@@ -1,0 +1,47 @@
+:root{
+  --bg:#F0F8FF;
+  --card:#fff;
+  --border:#e6eef7;
+  --text:#333;
+  --muted:#666;
+  --primary:#4CAF50;
+  --accent:#2196F3;
+  --low:#E3F2FD;
+  --high:#FCE4EC;
+  --good:#E8F5E9;
+}
+
+*{box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:var(--bg);margin:0;color:var(--text)}
+.container{max-width:1100px;margin:auto;padding:20px}
+
+.top{position:relative;margin-bottom:18px}
+.back{position:absolute;left:10px;top:10px;border:none;background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
+.child-card{background:#E3F2FD;border-radius:12px;padding:18px;text-align:center}
+.child-card h1{margin:6px 0 8px}
+.child-card p{margin:0;color:var(--muted)}
+.stats{display:flex;gap:10px;justify-content:center;margin-top:8px;color:#444;font-size:14px}
+.stats .badge{background:#fff;border:1px solid var(--border);border-radius:999px;padding:6px 10px}
+
+.card{background:var(--card);border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.08);padding:16px;margin-top:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.field{display:flex;flex-direction:column}
+.field.wide{grid-column:1/-1}
+.inline{display:flex;align-items:center;gap:10px}
+input,select,button{padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px}
+button{background:var(--primary);color:#fff;border:none;cursor:pointer}
+button.secondary{background:#ddd;color:#222}
+button:hover{opacity:.95}
+.hidden{display:none}
+.disclaimer{font-size:12px;color:#777;margin-top:8px}
+
+.table-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.list{display:flex;flex-direction:column;gap:10px}
+.row{display:grid;grid-template-columns:140px 1fr 1fr 1fr 110px;gap:10px;align-items:center;padding:10px;border:1px solid var(--border);border-radius:12px}
+.row.low{background:var(--low)}
+.row.good{background:var(--good)}
+.row.high{background:var(--high)}
+.pill{display:inline-block;background:#fff;border:1px solid var(--border);border-radius:999px;padding:3px 8px;font-size:12px}
+.val{font-weight:bold;color:#7E57C2}
+.actions-row{display:flex;gap:8px;justify-content:flex-end}
+.edit{background:#FFA726}
