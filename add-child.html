@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إضافة طفل جديد</title>
+  <link rel="stylesheet" href="css/add-child.css">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <div class="container">
+    <h1>➕ إضافة طفل جديد</h1>
+    <form id="childForm">
+
+      <!-- 👶 بيانات الطفل -->
+      <fieldset>
+        <legend>👶 بيانات الطفل</legend>
+        <input type="text" id="name" placeholder="الاسم الكامل" required>
+        <select id="gender" required>
+          <option value="">اختر النوع</option>
+          <option value="ذكر">ذكر</option>
+          <option value="أنثى">أنثى</option>
+        </select>
+        <input type="date" id="birthDate" required>
+        <input type="number" id="weight" placeholder="الوزن (كجم)" required>
+        <input type="number" id="height" placeholder="الطول (سم)" required>
+      </fieldset>
+
+      <!-- 💉 جرعة طويلة المفعول -->
+      <fieldset>
+        <legend>💉 الإنسولين طويل المفعول</legend>
+        <input type="text" id="longInsulin" placeholder="اسم الإنسولين" required>
+        <input type="number" id="longDose" placeholder="الجرعة (وحدة)" required>
+        <input type="time" id="longTime" required>
+      </fieldset>
+
+      <!-- 🍽️ جرعات الأكل -->
+      <fieldset>
+        <legend>🍽️ جرعات الأكل</legend>
+        <div id="mealsContainer"></div>
+        <button type="button" onclick="addMeal()">➕ أضف وجبة</button>
+      </fieldset>
+
+      <!-- 🔢 معاملات الحساب -->
+      <fieldset>
+        <legend>🔢 المعاملات</legend>
+        <input type="number" id="correctionFactor" placeholder="معامل التصحيح" required>
+        <input type="number" id="carbRatio" placeholder="معامل الكربوهيدرات" required>
+        <input type="number" id="hypoLevel" placeholder="مستوى الهبوط" required>
+        <input type="number" id="hyperLevel" placeholder="مستوى الارتفاع" required>
+        <input type="number" id="normalMin" placeholder="الحد الأدنى الطبيعي" required>
+        <input type="number" id="normalMax" placeholder="الحد الأعلى الطبيعي" required>
+      </fieldset>
+
+      <!-- ⚙️ إعدادات -->
+      <fieldset>
+        <legend>⚙️ الإعدادات</legend>
+        <select id="unitType" required>
+          <option value="">اختر وحدة القياس</option>
+          <option value="mg/dL">mg/dL</option>
+          <option value="mmol/L">mmol/L</option>
+        </select>
+      </fieldset>
+
+      <!-- إرسال -->
+      <button type="submit">حفظ الطفل</button>
+    </form>
+  </div>
+
+  <script type="module" src="js/add-child.js"></script>
+</body>
+</html>
