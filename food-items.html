@@ -1,3 +1,4 @@
+<!-- food-items.html (نسخة مُحدّثة تدعم الاستيراد من OpenFoodFacts بالباركود والاسم) -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -41,6 +42,13 @@
           <label>&nbsp;</label>
           <button id="addBtn">➕ إضافة صنف</button>
         </div>
+      </div>
+
+      <!-- استيراد من OpenFoodFacts -->
+      <div class="import-row">
+        <button id="importBarcodeBtn" class="secondary">📦 استيراد بالباركود (OFF)</button>
+        <button id="importSearchBtn" class="secondary">🔎 استيراد بالاسم (OFF)</button>
+        <span class="hint">سيتم ملء النموذج تلقائيًا ويمكنك المراجعة قبل الحفظ.</span>
       </div>
     </section>
 
@@ -132,9 +140,7 @@
         </div>
 
         <div class="subhead">المقادير البيتية</div>
-        <div id="measuresWrap" class="measures">
-          <!-- صفوف ديناميكية -->
-        </div>
+        <div id="measuresWrap" class="measures"></div>
         <button type="button" id="addMeasure" class="secondary small">+ إضافة تقدير بيتي</button>
 
         <div class="subhead">معاينة حساب الكمية</div>
@@ -168,6 +174,48 @@
           <button type="button" id="cancelBtn" class="secondary">إلغاء</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- مودال: استيراد بالباركود -->
+  <div id="offBarcodeModal" class="modal hidden">
+    <div class="modal-body">
+      <div class="modal-header">
+        <h3>استيراد من OpenFoodFacts — باركود</h3>
+        <button class="close" id="closeBarcodeModal">✕</button>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label>رقم الباركود (EAN-13)</label>
+          <input type="text" id="barcodeInput" placeholder="مثال: 7622210449283">
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="fetchBarcodeBtn">جلب المنتج</button>
+        </div>
+      </div>
+      <div id="barcodeResult" class="off-result"></div>
+    </div>
+  </div>
+
+  <!-- مودال: استيراد بالاسم -->
+  <div id="offSearchModal" class="modal hidden">
+    <div class="modal-body">
+      <div class="modal-header">
+        <h3>استيراد من OpenFoodFacts — اسم المنتج</h3>
+        <button class="close" id="closeSearchModal">✕</button>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label>ابحث باسم المنتج</label>
+          <input type="text" id="offQuery" placeholder="مثال: oats milk">
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="fetchSearchBtn">بحث</button>
+        </div>
+      </div>
+      <div id="searchResults" class="off-results-grid"></div>
     </div>
   </div>
 
