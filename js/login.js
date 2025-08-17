@@ -18,7 +18,7 @@ loginForm.addEventListener("submit", async (e) => {
   try {
     await signInWithEmailAndPassword(auth, email, password);
     alert("✅ تم تسجيل الدخول بنجاح");
-    window.location.href = "dashboard.html";
+window.location.href = "parent.html";
   } catch (error) {
     alert("❌ حدث خطأ في تسجيل الدخول\n" + error.message);
   }
