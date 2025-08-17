@@ -1,0 +1,61 @@
+/* css/reports.css */
+:root{
+  --bg:#F5FAFF; --card:#fff; --border:#e6eef7;
+  --text:#222; --muted:#666; --primary:#4CAF50;
+  --high:#E91E63; --low:#1E88E5; --good:#2E7D32;
+}
+
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--text);margin:0;font-family:'Segoe UI',Tahoma,Arial,sans-serif}
+.container{max-width:1200px;margin:auto;padding:16px}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+
+.controls h2{margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.field{display:flex;flex-direction:column}
+.field.checkbox{justify-content:flex-end}
+label{font-size:14px;color:var(--muted);margin-bottom:6px}
+input,select,button{padding:10px;border:1px solid #ccc;border-radius:8px;background:#fff;font-size:14px}
+.actions{display:flex;gap:10px;margin-top:10px}
+button{background:var(--primary);color:#fff;border:none;cursor:pointer}
+button.secondary{background:#ddd;color:#222}
+.hint{color:#666;font-size:12px;margin-top:6px}
+
+.report-header h1{margin:0 0 6px}
+.head-grid{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.meta{display:flex;gap:10px;flex-wrap:wrap;color:#444}
+.meta span{background:#f7fbff;border:1px solid var(--border);border-radius:999px;padding:6px 10px}
+
+#reportTable{overflow:auto}
+.table{border-collapse:collapse;width:100%;table-layout:fixed}
+.table th,.table td{border:1px solid var(--border);padding:8px;vertical-align:top}
+.table th{background:#F0F6FF}
+.table .date-col{width:120px}
+.table .slot-col{width:120px}
+
+.cell{display:flex;flex-direction:column;gap:6px;min-height:74px}
+.cell-line{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.val{font-weight:700;white-space:nowrap}
+.unit{font-size:12px;color:#555;margin-inline-start:4px}
+.extra{font-size:11px;color:#777;margin-inline-start:4px}
+
+.ind{display:inline-flex;align-items:center;gap:6px}
+.arrowUp{color:var(--high);font-weight:900}
+.arrowDown{color:var(--low);font-weight:900}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--good);display:inline-block}
+
+.corr{font-size:12px;color:#444}
+.notes{font-size:12px;color:#666}
+
+.report-footer{color:#666;text-align:center;margin:16px 0}
+
+@page{size:A4 landscape;margin:12mm}
+@media print{
+  .no-print{display:none !important}
+  body.print-no-notes .notes{display:none !important}
+  body{background:#fff}
+  .container{max-width:100%;padding:0}
+  .card{border:none;margin:0;padding:8px}
+  .report-footer{margin-top:6px}
+}
