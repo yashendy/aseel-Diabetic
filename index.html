@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>تسجيل الدخول / إنشاء حساب</title>
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="data:,">
 </head>
 <body>
   <div class="container">
@@ -31,6 +32,17 @@
     </form>
   </div>
 
+  <!-- كود Firebase -->
   <script type="module" src="js/login.js"></script>
+
+  <!-- دالة toggleForms -->
+  <script>
+    function toggleForms() {
+      const loginForm = document.getElementById("login-form");
+      const registerForm = document.getElementById("register-form");
+      loginForm.classList.toggle("hidden");
+      registerForm.classList.toggle("hidden");
+    }
+  </script>
 </body>
 </html>
