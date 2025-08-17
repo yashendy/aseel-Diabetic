@@ -3,44 +3,93 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تفاصيل الطفل</title>
+  <title>لوحة الطفل</title>
   <link rel="stylesheet" href="css/child.css">
   <link rel="icon" href="data:,">
 </head>
 <body>
   <div class="container">
-    <header class="child-header">
+    <header class="child-header card">
       <button class="back" onclick="history.back()">⬅ رجوع</button>
-      <h1>👶 <span id="childName">...</span></h1>
-      <p id="childMeta">...</p>
+      <div class="head-grid">
+        <div>
+          <h1>👶 <span id="childName">...</span></h1>
+          <p id="childMeta" class="muted">—</p>
+          <div class="chips">
+            <span class="chip" id="chipRange">النطاق الطبيعي: —</span>
+            <span class="chip" id="chipCR">CarbRatio: —</span>
+            <span class="chip" id="chipCF">CF: —</span>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-num" id="todayMeasures">0</div>
+            <div class="stat-label">قياسات اليوم</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="todayMeals">0</div>
+            <div class="stat-label">وجبات اليوم</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="nextVisit">—</div>
+            <div class="stat-label">أقرب متابعة</div>
+          </div>
+        </div>
+      </div>
     </header>
 
     <section class="cards">
-      <a class="card" id="goMeasurements">
-        <div>📊</div>
+      <!-- القياسات -->
+      <a class="card link measurements" id="goMeasurements">
+        <div class="icon">📊</div>
         <h3>القياسات</h3>
-        <p>إضافة وعرض قراءات السكر</p>
+        <p>إضافة وعرض قراءات السكر حسب الأوقات</p>
+        <div class="mini">اليوم: <span id="miniMeasures">0</span> قياس</div>
       </a>
 
-      <a class="card disabled">
-        <div>🍽️</div>
+      <!-- الوجبات -->
+      <a class="card link meals" id="goMeals">
+        <div class="icon">🍽️</div>
         <h3>الوجبات</h3>
-        <p>(قريبًا)</p>
+        <p>بناء الوجبة وحساب الكارب والجرعة المقترحة</p>
+        <div class="mini">اليوم: <span id="miniMeals">0</span> وجبة</div>
       </a>
 
-      <a class="card disabled">
-        <div>📄</div>
+      <!-- مكتبة الأصناف -->
+      <a class="card link food" id="goFoodItems">
+        <div class="icon">📚</div>
+        <h3>مكتبة الأصناف</h3>
+        <p>إضافة/تعديل أصناف + المقادير البيتية</p>
+        <div class="mini">للإستخدام داخل الوجبات</div>
+      </a>
+
+      <!-- التقارير -->
+      <a class="card link reports" id="goReports">
+        <div class="icon">📄</div>
         <h3>التقارير</h3>
-        <p>(قريبًا)</p>
+        <p>تقرير مطبوع بنطاق تاريخ ووحدة العرض</p>
+        <div class="mini">عرض سريع لآخر 7 أيام</div>
       </a>
 
-      <a class="card disabled">
-        <div>🩺</div>
+      <!-- الزيارات الطبية -->
+      <a class="card link visits" id="goVisits">
+        <div class="icon">🩺</div>
         <h3>الزيارات الطبية</h3>
-        <p>(قريبًا)</p>
+        <p>سجل الزيارات والتوصيات والمرفقات</p>
+        <div class="mini">أقرب متابعة: <span id="miniFollowUp">—</span></div>
+      </a>
+
+      <!-- تعديل بيانات الطفل -->
+      <a class="card link child-edit" id="goChildEdit">
+        <div class="icon">⚙️</div>
+        <h3>بيانات الطفل</h3>
+        <p>تعديل المعلومات والحدود والجرعات</p>
+        <div class="mini">تحديث الإعدادات</div>
       </a>
     </section>
   </div>
+
+  <div id="loader" class="loader hidden">جارِ التحميل…</div>
 
   <script type="module" src="js/child.js"></script>
 </body>
