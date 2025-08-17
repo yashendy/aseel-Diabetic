@@ -1,0 +1,79 @@
+<!-- reports.html -->
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>التقارير المطبوعة</title>
+  <link rel="stylesheet" href="css/reports.css"/>
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <div class="container">
+    <!-- شريط الإعدادات -->
+    <section class="controls card no-print">
+      <h2>🧾 إعداد تقرير مطبوع</h2>
+      <div class="grid">
+        <div class="field">
+          <label>من تاريخ</label>
+          <input type="date" id="dateFrom">
+        </div>
+        <div class="field">
+          <label>إلى تاريخ</label>
+          <input type="date" id="dateTo">
+        </div>
+        <div class="field">
+          <label>وحدة التقرير</label>
+          <select id="reportUnit">
+            <option value="mmol/L">mmol/L (خليجي/أوروبي)</option>
+            <option value="mg/dL">mg/dL (أمريكي)</option>
+          </select>
+        </div>
+        <div class="field checkbox">
+          <label>
+            <input type="checkbox" id="hideNotes">
+            إخفاء الملاحظات في الطباعة
+          </label>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="loadBtn">تحديث المعاينة</button>
+        <button id="printBtn" class="secondary">🖨️ طباعة</button>
+      </div>
+      <p class="hint">⚠️ المؤشر (سهم/دائرة) يعتمد على الحدود المخزّنة بالـ mmol/L.</p>
+    </section>
+
+    <!-- رأس التقرير -->
+    <header class="report-header card">
+      <div class="head-grid">
+        <div>
+          <h1>تقرير قياسات السكر</h1>
+          <div class="meta">
+            <span>الطفل: <strong id="childName">...</strong></span>
+            <span>العمر: <strong id="childAge">-</strong></span>
+            <span>الجنس: <strong id="childGender">-</strong></span>
+          </div>
+        </div>
+        <div class="meta right">
+          <span>الوحدة المختارة للتقرير: <strong id="unitChosen">mmol/L</strong></span>
+          <span>النطاق الطبيعي (mmol/L): <strong id="range">-</strong></span>
+          <span>CF (mmol/L): <strong id="cfVal">-</strong></span>
+          <span>تاريخ التوليد: <strong id="genAt">-</strong></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- جداول التقرير -->
+    <section class="tables card">
+      <div id="reportTable"></div>
+    </section>
+
+    <!-- تذييل -->
+    <footer class="report-footer">
+      <p>تنبيه: هذه المعلومات مساعدة وليست بديلاً عن استشارة الطبيب المختص.</p>
+    </footer>
+  </div>
+
+  <script type="module" src="js/reports.js"></script>
+</body>
+</html>
