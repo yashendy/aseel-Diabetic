@@ -1,3 +1,4 @@
+/* css/food-items.css (نسخة مُحدّثة) */
 :root{
   --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#333; --muted:#666;
   --primary:#4CAF50; --accent:#2196F3; --danger:#E53935;
@@ -21,6 +22,8 @@ button{background:var(--primary);color:#fff;border:none;cursor:pointer}
 button.secondary{background:#ddd;color:#222}
 button.small{padding:6px 10px;font-size:13px}
 button:hover{opacity:.96}
+.hint{font-size:12px;color:#666;margin-inline-start:10px}
+.import-row{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
 
 .items-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
 .item{display:flex;gap:10px;border:1px solid var(--border);border-radius:12px;padding:10px;background:#fff}
@@ -50,9 +53,16 @@ button:hover{opacity:.96}
 .measures{display:flex;flex-direction:column;gap:8px;grid-column:1/-1}
 .measure-row{display:grid;grid-template-columns:1fr 120px 40px;gap:8px}
 .measure-row input{width:100%}
-.measure-row button{width:100%;}
 
 .calc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;grid-column:1/-1}
 .preview{background:#f7fbff;border:1px solid var(--border);border-radius:10px;padding:10px;color:#333}
 
 .form-actions{grid-column:1/-1;display:flex;gap:10px;margin-top:10px}
+
+/* OFF نتائج */
+.off-result{margin-top:12px;border:1px dashed var(--border);border-radius:10px;padding:10px}
+.off-card{display:flex;gap:10px;border:1px solid var(--border);border-radius:10px;padding:10px;background:#fff}
+.off-thumb{width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid var(--border);background:#fafcff;display:flex;align-items:center;justify-content:center}
+.off-meta{flex:1}
+.off-actions{display:flex;gap:8px;margin-top:6px}
+.off-results-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:10px}
