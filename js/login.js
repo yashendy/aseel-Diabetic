@@ -1,4 +1,4 @@
-import { auth, db } from './firebase-config.js';
+import { auth } from './firebase-config.js';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -9,14 +9,7 @@ import {
 const loginForm = document.getElementById("login-form");
 const registerForm = document.getElementById("register-form");
 
-// 🔁 تبديل بين الفورمين
-function toggleForms() {
-  loginForm.classList.toggle("hidden");
-  registerForm.classList.toggle("hidden");
-}
-
-
-// ✅ تسجيل الدخول
+// تسجيل الدخول
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = document.getElementById("login-email").value;
@@ -24,15 +17,14 @@ loginForm.addEventListener("submit", async (e) => {
 
   try {
     await signInWithEmailAndPassword(auth, email, password);
-    alert("تم تسجيل الدخول بنجاح ✅");
-    // هنا نوجه المستخدم للداشبورد
+    alert("✅ تم تسجيل الدخول بنجاح");
     window.location.href = "dashboard.html";
   } catch (error) {
-    alert("حدث خطأ في تسجيل الدخول ❌\n" + error.message);
+    alert("❌ حدث خطأ في تسجيل الدخول\n" + error.message);
   }
 });
 
-// ✅ تسجيل حساب جديد
+// تسجيل حساب جديد
 registerForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = document.getElementById("register-name").value;
@@ -41,17 +33,16 @@ registerForm.addEventListener("submit", async (e) => {
   const confirm = document.getElementById("register-confirm").value;
 
   if (password !== confirm) {
-    alert("كلمتا المرور غير متطابقتين ❌");
+    alert("❌ كلمتا المرور غير متطابقتين");
     return;
   }
 
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(userCredential.user, { displayName: name });
-
-    alert("تم إنشاء الحساب بنجاح ✅");
+    alert("✅ تم إنشاء الحساب بنجاح");
     window.location.href = "dashboard.html";
   } catch (error) {
-    alert("حدث خطأ في التسجيل ❌\n" + error.message);
+    alert("❌ حدث خطأ في التسجيل\n" + error.message);
   }
 });
