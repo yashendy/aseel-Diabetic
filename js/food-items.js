@@ -1,3 +1,4 @@
+// js/food-items.js (نسخة مُحدّثة تدعم الاستيراد من OpenFoodFacts)
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
@@ -49,11 +50,27 @@ const pFatEl = document.getElementById('pFat');
 const cancelBtn = document.getElementById('cancelBtn');
 const saveBtn = document.getElementById('saveBtn');
 
+/* OFF عناصر */
+const importBarcodeBtn = document.getElementById('importBarcodeBtn');
+const importSearchBtn = document.getElementById('importSearchBtn');
+
+const offBarcodeModal = document.getElementById('offBarcodeModal');
+const closeBarcodeModal = document.getElementById('closeBarcodeModal');
+const barcodeInput = document.getElementById('barcodeInput');
+const fetchBarcodeBtn = document.getElementById('fetchBarcodeBtn');
+const barcodeResult = document.getElementById('barcodeResult');
+
+const offSearchModal = document.getElementById('offSearchModal');
+const closeSearchModal = document.getElementById('closeSearchModal');
+const offQuery = document.getElementById('offQuery');
+const fetchSearchBtn = document.getElementById('fetchSearchBtn');
+const searchResults = document.getElementById('searchResults');
+
 /* ====== حالة ====== */
 let currentUser;
 let editingId = null;
 let currentMeasures = []; // [{name, grams}]
-let allItemsCache = [];   // لعرض سريع وتصفية محلية عند الحاجة
+let allItemsCache = [];   // عرض سريع وتصفية محلية
 
 /* ====== أدوات ====== */
 function openModal(isEdit=false){
@@ -61,15 +78,15 @@ function openModal(isEdit=false){
   modalTitle.textContent = isEdit ? 'تعديل صنف' : 'إضافة صنف';
 }
 function closeModal(){ modal.classList.add('hidden'); }
+
+function openOffModal(m){ m.classList.remove('hidden'); }
+function closeOffModal(m){ m.classList.add('hidden'); }
+
 const pad = n => String(n).padStart(2,'0');
 function arabicToDot(s){ return (s||'').toString().replace(',', '.').trim(); }
-function numOrNull(x){
-  const n = Number(arabicToDot(x));
-  return isNaN(n) ? null : n;
-}
+function numOrNull(x){ const n = Number(arabicToDot(x)); return isNaN(n) ? null : n; }
 function toLowerAr(s){ return (s||'').toString().trim().toLowerCase(); }
 
-/* رموز فئة */
 function categoryIcon(cat){
   switch(cat){
     case 'نشويات': return '🍞';
@@ -87,9 +104,7 @@ function buildKeywords(name, tagsArr){
   const tokens = new Set();
   const addPrefixes = (word)=>{
     const w = word.trim().toLowerCase();
-    for (let i=1;i<=Math.min(w.length,10);i++){
-      tokens.add(w.slice(0,i));
-    }
+    for (let i=1;i<=Math.min(w.length,10);i++) tokens.add(w.slice(0,i));
   };
   toLowerAr(name).split(/\s+/).forEach(addPrefixes);
   (tagsArr||[]).forEach(t=> addPrefixes(toLowerAr(t)));
@@ -111,8 +126,7 @@ function renderMeasures(){
 
     nameInput.addEventListener('input', ()=>{
       currentMeasures[idx].name = nameInput.value.trim();
-      refreshCalcMeasureOptions();
-      calcPreview();
+      refreshCalcMeasureOptions(); calcPreview();
     });
     gramsInput.addEventListener('input', ()=>{
       currentMeasures[idx].grams = numOrNull(gramsInput.value);
@@ -120,9 +134,7 @@ function renderMeasures(){
     });
     delBtn.addEventListener('click', ()=>{
       currentMeasures.splice(idx,1);
-      renderMeasures();
-      refreshCalcMeasureOptions();
-      calcPreview();
+      renderMeasures(); refreshCalcMeasureOptions(); calcPreview();
     });
 
     measuresWrap.appendChild(row);
@@ -130,8 +142,7 @@ function renderMeasures(){
 }
 addMeasureBtn.addEventListener('click', ()=>{
   currentMeasures.push({ name:'', grams:null });
-  renderMeasures();
-  refreshCalcMeasureOptions();
+  renderMeasures(); refreshCalcMeasureOptions();
 });
 
 /* حساب المعاينة */
@@ -182,11 +193,10 @@ function calcPreview(){
 onAuthStateChanged(auth, async (user)=>{
   if (!user) return location.href = 'index.html';
   currentUser = user;
-  await loadItems(); // تحميل أولي
+  await loadItems();
 });
 
 async function loadItems(){
-  // قراءة مبدئية مرتبة بالاسم (نخزّن كاش محلي للفلاتر السريعة)
   const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
   const qy = query(ref, orderBy('nameLower','asc'));
   const snap = await getDocs(qy);
@@ -196,7 +206,6 @@ async function loadItems(){
     allItemsCache.push({ id: d.id, ...d.data() });
   });
 
-  // طبّق فلاتر الواجهة الحالية
   applyFilters();
 }
 
@@ -208,35 +217,28 @@ async function applyFilters(){
   const q = searchEl.value.trim();
   const cat = catEl.value;
 
-  // لو بحث بهاشتاج (#tag)
+  // #هاشتاج
   if (q.startsWith('#') && q.length > 1){
     const tag = q.slice(1).trim().toLowerCase();
-    // Query مباشر على tags (array-contains) ثم فلترة تصنيف محليًا
     const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
     const qy = query(ref, where('tags','array-contains', tag));
     const snap = await getDocs(qy);
-    const arr = [];
-    snap.forEach(d => arr.push({ id:d.id, ...d.data() }));
-
+    const arr = []; snap.forEach(d => arr.push({ id:d.id, ...d.data() }));
     const filtered = cat==='الكل' ? arr : arr.filter(x=> x.category===cat);
-    renderItems(filtered);
-    return;
+    renderItems(filtered); return;
   }
 
-  // بحث بالاسم: نستخدم keywords لو طول النص >= 2
+  // اسم (keywords)
   if (q.length >= 2){
     const token = q.trim().toLowerCase();
     const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
     const qy = query(ref, where('keywords','array-contains', token));
     const snap = await getDocs(qy);
-    const arr = [];
-    snap.forEach(d => arr.push({ id:d.id, ...d.data() }));
+    const arr = []; snap.forEach(d => arr.push({ id:d.id, ...d.data() }));
     const filtered = cat==='الكل' ? arr : arr.filter(x=> x.category===cat);
-    renderItems(filtered);
-    return;
+    renderItems(filtered); return;
   }
 
-  // لا يوجد بحث: استخدم الكاش + فلتر تصنيف محلي
   const base = (cat==='الكل') ? allItemsCache : allItemsCache.filter(x=> x.category===cat);
   renderItems(base);
 }
@@ -268,8 +270,7 @@ function renderItems(items){
     thumb.className = 'thumb';
     if (item.imageUrl && String(item.autoImage)!=='true'){
       const img = document.createElement('img');
-      img.src = item.imageUrl;
-      img.alt = item.name || '';
+      img.src = item.imageUrl; img.alt = item.name || '';
       img.style.width='100%'; img.style.height='100%'; img.style.objectFit='cover'; img.style.borderRadius='8px';
       img.onerror = ()=> { thumb.innerHTML=''; thumb.appendChild(placeholderThumb(item.category)); };
       thumb.appendChild(img);
@@ -319,11 +320,8 @@ addBtn.addEventListener('click', ()=>{
   editingId = null;
   itemForm.reset();
   currentMeasures = [];
-  renderMeasures();
-  refreshCalcMeasureOptions();
-  calcPreview();
-  autoImageEl.value = 'true';
-  sourceEl.value = 'manual';
+  renderMeasures(); refreshCalcMeasureOptions(); calcPreview();
+  autoImageEl.value = 'true'; sourceEl.value = 'manual';
   openModal(false);
 });
 closeModalBtn.addEventListener('click', closeModal);
@@ -346,9 +344,7 @@ function fillForm(item){
   sugarEl.value = item?.nutrPer100g?.sugar_g ?? '';
 
   currentMeasures = Array.isArray(item.measures) ? JSON.parse(JSON.stringify(item.measures)) : [];
-  renderMeasures();
-  refreshCalcMeasureOptions();
-  calcPreview();
+  renderMeasures(); refreshCalcMeasureOptions(); calcPreview();
 }
 
 function openEdit(item){
@@ -361,7 +357,6 @@ function openEdit(item){
 itemForm.addEventListener('submit', async (e)=>{
   e.preventDefault();
 
-  // تحقق أساسي
   if (!nameEl.value.trim()){ alert('أدخل اسم الصنف'); return; }
   if (!catModalEl.value){ alert('اختر التصنيف'); return; }
   const carbs = numOrNull(carbsEl.value);
@@ -369,7 +364,6 @@ itemForm.addEventListener('submit', async (e)=>{
   if (carbs===null || cal===null){ alert('أدخل الكارب والسعرات لكل 100 جم'); return; }
   if (carbs<0 || cal<0){ alert('القيم لا يمكن أن تكون سالبة'); return; }
 
-  // مقادير البيت: تجاهل الصفوف الفارغة
   const measures = currentMeasures
     .filter(m => (m.name||'').trim() && typeof m.grams === 'number' && m.grams>0)
     .map(m => ({ name: m.name.trim(), grams: Number(m.grams) }));
@@ -401,7 +395,6 @@ itemForm.addEventListener('submit', async (e)=>{
 
   try{
     const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
-
     if (editingId){
       await updateDoc(doc(ref, editingId), payload);
       alert('✅ تم تحديث الصنف');
@@ -410,10 +403,7 @@ itemForm.addEventListener('submit', async (e)=>{
       await addDoc(ref, payload);
       alert('✅ تم إضافة الصنف');
     }
-
-    closeModal();
-    await loadItems();
-
+    closeModal(); await loadItems();
   } catch(err){
     console.error(err);
     alert('حدث خطأ أثناء الحفظ');
@@ -425,18 +415,238 @@ async function deleteItem(item){
   if (!confirm(`هل تريد حذف "${item.name}"؟`)) return;
   try{
     await deleteDoc(doc(db, `parents/${currentUser.uid}/foodItems/${item.id}`));
-    alert('🗑️ تم الحذف');
-    await loadItems();
+    alert('🗑️ تم الحذف'); await loadItems();
   } catch(e){
-    console.error(e);
-    alert('تعذر حذف الصنف');
+    console.error(e); alert('تعذر حذف الصنف');
   }
 }
 
+/* ====== OpenFoodFacts: استيراد بالباركود ====== */
+importBarcodeBtn.addEventListener('click', ()=>{
+  barcodeInput.value=''; barcodeResult.innerHTML='';
+  openOffModal(offBarcodeModal);
+});
+closeBarcodeModal.addEventListener('click', ()=> closeOffModal(offBarcodeModal));
+
+fetchBarcodeBtn.addEventListener('click', async ()=>{
+  const code = (barcodeInput.value||'').trim();
+  if (!/^\d{8,14}$/.test(code)){ alert('رجاء إدخال باركود صالح (8-14 أرقام)'); return; }
+
+  barcodeResult.innerHTML = '⏳ جاري الجلب...';
+  try{
+    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data || data.status !== 1){
+      barcodeResult.innerHTML = `<div class="off-result">لم يتم العثور على منتج بهذا الباركود.</div>`;
+      return;
+    }
+    const prod = data.product;
+    const mapped = mapOFFProduct(prod);
+
+    barcodeResult.innerHTML = offPreviewHTML(mapped);
+    const fillBtn = barcodeResult.querySelector('.off-fill');
+    fillBtn.addEventListener('click', ()=>{
+      fillForm(mappedToForm(mapped));
+      closeOffModal(offBarcodeModal);
+      openModal(false); // افتح نموذج الإضافة
+    });
+
+  }catch(e){
+    console.error(e);
+    barcodeResult.innerHTML = `<div class="off-result">حدث خطأ أثناء الجلب.</div>`;
+  }
+});
+
+/* ====== OpenFoodFacts: استيراد بالاسم ====== */
+importSearchBtn.addEventListener('click', ()=>{
+  offQuery.value=''; searchResults.innerHTML='';
+  openOffModal(offSearchModal);
+});
+closeSearchModal.addEventListener('click', ()=> closeOffModal(offSearchModal));
+
+fetchSearchBtn.addEventListener('click', async ()=>{
+  const q = (offQuery.value||'').trim();
+  if (q.length < 2){ alert('اكتب على الأقل حرفين للبحث'); return; }
+  searchResults.innerHTML = '⏳ جاري البحث...';
+  try{
+    const fields = [
+      'code','product_name','product_name_ar','brands','image_front_url',
+      'nutriments','serving_size','categories','categories_tags'
+    ].join(',');
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&search_terms=${encodeURIComponent(q)}&json=1&page_size=20&fields=${fields}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const products = Array.isArray(data.products) ? data.products : [];
+    if (!products.length){
+      searchResults.innerHTML = '<div class="off-result">لا نتائج مطابقة.</div>';
+      return;
+    }
+    // عرض نتائج
+    searchResults.innerHTML = '';
+    products.forEach(p=>{
+      const mapped = mapOFFProduct(p);
+      const card = document.createElement('div');
+      card.className = 'off-card';
+      card.innerHTML = `
+        <div class="off-thumb">${mapped.imageUrl ? `<img src="${mapped.imageUrl}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px">` : '📦'}</div>
+        <div class="off-meta">
+          <div><strong>${escapeHTML(mapped.name||'-')}</strong> ${mapped.brand?`<small>(${escapeHTML(mapped.brand)})</small>`:''}</div>
+          <div class="muted" style="font-size:12px">كارب/100g: ${mapped.nutrPer100g.carbs_g ?? '-'} • سعرات/100g: ${mapped.nutrPer100g.cal_kcal ?? '-'}</div>
+          <div class="off-actions"><button class="off-fill small">ملء النموذج</button></div>
+        </div>
+      `;
+      card.querySelector('.off-fill').addEventListener('click', ()=>{
+        fillForm(mappedToForm(mapped));
+        closeOffModal(offSearchModal);
+        openModal(false);
+      });
+      searchResults.appendChild(card);
+    });
+
+  }catch(e){
+    console.error(e);
+    searchResults.innerHTML = `<div class="off-result">حدث خطأ أثناء البحث.</div>`;
+  }
+});
+
+/* ====== تحويل/تخمين من OFF ====== */
+function mapOFFProduct(prod){
+  // الاسم (أفضلية عربي)
+  const name = prod.product_name_ar || prod.product_name || '';
+  const brand = (prod.brands||'').split(',')[0]?.trim() || null;
+  const imageUrl = prod.image_front_url || null;
+
+  const n = prod.nutriments || {};
+  // سعرات kcal: قد تكون energy-kcal_100g أو energy_100g (كيلوجول)
+  let cal = n['energy-kcal_100g'];
+  if (cal == null && n['energy_100g'] != null){
+    const kj = Number(n['energy_100g']);
+    if (!isNaN(kj)) cal = Math.round(kj / 4.184);
+  }
+  const carbs = n['carbohydrates_100g'];
+  const protein = n['proteins_100g'];
+  const fat = n['fat_100g'];
+  const fiber = n['fiber_100g'];
+  const sugar = n['sugars_100g'];
+
+  // تقدير بيتي من serving_size لو يتضمن جرام
+  const measures = [];
+  const serving = prod.serving_size || '';
+  const gMatch = serving.match(/(\d+(?:[\.,]\d+)?)\s*g/i);
+  if (gMatch){
+    const grams = Number(String(gMatch[1]).replace(',','.'));
+    if (!isNaN(grams) && grams>0) measures.push({ name: 'حصة', grams });
+  }
+
+  // تخمين التصنيف
+  const category = guessCategory(prod);
+
+  // وسوم افتراضية
+  const code = prod.code || '';
+  const autoTags = ['off', code ? `barcode:${code}` : null].filter(Boolean);
+
+  return {
+    name,
+    brand,
+    category,
+    imageUrl,
+    autoImage: imageUrl ? false : true,
+    source: 'openfoodfacts',
+    tags: autoTags,
+    nutrPer100g: {
+      carbs_g: safeNum(carbs),
+      cal_kcal: safeNum(cal),
+      protein_g: safeNum(protein),
+      fat_g: safeNum(fat),
+      fiber_g: safeNum(fiber),
+      sugar_g: safeNum(sugar)
+    },
+    measures
+  };
+}
+
+function mappedToForm(mapped){
+  // دمج لإرسالها للفورم كما لو مستخدم أدخلها
+  return {
+    name: mapped.name || '',
+    brand: mapped.brand || '',
+    category: mapped.category || '',
+    source: mapped.source || 'openfoodfacts',
+    imageUrl: mapped.imageUrl || '',
+    autoImage: mapped.autoImage !== false ? true : false,
+    tags: mapped.tags || [],
+    nutrPer100g: mapped.nutrPer100g,
+    measures: mapped.measures || []
+  };
+}
+
+function offPreviewHTML(m){
+  return `
+    <div class="off-card">
+      <div class="off-thumb">${m.imageUrl ? `<img src="${m.imageUrl}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px">` : '📦'}</div>
+      <div class="off-meta">
+        <div><strong>${escapeHTML(m.name||'-')}</strong> ${m.brand?`<small>(${escapeHTML(m.brand)})</small>`:''}</div>
+        <div class="muted" style="font-size:12px">
+          تصنيف متوقّع: ${escapeHTML(m.category || '-')}&nbsp;•&nbsp;
+          كارب/100g: ${m.nutrPer100g.carbs_g ?? '-'} • سعرات/100g: ${m.nutrPer100g.cal_kcal ?? '-'}
+        </div>
+        <div class="off-actions">
+          <button class="off-fill">ملء النموذج</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function safeNum(v){
+  const n = Number(v); return isNaN(n) ? null : Math.round(n*100)/100;
+}
+
+function guessCategory(prod){
+  const cats = (prod.categories || prod.categories_tags || '').toString().toLowerCase();
+  const name = (prod.product_name || '').toLowerCase();
+
+  const has = (s)=> cats.includes(s) || name.includes(s);
+
+  if (has('bread') || has('rice') || has('pasta') || has('cereal') || has('oat') || has('biscuit') || has('flour') || has('corn'))
+    return 'نشويات';
+  if (has('milk') || has('lact') || has('yogurt') || has('cheese'))
+    return 'حليب';
+  if (has('fruit') || has('apple') || has('banana') || has('juice'))
+    return 'فاكهة';
+  if (has('vegetable') || has('tomato') || has('cucumber') || has('salad'))
+    return 'خضروات';
+  if (has('meat') || has('chicken') || has('beef') || has('fish') || has('tuna'))
+    return 'لحوم';
+  if (has('oil') || has('butter') || has('ghee') || has('fat') || has('avocado'))
+    return 'دهون';
+  return '';
+}
+
+/* ====== ملء نموذج الصفحة من الماب ====== */
+function fillFormFromMapped(m){
+  nameEl.value = m.name || '';
+  brandEl.value = m.brand || '';
+  catModalEl.value = m.category || '';
+  sourceEl.value = m.source || 'openfoodfacts';
+  imageUrlEl.value = m.imageUrl || '';
+  autoImageEl.value = m.autoImage ? 'true':'false';
+  tagsEl.value = (m.tags||[]).join(' ');
+
+  carbsEl.value = m?.nutrPer100g?.carbs_g ?? '';
+  calEl.value = m?.nutrPer100g?.cal_kcal ?? '';
+  proteinEl.value = m?.nutrPer100g?.protein_g ?? '';
+  fatEl.value = m?.nutrPer100g?.fat_g ?? '';
+  fiberEl.value = m?.nutrPer100g?.fiber_g ?? '';
+  sugarEl.value = m?.nutrPer100g?.sugar_g ?? '';
+
+  currentMeasures = Array.isArray(m.measures) ? JSON.parse(JSON.stringify(m.measures)) : [];
+  renderMeasures(); refreshCalcMeasureOptions(); calcPreview();
+}
+function fillForm(m){ fillFormFromMapped(m); }
+
 /* ====== debounce ====== */
 function debounce(fn, ms){
-  let t; return (...args)=>{
-    clearTimeout(t);
-    t = setTimeout(()=>fn.apply(null,args), ms);
-  };
+  let t; return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn.apply(null,args), ms); };
 }
