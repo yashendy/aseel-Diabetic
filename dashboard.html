@@ -2,33 +2,32 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>لوحة التحكم - ولي الأمر</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>لوحة التحكم - منصة سكر الأطفال</title>
   <link rel="stylesheet" href="css/dashboard.css" />
-  <link rel="icon" href="data:,">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>👨‍👧‍👦 أهلاً بك، <span id="parentName">...</span></h1>
-      <p id="parentEmail">...</p>
-      <button id="logoutBtn">تسجيل الخروج</button>
-    </header>
 
-    <section class="children-section">
-      <h2>أطفالك 👶</h2>
-      <div class="children-list" id="childrenList">
-        <!-- بطاقات الأطفال تظهر هنا -->
-        <!-- كارت الإضافة -->
-        <div class="child-card add-card" onclick="openAddChild()">
-          <div class="plus">➕</div>
-          <p>إضافة طفل جديد</p>
-        </div>
-      </div>
-    </section>
+  <div class="header">
+    <h2>👨‍👧 أهلاً بك، <span id="parent-name">...</span></h2>
+    <p id="parent-email">...</p>
+    <button onclick="logout()">تسجيل الخروج</button>
   </div>
 
-  <!-- سكربتات -->
+  <div class="children-section">
+    <h3>👶 أطفالك</h3>
+
+    <div class="children-list" id="children-list">
+      <!-- بطاقات الأطفال سيتم تحميلها هنا -->
+
+      <!-- 🔘 زر إضافة طفل جديد -->
+      <div class="child-card add-card" onclick="window.location.href='add-child.html'">
+        <div class="plus">➕</div>
+        <p>إضافة طفل جديد</p>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="js/dashboard.js"></script>
 </body>
 </html>
