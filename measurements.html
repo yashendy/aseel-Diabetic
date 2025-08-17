@@ -1,8 +1,9 @@
+<!-- measurements.html -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>قياسات السكر</title>
   <link rel="stylesheet" href="css/measurements.css">
   <link rel="icon" href="data:,">
@@ -15,10 +16,8 @@
       <button class="back" onclick="history.back()">⬅ رجوع</button>
       <div class="child-card">
         <h1>👶 <span id="childName">...</span></h1>
-        <p id="childMeta">الوحدة: mg/dL • الطبيعي: <span id="range">-</span></p>
-        <div id="todayStats" class="stats">
-          <!-- سيتم ملؤها: عدد/متوسط/أدنى/أعلى لليوم -->
-        </div>
+        <p id="childMeta">الوحدة المرجعية: mmol/L • الطبيعي: <span id="range">-</span></p>
+        <div id="todayStats" class="stats"></div>
       </div>
     </header>
 
@@ -26,46 +25,51 @@
     <section class="card">
       <h3>➕ إضافة / تعديل قياس</h3>
 
-      <form id="mForm" class="grid">
-        <!-- اختيار يوم العمل (للجدول والتحقق) -->
+      <form id="mForm" class="grid" novalidate>
+        <!-- التاريخ المختار لليوم -->
         <div class="field">
-          <label>تاريخ اليوم</label>
+          <label for="selDate">تاريخ اليوم</label>
           <input type="date" id="selDate" required>
         </div>
 
+        <!-- وقت القياس -->
         <div class="field">
-          <label>وقت القياس</label>
+          <label for="slot">وقت القياس</label>
           <select id="slot" required>
             <option value="">اختر الوقت</option>
           </select>
         </div>
 
+        <!-- قيمة القياس -->
         <div class="field">
-          <label>قيمة القياس</label>
+          <label for="value">قيمة القياس</label>
           <input type="number" id="value" step="any" placeholder="أدخل القيمة" required>
         </div>
 
+        <!-- وحدة الإدخال (جهاز المستخدم) -->
         <div class="field">
-          <label>وحدة الإدخال</label>
+          <label for="inputUnit">وحدة الإدخال</label>
           <select id="inputUnit" required>
-            <option value="mg/dL">mg/dL</option>
-            <option value="mmol/L">mmol/L</option>
+            <option value="mmol/L">mmol/L (خليجي/أوروبي)</option>
+            <option value="mg/dL">mg/dL (أمريكي)</option>
           </select>
         </div>
 
+        <!-- الساعة (اختياري) -->
         <div class="field">
-          <label>الوقت (اختياري)</label>
+          <label for="clock">الوقت (اختياري)</label>
           <input type="time" id="clock">
         </div>
 
+        <!-- ملاحظات -->
         <div class="field wide">
-          <label>ملاحظات (اختياري)</label>
+          <label for="notes">ملاحظات (اختياري)</label>
           <input type="text" id="notes" placeholder="مثال: بعد نشاط خفيف">
         </div>
 
         <!-- يظهر فقط عند الارتفاع -->
         <div class="field wide hidden" id="corrWrap">
-          <label>جرعة تصحيحية (مقترحة)</label>
+          <label for="correctionDose">جرعة تصحيحية (مقترحة)</label>
           <div class="inline">
             <input type="number" step="0.5" id="correctionDose" placeholder="مثال: 1.5">
             <small id="corrHint" class="hint"></small>
@@ -74,7 +78,7 @@
 
         <!-- يظهر فقط عند الهبوط -->
         <div class="field wide hidden" id="raisedWrap">
-          <label>رفعنا بإيه؟</label>
+          <label for="raisedWith">رفعنا بإيه؟</label>
           <input type="text" id="raisedWith" placeholder="مثال: عصير، حليب، قطعة سكر">
         </div>
 
@@ -82,12 +86,12 @@
           <button type="submit" id="saveBtn">حفظ</button>
           <button type="button" id="resetBtn" class="secondary">تفريغ النموذج</button>
         </div>
-      </form>
 
-      <p class="disclaimer">⚠️ الحسابات مساعدة فقط وليست نصيحة طبية — يُرجى الرجوع للطبيب دائمًا.</p>
+        <p class="disclaimer">⚠️ الحسابات مساعدة فقط وليست نصيحة طبية — يُرجى الرجوع للطبيب دائمًا.</p>
+      </form>
     </section>
 
-    <!-- المنطقة 3: جدول قياسات يوم محدد -->
+    <!-- المنطقة 3: جدول قياسات اليوم -->
     <section class="card">
       <div class="table-head">
         <h3>قياسات يوم: <span id="dayLabel">-</span></h3>
@@ -96,6 +100,7 @@
           <input type="date" id="tableDate">
         </div>
       </div>
+
       <div id="list" class="list"></div>
     </section>
 
