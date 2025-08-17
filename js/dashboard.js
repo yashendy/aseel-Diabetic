@@ -63,7 +63,3 @@ window.goToChild = function (childId) {
   window.location.href = `child.html?id=${childId}`;
 }
 
-// فتح صفحة إضافة طفل (هنبنيها بعدين)
-window.openAddChild = function () {
-  alert("🚧 سيتم تنفيذ إضافة طفل جديد لاحقًا");
-}
