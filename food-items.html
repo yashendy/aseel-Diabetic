@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>الأصناف الغذائية</title>
+  <link rel="stylesheet" href="css/food-items.css"/>
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <div class="container">
+    <!-- رأس -->
+    <header class="top">
+      <button class="back" onclick="history.back()">⬅ رجوع</button>
+      <div class="title">
+        <h1>🍽️ مكتبة الأصناف الغذائية</h1>
+        <p class="muted">أضِف الأصناف، المقادير البيتية، والقيم لكل 100 جرام. ثم استخدمها لاحقًا في صفحة الوجبات.</p>
+      </div>
+    </header>
+
+    <!-- أدوات -->
+    <section class="controls card">
+      <div class="grid">
+        <div class="field">
+          <label>بحث بالاسم أو #هاشتاج</label>
+          <input type="text" id="search" placeholder="مثال: شوفان أو #فطور">
+        </div>
+        <div class="field">
+          <label>تصنيف</label>
+          <select id="category">
+            <option value="الكل">الكل</option>
+            <option>نشويات</option>
+            <option>حليب</option>
+            <option>فاكهة</option>
+            <option>خضروات</option>
+            <option>لحوم</option>
+            <option>دهون</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="addBtn">➕ إضافة صنف</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- قائمة الأصناف -->
+    <section class="card">
+      <div id="itemsGrid" class="items-grid"></div>
+      <div id="emptyState" class="empty hidden">لا توجد أصناف بعد… اضغط “إضافة صنف”.</div>
+    </section>
+  </div>
+
+  <!-- نموذج إضافة/تعديل -->
+  <div id="itemModal" class="modal hidden">
+    <div class="modal-body">
+      <div class="modal-header">
+        <h3 id="modalTitle">إضافة صنف</h3>
+        <button id="closeModal" class="close">✕</button>
+      </div>
+
+      <form id="itemForm" class="form-grid" novalidate>
+        <div class="field">
+          <label>اسم الصنف *</label>
+          <input type="text" id="name" required placeholder="مثال: شوفان">
+        </div>
+        <div class="field">
+          <label>العلامة التجارية (اختياري)</label>
+          <input type="text" id="brand" placeholder="مثال: Quaker">
+        </div>
+        <div class="field">
+          <label>التصنيف *</label>
+          <select id="cat" required>
+            <option value="">اختر</option>
+            <option>نشويات</option>
+            <option>حليب</option>
+            <option>فاكهة</option>
+            <option>خضروات</option>
+            <option>لحوم</option>
+            <option>دهون</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>المصدر</label>
+          <select id="source">
+            <option value="manual">manual</option>
+            <option value="openfoodfacts">openfoodfacts</option>
+          </select>
+        </div>
+
+        <div class="field wide">
+          <label>رابط صورة (اختياري)</label>
+          <input type="url" id="imageUrl" placeholder="https://…">
+        </div>
+        <div class="field">
+          <label>صورة تلقائية رمزية</label>
+          <select id="autoImage">
+            <option value="true">مفعّل</option>
+            <option value="false">معطل</option>
+          </select>
+        </div>
+
+        <div class="field wide">
+          <label>هاشتاجات (افصلها بمسافة أو فاصلة)</label>
+          <input type="text" id="tags" placeholder="فطور سريع صحي">
+        </div>
+
+        <div class="subhead">القيم لكل 100 جرام</div>
+        <div class="field">
+          <label>الكارب (g) *</label>
+          <input type="number" id="carbs" step="any" required>
+        </div>
+        <div class="field">
+          <label>السعرات (kcal) *</label>
+          <input type="number" id="cal" step="any" required>
+        </div>
+        <div class="field">
+          <label>البروتين (g)</label>
+          <input type="number" id="protein" step="any">
+        </div>
+        <div class="field">
+          <label>الدهون (g)</label>
+          <input type="number" id="fat" step="any">
+        </div>
+        <div class="field">
+          <label>الألياف (g)</label>
+          <input type="number" id="fiber" step="any">
+        </div>
+        <div class="field">
+          <label>السكر (g)</label>
+          <input type="number" id="sugar" step="any">
+        </div>
+
+        <div class="subhead">المقادير البيتية</div>
+        <div id="measuresWrap" class="measures">
+          <!-- صفوف ديناميكية -->
+        </div>
+        <button type="button" id="addMeasure" class="secondary small">+ إضافة تقدير بيتي</button>
+
+        <div class="subhead">معاينة حساب الكمية</div>
+        <div class="calc-grid">
+          <div class="field">
+            <label>طريقة الإدخال</label>
+            <select id="calcMode">
+              <option value="grams">جرام</option>
+              <option value="household">تقدير بيتي</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>الكمية</label>
+            <input type="number" id="calcQty" step="any" value="1">
+          </div>
+          <div class="field">
+            <label>التقدير البيتي</label>
+            <select id="calcMeasure"></select>
+          </div>
+          <div class="preview">
+            <div>الجرامات: <strong id="pGrams">0</strong> g</div>
+            <div>كارب: <strong id="pCarbs">0</strong> g</div>
+            <div>سعرات: <strong id="pCal">0</strong> kcal</div>
+            <div>بروتين: <strong id="pProt">0</strong> g</div>
+            <div>دهون: <strong id="pFat">0</strong> g</div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="saveBtn">حفظ</button>
+          <button type="button" id="cancelBtn" class="secondary">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="js/food-items.js"></script>
+</body>
+</html>
