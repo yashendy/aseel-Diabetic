@@ -1,36 +1,34 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>لوحة التحكم - منصة سكر الأطفال</title>
-  <link rel="stylesheet" href="css/dashboard.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>لوحة وليّ الأمر</title>
+  <link rel="stylesheet" href="css/parent.css">
   <link rel="icon" href="data:,">
 </head>
 <body>
-
   <div class="container">
-    <header class="header">
-      <h2>👨‍👧 أهلاً بك، <span id="parentName">...</span></h2>
-      <p id="parentEmail">...</p>
-      <button id="logoutBtn">تسجيل الخروج</button>
+    <header class="top card">
+      <div class="head">
+        <h1>👨‍👩‍👧‍👦 أطفالك</h1>
+        <p class="muted">اختَر طفلاً لفتح لوحة التحكم الخاصة به.</p>
+      </div>
+      <div class="tools">
+        <div class="field">
+          <label>بحث بالاسم</label>
+          <input type="text" id="search" placeholder="مثال: سارة">
+        </div>
+        <a class="add-btn" href="add-child.html">➕ إضافة طفل</a>
+      </div>
     </header>
 
-    <section class="children-section">
-      <h3>👶 أطفالك</h3>
-
-      <div class="children-list" id="childrenList">
-        <!-- بطاقات الأطفال سيتم حقنها هنا -->
-        <!-- زر/كارت إضافة طفل جديد -->
-        <div class="child-card add-card" onclick="window.location.href='add-child.html'">
-          <div class="plus">➕</div>
-          <p>إضافة طفل جديد</p>
-        </div>
-      </div>
-    </section>
+    <section id="kidsGrid" class="grid"></section>
+    <div id="empty" class="empty hidden">لا يوجد أطفال بعد… ابدأي بإضافة طفل جديد.</div>
   </div>
 
-  <!-- لازم يكون السكربت في آخر الـ body -->
-  <script type="module" src="js/dashboard.js"></script>
+  <div id="loader" class="loader hidden">جارِ التحميل…</div>
+
+  <script type="module" src="js/parent.js"></script>
 </body>
 </html>
