@@ -10,10 +10,11 @@ const loginForm = document.getElementById("login-form");
 const registerForm = document.getElementById("register-form");
 
 // 🔁 تبديل بين الفورمين
-window.toggleForms = () => {
+function toggleForms() {
   loginForm.classList.toggle("hidden");
   registerForm.classList.toggle("hidden");
-};
+}
+
 
 // ✅ تسجيل الدخول
 loginForm.addEventListener("submit", async (e) => {
