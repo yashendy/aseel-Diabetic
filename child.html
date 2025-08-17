@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تفاصيل الطفل</title>
+  <link rel="stylesheet" href="css/child.css">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <div class="container">
+    <header class="child-header">
+      <button class="back" onclick="history.back()">⬅ رجوع</button>
+      <h1>👶 <span id="childName">...</span></h1>
+      <p id="childMeta">...</p>
+    </header>
+
+    <section class="cards">
+      <a class="card" id="goMeasurements">
+        <div>📊</div>
+        <h3>القياسات</h3>
+        <p>إضافة وعرض قراءات السكر</p>
+      </a>
+
+      <a class="card disabled">
+        <div>🍽️</div>
+        <h3>الوجبات</h3>
+        <p>(قريبًا)</p>
+      </a>
+
+      <a class="card disabled">
+        <div>📄</div>
+        <h3>التقارير</h3>
+        <p>(قريبًا)</p>
+      </a>
+
+      <a class="card disabled">
+        <div>🩺</div>
+        <h3>الزيارات الطبية</h3>
+        <p>(قريبًا)</p>
+      </a>
+    </section>
+  </div>
+
+  <script type="module" src="js/child.js"></script>
+</body>
+</html>
