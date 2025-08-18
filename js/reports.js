@@ -1,5 +1,4 @@
-// js/reports.js  (إصدار v2)  — يملّي رأس التقرير + يفعّل زر التحليل
-
+// js/reports.js  v3
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
@@ -12,7 +11,7 @@ const chipCREl    = document.getElementById('chipCR');
 const chipCFEl    = document.getElementById('chipCF');
 const openAnalyticsBtn = document.getElementById('openAnalytics');
 
-// أدوات
+// أدوات مساعدة
 const pad = n => String(n).padStart(2,'0');
 function calcAge(bd){
   if(!bd) return '—';
@@ -23,34 +22,44 @@ function calcAge(bd){
   return a;
 }
 
-// childId من الـ URL أو من localStorage
+// childId من URL أو من localStorage
 const params  = new URLSearchParams(location.search);
 let childId = params.get('child') || localStorage.getItem('lastChildId');
 
-onAuthStateChanged(auth, async (user) => {
-  if (!user) return location.href = 'index.html';
+console.log('[reports] childId =', childId);
 
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = 'index.html'; return; }
   if (!childId) {
-    alert('لا يوجد معرف طفل');
-    // رجّعي المستخدم لاختيار طفل
-    location.href = 'parent.html?pickChild=1';
-    return;
+    alert('لا يوجد معرف طفل'); location.href = 'parent.html?pickChild=1'; return;
   }
-  // خزِّنيه كآخر طفل
+
+  // خزّنه كآخر طفل
   localStorage.setItem('lastChildId', childId);
 
-  // حمّلي بيانات الطفل علشان تظهري اسمه والحدود
   try {
     const ref  = doc(db, `parents/${user.uid}/children/${childId}`);
+    console.log('[reports] fetching:', ref.path);
     const snap = await getDoc(ref);
+    console.log('[reports] snap.exists:', snap.exists());
+
     if (!snap.exists()) {
-      alert('لم يتم العثور على الطفل');
+      // محاولة أخيرة لإظهار الاسم من التخزين إن كان محفوظ
+      const cachedName = localStorage.getItem('lastChildName');
+      if (cachedName && childNameEl) childNameEl.textContent = cachedName;
+      alert('لم يتم العثور على الطفل'); 
       return;
     }
-    const c = snap.data();
 
-    // تعبئة الرأس
-    if (childNameEl) childNameEl.textContent = c.name || 'طفل';
+    const c = snap.data();
+    console.log('[reports] child data:', c);
+
+    // عرّضي الاسم والبيانات
+    if (childNameEl) {
+      childNameEl.textContent = c.name || 'طفل';
+      // خزن الاسم احتياطيًا لاستخدامه لو فشل التحميل لاحقًا
+      localStorage.setItem('lastChildName', c.name || 'طفل');
+    }
     if (childMetaEl) childMetaEl.textContent =
       `${c.gender || '—'} • العمر: ${calcAge(c.birthDate)} سنة`;
 
@@ -64,18 +73,19 @@ onAuthStateChanged(auth, async (user) => {
     if (chipCFEl)    chipCFEl.textContent    = `CF: ${cf ?? '—'} mmol/L/U`;
 
   } catch (e) {
-    console.error(e);
+    console.error('[reports] child load error:', e);
     alert('تعذر تحميل بيانات الطفل');
   }
 
-  // فعِّل زر "تحليل القياسات" — يفتح analytics.html لنفس الطفل
+  // زر "تحليل القياسات"
   if (openAnalyticsBtn) {
-    // لو هو <a> هنحط href، لو <button> هنستخدم click
     if (openAnalyticsBtn.tagName === 'A') {
-      openAnalyticsBtn.href = `analytics.html?child=${encodeURIComponent(childId)}&range=14d`;
+      openAnalyticsBtn.href =
+        `analytics.html?child=${encodeURIComponent(childId)}&range=14d`;
     } else {
       openAnalyticsBtn.addEventListener('click', () => {
-        location.href = `analytics.html?child=${encodeURIComponent(childId)}&range=14d`;
+        location.href =
+          `analytics.html?child=${encodeURIComponent(childId)}&range=14d`;
       });
     }
   }
