@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>تحليل القياسات</title>
+  <link rel="stylesheet" href="css/analytics.css" />
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <div class="container">
+    <!-- رأس -->
+    <header class="card header">
+      <button class="btn back" onclick="history.back()">⬅ رجوع</button>
+      <div class="title">
+        <h1>📈 تحليل القياسات — <span id="childName">طفل</span></h1>
+        <p class="muted" id="childMeta">—</p>
+      </div>
+
+      <div class="chips">
+        <span class="chip" id="chipRange">النطاق: —</span>
+        <span class="chip" id="chipCR">CR: —</span>
+        <span class="chip" id="chipCF">CF: —</span>
+      </div>
+
+      <!-- فلاتر -->
+      <div class="filters">
+        <label>الفترة</label>
+        <select id="range">
+          <option value="7d">آخر 7 أيام</option>
+          <option value="14d" selected>آخر 14 يوم</option>
+          <option value="30d">آخر 30 يوم</option>
+          <option value="custom">مخصص</option>
+        </select>
+
+        <input type="date" id="start" class="hidden">
+        <span>↔</span>
+        <input type="date" id="end"   class="hidden">
+
+        <label>الوحدة</label>
+        <select id="unit">
+          <option value="mmol" selected>mmol/L</option>
+          <option value="mgdl">mg/dL</option>
+        </select>
+
+        <button class="btn primary" id="apply">تطبيق</button>
+      </div>
+    </header>
+
+    <!-- KPIs -->
+    <section class="card kpis">
+      <div class="kpi"><div class="v" id="kpiTIR">—%</div><div class="l">وقت داخل النطاق (TIR)</div></div>
+      <div class="kpi bad"><div class="v" id="kpiHigh">—%</div><div class="l">ارتفاعات</div></div>
+      <div class="kpi bad"><div class="v" id="kpiLow">—%</div><div class="l">هبوطات</div></div>
+      <div class="kpi"><div class="v" id="kpiMean">—</div><div class="l">المتوسط</div></div>
+      <div class="kpi"><div class="v" id="kpiSD">—</div><div class="l">الانحراف المعياري</div></div>
+      <div class="kpi"><div class="v" id="kpiCount">—</div><div class="l">عدد القياسات</div></div>
+    </section>
+
+    <!-- رسوم بسيطة (Canvas بدون مكتبات) -->
+    <section class="card charts">
+      <h2>توزيع حسب وقت القياس</h2>
+      <canvas id="slotBar" height="180"></canvas>
+
+      <h2>متوسط كل يوم</h2>
+      <canvas id="dailyLine" height="180"></canvas>
+    </section>
+
+    <!-- توصيات -->
+    <section class="card insights">
+      <h2>ملاحظات واقتراحات</h2>
+      <ul id="insightsList" class="list"></ul>
+    </section>
+  </div>
+
+  <div id="loader" class="loader hidden">جارِ التحميل…</div>
+
+  <script type="module" src="js/analytics.js?v=1"></script>
+</body>
+</html>
