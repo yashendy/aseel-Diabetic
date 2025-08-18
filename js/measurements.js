@@ -293,46 +293,35 @@ function setTbodyMessage(msg){
 
 
 async function loadDayTable(){
-  try {
+  try{
     loader(true);
     setTbodyMessage('جارِ التحميل…');
 
     const date = dayInput.value;
-    if(!date){
-      setTbodyMessage('اختاري تاريخًا.');
-      return;
-    }
+    if (!date){ setTbodyMessage('اختاري تاريخًا.'); return; }
 
     const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
-    // بدون orderBy (نرتب محليًا)
-    const q  = query(col, where('date','==', date));
+    const q = query(col, where('date','==', date)); // بدون orderBy
     const snap = await getDocs(q);
 
-    const rows = snap.docs.map(d=>({id:d.id, ...d.data()}))
+    const rows = snap.docs.map(d => ({id:d.id, ...d.data()}))
       .sort((a,b)=>{
         if ((a.slotOrder||0)!==(b.slotOrder||0)) return (a.slotOrder||0)-(b.slotOrder||0);
         const ta=(a.createdAt?.seconds||0), tb=(b.createdAt?.seconds||0);
         return ta-tb;
       });
 
-    if(!rows.length){
-      setTbodyMessage('لا توجد قياسات لهذا اليوم.');
-      return;
-    }
+    if (!rows.length){ setTbodyMessage('لا توجد قياسات لهذا اليوم.'); return; }
 
+    // امسح tbody نهائيًا قبل البناء
     while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
 
-    for(const r of rows){
+    for (const r of rows){
       const tr = document.createElement('tr');
-      tr.dataset.id = r.id;
-
-      const state = classify(Number(r.value_mmol));
-      const badge = renderBadge(state);
-
       tr.innerHTML = `
         <td>${r.slotLabel||'-'}</td>
-        <td>${fmtNum(r.value_mmol)}</td>
-        <td>${badge}</td>
+        <td>${(r.value_mmol!=null)? Number(r.value_mmol).toFixed(1) : '—'}</td>
+        <td>${renderBadge(classify(Number(r.value_mmol)))}</td>
         <td>${r.correctionDose ?? '—'}</td>
         <td>${r.hypoTreatment ?? '—'}</td>
         <td>${escapeHtml(r.notes ?? '')}</td>
@@ -342,11 +331,18 @@ async function loadDayTable(){
             <button class="icon-btn btn-save hidden">💾 حفظ</button>
             <button class="icon-btn btn-cancel hidden">↩ إلغاء</button>
           </div>
-        </td>
-      `;
+        </td>`;
       attachRowEditing(tr, r);
       tbody.appendChild(tr);
     }
+  } catch(e){
+    console.error('loadDayTable error:', e);
+    setTbodyMessage('خطأ في تحميل البيانات');
+  } finally {
+    loader(false);
+  }
+}
+
 
   } catch (e){
     console.error('loadDayTable error:', e);
