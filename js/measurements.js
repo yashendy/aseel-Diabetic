@@ -1,4 +1,3 @@
-// js/measurements.js
 // ===========================================================
 // 0) childId مع fallback + إعادة توجيه لو غير متوفر
 // ===========================================================
@@ -20,7 +19,7 @@ import {
   where, query, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-// fallback للودر لو غير موجود لمنع crash مبكر
+// لودر آمن
 const loaderEl = document.getElementById('loader') || (() => {
   const d = document.createElement('div');
   d.id = 'loader';
@@ -55,15 +54,19 @@ const notesInput = document.getElementById('notes');
 const btnSave    = document.getElementById('btnSave');
 
 const tbody = document.getElementById('tbody');
-// ضمني عدم وجود أي <tbody> آخر داخل الجدول
+// ضمني عدم وجود أي <tbody> زائد
 const tableEl = tbody.closest('table');
 Array.from(tableEl.querySelectorAll('tbody')).forEach(el => {
-  if (el !== tbody) el.remove(); // امسح أي tbody إضافي
+  if (el !== tbody) el.remove();
 });
 
 // أدوات
 const pad = n => String(n).padStart(2,'0');
 const fmtDate = (d)=> `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const fmtNum = (n)=> (n==null || isNaN(n)) ? '—' : Number(n).toFixed(1);
+function escapeHtml(s){ return (s||'').toString()
+  .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+  .replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
 
 // ترتيب الأوقات
 const SLOTS = [
@@ -118,13 +121,12 @@ onAuthStateChanged(auth, async (user)=>{
 // تعبئة قائمة الأوقات + اختيار افتراضي
 function initSlotsSelect(){
   slotSelect.innerHTML = SLOTS.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
-  if (!slotSelect.value) slotSelect.value = SLOTS[0].key; // اختيار افتراضي
+  if (!slotSelect.value) slotSelect.value = SLOTS[0].key;
 }
 
 // تحميل بيانات الطفل للواجهة
 async function loadChildHeader(){
   const ref = doc(db, `parents/${currentUser.uid}/children/${childId}`);
-  console.log('[firestore] child path:', ref.path);
   const snap = await getDoc(ref);
   if(!snap.exists()){
     alert('❌ لم يتم العثور على هذا الطفل.');
@@ -178,12 +180,12 @@ function bindEvents(){
 async function onDayChange(){
   if(!dayInput.value) return;
   const sel = new Date(dayInput.value);
-  const today = new Date(fmtDate(new Date())); // منتصف ليل اليوم
+  const today = new Date(fmtDate(new Date()));
   if(sel > today){
     alert('⛔ لا يمكن اختيار تاريخ بعد تاريخ اليوم');
     dayInput.value = fmtDate(new Date());
   }
-  if (!slotSelect.value) slotSelect.value = SLOTS[0].key; // تأكيد اختيار افتراضي
+  if (!slotSelect.value) slotSelect.value = SLOTS[0].key;
   await loadDayTable();
 }
 
@@ -197,7 +199,7 @@ function onValueChange(){
 
   if(v>0 && v > max && cf>0){
     if (wrapCorrection){
-      const diff = v - max;                                // نبدأ من الحد الأعلى الطبيعي
+      const diff = v - max;                                // بدءًا من الحد الأعلى
       const dose = Math.round((diff / cf) * 10) / 10;      // جرعة مقترحة
       wrapCorrection.classList.remove('hidden');
       correctionDoseInput.value = dose;
@@ -266,7 +268,7 @@ async function onSave(){
     await loadDayTable();
   }catch(e){
     console.error(e);
-    alert('تعذّر الحفظ. تأكدي من الاتصال بالإنترنت.');
+    alert('تعذّر الحفظ. تأكدي من الاتصال بالإنترنت/قواعد Firestore.');
   }finally{
     loader(false);
   }
@@ -276,11 +278,7 @@ async function onSave(){
 // 4) تحميل جدول اليوم
 // ===========================================================
 function setTbodyMessage(msg){
-  // امسح أي tbody إضافي مرة أخرى كضمان
-  Array.from(tableEl.querySelectorAll('tbody')).forEach(el => {
-    if (el !== tbody) el.remove();
-  });
-  // امسح صفوف tbody الحالي تمامًا
+  Array.from(tableEl.querySelectorAll('tbody')).forEach(el => { if (el !== tbody) el.remove(); });
   while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
   const tr = document.createElement('tr');
   const td = document.createElement('td');
@@ -291,37 +289,41 @@ function setTbodyMessage(msg){
   tbody.appendChild(tr);
 }
 
-
 async function loadDayTable(){
-  try{
+  try {
     loader(true);
     setTbodyMessage('جارِ التحميل…');
 
     const date = dayInput.value;
-    if (!date){ setTbodyMessage('اختاري تاريخًا.'); return; }
+    if(!date){ setTbodyMessage('اختاري تاريخًا.'); return; }
 
     const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
-    const q = query(col, where('date','==', date)); // بدون orderBy
+    // بدون orderBy (نرتب محليًا)
+    const q  = query(col, where('date','==', date));
     const snap = await getDocs(q);
 
-    const rows = snap.docs.map(d => ({id:d.id, ...d.data()}))
+    const rows = snap.docs.map(d=>({id:d.id, ...d.data()}))
       .sort((a,b)=>{
         if ((a.slotOrder||0)!==(b.slotOrder||0)) return (a.slotOrder||0)-(b.slotOrder||0);
         const ta=(a.createdAt?.seconds||0), tb=(b.createdAt?.seconds||0);
         return ta-tb;
       });
 
-    if (!rows.length){ setTbodyMessage('لا توجد قياسات لهذا اليوم.'); return; }
+    if(!rows.length){ setTbodyMessage('لا توجد قياسات لهذا اليوم.'); return; }
 
-    // امسح tbody نهائيًا قبل البناء
     while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
 
-    for (const r of rows){
+    for(const r of rows){
       const tr = document.createElement('tr');
+      tr.dataset.id = r.id;
+
+      const state = classify(Number(r.value_mmol));
+      const badge = renderBadge(state);
+
       tr.innerHTML = `
         <td>${r.slotLabel||'-'}</td>
-        <td>${(r.value_mmol!=null)? Number(r.value_mmol).toFixed(1) : '—'}</td>
-        <td>${renderBadge(classify(Number(r.value_mmol)))}</td>
+        <td>${fmtNum(r.value_mmol)}</td>
+        <td>${badge}</td>
         <td>${r.correctionDose ?? '—'}</td>
         <td>${r.hypoTreatment ?? '—'}</td>
         <td>${escapeHtml(r.notes ?? '')}</td>
@@ -331,18 +333,11 @@ async function loadDayTable(){
             <button class="icon-btn btn-save hidden">💾 حفظ</button>
             <button class="icon-btn btn-cancel hidden">↩ إلغاء</button>
           </div>
-        </td>`;
+        </td>
+      `;
       attachRowEditing(tr, r);
       tbody.appendChild(tr);
     }
-  } catch(e){
-    console.error('loadDayTable error:', e);
-    setTbodyMessage('خطأ في تحميل البيانات');
-  } finally {
-    loader(false);
-  }
-}
-
 
   } catch (e){
     console.error('loadDayTable error:', e);
@@ -424,8 +419,3 @@ function renderBadge(state){
     default:             return '—';
   }
 }
-
-function fmtNum(n){ return (n==null || isNaN(n)) ? '—' : Number(n).toFixed(1); }
-function escapeHtml(s){ return (s||'').toString()
-  .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
-  .replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
