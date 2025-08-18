@@ -1,107 +1,203 @@
+// js/child.js
+// -----------------------------------------------------------
+// - نقرأ childId من رابط الصفحة أو من localStorage كـ fallback
+// - لو مش موجود نحول تلقائيًا إلى parent.html?pickChild=1
+// - نحفظ آخر طفل تم فتحه في localStorage
+// - نملأ معلومات الهيدر والكروت + نفعِّل الروابط للصفحات الأخرى
+// -----------------------------------------------------------
+
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { collection, getDocs, query, where, orderBy, limit, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import {
+  collection, getDocs, query, where, orderBy, limit, doc, getDoc
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-const params = new URLSearchParams(location.search);
-const childId = params.get('child');
-const loaderEl = document.getElementById('loader');
+// ---- childId مع fallback ----
+const params   = new URLSearchParams(location.search);
+let   childId  = params.get('child') || localStorage.getItem('lastChildId');
+if (!childId) {
+  // لا يوجد طفل محدد: ارجعي لاختيار طفل
+  location.replace('parent.html?pickChild=1');
+  throw new Error('Missing child id → redirecting to parent.html');
+}
+// خزِّني آخر طفل كـ fallback لاحقًا
+localStorage.setItem('lastChildId', childId);
 
-const childNameEl = document.getElementById('childName');
-const childMetaEl = document.getElementById('childMeta');
-const chipRangeEl = document.getElementById('chipRange');
-const chipCREl = document.getElementById('chipCR');
-const chipCFEl = document.getElementById('chipCF');
+// ---- عناصر DOM (مع حراسة) ----
+const $ = (id) => document.getElementById(id);
 
-const todayMeasuresEl = document.getElementById('todayMeasures');
-const todayMealsEl = document.getElementById('todayMeals');
-const nextVisitEl = document.getElementById('nextVisit');
+const loaderEl      = $('loader');
 
-const miniMeasuresEl = document.getElementById('miniMeasures');
-const miniMealsEl = document.getElementById('miniMeals');
-const miniFollowUpEl = document.getElementById('miniFollowUp');
+const childNameEl   = $('childName');
+const childMetaEl   = $('childMeta');
+const chipRangeEl   = $('chipRange');
+const chipCREl      = $('chipCR');
+const chipCFEl      = $('chipCF');
 
-const goMeasurements = document.getElementById('goMeasurements');
-const goMeals = document.getElementById('goMeals');
-const goFoodItems = document.getElementById('goFoodItems');
-const goReports = document.getElementById('goReports');
-const goVisits = document.getElementById('goVisits');
-const goChildEdit = document.getElementById('goChildEdit');
+const todayMeasuresEl = $('todayMeasures');
+const todayMealsEl    = $('todayMeals');
+const nextVisitEl     = $('nextVisit');
 
-const infoNameEl = document.getElementById('infoName');
-const infoAgeEl = document.getElementById('infoAge');
-const infoGenderEl = document.getElementById('infoGender');
-const infoWeightEl = document.getElementById('infoWeight');
-const infoHeightEl = document.getElementById('infoHeight');
-const infoDeviceEl = document.getElementById('infoDevice');
-const infoInsulinEl = document.getElementById('infoInsulin');
-const infoRangeEl = document.getElementById('infoRange');
-const infoCREl = document.getElementById('infoCR');
-const infoCFEl = document.getElementById('infoCF');
+const miniMeasuresEl  = $('miniMeasures');
+const miniMealsEl     = $('miniMeals');
+const miniFollowUpEl  = $('miniFollowUp');
 
-function pad(n){return String(n).padStart(2,'0')}
-function todayStr(){const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}
-function calcAge(bd){if(!bd)return '-';const b=new Date(bd),t=new Date();let a=t.getFullYear()-b.getFullYear();const m=t.getMonth()-b.getMonth();if(m<0||(m===0&&t.getDate()<b.getDate()))a--;return a}
-function loader(show){loaderEl?.classList.toggle('hidden',!show)}
+const goMeasurements  = $('goMeasurements');
+const goMeals         = $('goMeals');
+const goFoodItems     = $('goFoodItems');
+const goReports       = $('goReports');
+const goVisits        = $('goVisits');
+const goChildEdit     = $('goChildEdit');
 
+const infoNameEl    = $('infoName');
+const infoAgeEl     = $('infoAge');
+const infoGenderEl  = $('infoGender');
+const infoWeightEl  = $('infoWeight');
+const infoHeightEl  = $('infoHeight');
+const infoDeviceEl  = $('infoDevice');
+const infoInsulinEl = $('infoInsulin');
+const infoRangeEl   = $('infoRange');
+const infoCREl      = $('infoCR');
+const infoCFEl      = $('infoCF');
+
+// ---- أدوات ----
+function pad(n){ return String(n).padStart(2,'0'); }
+function todayStr(){
+  const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function calcAge(bd){
+  if(!bd) return '-';
+  const b=new Date(bd), t=new Date();
+  let a=t.getFullYear()-b.getFullYear();
+  const m=t.getMonth()-b.getMonth();
+  if(m<0 || (m===0 && t.getDate()<b.getDate())) a--;
+  return a;
+}
+function loader(show){ loaderEl && loaderEl.classList.toggle('hidden', !show); }
+
+// ---- تشغيل ----
 onAuthStateChanged(auth, async (user)=>{
-  if(!user) return location.href='index.html';
-  if(!childId){alert('لا يوجد معرف طفل');history.back();return;}
+  if(!user){ location.href='index.html'; return; }
 
   try{
     loader(true);
+
+    // قراءة بيانات الطفل
     const childRef = doc(db, `parents/${user.uid}/children/${childId}`);
     const snap = await getDoc(childRef);
-    if(!snap.exists()){alert('لم يتم العثور على الطفل');history.back();return;}
+    if(!snap.exists()){
+      alert('لم يتم العثور على الطفل');
+      // امسح lastChildId لأنه غير صالح ثم رجِّع لاختيار طفل
+      localStorage.removeItem('lastChildId');
+      location.replace('parent.html?pickChild=1');
+      return;
+    }
     const c = snap.data();
+    // تأكيد حفظ آخر طفل صالح
+    localStorage.setItem('lastChildId', childId);
 
-    childNameEl.textContent = c.name || 'طفل';
-    childMetaEl.textContent = `${c.gender || '-'} • العمر: ${calcAge(c.birthDate)} سنة`;
+    // ---- الهيدر والشرائط ----
+    if (childNameEl) childNameEl.textContent = c.name || 'طفل';
+    if (childMetaEl) childMetaEl.textContent = `${c.gender || '-'} • العمر: ${calcAge(c.birthDate)} سنة`;
 
     const min = Number(c.normalRange?.min ?? 4.4);
     const max = Number(c.normalRange?.max ?? 7.8);
     const cr  = Number(c.carbRatio ?? 12);
-    const cf  = c.correctionFactor!=null?Number(c.correctionFactor):null;
+    const cf  = (c.correctionFactor != null) ? Number(c.correctionFactor) : null;
 
-    chipRangeEl.textContent = `النطاق الطبيعي: ${min}–${max} mmol/L`;
-    chipCREl.textContent    = `CarbRatio: ${cr} g/U`;
-    chipCFEl.textContent    = `CF: ${cf ?? '—'} mmol/L per U`;
+    if (chipRangeEl) chipRangeEl.textContent = `النطاق الطبيعي: ${min}–${max} mmol/L`;
+    if (chipCREl)    chipCREl.textContent    = `CarbRatio: ${cr} g/U`;
+    if (chipCFEl)    chipCFEl.textContent    = `CF: ${cf ?? '—'} mmol/L per U`;
 
-    goMeasurements.href=`measurements.html?child=${childId}`;
-    goMeals.href=`meals.html?child=${childId}`;
-    goFoodItems.href=`food-items.html?child=${childId}`;
-    goReports.href=`reports.html?child=${childId}`;
-    goVisits.href=`visits.html?child=${childId}`;
-    goChildEdit.href = `child-edit.html?child=${encodeURIComponent(childId)}`;
+    // ---- الروابط للصفحات الأخرى (نضمن childId) ----
+    setHref(goMeasurements, `measurements.html?child=${encodeURIComponent(childId)}`);
+    setHref(goMeals,        `meals.html?child=${encodeURIComponent(childId)}`);
+    setHref(goFoodItems,    `food-items.html?child=${encodeURIComponent(childId)}`);
+    setHref(goReports,      `reports.html?child=${encodeURIComponent(childId)}`);
+    setHref(goVisits,       `visits.html?child=${encodeURIComponent(childId)}`);
+    setHref(goChildEdit,    `child-edit.html?child=${encodeURIComponent(childId)}`);
 
+    // ---- إحصائيات اليوم ----
+    const today = todayStr();
 
-    const today=todayStr();
-    const measRef=collection(db,`parents/${user.uid}/children/${childId}/measurements`);
-    const snapMeas=await getDocs(query(measRef,where('date','==',today)));
-    const mealsRef=collection(db,`parents/${user.uid}/children/${childId}/meals`);
-    const snapMeals=await getDocs(query(mealsRef,where('date','==',today)));
-    const visitsRef=collection(db,`parents/${user.uid}/children/${childId}/visits`);
-    const snapVisit=await getDocs(query(visitsRef,where('followUpDate','>=',today),orderBy('followUpDate','asc'),limit(1)));
+    // قياسات اليوم
+    const measRef   = collection(db, `parents/${user.uid}/children/${childId}/measurements`);
+    const snapMeas  = await getDocs(query(measRef, where('date','==',today)));
+    const measCount = snapMeas.size || 0;
 
-    todayMeasuresEl.textContent=miniMeasuresEl.textContent=snapMeas.size||0;
-    todayMealsEl.textContent=miniMealsEl.textContent=snapMeals.size||0;
-    nextVisitEl.textContent=miniFollowUpEl.textContent=!snapVisit.empty?snapVisit.docs[0].data().followUpDate:'—';
+    // وجبات اليوم
+    const mealsRef   = collection(db, `parents/${user.uid}/children/${childId}/meals`);
+    const snapMeals  = await getDocs(query(mealsRef, where('date','==',today)));
+    const mealsCount = snapMeals.size || 0;
 
-    infoNameEl.textContent=c.name||'طفل';
-    infoAgeEl.textContent=`${calcAge(c.birthDate)} سنة`;
-    infoGenderEl.textContent=c.gender||'—';
-    infoWeightEl.textContent=c.weightKg?`${c.weightKg} كجم`:'—';
-    infoHeightEl.textContent=c.heightCm?`${c.heightCm} سم`:'—';
-    infoDeviceEl.textContent=c.deviceName||c.device?.name||'—';
+    // أقرب متابعة
+    const visitsRef  = collection(db, `parents/${user.uid}/children/${childId}/visits`);
+    const qVisits    = query(
+      visitsRef,
+      where('followUpDate','>=', today),
+      orderBy('followUpDate','asc'),
+      limit(1)
+    );
+    const snapVisit  = await getDocs(qVisits);
+    const nextFollow = !snapVisit.empty ? (snapVisit.docs[0].data().followUpDate || '—') : '—';
 
-    const basal=c.insulin?.basalType||c.insulinBasalType||null;
-    const bolus=c.insulin?.bolusType||c.insulinBolusType||null;
-    const insulinType=c.insulinType||null;
-    infoInsulinEl.textContent=basal||bolus?(basal?`قاعدي: ${basal}`:'')+(basal&&bolus?' • ':'')+(bolus?`للوجبات: ${bolus}`:''):(insulinType||'—');
+    // عرض الأرقام في الكروت (كبير + مصغّر)
+    setText(todayMeasuresEl, measCount);
+    setText(miniMeasuresEl,  measCount);
 
-    infoRangeEl.textContent=`${min}–${max} mmol/L`;
-    infoCREl.textContent=`${cr} g/U`;
-    infoCFEl.textContent=cf!=null?`${cf} mmol/L/U`:'—';
+    setText(todayMealsEl,    mealsCount);
+    setText(miniMealsEl,     mealsCount);
 
-  }catch(e){console.error(e);alert('تعذر تحميل البيانات');}
-  finally{loader(false);}
+    setText(nextVisitEl,     nextFollow);
+    setText(miniFollowUpEl,  nextFollow);
+
+    // ---- بطاقة "بيانات الطفل" ----
+    setText(infoNameEl,   c.name || 'طفل');
+    setText(infoAgeEl,    `${calcAge(c.birthDate)} سنة`);
+    setText(infoGenderEl, c.gender || '—');
+    setText(infoWeightEl, c.weightKg ? `${c.weightKg} كجم` : '—');
+    setText(infoHeightEl, c.heightCm ? `${c.heightCm} سم` : '—');
+
+    // الجهاز
+    const deviceName = c.deviceName || c.device?.name || '—';
+    setText(infoDeviceEl, deviceName);
+
+    // الأنسولين
+    const basal = c.insulin?.basalType || c.insulinBasalType || null;
+    const bolus = c.insulin?.bolusType || c.insulinBolusType || null;
+    const insulinType = c.insulinType || null;
+
+    if (basal || bolus) {
+      const text = (basal ? `قاعدي: ${basal}` : '') +
+                   (basal && bolus ? ' • ' : '') +
+                   (bolus ? `للوجبات: ${bolus}` : '');
+      setText(infoInsulinEl, text);
+    } else {
+      setText(infoInsulinEl, insulinType || '—');
+    }
+
+    // الحدود والمعاملات
+    setText(infoRangeEl, `${min}–${max} mmol/L`);
+    setText(infoCREl,    `${cr} g/U`);
+    setText(infoCFEl,    (cf != null) ? `${cf} mmol/L/U` : '—');
+
+  }catch(e){
+    console.error(e);
+    alert('تعذر تحميل البيانات');
+  }finally{
+    loader(false);
+  }
 });
+
+// ---- مساعدين صغارين ----
+function setHref(el, href){
+  if (!el) return;
+  el.setAttribute('href', href);
+  // احتياط: لو المتصفح منع تنقل رابط فارغ لأي سبب
+  el.addEventListener('click', (ev)=>{
+    if (!href) { ev.preventDefault(); }
+  });
+}
+function setText(el, value){
+  if (el) el.textContent = (value ?? '—');
+}
