@@ -9,59 +9,84 @@
 </head>
 <body>
   <div class="container">
-    <header class="top no-print">
+
+    <!-- قسم 1: بيانات الطفل -->
+    <header class="card child-info">
       <button class="btn back" onclick="history.back()">⬅ رجوع</button>
-      <h1>📊 القياسات</h1>
-      <div class="tools">
-        <button id="btnPrintToday" class="btn primary">🖨️ طباعة اليوم (بدون سناك/رياضة)</button>
-        <button id="btnPrintBlankWeek" class="btn">🖨️ نموذج أسبوع فارغ</button>
-        <button id="btnLabs" class="btn outline">🔬 تقارير التحاليل الطبية</button>
+      <div class="head">
+        <h1>📊 القياسات — <span id="childName">طفل</span></h1>
+        <p class="muted" id="childMeta">—</p>
+        <div class="chips">
+          <span class="chip" id="chipRange">النطاق: —</span>
+          <span class="chip" id="chipCR">CR: —</span>
+          <span class="chip" id="chipCF">CF: —</span>
+          <span class="chip warn" id="chipSevereLow">Low≤—</span>
+          <span class="chip warn" id="chipSevereHigh">High≥—</span>
+        </div>
+      </div>
+      <div class="datebar">
+        <label for="day">اليوم:</label>
+        <input type="date" id="day" />
       </div>
     </header>
 
-    <!-- اختيار اليوم -->
-    <section class="no-print datebar">
-      <label for="day">اليوم:</label>
-      <input type="date" id="day" />
-    </section>
+    <!-- قسم 2: نموذج الإدخال -->
+    <section class="card form">
+      <h2>إدخال قياس</h2>
+      <div class="grid">
+        <div class="field">
+          <label for="slot">وقت القياس</label>
+          <select id="slot"></select>
+        </div>
 
-    <!-- منطقة الطباعة/العرض لليوم الحالي -->
-    <section id="printArea" class="sheet card">
-      <div class="sheet-head">
-        <div class="title">نموذج قياسات اليوم</div>
-        <div class="meta">
-          الطفل: <span id="childName">—</span> • التاريخ: <span id="dayLabel">—</span>
+        <div class="field">
+          <label for="value">قيمة القياس (mmol/L)</label>
+          <input id="value" type="number" step="0.1" min="0" placeholder="مثال: 6.5" />
+        </div>
+
+        <div class="field hidden" id="wrapCorrection">
+          <label for="correctionDose">جرعة تصحيحية (وحدة)</label>
+          <input id="correctionDose" type="number" step="0.1" min="0" />
+          <div class="hint" id="corrHint">—</div>
+        </div>
+
+        <div class="field hidden" id="wrapHypo">
+          <label for="hypoTreatment">رفعنا بإيه؟</label>
+          <input id="hypoTreatment" placeholder="مثال: عصير 100ml / 3 جلوكوز" />
+        </div>
+
+        <div class="field row">
+          <label for="notes">ملاحظات</label>
+          <input id="notes" placeholder="اختياري…" />
         </div>
       </div>
 
-      <!-- جدول أوقات القياس (للطباعة والعرض) -->
-      <table class="times">
+      <div class="actions">
+        <button class="btn primary" id="btnSave">💾 حفظ القياس</button>
+      </div>
+    </section>
+
+    <!-- قسم 3: جدول اليوم -->
+    <section class="card table">
+      <h2>قياسات اليوم</h2>
+      <table>
         <thead>
           <tr>
             <th>الوقت</th>
-            <th>القياس</th>
-            <th>جرعة التصحيح</th>
+            <th>القراءة</th>
+            <th>الحالة</th>
+            <th>التصحيح</th>
+            <th>علاج الهبوط</th>
             <th>ملاحظات</th>
+            <th>تعديل</th>
           </tr>
         </thead>
-        <tbody id="timesBody">
-          <!-- اوقات اليوم القياسية (وسمناها بكلاسات ليسهل إخفاؤها عند الطباعة) -->
-          <tr class="slot"><td>الاستيقاظ</td><td></td><td></td><td></td></tr>
-          <tr class="slot"><td>ق.الفطار</td><td></td><td></td><td></td></tr>
-          <tr class="slot"><td>ب.الفطار</td><td></td><td></td><td></td></tr>
-          <tr class="slot"><td>ق.الغداء</td><td></td><td></td><td></td></tr>
-          <tr class="slot"><td>ب.الغداء</td><td></td><td></td><td></td></tr>
-          <tr class="slot"><td>ق.العشاء</td><td></td><td></td><td></td></tr>
-          <tr class="slot"><td>ب.العشاء</td><td></td><td></td><td></td></tr>
-          <tr class="slot slot-snack"><td>سناك</td><td></td><td></td><td></td></tr>
-          <tr class="slot"><td>ق.النوم</td><td></td><td></td><td></td></tr>
-          <tr class="slot"><td>أثناء النوم</td><td></td><td></td><td></td></tr>
-          <tr class="slot slot-sport"><td>ق.الرياضة</td><td></td><td></td><td></td></tr>
-          <tr class="slot slot-sport"><td>ب.الرياضة</td><td></td><td></td><td></td></tr>
-        </tbody>
+        <tbody id="tbody"></tbody>
       </table>
     </section>
   </div>
+
+  <div id="loader" class="loader hidden">جارِ التحميل…</div>
 
   <script type="module" src="js/measurements.js"></script>
 </body>
