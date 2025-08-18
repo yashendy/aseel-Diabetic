@@ -1,43 +1,69 @@
+// js/measurements.js
+// ===========================================================
+// 0) الحصول على childId مع fallback + إعادة توجيه عند غيابه
+// ===========================================================
+const qsInit = new URLSearchParams(location.search);
+let childId = qsInit.get('child') || localStorage.getItem('lastChildId');
+if (!childId) {
+  // لا يوجد معرف طفل → ارجعي لاختيار الطفل
+  location.replace('parent.html?pickChild=1');
+  throw new Error('Missing childId → redirecting to parent.html');
+}
+// خزني آخر طفل كـ fallback لاحقًا
+localStorage.setItem('lastChildId', childId);
+
+// ===========================================================
+// 1) استيراد Firebase + عناصر الصفحة + fallback للـ loader
+// ===========================================================
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, where, query, orderBy, serverTimestamp
+  collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc,
+  where, query, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-/* عناصر */
-const params = new URLSearchParams(location.search);
-const childId = params.get('child');
+// fallback للودر لو غير موجود لمنع crash مبكر
+const loaderEl = document.getElementById('loader') || (() => {
+  const d = document.createElement('div');
+  d.id = 'loader';
+  d.className = 'loader hidden';
+  d.textContent = 'جارِ التحميل…';
+  document.body.appendChild(d);
+  return d;
+})();
+function loader(show){ loaderEl.classList.toggle('hidden', !show); }
 
-const loaderEl = document.getElementById('loader');
-
+// عناصر
 const childNameEl = document.getElementById('childName');
 const childMetaEl = document.getElementById('childMeta');
 const chipRangeEl = document.getElementById('chipRange');
 const chipCREl = document.getElementById('chipCR');
 const chipCFEl = document.getElementById('chipCF');
-const chipSevereLowEl = document.getElementById('chipSevereLow');
-const chipSevereHighEl= document.getElementById('chipSevereHigh');
+const chipSevereLowEl  = document.getElementById('chipSevereLow');
+const chipSevereHighEl = document.getElementById('chipSevereHigh');
 
-const dayInput = document.getElementById('day');
-const slotSelect= document.getElementById('slot');
-const valueInput= document.getElementById('value');
-const wrapCorrection = document.getElementById('wrapCorrection');
-const correctionDoseInput = document.getElementById('correctionDose');
-const corrHint = document.getElementById('corrHint');
-const wrapHypo = document.getElementById('wrapHypo');
-const hypoTreatmentInput = document.getElementById('hypoTreatment');
+const dayInput   = document.getElementById('day');
+const slotSelect = document.getElementById('slot');
+const valueInput = document.getElementById('value');
+
+const wrapCorrection       = document.getElementById('wrapCorrection');
+const correctionDoseInput  = document.getElementById('correctionDose');
+const corrHint             = document.getElementById('corrHint');
+
+const wrapHypo            = document.getElementById('wrapHypo');
+const hypoTreatmentInput  = document.getElementById('hypoTreatment');
+
 const notesInput = document.getElementById('notes');
-const btnSave = document.getElementById('btnSave');
+const btnSave    = document.getElementById('btnSave');
 
 const tbody = document.getElementById('tbody');
 
-/* أدوات */
+// أدوات
 const pad = n => String(n).padStart(2,'0');
-const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
-const arDate = d => d.toLocaleDateString('ar-EG',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-function loader(b){ loaderEl.classList.toggle('hidden', !b); }
+const fmtDate = (d)=> `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const arDate  = (d)=> d.toLocaleDateString('ar-EG',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
-/* ثوابت الأوقات وترتيبها */
+// ترتيب الأوقات
 const SLOTS = [
   {key:'WAKE',       label:'الاستيقاظ',     order: 1, multi:false},
   {key:'PRE_BF',     label:'ق.الفطار',      order: 2, multi:false},
@@ -52,10 +78,9 @@ const SLOTS = [
   {key:'PRE_SPORT',  label:'ق.الرياضة',     order:11, multi:true },
   {key:'POST_SPORT', label:'ب.الرياضة',     order:12, multi:true },
 ];
-const SLOT_BY_LABEL = Object.fromEntries(SLOTS.map(s=>[s.label,s]));
-const SLOT_BY_KEY   = Object.fromEntries(SLOTS.map(s=>[s.key,s]));
+const SLOT_BY_KEY = Object.fromEntries(SLOTS.map(s=>[s.key,s]));
 
-/* حالة الطفل */
+// حالة الطفل
 let currentUser;
 let childData = {
   normalRange:{min:4,max:7},
@@ -65,125 +90,119 @@ let childData = {
   severeHigh:null,
 };
 
-/* تهيئة */
+// تهيئة
 onAuthStateChanged(auth, async (user)=>{
-  if(!user) return location.href='index.html';
-  if(!childId){ alert('لا يوجد معرف طفل'); history.back(); return; }
+  if(!user){ location.href='index.html'; return; }
   currentUser = user;
 
   try{
     loader(true);
-    await initSlotsSelect();
+    initSlotsSelect();
     await loadChildHeader();
     initDate();
     bindEvents();
     await loadDayTable();
-  }catch(e){
-    console.error(e);
+  }catch(err){
+    console.error('[init error]', err);
     alert('حدث خطأ في تحميل الصفحة');
   }finally{
     loader(false);
   }
 });
 
-/* تعبئة قائمة الأوقات */
-async function initSlotsSelect(){
+// تعبئة قائمة الأوقات
+function initSlotsSelect(){
   slotSelect.innerHTML = SLOTS.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
 }
 
-/* تحميل بيانات الطفل وعرض الهيدر */
+// تحميل بيانات الطفل للواجهة
 async function loadChildHeader(){
   const ref = doc(db, `parents/${currentUser.uid}/children/${childId}`);
+  console.log('[firestore] child path:', ref.path);
   const snap = await getDoc(ref);
-  if(!snap.exists()) throw new Error('child not found');
+  if(!snap.exists()){
+    alert('❌ لم يتم العثور على هذا الطفل.'); 
+    location.replace('parent.html?pickChild=1');
+    throw new Error('child not found');
+  }
   const c = snap.data();
+
   childData.normalRange = {
     min: Number(c.normalRange?.min ?? 4),
     max: Number(c.normalRange?.max ?? 7),
   };
-  childData.carbRatio = c.carbRatio != null ? Number(c.carbRatio) : null;
+  childData.carbRatio        = c.carbRatio != null ? Number(c.carbRatio) : null;
   childData.correctionFactor = c.correctionFactor != null ? Number(c.correctionFactor) : null;
-  childData.severeLow  = c.severeLow  != null ? Number(c.severeLow)  : null;
-  childData.severeHigh = c.severeHigh != null ? Number(c.severeHigh) : null;
+  childData.severeLow        = c.severeLow  != null ? Number(c.severeLow)  : null;
+  childData.severeHigh       = c.severeHigh != null ? Number(c.severeHigh) : null;
 
   childNameEl.textContent = c.name || 'طفل';
-  childMetaEl.textContent = `${c.gender || '-'} • العمر: ${calcAge(c.birthDate)} سنة`;
+  childMetaEl.textContent = `${c.gender || '—'} • العمر: ${calcAge(c.birthDate)} سنة`;
 
-  chipRangeEl.textContent = `النطاق: ${childData.normalRange.min}–${childData.normalRange.max} mmol/L`;
-  chipCREl.textContent    = `CR: ${childData.carbRatio ?? '—'} g/U`;
-  chipCFEl.textContent    = `CF: ${childData.correctionFactor ?? '—'} mmol/L/U`;
+  chipRangeEl.textContent      = `النطاق: ${childData.normalRange.min}–${childData.normalRange.max} mmol/L`;
+  chipCREl.textContent         = `CR: ${childData.carbRatio ?? '—'} g/U`;
+  chipCFEl.textContent         = `CF: ${childData.correctionFactor ?? '—'} mmol/L/U`;
   chipSevereLowEl.textContent  = `Low≤${childData.severeLow ?? '—'}`;
   chipSevereHighEl.textContent = `High≥${childData.severeHigh ?? '—'}`;
 }
 
-/* تاريخ اليوم + منع المستقبل */
-function initDate(){
-  const now = new Date();
-  dayInput.value = fmtDate(now);
-  dayInput.max   = fmtDate(now);   // منع المستقبل
-  updateDayLabel();
-}
-
-function fmtDate(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function calcAge(bd){
-  if(!bd) return '-';
+  if(!bd) return '—';
   const b=new Date(bd), t=new Date();
   let a=t.getFullYear()-b.getFullYear();
   const m=t.getMonth()-b.getMonth();
   if(m<0 || (m===0 && t.getDate()<b.getDate())) a--;
   return a;
 }
+
+function initDate(){
+  const now = new Date();
+  dayInput.value = fmtDate(now);
+  dayInput.max   = fmtDate(now); // منع إدخال المستقبل
+}
+
 function bindEvents(){
-  // التحكم في إظهار التصحيح/الهبوط حسب القيمة
   valueInput.addEventListener('input', onValueChange);
   dayInput.addEventListener('change', onDayChange);
   btnSave.addEventListener('click', onSave);
 }
 
-/* عند تغيير التاريخ */
 async function onDayChange(){
   if(!dayInput.value) return;
   const sel = new Date(dayInput.value);
   const today = new Date(fmtDate(new Date())); // منتصف ليل اليوم
-  if (sel > today){
+  if(sel > today){
     alert('⛔ لا يمكن اختيار تاريخ بعد تاريخ اليوم');
     dayInput.value = fmtDate(new Date());
   }
-  updateDayLabel();
   await loadDayTable();
 }
-function updateDayLabel(){
-  const v = dayInput.value ? new Date(dayInput.value) : new Date();
-  const metaDate = arDate(v);
-  // نزيد التاريخ في سطر الهيدر (نفس child-info block)
-  // (اختياري) ممكن نعرضه بوضوح داخل الجدول فقط
-}
 
-/* منطق إظهار التصحيح/الهبوط */
 function onValueChange(){
   const v = Number(valueInput.value);
   const {min, max} = childData.normalRange;
   const cf = Number(childData.correctionFactor || 0);
 
-  // إظهار علاج الهبوط
-  wrapHypo.classList.toggle('hidden', !(v>0 && v < min));
+  if (wrapHypo) wrapHypo.classList.toggle('hidden', !(v>0 && v < min));
 
-  // إظهار/حساب التصحيح
   if(v>0 && v > max && cf>0){
-    const diff = v - max;                // نبدأ من الحد الأعلى الطبيعي
-    const dose = round1(diff / cf);
-    wrapCorrection.classList.remove('hidden');
-    correctionDoseInput.value = dose;    // اقتراح كقيمة افتراضية قابل للتعديل
-    corrHint.textContent = `فرق: ${diff.toFixed(1)} mmol/L • CF=${cf} ⇒ جرعة مقترحة ≈ ${dose}U`;
+    if (wrapCorrection){
+      const diff = v - max;                                // بداية الحساب من الحد الأعلى
+      const dose = Math.round((diff / cf) * 10) / 10;      // جرعة مقترحة
+      wrapCorrection.classList.remove('hidden');
+      correctionDoseInput.value = dose;
+      if (corrHint) corrHint.textContent = `فرق: ${diff.toFixed(1)} mmol/L • CF=${cf} ⇒ جرعة ≈ ${dose}U`;
+    }
   }else{
-    wrapCorrection.classList.add('hidden');
-    correctionDoseInput.value = '';
-    corrHint.textContent = '—';
+    if (wrapCorrection){
+      wrapCorrection.classList.add('hidden');
+      correctionDoseInput.value = '';
+      if (corrHint) corrHint.textContent = '—';
+    }
   }
 }
-function round1(x){ return Math.round(x*10)/10; }
 
-/* حفظ القياس */
+// حفظ القياس
 async function onSave(){
   const date = dayInput.value;
   const slotKey = slotSelect.value;
@@ -201,7 +220,7 @@ async function onSave(){
     slotOrder: slotDef.order,
     value_mmol: value,
     correctionDose: correctionDoseInput.value ? Number(correctionDoseInput.value) : null,
-    hypoTreatment: wrapHypo.classList.contains('hidden') ? null : (hypoTreatmentInput.value || null),
+    hypoTreatment: wrapHypo && !wrapHypo.classList.contains('hidden') ? (hypoTreatmentInput.value || null) : null,
     notes: notesInput.value || null,
     updatedAt: serverTimestamp(),
     createdAt: serverTimestamp(),
@@ -212,15 +231,15 @@ async function onSave(){
     const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
 
     if(slotDef.multi){
-      // يُسمح بتكرارات: استخدم addDoc
+      // الأوقات المسموح فيها بتكرارات (سناك/رياضة)
       await addDoc(col, data);
     }else{
-      // غير مسموح بتكرار (اليوم+الوقت): استخدم setDoc مع id ثابت وتحقق
+      // غير مسموح بتكرار (اليوم+الوقت)
       const id = `${date}__${slotKey}`;
       const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/measurements/${id}`);
       const exists = await getDoc(ref);
       if(exists.exists()){
-        alert('⛔ لا يمكن تسجيل نفس الوقت لنفس اليوم. يمكنك تعديل السجل من الجدول بالأسفل.');
+        alert('⛔ لا يمكن تسجيل نفس الوقت لنفس اليوم. يمكنك تعديل السجل من الجدول.');
         return;
       }
       await setDoc(ref, data, {merge:true});
@@ -241,15 +260,15 @@ async function onSave(){
   }
 }
 
-/* تحميل جدول اليوم */
+// تحميل قياسات اليوم
 async function loadDayTable(){
   tbody.innerHTML = '<tr><td colspan="7" class="muted">جارِ التحميل…</td></tr>';
+
   const date = dayInput.value;
   const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
   const q  = query(col, where('date','==', date));
   const snap = await getDocs(q);
 
-  // رتب حسب slotOrder ثم createdAt
   const rows = snap.docs.map(d=>({id:d.id, ...d.data()}))
     .sort((a,b)=>{
       if(a.slotOrder!==b.slotOrder) return a.slotOrder-b.slotOrder;
@@ -290,7 +309,7 @@ async function loadDayTable(){
   }
 }
 
-/* تحرير الصف في المكان */
+/* تحرير صف */
 function attachRowEditing(tr, r){
   const btnEdit = tr.querySelector('.btn-edit');
   const btnSave = tr.querySelector('.btn-save');
@@ -300,7 +319,6 @@ function attachRowEditing(tr, r){
     tr.classList.add('edit-row');
     const tds = tr.querySelectorAll('td');
     tds[1].innerHTML = `<input class="inp-val" type="number" step="0.1" min="0" value="${r.value_mmol ?? ''}">`;
-    // الحالة تُعاد حسابها تلقائيًا عند الحفظ
     tds[3].innerHTML = `<input class="inp-corr" type="number" step="0.1" min="0" value="${r.correctionDose ?? ''}">`;
     tds[4].innerHTML = `<input class="inp-hypo" placeholder="رفعنا بإيه؟" value="${r.hypoTreatment ?? ''}">`;
     tds[5].innerHTML = `<input class="inp-notes" placeholder="ملاحظات" value="${escapeHtml(r.notes ?? '')}">`;
@@ -309,16 +327,13 @@ function attachRowEditing(tr, r){
     btnCancel.classList.remove('hidden');
   };
 
-  const toDisplay = async ()=>{
-    // إعادة التحميل للسجل من جديد لضمان الدقة
-    await loadDayTable();
-  };
+  const toDisplay = async ()=>{ await loadDayTable(); };
 
   btnEdit.addEventListener('click', toInputs);
   btnCancel.addEventListener('click', toDisplay);
 
   btnSave.addEventListener('click', async ()=>{
-    const val = Number(tr.querySelector('.inp-val').value);
+    const val  = Number(tr.querySelector('.inp-val').value);
     const corr = tr.querySelector('.inp-corr').value ? Number(tr.querySelector('.inp-corr').value) : null;
     const hypo = tr.querySelector('.inp-hypo').value || null;
     const notes= tr.querySelector('.inp-notes').value || null;
@@ -329,10 +344,7 @@ function attachRowEditing(tr, r){
       loader(true);
       const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/measurements/${r.id}`);
       await updateDoc(ref, {
-        value_mmol: val,
-        correctionDose: corr,
-        hypoTreatment: hypo,
-        notes,
+        value_mmol: val, correctionDose: corr, hypoTreatment: hypo, notes,
         updatedAt: serverTimestamp()
       });
       await loadDayTable();
@@ -345,7 +357,7 @@ function attachRowEditing(tr, r){
   });
 }
 
-/* تصنيف القراءة حسب حدود الطفل */
+// تصنيف الحالة
 function classify(v){
   const {min,max} = childData.normalRange;
   const sl = childData.severeLow;
@@ -358,12 +370,12 @@ function classify(v){
 }
 function renderBadge(state){
   switch(state){
-    case 'ok': return `<span class="badge ok">✔️ طبيعي</span>`;
-    case 'high': return `<span class="badge up">⬆️ ارتفاع</span>`;
-    case 'low': return `<span class="badge down">⬇️ هبوط</span>`;
-    case 'severe-high': return `<span class="badge up">⛔ ارتفاع شديد</span>`;
-    case 'severe-low':  return `<span class="badge down">⛔ هبوط شديد</span>`;
-    default: return '—';
+    case 'ok':           return `<span class="badge ok">✔️ طبيعي</span>`;
+    case 'high':         return `<span class="badge up">⬆️ ارتفاع</span>`;
+    case 'low':          return `<span class="badge down">⬇️ هبوط</span>`;
+    case 'severe-high':  return `<span class="badge up">⛔ ارتفاع شديد</span>`;
+    case 'severe-low':   return `<span class="badge down">⛔ هبوط شديد</span>`;
+    default:             return '—';
   }
 }
 
