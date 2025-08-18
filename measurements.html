@@ -28,15 +28,17 @@
       </div>
     </header>
 
-    <!-- نموذج الإدخال -->
+    <!-- بطاقة إدخال القياس -->
     <section class="card form">
       <h2>إدخال قياس</h2>
       <div class="grid">
+        <!-- وقت القياس (التصنيف) -->
         <div class="field">
           <label for="slot">وقت القياس</label>
           <select id="slot"></select>
         </div>
 
+        <!-- قيمة القياس + وحدة الإدخال -->
         <div class="field">
           <label for="value">قيمة القياس</label>
           <div class="row-inline">
@@ -49,22 +51,27 @@
           <div class="hint" id="convHint">—</div>
         </div>
 
+        <!-- جرعة التصحيح -->
         <div class="field" id="wrapCorrection">
           <label for="correctionDose">جرعة تصحيحية (U)</label>
           <input id="correctionDose" type="number" step="0.1" min="0" />
           <div class="hint" id="corrHint">—</div>
         </div>
 
+        <!-- جرعة الأكل (Bolus) -->
         <div class="field" id="wrapBolus">
           <label for="bolusDose">جرعة الإنسولين قبل الأكل (U)</label>
           <input id="bolusDose" type="number" step="0.1" min="0" placeholder="اختياري" />
+          <div class="hint">أدخلي جرعة الأكل إن وُجدت.</div>
         </div>
 
+        <!-- علاج الهبوط -->
         <div class="field" id="wrapHypo">
           <label for="hypoTreatment">رفعنا بإيه؟</label>
           <input id="hypoTreatment" placeholder="مثال: عصير 100ml / 3 جلوكوز" />
         </div>
 
+        <!-- ملاحظات -->
         <div class="field row">
           <label for="notes">ملاحظات</label>
           <input id="notes" placeholder="اختياري…" />
@@ -77,7 +84,7 @@
       </div>
     </section>
 
-    <!-- جدول -->
+    <!-- جدول اليوم -->
     <section class="card table">
       <div class="table-head">
         <h2>قياسات اليوم</h2>
@@ -110,6 +117,7 @@
     </section>
   </div>
 
+  <!-- اللودر -->
   <div id="loader" class="loader hidden">جارِ التحميل…</div>
 
   <script type="module" src="js/measurements.js"></script>
