@@ -1,100 +1,62 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>التقارير</title>
+  <title>تقرير مطبوع</title>
+  <link rel="stylesheet" href="css/reports-print.css" />
   <link rel="icon" href="data:,">
-  <style>
-    :root{--border:#e5e7eb;--muted:#768398;--primary:#4f46e5;--bg:#f7fbff}
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);font-family:"Segoe UI",Tahoma,Arial,sans-serif;color:#1f2937}
-    .container{max-width:1000px;margin:24px auto;padding:0 12px}
-    .card{background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,.06);padding:16px 18px;margin-bottom:18px}
-    .muted{color:var(--muted)}
-    .btn{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer}
-    .btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
-    .btn.back{background:#eef0ff;color:var(--primary);border-color:var(--primary);margin-bottom:10px}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
-    .chip{background:#f3f4f6;border:1px solid var(--border);padding:6px 10px;border-radius:999px;font-size:13px}
-    .filters input[type="date"]{padding:8px 10px;border:1px solid var(--border);border-radius:10px}
-    table{width:100%;border-collapse:collapse}
-    thead th{background:#fafafa;border:1px solid var(--border);padding:10px}
-    tbody td{border:1px solid var(--border);padding:10px}
-    .print-hide{display:inline-block}
-    @media print{
-      .no-print{display:none !important}
-      .hide-notes-print td.notes,.hide-notes-print th.notes{display:none}
-      body{background:#fff}
-    }
-  </style>
 </head>
 <body>
   <div class="container">
+    <!-- شريط علوي -->
+    <header class="toolbar no-print">
+      <button class="btn" onclick="history.back()">⬅ رجوع</button>
 
-    <!-- الهيدر -->
-    <header class="card">
-      <button class="btn back no-print" onclick="history.back()">⬅ رجوع</button>
-
-      <h1>📄 التقارير — <span id="childName">طفل</span></h1>
-      <p class="muted" id="childMeta">—</p>
-
-      <div class="chips">
-        <span class="chip" id="chipRange">النطاق: —</span>
-        <span class="chip" id="chipCR">CR: —</span>
-        <span class="chip" id="chipCF">CF: —</span>
+      <div class="range">
+        <label>من</label>
+        <input type="date" id="fromDate">
+        <label>إلى</label>
+        <input type="date" id="toDate">
+        <button id="btnLoad" class="btn primary">تحميل التقرير</button>
       </div>
 
-      <!-- الأكشنات -->
-      <div class="row no-print" style="margin-top:10px">
-        <div class="filters row">
-          <label>من</label><input type="date" id="fromDate">
-          <label>إلى</label><input type="date" id="toDate">
-        </div>
-        <button class="btn" id="toggleNotes">👁️ إخفاء/إظهار الملاحظات في الطباعة</button>
-        <button class="btn" onclick="window.print()">🖨️ طباعة</button>
-
-        <!-- زر تحليل القياسات (المهم وجود هذا الـ id) -->
-        <a class="btn primary" id="openAnalytics">📈 تحليل القياسات</a>
+      <div class="controls">
+        <label class="toggle">
+          <input type="checkbox" id="chkNotes" checked>
+          <span>إظهار الملاحظات في الطباعة</span>
+        </label>
+        <button id="btnBlank" class="btn">ورقة فارغة لأسبوع</button>
+        <button id="btnPrint" class="btn print">🖨️ طباعة</button>
       </div>
     </header>
 
-    <!-- جدول التقرير (استخدمي JS عندك لتعبئته لو موجود) -->
-    <section class="card" id="reportCard">
-      <h2>قياسات الفترة</h2>
-      <table id="reportTable">
-        <thead>
-          <tr>
-            <th>التاريخ</th>
-            <th>الوقت</th>
-            <th>القراءة</th>
-            <th>الحالة</th>
-            <th>التصحيح</th>
-            <th>علاج الهبوط</th>
-            <th class="notes">ملاحظات</th>
-          </tr>
-        </thead>
-        <tbody id="tbody">
-          <tr><td colspan="7" class="muted">اضبطي الفترة ثم حمّلي التقرير…</td></tr>
-        </tbody>
-      </table>
+    <!-- معلومات الطفل -->
+    <section class="child-card">
+      <div class="row">
+        <div><strong>الطفل:</strong> <span id="childName">—</span></div>
+        <div><strong>العمر:</strong> <span id="childAge">—</span></div>
+        <div><strong>الجنس:</strong> <span id="childGender">—</span></div>
+      </div>
+      <div class="row">
+        <div><strong>النطاق الطبيعي:</strong> <span id="chipRange">—</span></div>
+        <div><strong>CF:</strong> <span id="chipCF">—</span></div>
+        <div><strong>CR:</strong> <span id="chipCR">—</span></div>
+        <div><strong>الوحدة المختارة:</strong> <span id="unit">mmol/L</span></div>
+        <div class="no-print"><strong>تاريخ التوليد:</strong> <span id="generatedAt">—</span></div>
+      </div>
     </section>
 
+    <!-- شبكة التقرير المطبوعة -->
+    <section id="printArea" class="print-area show-notes">
+      <!-- يُملأ ديناميكيًا -->
+    </section>
+
+    <footer class="foot-note print-only">
+      تنبيه: هذه المعلومات مساعدة وليست بديلاً عن استشارة الطبيب المختص.
+    </footer>
   </div>
 
-  <!-- مفيش أي سكربتات تانية خارجية—سيبي سكربت واحد فقط -->
-  <script type="module" src="js/reports.js?v=3"></script>
-
-  <!-- سكربت صغير اختياري لإخفاء/إظهار الملاحظات وقت الطباعة -->
-  <script>
-    (function(){
-      const btn = document.getElementById('toggleNotes');
-      const card = document.getElementById('reportCard');
-      if(btn && card){
-        btn.addEventListener('click', ()=> card.classList.toggle('hide-notes-print'));
-      }
-    })();
-  </script>
+  <script type="module" src="js/reports-print.js"></script>
 </body>
 </html>
