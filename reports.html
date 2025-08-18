@@ -76,6 +76,20 @@
       <p>تنبيه: هذه المعلومات مساعدة وليست بديلاً عن استشارة الطبيب المختص.</p>
     </footer>
   </div>
+...
+<script src="js/report.js"></script>
+<script>
+  (function(){
+    const params = new URLSearchParams(location.search);
+    const child = params.get('child') || localStorage.getItem('lastChildId');
+    const btn = document.getElementById('openAnalytics');
+    if(btn && child){
+      btn.href = `analytics.html?child=${encodeURIComponent(child)}&range=14d`;
+    }
+  })();
+</script>
+</body>
+</html>
 
   <script type="module" src="js/reports.js"></script>
 </body>
