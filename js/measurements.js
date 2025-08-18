@@ -112,8 +112,13 @@ onAuthStateChanged(auth, async (user)=>{
 
 // تعبئة قائمة الأوقات
 function initSlotsSelect(){
-  slotSelect.innerHTML = SLOTS.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+  slotSelect.innerHTML = SLOTS
+    .map(s => `<option value="${s.key}">${s.label}</option>`)
+    .join('');
+  // ✅ عيّن اختيار افتراضي علشان مايبقاش فاضي
+  if (!slotSelect.value) slotSelect.value = SLOTS[0].key; // 'WAKE'
 }
+
 
 // تحميل بيانات الطفل للواجهة
 async function loadChildHeader(){
