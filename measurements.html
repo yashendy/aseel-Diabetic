@@ -20,8 +20,6 @@
           <span class="chip" id="chipRange">النطاق: —</span>
           <span class="chip" id="chipCR">CR: —</span>
           <span class="chip" id="chipCF">CF: —</span>
-          <span class="chip warn" id="chipSevereLow">Low≤—</span>
-          <span class="chip warn" id="chipSevereHigh">High≥—</span>
         </div>
       </div>
       <div class="datebar">
@@ -40,12 +38,19 @@
         </div>
 
         <div class="field">
-          <label for="value">قيمة القياس (mmol/L)</label>
-          <input id="value" type="number" step="0.1" min="0" placeholder="مثال: 6.5" />
+          <label for="value">قيمة القياس</label>
+          <div class="row-inline">
+            <input id="value" type="number" step="0.1" min="0" placeholder="مثال: 6.5" />
+            <select id="inUnit" class="unit">
+              <option value="mmol">mmol/L</option>
+              <option value="mgdl">mg/dL</option>
+            </select>
+          </div>
+          <div class="hint" id="convHint">—</div>
         </div>
 
         <div class="field hidden" id="wrapCorrection">
-          <label for="correctionDose">جرعة تصحيحية (وحدة)</label>
+          <label for="correctionDose">جرعة تصحيحية (U)</label>
           <input id="correctionDose" type="number" step="0.1" min="0" />
           <div class="hint" id="corrHint">—</div>
         </div>
@@ -53,6 +58,12 @@
         <div class="field hidden" id="wrapHypo">
           <label for="hypoTreatment">رفعنا بإيه؟</label>
           <input id="hypoTreatment" placeholder="مثال: عصير 100ml / 3 جلوكوز" />
+        </div>
+
+        <div class="field hidden" id="wrapBolus">
+          <label for="bolusDose">جرعة الأكل (U)</label>
+          <input id="bolusDose" type="number" step="0.1" min="0" placeholder="اختياري" />
+          <div class="hint" id="bolusHint">تظهر قبل الوجبات فقط.</div>
         </div>
 
         <div class="field row">
@@ -63,12 +74,23 @@
 
       <div class="actions">
         <button class="btn primary" id="btnSave">💾 حفظ القياس</button>
+        <button class="btn" id="btnReset">مسح الحقول</button>
       </div>
     </section>
 
     <!-- قسم 3: جدول اليوم -->
     <section class="card table">
-      <h2>قياسات اليوم</h2>
+      <div class="table-head">
+        <h2>قياسات اليوم</h2>
+        <div class="view-unit">
+          <label for="outUnit">عرض القيم بالوحدة:</label>
+          <select id="outUnit" class="unit">
+            <option value="mmol">mmol/L</option>
+            <option value="mgdl">mg/dL</option>
+          </select>
+        </div>
+      </div>
+
       <table>
         <thead>
           <tr>
@@ -76,20 +98,22 @@
             <th>القراءة</th>
             <th>الحالة</th>
             <th>التصحيح</th>
+            <th>بولس قبل الأكل</th>
             <th>علاج الهبوط</th>
             <th>ملاحظات</th>
             <th>تعديل</th>
           </tr>
         </thead>
-        <tbody id="tbody"></tbody>
+        <tbody id="tbody">
+          <tr><td colspan="8" class="muted">—</td></tr>
+        </tbody>
       </table>
     </section>
   </div>
 
-  <!-- لودر عالمي آمن -->
+  <!-- اللودر -->
   <div id="loader" class="loader hidden">جارِ التحميل…</div>
 
-  <!-- كسْر كاش مع رقم نسخة -->
-  <script type="module" src="js/measurements.js?v=6"></script>
+  <script type="module" src="js/measurements.js"></script>
 </body>
 </html>
