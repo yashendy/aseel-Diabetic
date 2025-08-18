@@ -267,52 +267,50 @@ async function onSave(){
 
 // تحميل قياسات اليوم
 async function loadDayTable(){
-  tbody.innerHTML = '<tr><td colspan="7" class="muted">جارِ التحميل…</td></tr>';
+  try {
+    loader(true);
+    tbody.innerHTML = `<tr><td colspan="7">جار التحميل...</td></tr>`;
 
-  const date = dayInput.value;
-  const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
-  const q  = query(col, where('date','==', date));
-  const snap = await getDocs(q);
+    const day = dayInput.value;
+    if(!day){
+      tbody.innerHTML = `<tr><td colspan="7">اختر تاريخاً</td></tr>`;
+      return;
+    }
 
-  const rows = snap.docs.map(d=>({id:d.id, ...d.data()}))
-    .sort((a,b)=>{
-      if(a.slotOrder!==b.slotOrder) return a.slotOrder-b.slotOrder;
-      const ta=(a.createdAt?.seconds||0), tb=(b.createdAt?.seconds||0);
-      return ta-tb;
+    const qRef = collection(db, `parents/${auth.currentUser.uid}/children/${childId}/measurements`);
+    const q = query(qRef, where('date','==',day), orderBy('time','asc'));
+    const snap = await getDocs(q);
+
+    if (snap.empty){
+      tbody.innerHTML = `<tr><td colspan="7">لا توجد قياسات لهذا اليوم.</td></tr>`;
+      return;
+    }
+
+    // ✅ املى الجدول بالنتائج
+    let rows = '';
+    snap.forEach(docSnap=>{
+      const m = docSnap.data();
+      rows += `
+        <tr>
+          <td>${m.time||'-'}</td>
+          <td>${m.value||'-'}</td>
+          <td>${m.state||'-'}</td>
+          <td>${m.correction||'-'}</td>
+          <td>${m.lowTreat||'-'}</td>
+          <td>${m.notes||''}</td>
+          <td><button class="btn small" onclick="editMeasure('${docSnap.id}')">✎</button></td>
+        </tr>`;
     });
+    tbody.innerHTML = rows;
 
-  if(!rows.length){
-    tbody.innerHTML = '<tr><td colspan="7" class="muted">لا توجد قياسات لهذا اليوم.</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = '';
-  for(const r of rows){
-    const tr = document.createElement('tr');
-    tr.dataset.id = r.id;
-
-    const state = classify(r.value_mmol);
-    const badge = renderBadge(state);
-
-    tr.innerHTML = `
-      <td>${r.slotLabel||'-'}</td>
-      <td>${fmtNum(r.value_mmol)}</td>
-      <td>${badge}</td>
-      <td>${r.correctionDose ?? '—'}</td>
-      <td>${r.hypoTreatment ?? '—'}</td>
-      <td>${escapeHtml(r.notes ?? '')}</td>
-      <td>
-        <div class="edit-actions">
-          <button class="icon-btn btn-edit">✏️ تعديل</button>
-          <button class="icon-btn btn-save hidden">💾 حفظ</button>
-          <button class="icon-btn btn-cancel hidden">↩ إلغاء</button>
-        </div>
-      </td>
-    `;
-    attachRowEditing(tr, r);
-    tbody.appendChild(tr);
+  } catch(e){
+    console.error("❌ loadDayTable error:", e);
+    tbody.innerHTML = `<tr><td colspan="7">خطأ في تحميل البيانات</td></tr>`;
+  } finally {
+    loader(false);   // ✅ يضمن إخفاء "جار التحميل..."
   }
 }
+
 
 /* تحرير صف */
 function attachRowEditing(tr, r){
