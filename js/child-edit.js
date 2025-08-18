@@ -1,8 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import {
-  doc, getDoc, updateDoc, deleteDoc
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 // عناصر
 const $ = (id) => document.getElementById(id);
@@ -20,6 +18,8 @@ const rangeMinEl = $('rangeMin');
 const rangeMaxEl = $('rangeMax');
 const carbRatioEl = $('carbRatio');
 const correctionFactorEl = $('correctionFactor');
+const severeLowEl = $('severeLow');
+const severeHighEl = $('severeHigh');
 
 const deviceNameEl = $('deviceName');
 const basalTypeEl = $('basalType');
@@ -53,6 +53,8 @@ onAuthStateChanged(auth, async (user)=>{
     rangeMaxEl.value = c.normalRange?.max ?? '';
     carbRatioEl.value = c.carbRatio ?? '';
     correctionFactorEl.value = c.correctionFactor ?? '';
+    severeLowEl.value  = c.severeLow  ?? '';
+    severeHighEl.value = c.severeHigh ?? '';
 
     deviceNameEl.value = c.deviceName || c.device?.name || '';
     basalTypeEl.value = c.insulin?.basalType || c.insulinBasalType || '';
@@ -76,6 +78,8 @@ onAuthStateChanged(auth, async (user)=>{
           },
           carbRatio: carbRatioEl.value ? Number(carbRatioEl.value) : null,
           correctionFactor: correctionFactorEl.value ? Number(correctionFactorEl.value) : null,
+          severeLow:  severeLowEl.value  ? Number(severeLowEl.value)  : null,
+          severeHigh: severeHighEl.value ? Number(severeHighEl.value) : null,
           deviceName: deviceNameEl.value.trim() || null,
           insulin: {
             basalType: basalTypeEl.value.trim() || null,
@@ -84,6 +88,7 @@ onAuthStateChanged(auth, async (user)=>{
           updatedAt: new Date().toISOString()
         };
 
+        const ref = doc(db, `parents/${user.uid}/children/${childId}`);
         await updateDoc(ref, payload);
         alert('✅ تم حفظ التعديلات بنجاح');
         history.back();
@@ -100,6 +105,7 @@ onAuthStateChanged(auth, async (user)=>{
       if(!confirm('هل أنتِ متأكدة من حذف الطفل؟ هذا الإجراء لا يمكن التراجع عنه.')) return;
       try{
         showLoader(true);
+        const ref = doc(db, `parents/${user.uid}/children/${childId}`);
         await deleteDoc(ref);
         alert('تم حذف الطفل.');
         location.href = 'parent.html';
