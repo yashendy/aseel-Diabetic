@@ -3,7 +3,6 @@
   --primary:#4CAF50; --accent:#2196F3; --warn:#FB8C00; --danger:#E53935; --ok:#2E7D32;
 }
 
-*{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Tahoma,Arial,sans-serif}
 .container{max-width:1200px;margin:auto;padding:16px}
 
@@ -11,22 +10,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Taho
 .muted{color:var(--muted)}
 
 .child-header{position:relative}
-.back{
-  position:absolute;left:12px;top:12px;
-  color:#0D47A1;               /* لون الخط */
-  border:1px solid #cfe1ff;    /* إطار خفيف */
-  background:#E3F2FD;          /* خلفية مزرقة */
-  font-weight:600;
-  border-radius:10px;
-  padding:6px 12px;
-  cursor:pointer;
-  transition:background .2s ease, color .2s ease, box-shadow .2s ease;
-}
-.back:hover{
-  background:#BBDEFB;
-  color:#08306b;
-  box-shadow:0 4px 10px rgba(13,71,161,.15);
-}
+.back{position:absolute;left:12px;top:12px;color:#0D47A1;border:1px solid #cfe1ff;background:#E3F2FD;font-weight:600;border-radius:10px;padding:6px 12px;cursor:pointer}
+.back:hover{background:#BBDEFB;color:#08306b}
 
 .head-grid{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -34,15 +19,11 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Taho
 
 .stats{display:flex;gap:12px;align-items:center}
 .stat{background:#f7fbff;border:1px solid var(--border);border-radius:12px;min-width:140px;text-align:center;padding:10px}
-.stat-num{font-size:22px;font-weight:800;color:#111}
+.stat-num{font-size:22px;font-weight:800}
 .stat-label{font-size:12px;color:#555}
 
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:16px}
-.card.link{position:relative;overflow:hidden;border:1px solid var(--border)}
-.card .icon{font-size:28px}
-.card h3{margin:6px 0 4px}
-.card p{margin:0 0 8px;color:#444}
-.card .mini{font-size:12px;color:#555;background:#f7fbff;border:1px solid var(--border);padding:4px 8px;border-radius:999px;width:max-content}
+.card.link:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(0,0,0,.09)}
 
 .card.measurements{border-left:6px solid #42A5F5}
 .card.meals{border-left:6px solid #66BB6A}
@@ -51,13 +32,9 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Taho
 .card.visits{border-left:6px solid #26C6DA}
 .card.child-edit{border-left:6px solid #EF5350}
 
-.card.link:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(0,0,0,.09)}
-.card.link:active{transform:translateY(0)}
-
 .loader{position:fixed;inset:0;background:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;font-weight:700;z-index:1000}
 .hidden{display:none}
 
-@media (max-width:900px){
-  .stats{width:100%;justify-content:space-between}
-  .stat{min-width:unset;flex:1}
-}
+.mini-list{margin-top:6px;background:#f9fcff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;display:grid;gap:4px;font-size:13px}
+.mini-list .lbl{color:#555}
+.mini-list strong{font-weight:700;color:#111}
