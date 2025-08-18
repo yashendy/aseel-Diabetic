@@ -269,47 +269,67 @@ async function onSave(){
 async function loadDayTable(){
   try {
     loader(true);
-    tbody.innerHTML = `<tr><td colspan="7">جار التحميل...</td></tr>`;
+    tbody.innerHTML = '<tr><td colspan="7" class="muted">جارِ التحميل…</td></tr>';
 
-    const day = dayInput.value;
-    if(!day){
-      tbody.innerHTML = `<tr><td colspan="7">اختر تاريخاً</td></tr>`;
+    const date = dayInput.value;
+    if(!date){
+      tbody.innerHTML = '<tr><td colspan="7" class="muted">اختاري تاريخًا.</td></tr>';
       return;
     }
 
-    const qRef = collection(db, `parents/${auth.currentUser.uid}/children/${childId}/measurements`);
-    const q = query(qRef, where('date','==',day), orderBy('time','asc'));
+    const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
+    // ❌ بدون orderBy هنا
+    const q  = query(col, where('date','==', date));
     const snap = await getDocs(q);
 
-    if (snap.empty){
-      tbody.innerHTML = `<tr><td colspan="7">لا توجد قياسات لهذا اليوم.</td></tr>`;
+    const rows = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+      // ✅ نرتّب محليًا: حسب ترتيب الوقت ثم وقت الإنشاء
+      .sort((a,b)=>{
+        if ((a.slotOrder||0) !== (b.slotOrder||0)) return (a.slotOrder||0)-(b.slotOrder||0);
+        const ta = (a.createdAt?.seconds||0), tb = (b.createdAt?.seconds||0);
+        return ta - tb;
+      });
+
+    if(!rows.length){
+      tbody.innerHTML = '<tr><td colspan="7" class="muted">لا توجد قياسات لهذا اليوم.</td></tr>';
       return;
     }
 
-    // ✅ املى الجدول بالنتائج
-    let rows = '';
-    snap.forEach(docSnap=>{
-      const m = docSnap.data();
-      rows += `
-        <tr>
-          <td>${m.time||'-'}</td>
-          <td>${m.value||'-'}</td>
-          <td>${m.state||'-'}</td>
-          <td>${m.correction||'-'}</td>
-          <td>${m.lowTreat||'-'}</td>
-          <td>${m.notes||''}</td>
-          <td><button class="btn small" onclick="editMeasure('${docSnap.id}')">✎</button></td>
-        </tr>`;
-    });
-    tbody.innerHTML = rows;
+    tbody.innerHTML = '';
+    for (const r of rows){
+      const tr = document.createElement('tr');
+      tr.dataset.id = r.id;
 
-  } catch(e){
-    console.error("❌ loadDayTable error:", e);
-    tbody.innerHTML = `<tr><td colspan="7">خطأ في تحميل البيانات</td></tr>`;
+      const state = classify(Number(r.value_mmol));
+      const badge = renderBadge(state);
+
+      tr.innerHTML = `
+        <td>${r.slotLabel || '-'}</td>
+        <td>${(r.value_mmol!=null)? Number(r.value_mmol).toFixed(1) : '—'}</td>
+        <td>${badge}</td>
+        <td>${r.correctionDose ?? '—'}</td>
+        <td>${r.hypoTreatment ?? '—'}</td>
+        <td>${escapeHtml(r.notes ?? '')}</td>
+        <td>
+          <div class="edit-actions">
+            <button class="icon-btn btn-edit">✏️ تعديل</button>
+            <button class="icon-btn btn-save hidden">💾 حفظ</button>
+            <button class="icon-btn btn-cancel hidden">↩ إلغاء</button>
+          </div>
+        </td>
+      `;
+      attachRowEditing(tr, r);
+      tbody.appendChild(tr);
+    }
+
+  } catch (e) {
+    console.error('loadDayTable error:', e);
+    tbody.innerHTML = '<tr><td colspan="7" class="muted">خطأ في تحميل البيانات</td></tr>';
   } finally {
-    loader(false);   // ✅ يضمن إخفاء "جار التحميل..."
+    loader(false); // ✅ دا يضمن إخفاء "جار التحميل…"
   }
 }
+
 
 
 /* تحرير صف */
