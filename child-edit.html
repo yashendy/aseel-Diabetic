@@ -89,6 +89,14 @@
             <label for="correctionFactor">CF (mmol/L per U)</label>
             <input id="correctionFactor" type="number" step="0.1" min="0" />
           </div>
+          <div>
+            <label for="severeLow">حد الهبوط الشديد (mmol/L)</label>
+            <input id="severeLow" type="number" step="0.1" min="0" />
+          </div>
+          <div>
+            <label for="severeHigh">حد الارتفاع الشديد (mmol/L)</label>
+            <input id="severeHigh" type="number" step="0.1" min="0" />
+          </div>
         </fieldset>
 
         <fieldset class="row-1">
@@ -98,7 +106,7 @@
             <input id="deviceName" placeholder="مثال: FreeStyle Libre 2 / Accu-Chek" />
           </div>
           <div>
-            <label for="basalType">الأنسولين القاعدي (طويل المفعول)</label>
+            <label for="basalType">الأنسولين القاعدي (طويل)</label>
             <input id="basalType" placeholder="مثال: Tresiba / Lantus" />
           </div>
           <div>
@@ -107,7 +115,7 @@
           </div>
         </fieldset>
 
-        <div class="row-1 hint">💡 تذكير: كل القيم تُحفظ باسم الطفل الحالي فقط.</div>
+        <div class="row-1 hint">💡 كل القيم تُحفظ للطفل الحالي.</div>
 
         <div class="actions row-1">
           <button type="button" class="btn delete" id="deleteBtn">🗑️ حذف الطفل</button>
