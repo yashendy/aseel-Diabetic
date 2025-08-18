@@ -55,6 +55,11 @@ const notesInput = document.getElementById('notes');
 const btnSave    = document.getElementById('btnSave');
 
 const tbody = document.getElementById('tbody');
+// ضمني عدم وجود أي <tbody> آخر داخل الجدول
+const tableEl = tbody.closest('table');
+Array.from(tableEl.querySelectorAll('tbody')).forEach(el => {
+  if (el !== tbody) el.remove(); // امسح أي tbody إضافي
+});
 
 // أدوات
 const pad = n => String(n).padStart(2,'0');
@@ -271,6 +276,11 @@ async function onSave(){
 // 4) تحميل جدول اليوم
 // ===========================================================
 function setTbodyMessage(msg){
+  // امسح أي tbody إضافي مرة أخرى كضمان
+  Array.from(tableEl.querySelectorAll('tbody')).forEach(el => {
+    if (el !== tbody) el.remove();
+  });
+  // امسح صفوف tbody الحالي تمامًا
   while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
   const tr = document.createElement('tr');
   const td = document.createElement('td');
@@ -280,6 +290,7 @@ function setTbodyMessage(msg){
   tr.appendChild(td);
   tbody.appendChild(tr);
 }
+
 
 async function loadDayTable(){
   try {
