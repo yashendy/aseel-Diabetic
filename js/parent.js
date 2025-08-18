@@ -1,7 +1,7 @@
 import { auth, db } from './firebase-config.js';
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, getDocs, query, where, orderBy, limit, doc, getDoc
+  collection, getDocs, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 /* عناصر */
@@ -12,7 +12,7 @@ const loaderEl = document.getElementById('loader');
 
 /* حالة */
 let currentUser;
-let kids = [];      // الكل
+let kids = [];      // كل الأطفال
 let filtered = [];  // بعد البحث
 
 /* أدوات */
@@ -34,7 +34,10 @@ function esc(s){ return (s||'').toString()
   .replaceAll('&','&amp;').replaceAll('<','&lt;')
   .replaceAll('>','&gt;').replaceAll('"','&quot;')
   .replaceAll("'",'&#039;'); }
-function loader(show){ loaderEl.classList.toggle('hidden', !show); }
+function loader(show){ loaderEl?.classList.toggle('hidden', !show); }
+
+/* إخفاء مبدئي (لو اللودر ظاهر بسبب كاش) */
+if (loaderEl) loaderEl.classList.add('hidden');
 
 /* بدء الجلسة */
 onAuthStateChanged(auth, async (user)=>{
@@ -59,25 +62,25 @@ async function loadKids(){
     const snap= await getDocs(qy);
 
     kids = [];
+    const today = todayStr();
+
+    // نجيب لكل طفل إحصائيات سريعة
     for (const d of snap.docs){
       const kid = { id:d.id, ...d.data() };
 
-      // إحصائيات اليوم
-      const today = todayStr();
-
-      // قياسات
+      // قياسات اليوم
       const measRef = collection(db, `parents/${currentUser.uid}/children/${kid.id}/measurements`);
-      const qMeas = query(measRef, where('date','==', today));
-      const sMeas = await getDocs(qMeas);
+      const qMeas   = query(measRef, where('date','==', today));
+      const sMeas   = await getDocs(qMeas);
       kid.measuresToday = sMeas.size || 0;
 
-      // وجبات
+      // وجبات اليوم
       const mealsRef = collection(db, `parents/${currentUser.uid}/children/${kid.id}/meals`);
-      const qMeals = query(mealsRef, where('date','==', today));
-      const sMeals = await getDocs(qMeals);
+      const qMeals   = query(mealsRef, where('date','==', today));
+      const sMeals   = await getDocs(qMeals);
       kid.mealsToday = sMeals.size || 0;
 
-      // أقرب متابعة
+      // أقرب متابعة طبية
       const visitsRef = collection(db, `parents/${currentUser.uid}/children/${kid.id}/visits`);
       const qVisits   = query(visitsRef, where('followUpDate','>=', today), orderBy('followUpDate','asc'), limit(1));
       const sVisit    = await getDocs(qVisits);
@@ -92,6 +95,8 @@ async function loadKids(){
     alert('تعذّر تحميل قائمة الأطفال');
   }finally{
     loader(false);
+    // fallback أمان
+    setTimeout(()=>{ try{ loader(false); }catch{} }, 5000);
   }
 }
 
@@ -126,6 +131,7 @@ function render(){
 
       <div class="next">🩺 أقرب متابعة: <b>${k.nextFollowUp}</b></div>
     `;
+    // البطاقة كلها قابلة للنقر
     card.addEventListener('click', ()=>{
       location.href = `child.html?child=${encodeURIComponent(k.id)}`;
     });
