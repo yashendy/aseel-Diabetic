@@ -44,7 +44,6 @@ onAuthStateChanged(auth, async (user) => {
     console.log('[reports] snap.exists:', snap.exists());
 
     if (!snap.exists()) {
-      // محاولة أخيرة لإظهار الاسم من التخزين إن كان محفوظ
       const cachedName = localStorage.getItem('lastChildName');
       if (cachedName && childNameEl) childNameEl.textContent = cachedName;
       alert('لم يتم العثور على الطفل'); 
@@ -54,10 +53,8 @@ onAuthStateChanged(auth, async (user) => {
     const c = snap.data();
     console.log('[reports] child data:', c);
 
-    // عرّضي الاسم والبيانات
     if (childNameEl) {
       childNameEl.textContent = c.name || 'طفل';
-      // خزن الاسم احتياطيًا لاستخدامه لو فشل التحميل لاحقًا
       localStorage.setItem('lastChildName', c.name || 'طفل');
     }
     if (childMetaEl) childMetaEl.textContent =
