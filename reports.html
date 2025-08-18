@@ -1,62 +1,62 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تقرير مطبوع</title>
-  <link rel="stylesheet" href="css/reports-print.css" />
+  <title>التقارير</title>
+  <link rel="stylesheet" href="css/reports.css" />
   <link rel="icon" href="data:,">
 </head>
 <body>
   <div class="container">
-    <!-- شريط علوي -->
-    <header class="toolbar no-print">
-      <button class="btn" onclick="history.back()">⬅ رجوع</button>
-
-      <div class="range">
-        <label>من</label>
-        <input type="date" id="fromDate">
-        <label>إلى</label>
-        <input type="date" id="toDate">
-        <button id="btnLoad" class="btn primary">تحميل التقرير</button>
+    <header class="card child-info">
+      <button class="btn back" onclick="history.back()">⬅ رجوع</button>
+      <div class="head">
+        <h1>التقارير — <span id="childName">طفل</span> <span class="ic">🧾</span></h1>
+        <p class="muted" id="childMeta">—</p>
+        <div class="chips">
+          <span class="chip" id="chipRange">النطاق: —</span>
+          <span class="chip" id="chipCR">CR: —</span>
+          <span class="chip" id="chipCF">CF: —</span>
+        </div>
       </div>
 
       <div class="controls">
-        <label class="toggle">
-          <input type="checkbox" id="chkNotes" checked>
-          <span>إظهار الملاحظات في الطباعة</span>
-        </label>
-        <button id="btnBlank" class="btn">ورقة فارغة لأسبوع</button>
-        <button id="btnPrint" class="btn print">🖨️ طباعة</button>
+        <div class="range">
+          <label>من</label>
+          <input type="date" id="fromDate">
+          <label>إلى</label>
+          <input type="date" id="toDate">
+        </div>
+
+        <div class="actions">
+          <a id="openAnalytics" class="btn primary">تحليل القياسات</a>
+          <a id="openPrint" class="btn">تقرير مطبوع</a>
+        </div>
       </div>
     </header>
 
-    <!-- معلومات الطفل -->
-    <section class="child-card">
-      <div class="row">
-        <div><strong>الطفل:</strong> <span id="childName">—</span></div>
-        <div><strong>العمر:</strong> <span id="childAge">—</span></div>
-        <div><strong>الجنس:</strong> <span id="childGender">—</span></div>
-      </div>
-      <div class="row">
-        <div><strong>النطاق الطبيعي:</strong> <span id="chipRange">—</span></div>
-        <div><strong>CF:</strong> <span id="chipCF">—</span></div>
-        <div><strong>CR:</strong> <span id="chipCR">—</span></div>
-        <div><strong>الوحدة المختارة:</strong> <span id="unit">mmol/L</span></div>
-        <div class="no-print"><strong>تاريخ التوليد:</strong> <span id="generatedAt">—</span></div>
-      </div>
+    <section class="card table">
+      <h2>قياسات الفترة</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>الوقت</th>
+            <th>القراءة</th>
+            <th>الحالة</th>
+            <th>التصحيح</th>
+            <th>علاج الهبوط</th>
+            <th>ملاحظات</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="7" class="muted">—</td></tr>
+        </tbody>
+      </table>
     </section>
-
-    <!-- شبكة التقرير المطبوعة -->
-    <section id="printArea" class="print-area show-notes">
-      <!-- يُملأ ديناميكيًا -->
-    </section>
-
-    <footer class="foot-note print-only">
-      تنبيه: هذه المعلومات مساعدة وليست بديلاً عن استشارة الطبيب المختص.
-    </footer>
   </div>
 
-  <script type="module" src="js/reports-print.js"></script>
+  <script type="module" src="js/reports.js"></script>
 </body>
 </html>
