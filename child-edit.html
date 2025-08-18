@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>تعديل بيانات الطفل</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root{
+      --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#222; --muted:#666;
+      --primary:#4CAF50; --accent:#42A5F5; --danger:#E53935;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Tahoma,Arial,sans-serif}
+    .container{max-width:920px;margin:auto;padding:16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 6px 16px rgba(0,0,0,.06)}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .top h1{margin:0}
+    .btn{border:none;border-radius:10px;padding:10px 12px;cursor:pointer}
+    .btn.back{background:#E3F2FD;color:#0D47A1;border:1px solid #cfe1ff}
+    .btn.save{background:var(--primary);color:#fff}
+    .btn.delete{background:#fff;color:var(--danger);border:1px solid #ffd1d1}
+    form{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+    fieldset{border:1px solid var(--border);border-radius:12px;padding:12px}
+    legend{padding:0 6px;color:#333;font-weight:700}
+    label{display:block;font-size:12px;color:#555;margin-bottom:6px}
+    input,select{width:100%;padding:10px;border:1px solid #cfd8e3;border-radius:10px;background:#fff;font-size:14px}
+    .row-1{grid-column:1/-1}
+    .muted{color:#666}
+    .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+    .hint{font-size:12px;color:#666}
+    .loader{position:fixed;inset:0;background:rgba(255,255,255,.6);display:none;align-items:center;justify-content:center;font-weight:700;z-index:9999}
+    .loader.show{display:flex}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top">
+      <button class="btn back" onclick="history.back()">⬅ رجوع</button>
+      <h1>تعديل بيانات الطفل</h1>
+      <span class="muted" id="childLabel">—</span>
+    </div>
+
+    <div class="card">
+      <form id="form">
+        <fieldset class="row-1">
+          <legend>البيانات الأساسية</legend>
+          <div>
+            <label for="name">الاسم</label>
+            <input id="name" required />
+          </div>
+          <div>
+            <label for="gender">الجنس</label>
+            <select id="gender">
+              <option value="">—</option>
+              <option value="ذكر">ذكر</option>
+              <option value="أنثى">أنثى</option>
+            </select>
+          </div>
+          <div>
+            <label for="birthDate">تاريخ الميلاد</label>
+            <input id="birthDate" type="date" />
+          </div>
+          <div>
+            <label for="weightKg">الوزن (كجم)</label>
+            <input id="weightKg" type="number" step="0.1" min="0" />
+          </div>
+          <div>
+            <label for="heightCm">الطول (سم)</label>
+            <input id="heightCm" type="number" step="0.1" min="0" />
+          </div>
+        </fieldset>
+
+        <fieldset class="row-1">
+          <legend>الحدود والمعاملات</legend>
+          <div>
+            <label for="rangeMin">النطاق الطبيعي (أدنى) mmol/L</label>
+            <input id="rangeMin" type="number" step="0.1" min="0" />
+          </div>
+          <div>
+            <label for="rangeMax">النطاق الطبيعي (أعلى) mmol/L</label>
+            <input id="rangeMax" type="number" step="0.1" min="0" />
+          </div>
+          <div>
+            <label for="carbRatio">Carb Ratio (g/U)</label>
+            <input id="carbRatio" type="number" step="0.1" min="0" />
+          </div>
+          <div>
+            <label for="correctionFactor">CF (mmol/L per U)</label>
+            <input id="correctionFactor" type="number" step="0.1" min="0" />
+          </div>
+        </fieldset>
+
+        <fieldset class="row-1">
+          <legend>الجهاز والأنسولين</legend>
+          <div>
+            <label for="deviceName">الجهاز</label>
+            <input id="deviceName" placeholder="مثال: FreeStyle Libre 2 / Accu-Chek" />
+          </div>
+          <div>
+            <label for="basalType">الأنسولين القاعدي (طويل المفعول)</label>
+            <input id="basalType" placeholder="مثال: Tresiba / Lantus" />
+          </div>
+          <div>
+            <label for="bolusType">أنسولين الوجبات (سريع)</label>
+            <input id="bolusType" placeholder="مثال: Novorapid / Humalog" />
+          </div>
+        </fieldset>
+
+        <div class="row-1 hint">💡 تذكير: كل القيم تُحفظ باسم الطفل الحالي فقط.</div>
+
+        <div class="actions row-1">
+          <button type="button" class="btn delete" id="deleteBtn">🗑️ حذف الطفل</button>
+          <button type="submit" class="btn save" id="saveBtn">💾 حفظ التعديلات</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="loader" class="loader">جارِ الحفظ…</div>
+
+  <script type="module" src="js/child-edit.js"></script>
+</body>
+</html>
