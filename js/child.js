@@ -71,7 +71,8 @@ onAuthStateChanged(auth, async (user)=>{
     goFoodItems.href=`food-items.html?child=${childId}`;
     goReports.href=`reports.html?child=${childId}`;
     goVisits.href=`visits.html?child=${childId}`;
-    goChildEdit.href=`add-child.html?child=${childId}`;
+    goChildEdit.href = `child-edit.html?child=${encodeURIComponent(childId)}`;
+
 
     const today=todayStr();
     const measRef=collection(db,`parents/${user.uid}/children/${childId}/measurements`);
