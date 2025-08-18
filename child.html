@@ -79,18 +79,43 @@
         <div class="mini">أقرب متابعة: <span id="miniFollowUp">—</span></div>
       </a>
 
-      <!-- تعديل بيانات الطفل -->
+      <!-- تعديل/عرض بيانات الطفل -->
       <a class="card link child-edit" id="goChildEdit">
         <div class="icon">⚙️</div>
         <h3>بيانات الطفل</h3>
         <p>تعديل المعلومات والحدود والجرعات</p>
+
+        <!-- ملخص بيانات الطفل -->
+        <div class="mini-list">
+          <div><span class="lbl">الاسم:</span> <strong id="infoName">—</strong></div>
+          <div>
+            <span class="lbl">العمر:</span> <strong id="infoAge">—</strong>
+            • <span class="lbl">الجنس:</span> <strong id="infoGender">—</strong>
+          </div>
+          <div>
+            <span class="lbl">الوزن:</span> <strong id="infoWeight">—</strong>
+            • <span class="lbl">الطول:</span> <strong id="infoHeight">—</strong>
+          </div>
+          <div>
+            <span class="lbl">الجهاز:</span> <strong id="infoDevice">—</strong>
+          </div>
+          <div>
+            <span class="lbl">الأنسولين:</span>
+            <strong id="infoInsulin">—</strong>
+          </div>
+          <div><span class="lbl">النطاق:</span> <strong id="infoRange">—</strong></div>
+          <div>
+            <span class="lbl">CR:</span> <strong id="infoCR">—</strong>
+            • <span class="lbl">CF:</span> <strong id="infoCF">—</strong>
+          </div>
+        </div>
+
         <div class="mini">تحديث الإعدادات</div>
       </a>
     </section>
   </div>
 
   <div id="loader" class="loader hidden">جارِ التحميل…</div>
-
   <script type="module" src="js/child.js"></script>
 </body>
 </html>
