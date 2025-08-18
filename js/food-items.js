@@ -1,652 +1,409 @@
-// js/food-items.js (نسخة مُحدّثة تدعم الاستيراد من OpenFoodFacts)
+// js/food-items.js
 import { auth, db } from './firebase-config.js';
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, addDoc, getDocs, query, where, orderBy, doc, getDoc, updateDoc, deleteDoc,
-  serverTimestamp
+  collection, addDoc, updateDoc, deleteDoc, getDocs, doc, query, orderBy,
+  serverTimestamp, setDoc
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* ====== عناصر ====== */
-const searchEl = document.getElementById('search');
-const catEl = document.getElementById('category');
-const addBtn = document.getElementById('addBtn');
-const itemsGrid = document.getElementById('itemsGrid');
-const emptyState = document.getElementById('emptyState');
+/* DOM refs */
+const grid = document.getElementById('grid');
 
-const modal = document.getElementById('itemModal');
-const closeModalBtn = document.getElementById('closeModal');
-const itemForm = document.getElementById('itemForm');
-const modalTitle = document.getElementById('modalTitle');
+const qEl = document.getElementById('q');
+const fCat = document.getElementById('fCat');
+const fSource = document.getElementById('fSource');
+const fPhoto = document.getElementById('fPhoto');
+const fSort = document.getElementById('fSort');
+const btnClear = document.getElementById('btnClear');
 
+const btnAdd = document.getElementById('btnAdd');
+const togglePick = document.getElementById('togglePickMode');
+
+const drawer = document.getElementById('drawer');
+const btnClose = document.getElementById('btnClose');
+const btnCancel = document.getElementById('btnCancel');
+const formTitle = document.getElementById('formTitle');
+
+const form = document.getElementById('itemForm');
+const itemId = document.getElementById('itemId');
 const nameEl = document.getElementById('name');
 const brandEl = document.getElementById('brand');
-const catModalEl = document.getElementById('cat');
-const sourceEl = document.getElementById('source');
+const categoryEl = document.getElementById('category');
+const carb100El = document.getElementById('carb100');
+const prot100El = document.getElementById('prot100');
+const fat100El  = document.getElementById('fat100');
+const kcal100El = document.getElementById('kcal100');
+const unitsList = document.getElementById('unitsList');
+const uNameEl   = document.getElementById('uName');
+const uGramsEl  = document.getElementById('uGrams');
+const btnAddUnit= document.getElementById('btnAddUnit');
+const imageUrlEl= document.getElementById('imageUrl');
+const btnAutoImage = document.getElementById('btnAutoImage');
+const tagsEl    = document.getElementById('tags');
+const notesEl   = document.getElementById('notes');
+const sourceEl  = document.getElementById('source');
+const metaText  = document.getElementById('metaText');
 
-const imageUrlEl = document.getElementById('imageUrl');
-const autoImageEl = document.getElementById('autoImage');
-const tagsEl = document.getElementById('tags');
+/* Snack (undo delete) */
+const snack = document.getElementById('snack');
+const snackText = document.getElementById('snackText');
+const snackUndo = document.getElementById('snackUndo');
 
-const carbsEl = document.getElementById('carbs');
-const calEl = document.getElementById('cal');
-const proteinEl = document.getElementById('protein');
-const fatEl = document.getElementById('fat');
-const fiberEl = document.getElementById('fiber');
-const sugarEl = document.getElementById('sugar');
+let UNITS = []; // [{name, grams}]
+let ITEMS = [];
+let USER = null;
+let lastDeleted = null, snackTimer = null;
 
-const measuresWrap = document.getElementById('measuresWrap');
-const addMeasureBtn = document.getElementById('addMeasure');
+const params = new URLSearchParams(location.search);
+const currentChild = params.get('child') || '';
 
-const calcModeEl = document.getElementById('calcMode');
-const calcQtyEl = document.getElementById('calcQty');
-const calcMeasureEl = document.getElementById('calcMeasure');
+/* Helpers */
+const toNumber = v => (v==='' || v==null ? 0 : Number(v));
+const calcCalories = (c,p,f) => Math.round(4*toNumber(c) + 4*toNumber(p) + 9*toNumber(f));
+const fmt = n => (n==null || isNaN(+n) ? '—' : (+n).toFixed(1));
+const esc = s => (s ?? '').toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
-const pGramsEl = document.getElementById('pGrams');
-const pCarbsEl = document.getElementById('pCarbs');
-const pCalEl = document.getElementById('pCal');
-const pProtEl = document.getElementById('pProt');
-const pFatEl = document.getElementById('pFat');
-
-const cancelBtn = document.getElementById('cancelBtn');
-const saveBtn = document.getElementById('saveBtn');
-
-/* OFF عناصر */
-const importBarcodeBtn = document.getElementById('importBarcodeBtn');
-const importSearchBtn = document.getElementById('importSearchBtn');
-
-const offBarcodeModal = document.getElementById('offBarcodeModal');
-const closeBarcodeModal = document.getElementById('closeBarcodeModal');
-const barcodeInput = document.getElementById('barcodeInput');
-const fetchBarcodeBtn = document.getElementById('fetchBarcodeBtn');
-const barcodeResult = document.getElementById('barcodeResult');
-
-const offSearchModal = document.getElementById('offSearchModal');
-const closeSearchModal = document.getElementById('closeSearchModal');
-const offQuery = document.getElementById('offQuery');
-const fetchSearchBtn = document.getElementById('fetchSearchBtn');
-const searchResults = document.getElementById('searchResults');
-
-/* ====== حالة ====== */
-let currentUser;
-let editingId = null;
-let currentMeasures = []; // [{name, grams}]
-let allItemsCache = [];   // عرض سريع وتصفية محلية
-
-/* ====== أدوات ====== */
-function openModal(isEdit=false){
-  modal.classList.remove('hidden');
-  modalTitle.textContent = isEdit ? 'تعديل صنف' : 'إضافة صنف';
-}
-function closeModal(){ modal.classList.add('hidden'); }
-
-function openOffModal(m){ m.classList.remove('hidden'); }
-function closeOffModal(m){ m.classList.add('hidden'); }
-
-const pad = n => String(n).padStart(2,'0');
-function arabicToDot(s){ return (s||'').toString().replace(',', '.').trim(); }
-function numOrNull(x){ const n = Number(arabicToDot(x)); return isNaN(n) ? null : n; }
-function toLowerAr(s){ return (s||'').toString().trim().toLowerCase(); }
-
-function categoryIcon(cat){
-  switch(cat){
-    case 'نشويات': return '🍞';
-    case 'حليب': return '🥛';
-    case 'فاكهة': return '🍎';
-    case 'خضروات': return '🥕';
-    case 'لحوم': return '🍗';
-    case 'دهون': return '🥑';
-    default: return '🍽️';
-  }
-}
-
-/* توليد keywords (بادئات) من الاسم والتاجز */
-function buildKeywords(name, tagsArr){
-  const tokens = new Set();
-  const addPrefixes = (word)=>{
-    const w = word.trim().toLowerCase();
-    for (let i=1;i<=Math.min(w.length,10);i++) tokens.add(w.slice(0,i));
-  };
-  toLowerAr(name).split(/\s+/).forEach(addPrefixes);
-  (tagsArr||[]).forEach(t=> addPrefixes(toLowerAr(t)));
-  return Array.from(tokens);
-}
-
-/* مزامنة قائمة المقادير في UI */
-function renderMeasures(){
-  measuresWrap.innerHTML = '';
-  currentMeasures.forEach((m, idx)=>{
-    const row = document.createElement('div');
-    row.className = 'measure-row';
-    row.innerHTML = `
-      <input type="text" placeholder="اسم التقدير (كوب/معلقة/حبة)" value="${m.name||''}">
-      <input type="number" step="any" placeholder="جم" value="${m.grams ?? ''}">
-      <button type="button" class="del small">حذف</button>
-    `;
-    const [nameInput, gramsInput, delBtn] = row.querySelectorAll('input,button');
-
-    nameInput.addEventListener('input', ()=>{
-      currentMeasures[idx].name = nameInput.value.trim();
-      refreshCalcMeasureOptions(); calcPreview();
-    });
-    gramsInput.addEventListener('input', ()=>{
-      currentMeasures[idx].grams = numOrNull(gramsInput.value);
-      calcPreview();
-    });
-    delBtn.addEventListener('click', ()=>{
-      currentMeasures.splice(idx,1);
-      renderMeasures(); refreshCalcMeasureOptions(); calcPreview();
-    });
-
-    measuresWrap.appendChild(row);
+function normalTags(str){
+  if(!str) return [];
+  return str.split(',').map(t=>t.trim()).filter(Boolean).map(t=>{
+    if(!t.startsWith('#')) t = '#'+t;
+    return t.toLowerCase();
   });
 }
-addMeasureBtn.addEventListener('click', ()=>{
-  currentMeasures.push({ name:'', grams:null });
-  renderMeasures(); refreshCalcMeasureOptions();
+function tagsToString(arr){return (arr||[]).join(', ')}
+
+function openDrawer(){ drawer.classList.add('open'); }
+function closeDrawer(){ drawer.classList.remove('open'); resetForm(); }
+
+function resetForm(){
+  itemId.value = '';
+  formTitle.textContent = 'إضافة صنف';
+  nameEl.value = ''; brandEl.value = ''; categoryEl.value='';
+  carb100El.value=''; prot100El.value=''; fat100El.value=''; kcal100El.value='';
+  UNITS = []; renderUnits();
+  imageUrlEl.value=''; tagsEl.value=''; notesEl.value='';
+  sourceEl.value='manual'; metaText.textContent='—';
+}
+
+function renderUnits(){
+  unitsList.innerHTML = UNITS.length ? '' : '<span class="meta">لا توجد مقادير مضافة.</span>';
+  UNITS.forEach((u,idx)=>{
+    const el = document.createElement('span');
+    el.className='unit';
+    el.innerHTML = `<strong>${esc(u.name)}</strong> = <span>${esc(u.grams)} g</span> <span class="x" title="حذف" data-i="${idx}">✖</span>`;
+    unitsList.appendChild(el);
+  });
+}
+btnAddUnit.addEventListener('click', ()=>{
+  const n = uNameEl.value.trim();
+  const g = Number(uGramsEl.value);
+  if(!n || !g){ alert('أدخل اسم المقدار والجرام المكافئ'); return; }
+  if(g<=0){ alert('الجرام يجب أن يكون رقمًا موجبًا'); return; }
+  UNITS.push({name:n, grams:g});
+  uNameEl.value=''; uGramsEl.value='';
+  renderUnits();
+});
+unitsList.addEventListener('click', (e)=>{
+  const t = e.target;
+  if(t.classList.contains('x')){
+    const i = Number(t.dataset.i);
+    UNITS.splice(i,1);
+    renderUnits();
+  }
 });
 
-/* حساب المعاينة */
-function refreshCalcMeasureOptions(){
-  calcMeasureEl.innerHTML = '';
-  currentMeasures.forEach(m=>{
-    if (m.name && m.grams){
-      const opt = document.createElement('option');
-      opt.value = m.name;
-      opt.textContent = `${m.name} (${m.grams} جم)`;
-      calcMeasureEl.appendChild(opt);
+/* صورة تلقائية (SVG) */
+function autoImageFor(name='صنف'){
+  const hue = (Array.from(name).reduce((a,c)=>a+c.charCodeAt(0),0) % 360);
+  const bg  = `hsl(${hue} 80% 90%)`;
+  const fg  = `hsl(${hue} 60% 40%)`;
+  const txt = esc(name[0] || 'ص');
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'>
+    <rect width='100%' height='100%' fill='${bg}'/>
+    <text x='50%' y='56%' dominant-baseline='middle' text-anchor='middle'
+      font-family='Segoe UI, Tahoma' font-size='140' fill='${fg}'>${txt}</text>
+  </svg>`;
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+btnAutoImage.addEventListener('click', ()=>{
+  if(!nameEl.value.trim()){ alert('أدخل اسم الصنف أولاً'); return; }
+  imageUrlEl.value = autoImageFor(nameEl.value.trim());
+});
+
+/* احسب السعرات تلقائيًا لو فاضي */
+[kcal100El, carb100El, prot100El, fat100El].forEach(el=>{
+  el.addEventListener('input', ()=>{
+    if(kcal100El.value===''){
+      const kcal = calcCalories(carb100El.value, prot100El.value, fat100El.value);
+      if(!isNaN(kcal)) kcal100El.placeholder = `${kcal}`;
     }
   });
-}
-function calcPreview(){
-  const mode = calcModeEl.value;
-  const qty = Number(arabicToDot(calcQtyEl.value) || 0);
-  const per100 = {
-    carbs: Number(arabicToDot(carbsEl.value) || 0),
-    cal: Number(arabicToDot(calEl.value) || 0),
-    prot: Number(arabicToDot(proteinEl.value) || 0),
-    fat: Number(arabicToDot(fatEl.value) || 0),
-  };
-
-  let grams = 0;
-  if (mode === 'grams'){
-    grams = qty;
-  } else {
-    const m = currentMeasures.find(x=> x.name === calcMeasureEl.value);
-    if (m && m.grams) grams = qty * m.grams;
-  }
-  const carbs = (per100.carbs * grams) / 100;
-  const cal = (per100.cal * grams) / 100;
-  const prot = (per100.prot * grams) / 100;
-  const fat = (per100.fat * grams) / 100;
-
-  pGramsEl.textContent = (Math.round(grams*10)/10) || 0;
-  pCarbsEl.textContent = (Math.round(carbs*10)/10) || 0;
-  pCalEl.textContent   = Math.round(cal) || 0;
-  pProtEl.textContent  = (Math.round(prot*10)/10) || 0;
-  pFatEl.textContent   = (Math.round(fat*10)/10) || 0;
-}
-[calcModeEl, calcQtyEl, calcMeasureEl, carbsEl, calEl, proteinEl, fatEl].forEach(el=>{
-  el.addEventListener('input', calcPreview);
 });
 
-/* ====== تحميل المستخدم ثم الأصناف ====== */
+/* فتح/إغلاق النموذج */
+btnAdd.addEventListener('click', ()=>{ resetForm(); openDrawer(); });
+btnClose.addEventListener('click', closeDrawer);
+btnCancel.addEventListener('click', closeDrawer);
+
+/* وضع الاختيار (يحفظ محليًا) */
+togglePick.checked = localStorage.getItem('fi_pickmode') === '1';
+togglePick.addEventListener('change', ()=>{
+  localStorage.setItem('fi_pickmode', togglePick.checked ? '1' : '0');
+  renderGrid();
+});
+
+/* فلاتر */
+[qEl,fCat,fSource,fPhoto,fSort].forEach(el=> el.addEventListener('input', renderGrid));
+btnClear.addEventListener('click', ()=>{
+  qEl.value=''; fCat.value=''; fSource.value=''; fPhoto.value=''; fSort.value='name_asc';
+  renderGrid();
+});
+
+/* تحميل بيانات المستخدم ثم الأصناف */
 onAuthStateChanged(auth, async (user)=>{
-  if (!user) return location.href = 'index.html';
-  currentUser = user;
+  if(!user){ location.href='index.html'; return; }
+  USER = user;
   await loadItems();
 });
 
 async function loadItems(){
-  const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
-  const qy = query(ref, orderBy('nameLower','asc'));
-  const snap = await getDocs(qy);
+  grid.textContent = 'جارِ التحميل…';
+  const ref = collection(db, `parents/${USER.uid}/foodItems`);
+  const snap = await getDocs(query(ref, orderBy('name')));
+  ITEMS = snap.docs.map(d=> ({ id:d.id, ...d.data() }));
+  renderGrid();
+}
 
-  allItemsCache = [];
-  snap.forEach(d=>{
-    allItemsCache.push({ id: d.id, ...d.data() });
+/* تصفية + ترتيب + عرض الشبكة */
+function renderGrid(){
+  const q = qEl.value.trim().toLowerCase();
+  const cat = fCat.value;
+  const src = fSource.value;
+  const ph  = fPhoto.value;
+  const sort = fSort.value;
+
+  let arr = ITEMS.slice();
+
+  // فلترة
+  if(q){
+    arr = arr.filter(it=>{
+      const inName = (it.name||'').toLowerCase().includes(q);
+      const inTags = (it.tags||[]).some(t=> t.toLowerCase().includes(q));
+      return inName || inTags;
+    });
+  }
+  if(cat) arr = arr.filter(it=> it.category===cat);
+  if(src) arr = arr.filter(it=> (it.source||'manual')===src);
+  if(ph==='with')    arr = arr.filter(it=> !!it.imageUrl);
+  if(ph==='without') arr = arr.filter(it=> !it.imageUrl);
+
+  // ترتيب
+  arr.sort((a,b)=>{
+    if(sort==='name_asc')  return (a.name||'').localeCompare(b.name||'','ar');
+    if(sort==='name_desc') return (b.name||'').localeCompare(a.name||'','ar');
+    if(sort==='newest')    return (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0);
+    if(sort==='oldest')    return (a.createdAt?.seconds||0)-(b.createdAt?.seconds||0);
+    return 0;
   });
 
-  applyFilters();
-}
-
-/* ====== الفلاتر والبحث ====== */
-searchEl.addEventListener('input', debounce(applyFilters, 250));
-catEl.addEventListener('change', applyFilters);
-
-async function applyFilters(){
-  const q = searchEl.value.trim();
-  const cat = catEl.value;
-
-  // #هاشتاج
-  if (q.startsWith('#') && q.length > 1){
-    const tag = q.slice(1).trim().toLowerCase();
-    const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
-    const qy = query(ref, where('tags','array-contains', tag));
-    const snap = await getDocs(qy);
-    const arr = []; snap.forEach(d => arr.push({ id:d.id, ...d.data() }));
-    const filtered = cat==='الكل' ? arr : arr.filter(x=> x.category===cat);
-    renderItems(filtered); return;
-  }
-
-  // اسم (keywords)
-  if (q.length >= 2){
-    const token = q.trim().toLowerCase();
-    const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
-    const qy = query(ref, where('keywords','array-contains', token));
-    const snap = await getDocs(qy);
-    const arr = []; snap.forEach(d => arr.push({ id:d.id, ...d.data() }));
-    const filtered = cat==='الكل' ? arr : arr.filter(x=> x.category===cat);
-    renderItems(filtered); return;
-  }
-
-  const base = (cat==='الكل') ? allItemsCache : allItemsCache.filter(x=> x.category===cat);
-  renderItems(base);
-}
-
-/* ====== عرض الكروت ====== */
-function placeholderThumb(cat){
-  const span = document.createElement('span');
-  span.textContent = categoryIcon(cat);
-  span.style.display='inline-block';
-  span.style.lineHeight='64px';
-  span.style.textAlign='center';
-  span.style.width='64px';
-  return span;
-}
-
-function renderItems(items){
-  itemsGrid.innerHTML = '';
-  if (!items.length){
-    emptyState.classList.remove('hidden');
+  // عرض
+  grid.innerHTML = '';
+  if(!arr.length){
+    grid.innerHTML = `<div class="meta">لا توجد أصناف مطابقة.</div>`;
     return;
   }
-  emptyState.classList.add('hidden');
 
-  items.forEach(item=>{
+  const pickMode = togglePick.checked;
+
+  arr.forEach(it=>{
+    const kcal = it.calories_100g ?? calcCalories(it.carbs_100g, it.protein_100g, it.fat_100g);
+    const img  = it.imageUrl || autoImageFor(it.name||'صنف');
+    const unitsBadge = (it.householdUnits?.length>0) ? `<span class="badge units">مقادير منزلية</span>` : '';
+    const tagsBadge  = (it.tags?.length>0) ? `<span class="badge tags">تاجات</span>` : '';
+    const source     = `<span class="badge src">${esc(it.source||'manual')}</span>`;
+
     const card = document.createElement('div');
-    card.className = 'item';
+    card.className='card';
+    card.innerHTML = `
+      <div class="head">
+        <img class="thumb" src="${esc(img)}" alt="">
+        <div>
+          <div class="title">${esc(it.name||'—')}</div>
+          <div class="meta">${esc(it.brand||'—')} • ${esc(it.category||'—')}</div>
+          <div class="chips">
+            <span class="chip">كارب/100g: <strong>${fmt(it.carbs_100g)}</strong></span>
+            <span class="chip">بروتين/100g: ${fmt(it.protein_100g)}</span>
+            <span class="chip">دهون/100g: ${fmt(it.fat_100g)}</span>
+            <span class="chip">سعرات/100g: ${isNaN(kcal)?'—':kcal}</span>
+            ${source} ${unitsBadge} ${tagsBadge}
+          </div>
+        </div>
+      </div>
 
-    const thumb = document.createElement('div');
-    thumb.className = 'thumb';
-    if (item.imageUrl && String(item.autoImage)!=='true'){
-      const img = document.createElement('img');
-      img.src = item.imageUrl; img.alt = item.name || '';
-      img.style.width='100%'; img.style.height='100%'; img.style.objectFit='cover'; img.style.borderRadius='8px';
-      img.onerror = ()=> { thumb.innerHTML=''; thumb.appendChild(placeholderThumb(item.category)); };
-      thumb.appendChild(img);
-    } else {
-      thumb.appendChild(placeholderThumb(item.category));
-    }
+      <div class="quick">
+        <label>حساب سريع للحصة:</label>
+        <input type="number" step="1" min="0" placeholder="جرام" class="input qG">
+        <select class="input qU">
+          <option value="">أو اختَر مقدارًا منزليًا</option>
+          ${(it.householdUnits||[]).map(u=>`<option value="${u.grams}">${esc(u.name)} (${u.grams}g)</option>`).join('')}
+        </select>
+        <button class="btn ghost qCalc">احسب</button>
+        <span class="meta qOut"></span>
+      </div>
 
-    const meta = document.createElement('div'); meta.className = 'meta';
-    const title = document.createElement('div');
-    title.innerHTML = `<strong>${escapeHTML(item.name)}</strong> ${item.brand? `<small>(${escapeHTML(item.brand)})</small>`:''}`;
-    const badges = document.createElement('div'); badges.className='badges';
-    badges.innerHTML = `
-      <span class="badge">${escapeHTML(item.category||'-')}</span>
-      <span class="badge">كارب/100g: ${item?.nutrPer100g?.carbs_g ?? '-'}</span>
-      <span class="badge">سعرات/100g: ${item?.nutrPer100g?.cal_kcal ?? '-'}</span>
-      <span class="badge">المصدر: ${escapeHTML(item.source || 'manual')}</span>
+      <div class="actions">
+        ${pickMode && currentChild ? `<button class="btn primary qSend">استخدام داخل الوجبات</button>`:''}
+        <button class="btn qEdit">تعديل</button>
+        <button class="btn qCopy">نسخ</button>
+        <button class="btn qDel" style="color:#fff;background:#ef4444;border:0">حذف</button>
+      </div>
+
+      <div class="meta">${esc(tagsToString(it.tags))}</div>
     `;
-    const tags = document.createElement('div'); tags.className='tags';
-    (item.tags || []).forEach(t=>{
-      const sp = document.createElement('span'); sp.className='tag'; sp.textContent = `#${t}`;
-      tags.appendChild(sp);
+
+    // أحداث الحاسبة
+    const qG = card.querySelector('.qG');
+    const qU = card.querySelector('.qU');
+    const qOut = card.querySelector('.qOut');
+
+    card.querySelector('.qCalc').addEventListener('click', ()=>{
+      const grams = Number(qU.value || qG.value);
+      if(!grams){ qOut.textContent='أدخل وزنًا أو اختر مقدار'; return; }
+      const factor = grams/100;
+      const carbs = factor * (it.carbs_100g||0);
+      const kcal  = factor * (it.calories_100g ?? calcCalories(it.carbs_100g, it.protein_100g, it.fat_100g));
+      qOut.textContent = `كارب: ${carbs.toFixed(1)}g • سعرات: ${Math.round(kcal)} kcal`;
     });
 
-    const actions = document.createElement('div'); actions.className='actions';
-    const editBtn = document.createElement('button'); editBtn.textContent='تعديل';
-    const delBtn  = document.createElement('button'); delBtn.textContent='حذف'; delBtn.className='del';
-    editBtn.addEventListener('click', ()=> openEdit(item));
-    delBtn.addEventListener('click', ()=> deleteItem(item));
+    // إرسال للوجبات
+    if(pickMode && currentChild){
+      const btnSend = card.querySelector('.qSend');
+      btnSend?.addEventListener('click', ()=>{
+        const grams = Number(qU.value || qG.value);
+        if(!grams){ alert('أدخل وزنًا أو اختر مقدار'); return; }
+        const url = `meals.html?child=${encodeURIComponent(currentChild)}&item=${encodeURIComponent(it.id)}&grams=${grams}`;
+        location.href = url;
+      });
+    }
 
-    actions.append(editBtn, delBtn);
-    meta.append(title, badges, tags, actions);
+    // تعديل
+    card.querySelector('.qEdit').addEventListener('click', ()=> openEdit(it));
+    // نسخ
+    card.querySelector('.qCopy').addEventListener('click', ()=> openCopy(it));
+    // حذف (مع undo)
+    card.querySelector('.qDel').addEventListener('click', async ()=>{
+      if(!confirm(`حذف الصنف «${it.name}»؟ لا يمكن التراجع بعد الإغلاق.`)) return;
+      lastDeleted = { ...it };
+      await deleteDoc(doc(db, `parents/${USER.uid}/foodItems/${it.id}`));
+      await loadItems();
+      showSnack(`تم حذف «${it.name}»`);
+    });
 
-    card.append(thumb, meta);
-    itemsGrid.appendChild(card);
+    grid.appendChild(card);
   });
 }
 
-function escapeHTML(s){
-  return (s||'').toString()
-    .replaceAll('&','&amp;').replaceAll('<','&lt;')
-    .replaceAll('>','&gt;').replaceAll('"','&quot;')
-    .replaceAll("'",'&#039;');
+/* Snack (Undo) */
+function showSnack(text){
+  snackText.textContent = text;
+  snack.hidden = false;
+  clearTimeout(snackTimer);
+  snackTimer = setTimeout(()=> snack.hidden = true, 5000);
 }
-
-/* ====== إضافة/تعديل ====== */
-addBtn.addEventListener('click', ()=>{
-  editingId = null;
-  itemForm.reset();
-  currentMeasures = [];
-  renderMeasures(); refreshCalcMeasureOptions(); calcPreview();
-  autoImageEl.value = 'true'; sourceEl.value = 'manual';
-  openModal(false);
+snackUndo.addEventListener('click', async ()=>{
+  snack.hidden = true;
+  if(!lastDeleted) return;
+  const backup = {...lastDeleted};
+  lastDeleted = null;
+  // استرجاع بنفس الـ id (اختياري: نحاول)
+  try{
+    await setDoc(doc(db, `parents/${USER.uid}/foodItems/${backup.id}`), {
+      ...backup, updatedAt: serverTimestamp()
+    });
+  }catch{
+    await addDoc(collection(db, `parents/${USER.uid}/foodItems`), {
+      ...backup, id: undefined, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    });
+  }
+  await loadItems();
+  showSnack('تم التراجع عن الحذف');
 });
-closeModalBtn.addEventListener('click', closeModal);
-cancelBtn.addEventListener('click', closeModal);
 
-function fillForm(item){
-  nameEl.value = item.name || '';
-  brandEl.value = item.brand || '';
-  catModalEl.value = item.category || '';
-  sourceEl.value = item.source || 'manual';
-  imageUrlEl.value = item.imageUrl || '';
-  autoImageEl.value = String(item.autoImage)==='false' ? 'false' : 'true';
-  tagsEl.value = (item.tags||[]).join(' ');
+/* فتح تعديل */
+function fillForm(it){
+  itemId.value = it.id || '';
+  formTitle.textContent = it.id ? 'تعديل صنف' : 'إضافة صنف';
+  nameEl.value = it.name || '';
+  brandEl.value = it.brand || '';
+  categoryEl.value = it.category || '';
+  carb100El.value = it.carbs_100g ?? '';
+  prot100El.value = it.protein_100g ?? '';
+  fat100El.value  = it.fat_100g ?? '';
+  kcal100El.value = it.calories_100g ?? '';
+  UNITS = (it.householdUnits||[]).map(u=> ({name:u.name, grams:u.grams}));
+  renderUnits();
+  imageUrlEl.value = it.imageUrl || '';
+  tagsEl.value = tagsToString(it.tags);
+  notesEl.value = it.notes || '';
+  sourceEl.value = it.source || 'manual';
 
-  carbsEl.value = item?.nutrPer100g?.carbs_g ?? '';
-  calEl.value = item?.nutrPer100g?.cal_kcal ?? '';
-  proteinEl.value = item?.nutrPer100g?.protein_g ?? '';
-  fatEl.value = item?.nutrPer100g?.fat_g ?? '';
-  fiberEl.value = item?.nutrPer100g?.fiber_g ?? '';
-  sugarEl.value = item?.nutrPer100g?.sugar_g ?? '';
-
-  currentMeasures = Array.isArray(item.measures) ? JSON.parse(JSON.stringify(item.measures)) : [];
-  renderMeasures(); refreshCalcMeasureOptions(); calcPreview();
+  const c = it.createdAt?.toDate ? it.createdAt.toDate() : null;
+  const u = it.updatedAt?.toDate ? it.updatedAt.toDate() : null;
+  metaText.textContent = `أُنشئ: ${c?c.toLocaleString('ar-EG'):'—'} • آخر تحديث: ${u?u.toLocaleString('ar-EG'):'—'}`;
 }
 
-function openEdit(item){
-  editingId = item.id;
-  itemForm.reset();
-  fillForm(item);
-  openModal(true);
+function openEdit(it){ fillForm(it); openDrawer(); }
+function openCopy(it){
+  const clone = {...it};
+  delete clone.id;
+  clone.name = (clone.name||'') + ' - نسخة';
+  fillForm(clone);
+  openDrawer();
 }
 
-itemForm.addEventListener('submit', async (e)=>{
+/* حفظ النموذج */
+form.addEventListener('submit', async (e)=>{
   e.preventDefault();
+  const name = nameEl.value.trim();
+  const category = categoryEl.value;
+  const carbs = Number(carb100El.value);
+  if(!name || !category || isNaN(carbs)){ alert('الاسم + التصنيف + كارب/100g مطلوبة'); return; }
+  if(carbs < 0 || toNumber(prot100El.value) < 0 || toNumber(fat100El.value) < 0){ alert('القيم الغذائية يجب أن تكون ≥ 0'); return; }
 
-  if (!nameEl.value.trim()){ alert('أدخل اسم الصنف'); return; }
-  if (!catModalEl.value){ alert('اختر التصنيف'); return; }
-  const carbs = numOrNull(carbsEl.value);
-  const cal   = numOrNull(calEl.value);
-  if (carbs===null || cal===null){ alert('أدخل الكارب والسعرات لكل 100 جم'); return; }
-  if (carbs<0 || cal<0){ alert('القيم لا يمكن أن تكون سالبة'); return; }
-
-  const measures = currentMeasures
-    .filter(m => (m.name||'').trim() && typeof m.grams === 'number' && m.grams>0)
-    .map(m => ({ name: m.name.trim(), grams: Number(m.grams) }));
-
-  const tagsArr = (tagsEl.value || '')
-    .split(/[,\s]+/).map(t=>t.trim()).filter(Boolean).map(t=>t.toLowerCase());
+  let kcal100 = kcal100El.value==='' ? calcCalories(carb100El.value, prot100El.value, fat100El.value) : Number(kcal100El.value);
+  if(isNaN(kcal100)) kcal100 = 0;
 
   const payload = {
-    name: nameEl.value.trim(),
-    nameLower: toLowerAr(nameEl.value),
+    name,
     brand: brandEl.value.trim() || null,
-    category: catModalEl.value,
-    source: (sourceEl.value || 'manual'),
+    category,
+    carbs_100g: +carb100El.value || 0,
+    protein_100g: +prot100El.value || 0,
+    fat_100g: +fat100El.value || 0,
+    calories_100g: +kcal100 || 0,
+    householdUnits: UNITS.slice(),
     imageUrl: imageUrlEl.value.trim() || null,
-    autoImage: (autoImageEl.value === 'true'),
-    tags: tagsArr,
-    keywords: buildKeywords(nameEl.value, tagsArr),
-    nutrPer100g: {
-      carbs_g: carbs,
-      cal_kcal: cal,
-      protein_g: numOrNull(proteinEl.value),
-      fat_g: numOrNull(fatEl.value),
-      fiber_g: numOrNull(fiberEl.value),
-      sugar_g: numOrNull(sugarEl.value)
-    },
-    measures,
-    updatedAt: serverTimestamp()
+    tags: normalTags(tagsEl.value),
+    notes: notesEl.value.trim() || null,
+    source: sourceEl.value || 'manual',
+    updatedAt: serverTimestamp(),
   };
 
+  const id = itemId.value;
   try{
-    const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
-    if (editingId){
-      await updateDoc(doc(ref, editingId), payload);
-      alert('✅ تم تحديث الصنف');
-    } else {
-      payload.createdAt = serverTimestamp();
-      await addDoc(ref, payload);
-      alert('✅ تم إضافة الصنف');
+    if(id){
+      await updateDoc(doc(db, `parents/${USER.uid}/foodItems/${id}`), payload);
+      alert('تم التحديث بنجاح');
+    }else{
+      await addDoc(collection(db, `parents/${USER.uid}/foodItems`), {
+        ...payload, createdAt: serverTimestamp()
+      });
+      alert('تمت الإضافة بنجاح');
     }
-    closeModal(); await loadItems();
-  } catch(err){
+    closeDrawer();
+    await loadItems();
+  }catch(err){
     console.error(err);
     alert('حدث خطأ أثناء الحفظ');
   }
 });
-
-/* ====== حذف ====== */
-async function deleteItem(item){
-  if (!confirm(`هل تريد حذف "${item.name}"؟`)) return;
-  try{
-    await deleteDoc(doc(db, `parents/${currentUser.uid}/foodItems/${item.id}`));
-    alert('🗑️ تم الحذف'); await loadItems();
-  } catch(e){
-    console.error(e); alert('تعذر حذف الصنف');
-  }
-}
-
-/* ====== OpenFoodFacts: استيراد بالباركود ====== */
-importBarcodeBtn.addEventListener('click', ()=>{
-  barcodeInput.value=''; barcodeResult.innerHTML='';
-  openOffModal(offBarcodeModal);
-});
-closeBarcodeModal.addEventListener('click', ()=> closeOffModal(offBarcodeModal));
-
-fetchBarcodeBtn.addEventListener('click', async ()=>{
-  const code = (barcodeInput.value||'').trim();
-  if (!/^\d{8,14}$/.test(code)){ alert('رجاء إدخال باركود صالح (8-14 أرقام)'); return; }
-
-  barcodeResult.innerHTML = '⏳ جاري الجلب...';
-  try{
-    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (!data || data.status !== 1){
-      barcodeResult.innerHTML = `<div class="off-result">لم يتم العثور على منتج بهذا الباركود.</div>`;
-      return;
-    }
-    const prod = data.product;
-    const mapped = mapOFFProduct(prod);
-
-    barcodeResult.innerHTML = offPreviewHTML(mapped);
-    const fillBtn = barcodeResult.querySelector('.off-fill');
-    fillBtn.addEventListener('click', ()=>{
-      fillForm(mappedToForm(mapped));
-      closeOffModal(offBarcodeModal);
-      openModal(false); // افتح نموذج الإضافة
-    });
-
-  }catch(e){
-    console.error(e);
-    barcodeResult.innerHTML = `<div class="off-result">حدث خطأ أثناء الجلب.</div>`;
-  }
-});
-
-/* ====== OpenFoodFacts: استيراد بالاسم ====== */
-importSearchBtn.addEventListener('click', ()=>{
-  offQuery.value=''; searchResults.innerHTML='';
-  openOffModal(offSearchModal);
-});
-closeSearchModal.addEventListener('click', ()=> closeOffModal(offSearchModal));
-
-fetchSearchBtn.addEventListener('click', async ()=>{
-  const q = (offQuery.value||'').trim();
-  if (q.length < 2){ alert('اكتب على الأقل حرفين للبحث'); return; }
-  searchResults.innerHTML = '⏳ جاري البحث...';
-  try{
-    const fields = [
-      'code','product_name','product_name_ar','brands','image_front_url',
-      'nutriments','serving_size','categories','categories_tags'
-    ].join(',');
-    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&search_terms=${encodeURIComponent(q)}&json=1&page_size=20&fields=${fields}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    const products = Array.isArray(data.products) ? data.products : [];
-    if (!products.length){
-      searchResults.innerHTML = '<div class="off-result">لا نتائج مطابقة.</div>';
-      return;
-    }
-    // عرض نتائج
-    searchResults.innerHTML = '';
-    products.forEach(p=>{
-      const mapped = mapOFFProduct(p);
-      const card = document.createElement('div');
-      card.className = 'off-card';
-      card.innerHTML = `
-        <div class="off-thumb">${mapped.imageUrl ? `<img src="${mapped.imageUrl}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px">` : '📦'}</div>
-        <div class="off-meta">
-          <div><strong>${escapeHTML(mapped.name||'-')}</strong> ${mapped.brand?`<small>(${escapeHTML(mapped.brand)})</small>`:''}</div>
-          <div class="muted" style="font-size:12px">كارب/100g: ${mapped.nutrPer100g.carbs_g ?? '-'} • سعرات/100g: ${mapped.nutrPer100g.cal_kcal ?? '-'}</div>
-          <div class="off-actions"><button class="off-fill small">ملء النموذج</button></div>
-        </div>
-      `;
-      card.querySelector('.off-fill').addEventListener('click', ()=>{
-        fillForm(mappedToForm(mapped));
-        closeOffModal(offSearchModal);
-        openModal(false);
-      });
-      searchResults.appendChild(card);
-    });
-
-  }catch(e){
-    console.error(e);
-    searchResults.innerHTML = `<div class="off-result">حدث خطأ أثناء البحث.</div>`;
-  }
-});
-
-/* ====== تحويل/تخمين من OFF ====== */
-function mapOFFProduct(prod){
-  // الاسم (أفضلية عربي)
-  const name = prod.product_name_ar || prod.product_name || '';
-  const brand = (prod.brands||'').split(',')[0]?.trim() || null;
-  const imageUrl = prod.image_front_url || null;
-
-  const n = prod.nutriments || {};
-  // سعرات kcal: قد تكون energy-kcal_100g أو energy_100g (كيلوجول)
-  let cal = n['energy-kcal_100g'];
-  if (cal == null && n['energy_100g'] != null){
-    const kj = Number(n['energy_100g']);
-    if (!isNaN(kj)) cal = Math.round(kj / 4.184);
-  }
-  const carbs = n['carbohydrates_100g'];
-  const protein = n['proteins_100g'];
-  const fat = n['fat_100g'];
-  const fiber = n['fiber_100g'];
-  const sugar = n['sugars_100g'];
-
-  // تقدير بيتي من serving_size لو يتضمن جرام
-  const measures = [];
-  const serving = prod.serving_size || '';
-  const gMatch = serving.match(/(\d+(?:[\.,]\d+)?)\s*g/i);
-  if (gMatch){
-    const grams = Number(String(gMatch[1]).replace(',','.'));
-    if (!isNaN(grams) && grams>0) measures.push({ name: 'حصة', grams });
-  }
-
-  // تخمين التصنيف
-  const category = guessCategory(prod);
-
-  // وسوم افتراضية
-  const code = prod.code || '';
-  const autoTags = ['off', code ? `barcode:${code}` : null].filter(Boolean);
-
-  return {
-    name,
-    brand,
-    category,
-    imageUrl,
-    autoImage: imageUrl ? false : true,
-    source: 'openfoodfacts',
-    tags: autoTags,
-    nutrPer100g: {
-      carbs_g: safeNum(carbs),
-      cal_kcal: safeNum(cal),
-      protein_g: safeNum(protein),
-      fat_g: safeNum(fat),
-      fiber_g: safeNum(fiber),
-      sugar_g: safeNum(sugar)
-    },
-    measures
-  };
-}
-
-function mappedToForm(mapped){
-  // دمج لإرسالها للفورم كما لو مستخدم أدخلها
-  return {
-    name: mapped.name || '',
-    brand: mapped.brand || '',
-    category: mapped.category || '',
-    source: mapped.source || 'openfoodfacts',
-    imageUrl: mapped.imageUrl || '',
-    autoImage: mapped.autoImage !== false ? true : false,
-    tags: mapped.tags || [],
-    nutrPer100g: mapped.nutrPer100g,
-    measures: mapped.measures || []
-  };
-}
-
-function offPreviewHTML(m){
-  return `
-    <div class="off-card">
-      <div class="off-thumb">${m.imageUrl ? `<img src="${m.imageUrl}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px">` : '📦'}</div>
-      <div class="off-meta">
-        <div><strong>${escapeHTML(m.name||'-')}</strong> ${m.brand?`<small>(${escapeHTML(m.brand)})</small>`:''}</div>
-        <div class="muted" style="font-size:12px">
-          تصنيف متوقّع: ${escapeHTML(m.category || '-')}&nbsp;•&nbsp;
-          كارب/100g: ${m.nutrPer100g.carbs_g ?? '-'} • سعرات/100g: ${m.nutrPer100g.cal_kcal ?? '-'}
-        </div>
-        <div class="off-actions">
-          <button class="off-fill">ملء النموذج</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function safeNum(v){
-  const n = Number(v); return isNaN(n) ? null : Math.round(n*100)/100;
-}
-
-function guessCategory(prod){
-  const cats = (prod.categories || prod.categories_tags || '').toString().toLowerCase();
-  const name = (prod.product_name || '').toLowerCase();
-
-  const has = (s)=> cats.includes(s) || name.includes(s);
-
-  if (has('bread') || has('rice') || has('pasta') || has('cereal') || has('oat') || has('biscuit') || has('flour') || has('corn'))
-    return 'نشويات';
-  if (has('milk') || has('lact') || has('yogurt') || has('cheese'))
-    return 'حليب';
-  if (has('fruit') || has('apple') || has('banana') || has('juice'))
-    return 'فاكهة';
-  if (has('vegetable') || has('tomato') || has('cucumber') || has('salad'))
-    return 'خضروات';
-  if (has('meat') || has('chicken') || has('beef') || has('fish') || has('tuna'))
-    return 'لحوم';
-  if (has('oil') || has('butter') || has('ghee') || has('fat') || has('avocado'))
-    return 'دهون';
-  return '';
-}
-
-/* ====== ملء نموذج الصفحة من الماب ====== */
-function fillFormFromMapped(m){
-  nameEl.value = m.name || '';
-  brandEl.value = m.brand || '';
-  catModalEl.value = m.category || '';
-  sourceEl.value = m.source || 'openfoodfacts';
-  imageUrlEl.value = m.imageUrl || '';
-  autoImageEl.value = m.autoImage ? 'true':'false';
-  tagsEl.value = (m.tags||[]).join(' ');
-
-  carbsEl.value = m?.nutrPer100g?.carbs_g ?? '';
-  calEl.value = m?.nutrPer100g?.cal_kcal ?? '';
-  proteinEl.value = m?.nutrPer100g?.protein_g ?? '';
-  fatEl.value = m?.nutrPer100g?.fat_g ?? '';
-  fiberEl.value = m?.nutrPer100g?.fiber_g ?? '';
-  sugarEl.value = m?.nutrPer100g?.sugar_g ?? '';
-
-  currentMeasures = Array.isArray(m.measures) ? JSON.parse(JSON.stringify(m.measures)) : [];
-  renderMeasures(); refreshCalcMeasureOptions(); calcPreview();
-}
-function fillForm(m){ fillFormFromMapped(m); }
-
-/* ====== debounce ====== */
-function debounce(fn, ms){
-  let t; return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn.apply(null,args), ms); };
-}
