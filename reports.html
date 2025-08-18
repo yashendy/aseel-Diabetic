@@ -1,96 +1,102 @@
-<!-- reports.html -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>التقارير المطبوعة</title>
-  <link rel="stylesheet" href="css/reports.css"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>التقارير</title>
   <link rel="icon" href="data:,">
+  <style>
+    :root{--border:#e5e7eb;--muted:#768398;--primary:#4f46e5;--bg:#f7fbff}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);font-family:"Segoe UI",Tahoma,Arial,sans-serif;color:#1f2937}
+    .container{max-width:1000px;margin:24px auto;padding:0 12px}
+    .card{background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,.06);padding:16px 18px;margin-bottom:18px}
+    .muted{color:var(--muted)}
+    .btn{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer}
+    .btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+    .btn.back{background:#eef0ff;color:var(--primary);border-color:var(--primary);margin-bottom:10px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+    .chip{background:#f3f4f6;border:1px solid var(--border);padding:6px 10px;border-radius:999px;font-size:13px}
+    .filters input[type="date"]{padding:8px 10px;border:1px solid var(--border);border-radius:10px}
+    table{width:100%;border-collapse:collapse}
+    thead th{background:#fafafa;border:1px solid var(--border);padding:10px}
+    tbody td{border:1px solid var(--border);padding:10px}
+    .print-hide{display:inline-block}
+    @media print{
+      .no-print{display:none !important}
+      /* اخفاء الملاحظات وقت الطباعة (يتحكم بها كلاس من الزر) */
+      .hide-notes-print td.notes{display:none}
+      .hide-notes-print th.notes{display:none}
+      body{background:#fff}
+    }
+  </style>
 </head>
 <body>
   <div class="container">
-    <!-- شريط الإعدادات -->
-    <section class="controls card no-print">
-      <h2>🧾 إعداد تقرير مطبوع</h2>
-      <div class="grid">
-        <div class="field">
-          <label>من تاريخ</label>
-          <input type="date" id="dateFrom">
-        </div>
-        <div class="field">
-          <label>إلى تاريخ</label>
-          <input type="date" id="dateTo">
-        </div>
-        <div class="field">
-          <label>وحدة التقرير</label>
-          <select id="reportUnit">
-            <option value="mmol/L">mmol/L (خليجي/أوروبي)</option>
-            <option value="mg/dL">mg/dL (أمريكي)</option>
-          </select>
-        </div>
-        <div class="field checkbox">
-          <label>
-            <input type="checkbox" id="hideNotes">
-            إخفاء الملاحظات في الطباعة
-          </label>
-        </div>
-      </div>
-      <div class="actions">
-        <button id="loadBtn">تحديث المعاينة</button>
-        <button id="printBtn" class="secondary">🖨️ طباعة</button>
-       
 
+    <!-- رأس الصفحة -->
+    <header class="card">
+      <button class="btn back no-print" onclick="history.back()">⬅ رجوع</button>
+      <h1>📄 التقارير — <span id="childName">طفل</span></h1>
+      <p class="muted" id="childMeta">—</p>
+      <div class="chips">
+        <span class="chip" id="chipRange">النطاق: —</span>
+        <span class="chip" id="chipCR">CR: —</span>
+        <span class="chip" id="chipCF">CF: —</span>
       </div>
-      <p class="hint">⚠️ المؤشر (سهم/دائرة) يعتمد على الحدود المخزّنة بالـ mmol/L.</p>
-       <a class="btn" id="openAnalytics">📈 تحليل القياسات</a>
-    </section>
 
-    <!-- رأس التقرير -->
-    <header class="report-header card">
-      <div class="head-grid">
-        <div>
-          <h1>تقرير قياسات السكر</h1>
-          <div class="meta">
-            <span>الطفل: <strong id="childName">...</strong></span>
-            <span>العمر: <strong id="childAge">-</strong></span>
-            <span>الجنس: <strong id="childGender">-</strong></span>
-          </div>
+      <!-- أكشنات -->
+      <div class="row no-print" style="margin-top:10px">
+        <div class="filters row">
+          <label>من</label><input type="date" id="fromDate">
+          <label>إلى</label><input type="date" id="toDate">
         </div>
-        <div class="meta right">
-          <span>الوحدة المختارة للتقرير: <strong id="unitChosen">mmol/L</strong></span>
-          <span>النطاق الطبيعي (mmol/L): <strong id="range">-</strong></span>
-          <span>CF (mmol/L): <strong id="cfVal">-</strong></span>
-          <span>تاريخ الإصدار: <strong id="genAt">-</strong></span>
-        </div>
+        <button class="btn" id="toggleNotes">👁️ إخفاء/إظهار الملاحظات في الطباعة</button>
+        <button class="btn" onclick="window.print()">🖨️ طباعة</button>
+
+        <!-- 👇 الزر الجديد لفتح التحليل -->
+        <a class="btn primary" id="openAnalytics">📈 تحليل القياسات</a>
       </div>
     </header>
 
-    <!-- جداول التقرير -->
-    <section class="tables card">
-      <div id="reportTable"></div>
+    <!-- جدول القياسات (نموذج بسيط؛ لو عندك JS قديم يملأه، سيبِيه يشتغل عادي) -->
+    <section class="card" id="reportCard">
+      <h2>قياسات الفترة</h2>
+      <table id="reportTable">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>الوقت</th>
+            <th>القراءة</th>
+            <th>الحالة</th>
+            <th>التصحيح</th>
+            <th>علاج الهبوط</th>
+            <th class="notes">ملاحظات</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="7" class="muted">اضبطي الفترة ثم حمّلي التقرير…</td></tr>
+        </tbody>
+      </table>
     </section>
 
-    <!-- تذييل -->
-    <footer class="report-footer">
-      <p>تنبيه: هذه المعلومات مساعدة وليست بديلاً عن استشارة الطبيب المختص.</p>
-    </footer>
   </div>
-...
-<script src="js/report.js"></script>
-<script>
-  (function(){
-    const params = new URLSearchParams(location.search);
-    const child = params.get('child') || localStorage.getItem('lastChildId');
-    const btn = document.getElementById('openAnalytics');
-    if(btn && child){
-      btn.href = `analytics.html?child=${encodeURIComponent(child)}&range=14d`;
-    }
-  })();
-</script>
-</body>
-</html>
 
-  <script type="module" src="js/reports.js"></script>
+  <!-- سكربتات: بتاعتك القديمة (لو موجودة) وبعدين سكربتنا الخفيفة -->
+  <!-- <script type="module" src="js/reports.js"></script>  <-- لو عندك ملفك القديم -->
+  <script type="module" src="js/report-analytics-link.js?v=1"></script>
+  <script>
+    // زر إخفاء/إظهار الملاحظات وقت الطباعة
+    (function(){
+      const btn = document.getElementById('toggleNotes');
+      const card = document.getElementById('reportCard');
+      if(btn && card){
+        btn.addEventListener('click', ()=> {
+          card.classList.toggle('hide-notes-print');
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
