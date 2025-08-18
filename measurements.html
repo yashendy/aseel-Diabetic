@@ -1,109 +1,66 @@
-<!-- measurements.html -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>قياسات السكر</title>
-  <link rel="stylesheet" href="css/measurements.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>القياسات</title>
+  <link rel="stylesheet" href="css/measurements.css" />
   <link rel="icon" href="data:,">
 </head>
 <body>
   <div class="container">
-
-    <!-- المنطقة 1: بطاقة الطفل -->
-    <header class="top">
-      <button class="back" onclick="history.back()">⬅ رجوع</button>
-      <div class="child-card">
-        <h1>👶 <span id="childName">...</span></h1>
-        <p id="childMeta">الوحدة المرجعية: mmol/L • الطبيعي: <span id="range">-</span></p>
-        <div id="todayStats" class="stats"></div>
+    <header class="top no-print">
+      <button class="btn back" onclick="history.back()">⬅ رجوع</button>
+      <h1>📊 القياسات</h1>
+      <div class="tools">
+        <button id="btnPrintToday" class="btn primary">🖨️ طباعة اليوم (بدون سناك/رياضة)</button>
+        <button id="btnPrintBlankWeek" class="btn">🖨️ نموذج أسبوع فارغ</button>
+        <button id="btnLabs" class="btn outline">🔬 تقارير التحاليل الطبية</button>
       </div>
     </header>
 
-    <!-- المنطقة 2: إدخال القياس -->
-    <section class="card">
-      <h3>➕ إضافة / تعديل قياس</h3>
-
-      <form id="mForm" class="grid" novalidate>
-        <!-- التاريخ المختار لليوم -->
-        <div class="field">
-          <label for="selDate">تاريخ اليوم</label>
-          <input type="date" id="selDate" required>
-        </div>
-
-        <!-- وقت القياس -->
-        <div class="field">
-          <label for="slot">وقت القياس</label>
-          <select id="slot" required>
-            <option value="">اختر الوقت</option>
-          </select>
-        </div>
-
-        <!-- قيمة القياس -->
-        <div class="field">
-          <label for="value">قيمة القياس</label>
-          <input type="number" id="value" step="any" placeholder="أدخل القيمة" required>
-        </div>
-
-        <!-- وحدة الإدخال (جهاز المستخدم) -->
-        <div class="field">
-          <label for="inputUnit">وحدة الإدخال</label>
-          <select id="inputUnit" required>
-            <option value="mmol/L">mmol/L (خليجي/أوروبي)</option>
-            <option value="mg/dL">mg/dL (أمريكي)</option>
-          </select>
-        </div>
-
-        <!-- الساعة (اختياري) -->
-        <div class="field">
-          <label for="clock">الوقت (اختياري)</label>
-          <input type="time" id="clock">
-        </div>
-
-        <!-- ملاحظات -->
-        <div class="field wide">
-          <label for="notes">ملاحظات (اختياري)</label>
-          <input type="text" id="notes" placeholder="مثال: بعد نشاط خفيف">
-        </div>
-
-        <!-- يظهر فقط عند الارتفاع -->
-        <div class="field wide hidden" id="corrWrap">
-          <label for="correctionDose">جرعة تصحيحية (مقترحة)</label>
-          <div class="inline">
-            <input type="number" step="0.5" id="correctionDose" placeholder="مثال: 1.5">
-            <small id="corrHint" class="hint"></small>
-          </div>
-        </div>
-
-        <!-- يظهر فقط عند الهبوط -->
-        <div class="field wide hidden" id="raisedWrap">
-          <label for="raisedWith">رفعنا بإيه؟</label>
-          <input type="text" id="raisedWith" placeholder="مثال: عصير، حليب، قطعة سكر">
-        </div>
-
-        <div class="actions">
-          <button type="submit" id="saveBtn">حفظ</button>
-          <button type="button" id="resetBtn" class="secondary">تفريغ النموذج</button>
-        </div>
-
-        <p class="disclaimer">⚠️ الحسابات مساعدة فقط وليست نصيحة طبية — يُرجى الرجوع للطبيب دائمًا.</p>
-      </form>
+    <!-- اختيار اليوم -->
+    <section class="no-print datebar">
+      <label for="day">اليوم:</label>
+      <input type="date" id="day" />
     </section>
 
-    <!-- المنطقة 3: جدول قياسات اليوم -->
-    <section class="card">
-      <div class="table-head">
-        <h3>قياسات يوم: <span id="dayLabel">-</span></h3>
-        <div class="inline">
-          <label for="tableDate">اختر اليوم</label>
-          <input type="date" id="tableDate">
+    <!-- منطقة الطباعة/العرض لليوم الحالي -->
+    <section id="printArea" class="sheet card">
+      <div class="sheet-head">
+        <div class="title">نموذج قياسات اليوم</div>
+        <div class="meta">
+          الطفل: <span id="childName">—</span> • التاريخ: <span id="dayLabel">—</span>
         </div>
       </div>
 
-      <div id="list" class="list"></div>
+      <!-- جدول أوقات القياس (للطباعة والعرض) -->
+      <table class="times">
+        <thead>
+          <tr>
+            <th>الوقت</th>
+            <th>القياس</th>
+            <th>جرعة التصحيح</th>
+            <th>ملاحظات</th>
+          </tr>
+        </thead>
+        <tbody id="timesBody">
+          <!-- اوقات اليوم القياسية (وسمناها بكلاسات ليسهل إخفاؤها عند الطباعة) -->
+          <tr class="slot"><td>الاستيقاظ</td><td></td><td></td><td></td></tr>
+          <tr class="slot"><td>ق.الفطار</td><td></td><td></td><td></td></tr>
+          <tr class="slot"><td>ب.الفطار</td><td></td><td></td><td></td></tr>
+          <tr class="slot"><td>ق.الغداء</td><td></td><td></td><td></td></tr>
+          <tr class="slot"><td>ب.الغداء</td><td></td><td></td><td></td></tr>
+          <tr class="slot"><td>ق.العشاء</td><td></td><td></td><td></td></tr>
+          <tr class="slot"><td>ب.العشاء</td><td></td><td></td><td></td></tr>
+          <tr class="slot slot-snack"><td>سناك</td><td></td><td></td><td></td></tr>
+          <tr class="slot"><td>ق.النوم</td><td></td><td></td><td></td></tr>
+          <tr class="slot"><td>أثناء النوم</td><td></td><td></td><td></td></tr>
+          <tr class="slot slot-sport"><td>ق.الرياضة</td><td></td><td></td><td></td></tr>
+          <tr class="slot slot-sport"><td>ب.الرياضة</td><td></td><td></td><td></td></tr>
+        </tbody>
+      </table>
     </section>
-
   </div>
 
   <script type="module" src="js/measurements.js"></script>
