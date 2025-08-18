@@ -25,6 +25,16 @@
           <input type="checkbox" id="chkNotes" checked>
           <span>إظهار الملاحظات في الطباعة</span>
         </label>
+
+        <!-- 🆕 اختيار نوع القياس للطباعة -->
+        <label class="toggle">
+          <span>الوحدة:</span>
+          <select id="outUnit" class="btn" style="padding:6px 10px">
+            <option value="mmol">mmol/L</option>
+            <option value="mgdl">mg/dL</option>
+          </select>
+        </label>
+
         <button id="btnBlank" class="btn">ورقة فارغة لأسبوع</button>
         <button id="btnPrint" class="btn print">🖨️ طباعة</button>
       </div>
