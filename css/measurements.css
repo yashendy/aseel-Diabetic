@@ -1,6 +1,7 @@
 :root{
   --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#222; --muted:#666;
   --primary:#4CAF50; --primary-ink:#fff; --blue:#0D47A1;
+  --ok:#2E7D32; --warn:#FB8C00; --danger:#E53935;
 }
 
 *{box-sizing:border-box}
@@ -8,34 +9,47 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Taho
 .container{max-width:1100px;margin:auto;padding:16px}
 
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 6px 16px rgba(0,0,0,.06)}
-.no-print{}
+.muted{color:var(--muted)}
+.hidden{display:none}
+.hint{font-size:12px;color:#555;margin-top:4px}
 
-.top{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-.top h1{margin:0}
+.child-info{position:relative}
 .btn{border:1px solid #cfe1ff;background:#E3F2FD;color:var(--blue);border-radius:10px;padding:8px 14px;cursor:pointer}
 .btn:hover{background:#bbdefb}
 .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink)}
-.btn.outline{background:#fff;color:#333;border:1px solid #cfd8e3}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.btn.back{position:absolute;left:12px;top:12px}
 
-.datebar{display:flex;gap:8px;align-items:center;margin:12px 0}
+.head h1{margin:0 0 6px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{background:#f7fbff;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#333}
+.chip.warn{background:#fff7f0;border-color:#ffe0be;color:#b55b00}
+
+.datebar{display:flex;gap:8px;align-items:center;margin-top:10px}
 .datebar input{padding:10px;border:1px solid #cfd8e3;border-radius:10px}
 
-.sheet{margin-top:8px}
-.sheet-head{display:flex;justify-content:space-between;align-items:end;margin-bottom:8px}
-.sheet-head .title{font-weight:800}
-.sheet-head .meta{color:#444}
+.form h2,.table h2{margin:0 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.field label{display:block;font-size:12px;color:#555;margin-bottom:6px}
+.field input,.field select{width:100%;padding:10px;border:1px solid #cfd8e3;border-radius:10px;background:#fff;font-size:14px}
+.field.row{grid-column:1/-1}
 
-.times{width:100%;border-collapse:collapse}
-.times th,.times td{border:1px solid #cfd8e3;padding:8px;text-align:right}
-.times th{background:#f4f8ff}
-.slot td{height:40px}
+.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px}
 
-@media print{
-  .no-print{display:none !important;}
-  body{background:white}
-  .sheet{box-shadow:none;border:none;padding:0}
-  /* إخفاء سناك + الرياضة فقط في الطباعة */
-  .slot-snack, .slot-sport{display:none !important;}
-  /* محاولة حصر الصفحة في A4 عمودي */
-  @page { size: A4 portrait; margin: 12mm; }
+.table table{width:100%;border-collapse:collapse}
+.table th,.table td{border:1px solid #cfd8e3;padding:8px;text-align:right;vertical-align:top}
+.table th{background:#f4f8ff}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid}
+.badge.ok{background:#ecf7ee;border-color:#cfe9d4;color:var(--ok)}
+.badge.up{background:#fff1f1;border-color:#ffd1d1;color:var(--danger)}
+.badge.down{background:#fff7e6;border-color:#ffe1b3;color:#b55b00}
+
+.edit-row input{width:100%;padding:6px;border:1px solid #d7e0ea;border-radius:8px}
+.edit-actions{display:flex;gap:8px}
+.icon-btn{background:#fff;border:1px solid #d7e0ea;padding:6px 8px;border-radius:8px;cursor:pointer}
+.icon-btn:hover{background:#f6fbff}
+
+.loader{
+  position:fixed;inset:0;background:rgba(255,255,255,.6);
+  display:flex;align-items:center;justify-content:center;font-weight:700;z-index:1000
 }
