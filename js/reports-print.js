@@ -6,7 +6,9 @@ import { collection, query, orderBy, getDocs, doc, getDoc } from "https://www.gs
 /* DOM */
 const fromEl = document.getElementById('fromDate');
 const toEl   = document.getElementById('toDate');
+const outUnitEl = document.getElementById('outUnit');
 const printArea = document.getElementById('printArea');
+
 const childNameEl = document.getElementById('childName');
 const childAgeEl  = document.getElementById('childAge');
 const childGenderEl = document.getElementById('childGender');
@@ -15,6 +17,7 @@ const chipCFEl = document.getElementById('chipCF');
 const chipCREl = document.getElementById('chipCR');
 const unitEl = document.getElementById('unit');
 const genAtEl = document.getElementById('generatedAt');
+
 const btnLoad  = document.getElementById('btnLoad');
 const btnBlank = document.getElementById('btnBlank');
 const btnPrint = document.getElementById('btnPrint');
@@ -46,7 +49,29 @@ function calcAge(bd){
   return a + ' سنة';
 }
 
-/* أعمدة التقرير (بدون سناك والرياضة) */
+/* 🟣 تطبيع خانة الوقت: عربي → مفتاح قياسي */
+function normalizeSlot(raw){
+  if(!raw) return '';
+  const s = String(raw).trim();
+  const map = new Map([
+    // الاستيقاظ
+    ['الاستيقاظ','wake'], ['استيقاظ','wake'],
+    // الإفطار
+    ['قبل الإفطار','pre_bf'], ['ق.الفطار','pre_bf'], ['ق.الافطار','pre_bf'],
+    ['بعد الإفطار','post_bf'], ['ب.الفطار','post_bf'], ['ب.الافطار','post_bf'],
+    // الغداء
+    ['قبل الغداء','pre_ln'], ['ق.الغدا','pre_ln'],
+    ['بعد الغداء','post_ln'], ['ب.الغدا','post_ln'],
+    // العشاء
+    ['قبل العشاء','pre_dn'], ['ق.العشا','pre_dn'],
+    ['بعد العشاء','post_dn'], ['ب.العشا','post_dn'],
+    // احتمالات عامة
+    ['ق.الفطور','pre_bf'], ['ب.الفطور','post_bf'],
+  ]);
+  return map.get(s) || s; // لو كان بالفعل مفتاح انجليزي نرجّعه كما هو
+}
+
+/* أعمدة التقرير (بدون سناك/رياضة) */
 const PRINT_SLOTS = ['wake','pre_bf','post_bf','pre_ln','post_ln','pre_dn','post_dn'];
 const SLOT_TITLES = {
   wake:'الاستيقاظ',
@@ -54,6 +79,27 @@ const SLOT_TITLES = {
   pre_ln:'ق.الغدا',  post_ln:'ب.الغدا',
   pre_dn:'ق.العشا',  post_dn:'ب.العشا'
 };
+
+/* استخراج القيم + التحويل للوحدة المطلوبة */
+function extractValues(r){
+  // نحاول نلقط من أكثر من مكان
+  const mmol = r.value_mmol ?? r.input?.value_mmol ?? (r.unit==='mmol/L' ? (r.value ?? r.input?.value) : null);
+  const mgdl = r.value_mgdl ?? r.input?.value_mgdl ?? (r.unit==='mg/dL' ? (r.value ?? r.input?.value) : null);
+  return { mmol, mgdl, unit: (r.unit || r.input?.unit || (mgdl!=null?'mg/dL':'mmol/L')) };
+}
+function formatByUnit(vals, want){ // want: 'mmol' | 'mgdl'
+  let outVal, outUnit;
+  if(want==='mgdl'){
+    if(vals.mgdl!=null) outVal = Math.round(Number(vals.mgdl));
+    else if(vals.mmol!=null) outVal = Math.round(Number(vals.mmol)*18);
+    outUnit = 'mg/dL';
+  }else{ // mmol
+    if(vals.mmol!=null) outVal = Number(vals.mmol).toFixed(1);
+    else if(vals.mgdl!=null) outVal = (Number(vals.mgdl)/18).toFixed(1);
+    outUnit = 'mmol/L';
+  }
+  return (outVal==null || outVal==='NaN') ? {text:'—', unit:outUnit} : {text:`${outVal} ${outUnit}`, unit:outUnit};
+}
 
 /* ChildId */
 const params = new URLSearchParams(location.search);
@@ -87,7 +133,9 @@ onAuthStateChanged(auth, async (user)=>{
   }catch(e){ console.error('child load', e); }
 
   // actions
-  btnLoad.addEventListener('click', ()=> buildFilled(user.uid));
+  const reload = ()=> buildFilled(user.uid);
+  btnLoad.addEventListener('click', reload);
+  outUnitEl.addEventListener('change', ()=>{ unitEl.textContent = (outUnitEl.value==='mgdl'?'mg/dL':'mmol/L'); reload(); });
   btnBlank.addEventListener('click', buildBlankSheet);
   btnPrint.addEventListener('click', ()=> window.print());
   chkNotes.addEventListener('change', ()=>{
@@ -95,6 +143,7 @@ onAuthStateChanged(auth, async (user)=>{
     printArea.classList.toggle('hide-notes', !chkNotes.checked);
   });
 
+  unitEl.textContent = (outUnitEl.value==='mgdl'?'mg/dL':'mmol/L');
   // first load
   buildFilled(user.uid);
 });
@@ -107,25 +156,26 @@ async function buildFilled(uid){
   const base = collection(db, `parents/${uid}/children/${childId}/measurements`);
   const snap = await getDocs(query(base, orderBy('date','asc')));
 
-  const byDate = {}; // {date: {slot:{value,unit,notes,corr}}}
+  const byDate = {}; // {date: {slot:{text, notes, corr}}}
+  const want = outUnitEl.value; // 'mmol' | 'mgdl'
+
   snap.forEach(d=>{
     const r = d.data();
     const dstr = normalizeDateStr(r.date);
     if(!dstr || dstr < start || dstr > end) return;
 
-    const slot = r.slot || r.input?.slot || '';
-    if(!PRINT_SLOTS.includes(slot)) return;
+    const rawSlot = r.slot || r.input?.slot || '';
+    const slot = normalizeSlot(rawSlot);
+    if(!PRINT_SLOTS.includes(slot)) return; // تجاهل السناك/الرياضة وأي خانة غير مطلوبة
 
-    const value = (r.value!=null? r.value :
-                  r.input?.value!=null? r.input.value :
-                  r.input?.value_mmol!=null? r.input.value_mmol :
-                  r.input?.value_mgdl!=null? r.input.value_mgdl : null);
-    const unit  = r.unit || r.input?.unit || 'mmol/L';
+    const vals = extractValues(r);
+    const disp = formatByUnit(vals, want);
+
     const notes = r.notes || r.input?.notes || '';
     const corr  = r.correctionDose ?? r.input?.correctionDose ?? null;
 
     if(!byDate[dstr]) byDate[dstr] = {};
-    byDate[dstr][slot] = { value, unit, notes, corr };
+    byDate[dstr][slot] = { text: disp.text, notes, corr };
   });
 
   const dates = Object.keys(byDate).sort();
@@ -151,8 +201,7 @@ function makeSheet(dates, rowGetter, blank=false){
       <td class="cell">${blank? '____' : date}</td>
       ${PRINT_SLOTS.map(slot=>{
         const c = row[slot] || {};
-        const showVal = (c.value!=null && c.value!=='');
-        const valTxt  = showVal ? `${c.value} ${c.unit||'mmol/L'}` : '—';
+        const valTxt  = c.text ?? '—';
         const corrTxt = (c.corr!=null && c.corr!=='') ? c.corr : '____';
         const noteTxt = (c.notes && String(c.notes).trim()) ? c.notes : '____';
         return `<td class="cell">
