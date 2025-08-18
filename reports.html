@@ -25,9 +25,7 @@
     .print-hide{display:inline-block}
     @media print{
       .no-print{display:none !important}
-      /* اخفاء الملاحظات وقت الطباعة (يتحكم بها كلاس من الزر) */
-      .hide-notes-print td.notes{display:none}
-      .hide-notes-print th.notes{display:none}
+      .hide-notes-print td.notes,.hide-notes-print th.notes{display:none}
       body{background:#fff}
     }
   </style>
@@ -35,18 +33,20 @@
 <body>
   <div class="container">
 
-    <!-- رأس الصفحة -->
+    <!-- الهيدر -->
     <header class="card">
       <button class="btn back no-print" onclick="history.back()">⬅ رجوع</button>
+
       <h1>📄 التقارير — <span id="childName">طفل</span></h1>
       <p class="muted" id="childMeta">—</p>
+
       <div class="chips">
         <span class="chip" id="chipRange">النطاق: —</span>
         <span class="chip" id="chipCR">CR: —</span>
         <span class="chip" id="chipCF">CF: —</span>
       </div>
 
-      <!-- أكشنات -->
+      <!-- الأكشنات -->
       <div class="row no-print" style="margin-top:10px">
         <div class="filters row">
           <label>من</label><input type="date" id="fromDate">
@@ -55,12 +55,12 @@
         <button class="btn" id="toggleNotes">👁️ إخفاء/إظهار الملاحظات في الطباعة</button>
         <button class="btn" onclick="window.print()">🖨️ طباعة</button>
 
-        <!-- 👇 الزر الجديد لفتح التحليل -->
+        <!-- زر تحليل القياسات (المهم وجود هذا الـ id) -->
         <a class="btn primary" id="openAnalytics">📈 تحليل القياسات</a>
       </div>
     </header>
 
-    <!-- جدول القياسات (نموذج بسيط؛ لو عندك JS قديم يملأه، سيبِيه يشتغل عادي) -->
+    <!-- جدول التقرير (استخدمي JS عندك لتعبئته لو موجود) -->
     <section class="card" id="reportCard">
       <h2>قياسات الفترة</h2>
       <table id="reportTable">
@@ -83,18 +83,16 @@
 
   </div>
 
-  <!-- سكربتات: بتاعتك القديمة (لو موجودة) وبعدين سكربتنا الخفيفة -->
-  <!-- <script type="module" src="js/reports.js"></script>  <-- لو عندك ملفك القديم -->
-  <script type="module" src="js/report-analytics-link.js?v=1"></script>
+  <!-- مفيش أي سكربتات تانية خارجية—سيبي سكربت واحد فقط -->
+  <script type="module" src="js/reports.js?v=3"></script>
+
+  <!-- سكربت صغير اختياري لإخفاء/إظهار الملاحظات وقت الطباعة -->
   <script>
-    // زر إخفاء/إظهار الملاحظات وقت الطباعة
     (function(){
       const btn = document.getElementById('toggleNotes');
       const card = document.getElementById('reportCard');
       if(btn && card){
-        btn.addEventListener('click', ()=> {
-          card.classList.toggle('hide-notes-print');
-        });
+        btn.addEventListener('click', ()=> card.classList.toggle('hide-notes-print'));
       }
     })();
   </script>
