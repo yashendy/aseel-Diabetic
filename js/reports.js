@@ -1,4 +1,4 @@
-// js/reports.js — ENHANCED
+// js/reports.js — PRINT GRID (FILLED) + BLANK + UNIT + NOTES TOGGLE
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { collection, query, orderBy, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
@@ -12,22 +12,31 @@ const chipCFEl = document.getElementById('chipCF');
 
 const fromEl = document.getElementById('fromDate');
 const toEl   = document.getElementById('toDate');
+const unitSel= document.getElementById('unitSel');
+
 const tbody  = document.getElementById('tbody');
 const table  = document.getElementById('reportTable');
+const densityHint = document.getElementById('densityHint');
 
 const openAnalytics = document.getElementById('openAnalytics');
-const printBtn      = document.getElementById('printBtn');
 const toggleNotesBtn= document.getElementById('toggleNotes');
-const densityHint   = document.getElementById('densityHint');
 
 const blankWeekBtn  = document.getElementById('blankWeek');
 const blankWeekSec  = document.getElementById('blankWeekSection');
 const blankBody     = document.getElementById('blankBody');
+const blankUnit     = document.getElementById('blankUnit');
+
+const printFilledBtn= document.getElementById('printFilledBtn');
+const printFilledSec= document.getElementById('printFilledSection');
+const printFilledContainer = document.getElementById('printFilledContainer');
+const filledUnit    = document.getElementById('filledUnit');
 
 /* Helpers */
 const pad = n => String(n).padStart(2,'0');
 function todayStr(d=new Date()){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function addDaysStr(ds,delta){ const d=new Date(ds); d.setDate(d.getDate()+delta); return todayStr(d); }
+const toMgdl = mmol => Math.round(Number(mmol)*18);
+const toMmol = mgdl => Number(mgdl)/18;
 
 function normalizeDateStr(any){
   if(!any) return '';
@@ -41,7 +50,6 @@ function normalizeDateStr(any){
   if(!isNaN(d)) return todayStr(d);
   return '';
 }
-
 function calcAge(bd){
   if(!bd) return '—';
   const b=new Date(bd), t=new Date();
@@ -50,7 +58,6 @@ function calcAge(bd){
   if(m<0 || (m===0 && t.getDate()<b.getDate())) a--;
   return `${a} سنة`;
 }
-
 function stateLabel(s){ return {normal:'طبيعي', high:'ارتفاع', low:'هبوط'}[s] || '—'; }
 function slotLabel(key){
   const map={
@@ -64,20 +71,16 @@ function slotLabel(key){
   if(!key) return '—';
   return map[key] || key;
 }
-function arrowFor(state){
+function arrowSpan(state){
   if(state==='high') return '<span class="arrow up">↑</span>';
   if(state==='low')  return '<span class="arrow down">↓</span>';
   return '';
-}
-function readingCell(value,unit,state){
-  if(value==null || value==='') return '—';
-  const base = unit==='mg/dL' ? `${value} mg/dL` : `${value} mmol/L`;
-  return `<span>${base}</span>${arrowFor(state)}`;
 }
 
 /* Child Id */
 const params = new URLSearchParams(location.search);
 let childId = params.get('child') || localStorage.getItem('lastChildId');
+let lastRows = []; // cache for print grid
 
 /* Main */
 onAuthStateChanged(auth, async (user)=>{
@@ -103,49 +106,57 @@ onAuthStateChanged(auth, async (user)=>{
     }
   }catch(e){ console.error('child load error', e); }
 
-  // default dates (last 7 days)
+  // defaults
   const today = todayStr();
   if(!toEl.value)   toEl.value   = today;
   if(!fromEl.value) fromEl.value = addDaysStr(today,-7);
+  unitSel.value = localStorage.getItem('reports_unit') || 'mmol';
+  blankUnit.textContent = unitSel.value==='mgdl' ? 'mg/dL' : 'mmol/L';
 
-  // load once + on change
+  // listeners
   fromEl.addEventListener('change', loadRange);
   toEl.addEventListener('change', loadRange);
+  unitSel.addEventListener('change', ()=>{
+    localStorage.setItem('reports_unit', unitSel.value);
+    blankUnit.textContent = unitSel.value==='mgdl' ? 'mg/dL' : 'mmol/L';
+    renderTable(lastRows); // إعادة عرض الجدول بالشاشة
+  });
+
   await loadRange();
 
-  // Buttons
   openAnalytics.addEventListener('click', ()=>{
     const href = new URL('analytics.html', location.href);
     href.searchParams.set('child', childId);
-    // مرر نفس الفترة المعروضة
     if(fromEl.value) href.searchParams.set('start', fromEl.value);
     if(toEl.value)   href.searchParams.set('end', toEl.value);
     location.href = href.toString();
   });
 
-  printBtn.addEventListener('click', ()=>{
-    // وضع الطباعة العادي (الجدول)
-    document.body.classList.remove('print-blank');
-    window.print();
-  });
-
-  // Toggle notes (يؤثر على الطباعة أيضًا عبر @media print)
+  // Toggle notes (يؤثر على الطباعة أيضًا عبر CSS)
   toggleNotesBtn.addEventListener('click', ()=>{
     const hidden = document.body.classList.toggle('notes-hidden');
     toggleNotesBtn.textContent = hidden ? '📝 إظهار الملاحظات' : '👁️‍🗨️ إخفاء الملاحظات';
   });
 
-  // تقرير فارغ لأسبوع (بدون سناك) — للطباعة اليدوية
+  // تقرير فارغ للأسبوع (بدون سناك) — للطباعة اليدوية
   blankWeekBtn.addEventListener('click', ()=>{
     buildBlankWeek();
     document.body.classList.add('print-blank');
     window.print();
-    // ارجعي للوضع الطبيعي بعد الطباعة
     setTimeout(()=> document.body.classList.remove('print-blank'), 300);
+  });
+
+  // طباعة التقرير الممتلئ (شبكة أسبوعية بدون سناك)
+  printFilledBtn.addEventListener('click', async ()=>{
+    // بُني الشبكات (قد تكون عدة جداول كل 7 أيام)
+    buildFilledGrids(lastRows);
+    document.body.classList.add('print-filled');
+    window.print();
+    setTimeout(()=> document.body.classList.remove('print-filled'), 300);
   });
 });
 
-/* تحميل الفترة وعرض الجدول */
+/* تحميل الفترة وعرض جدول الشاشة */
 async function loadRange(){
   const start = normalizeDateStr(fromEl.value);
   const end   = normalizeDateStr(toEl.value);
@@ -164,54 +175,42 @@ async function loadRange(){
       if(!date || date < start || date > end) return;
 
       const slot = r.slot || r.input?.slot || '';
-      const value = (r.value!=null? r.value :
-                     r.input?.value!=null? r.input.value :
-                     r.input?.value_mmol!=null? r.input.value_mmol :
-                     r.input?.value_mgdl!=null? r.input.value_mgdl : null);
-      const unit  = r.unit || r.input?.unit || 'mmol/L';
+      // نفضل value_mmol / value_mgdl، وإلا value + unit
+      let mmol = (typeof r.value_mmol==='number') ? r.value_mmol : null;
+      let mgdl = (typeof r.value_mgdl==='number') ? r.value_mgdl : null;
+      if(mmol==null && typeof r.value==='number' && (r.unit||'')==='mmol/L') mmol = r.value;
+      if(mgdl==null && typeof r.value==='number' && (r.unit||'')==='mg/dL') mgdl = r.value;
+      if(mmol==null && mgdl!=null) mmol = toMmol(mgdl);
+      if(mgdl==null && mmol!=null) mgdl = toMgdl(mmol);
+
+      const unit  = (unitSel.value==='mgdl') ? 'mg/dL' : 'mmol/L'; // عرض حسب اختيار المستخدم
       const notes = r.notes || r.input?.notes || '';
       const corr  = r.correctionDose ?? r.input?.correctionDose ?? null;
       const hypo  = r.hypoTreatment  ?? r.input?.raisedWith   ?? '';
       const state = r.state || r.input?.state || '';
 
-      rows.push({date, slot, value, unit, state, corr, hypo, notes});
+      rows.push({
+        date, slot,
+        value_mmol:mmol, value_mgdl:mgdl, unitDisplay:unit,
+        state, corr, hypo, notes
+      });
     });
 
     // sort by date then slot
     rows.sort((a,b)=> a.date!==b.date ? (a.date<b.date?-1:1) : String(a.slot).localeCompare(String(b.slot),'ar'));
 
-    // كثافة الطباعة: لو عدد الأيام كبير، صغّر الخط
+    lastRows = rows;
     tuneDensity(rows);
-
-    if(!rows.length){
-      tbody.innerHTML = `<tr><td colspan="6" class="muted center">لا يوجد قياسات للفترة المحددة.</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = rows.map(r=>{
-      const trClass = `state-${r.state||'normal'} ${r.slot==='snack'?'slot-snack':''}`;
-      return `
-      <tr class="${trClass}">
-        <td>${r.date}</td>
-        <td>${slotLabel(r.slot)}</td>
-        <td class="reading">${readingCell(r.value, r.unit, r.state)}</td>
-        <td>${stateLabel(r.state)}</td>
-        <td>${(r.corr!=null && r.corr!=='') ? r.corr : '—'}</td>
-        <td class="col-notes">${(r.notes && String(r.notes).trim()) ? r.notes : (r.hypo? `رفع: ${r.hypo}` : '—')}</td>
-      </tr>`;
-    }).join('');
+    renderTable(rows);
   }catch(e){
     console.error('loadRange error', e);
     tbody.innerHTML = `<tr><td colspan="6" class="muted center">خطأ في تحميل البيانات.</td></tr>`;
   }
 }
 
-/* تصغير الخط تلقائيًا حسب كثافة الفترة */
 function tuneDensity(rows){
   document.body.classList.remove('dense','very-dense');
   densityHint.classList.add('hidden');
-
-  // تقدير بسيط: لو أكتر من 120 صف → very-dense، لو أكتر من 80 صف → dense
   const n = rows.length;
   if(n > 120){
     document.body.classList.add('very-dense');
@@ -222,10 +221,42 @@ function tuneDensity(rows){
   }
 }
 
-/* بناء التقرير الفارغ للأسبوع (بدون سناك) */
+function readingText(row){
+  const useMg = unitSel.value==='mgdl';
+  const v = useMg ? row.value_mgdl : row.value_mmol;
+  if(v==null || isNaN(v)) return '—';
+  return useMg ? `${Math.round(v)} mg/dL` : `${Number(v).toFixed(1)} mmol/L`;
+}
+function arrowFor(state){
+  if(state==='high') return '<span class="arrow up">↑</span>';
+  if(state==='low')  return '<span class="arrow down">↓</span>';
+  return '';
+}
+
+function renderTable(rows){
+  if(!rows.length){
+    tbody.innerHTML = `<tr><td colspan="6" class="muted center">لا يوجد قياسات للفترة المحددة.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r=>{
+    const trClass = `state-${r.state||'normal'} ${r.slot==='snack'?'slot-snack':''}`;
+    return `
+    <tr class="${trClass}">
+      <td>${r.date}</td>
+      <td>${slotLabel(r.slot)}</td>
+      <td class="reading"><span>${readingText(r)}</span>${arrowFor(r.state)}</td>
+      <td>${stateLabel(r.state)}</td>
+      <td>${(r.corr!=null && r.corr!=='') ? r.corr : '—'}</td>
+      <td class="col-notes">${(r.notes && String(r.notes).trim()) ? r.notes : (r.hypo? `رفع: ${r.hypo}` : '—')}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* تقرير فارغ لأسبوع (بدون سناك) */
+blankWeekBtn?.addEventListener('click', ()=>{}); // listener متسجل فوق
+
 function buildBlankWeek(){
   blankBody.innerHTML = '';
-  // الأيام السبعة القادمة من تاريخ "من" (لو محدد)، وإلا من اليوم
   const base = normalizeDateStr(fromEl.value) || todayStr();
   const days = [...Array(7)].map((_,i)=> addDaysStr(base, i));
 
@@ -233,12 +264,12 @@ function buildBlankWeek(){
     const d = new Date(dStr);
     const names = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
     return names[d.getDay()];
-  };
+    };
 
   days.forEach(date=>{
     blankBody.insertAdjacentHTML('beforeend', `
       <tr>
-        <td><div><strong>${dayName(date)}</strong></div><div class="small-note">${date}</div></td>
+        <td><div><strong>${dayName(date)}</strong></div><div class="small">${date}</div></td>
         <td></td> <!-- الاستيقاظ -->
         <td></td> <!-- ق.الفطار -->
         <td></td> <!-- ب.الفطار -->
@@ -251,4 +282,94 @@ function buildBlankWeek(){
       </tr>
     `);
   });
+}
+
+/* تقرير ممتلئ: جداول أسبوعية بدون سناك (الخلية = قراءة + سهم + جرعة + ملاحظات) */
+const GRID_COLS = [
+  {key:'wake',        label:'الاستيقاظ'},
+  {key:'pre_bf',      label:'ق.الفطار'},
+  {key:'post_bf',     label:'ب.الفطار'},
+  {key:'pre_ln',      label:'ق.الغداء'},
+  {key:'post_ln',     label:'ب.الغداء'},
+  {key:'pre_dn',      label:'ق.العشاء'},
+  {key:'post_dn',     label:'ب.العشاء'},
+  {key:'pre_sleep',   label:'ق.النوم'},
+  {key:'during_sleep',label:'أثناء النوم'},
+]; // بدون snack
+
+function buildFilledGrids(rows){
+  printFilledContainer.innerHTML = '';
+  filledUnit.textContent = unitSel.value==='mgdl' ? 'mg/dL' : 'mmol/L';
+
+  if(!rows.length){
+    printFilledContainer.innerHTML = '<div class="muted">لا توجد بيانات للطباعة.</div>';
+    return;
+  }
+
+  // اجمع التواريخ ضمن الفترة واختر تسلسلها
+  const allDates = Array.from(new Set(rows.map(r=>r.date))).sort();
+  // قسّم إلى أسابيع (chunks of 7)
+  for(let i=0; i<allDates.length; i+=7){
+    const chunk = allDates.slice(i, i+7);
+    const html = renderFilledGridForDates(chunk, rows);
+    printFilledContainer.insertAdjacentHTML('beforeend', html);
+  }
+}
+
+function renderFilledGridForDates(dates, rows){
+  const rowsByDateSlot = new Map();
+  rows.forEach(r=>{
+    const key = r.date+'|'+r.slot;
+    if(!rowsByDateSlot.has(key)) rowsByDateSlot.set(key, []);
+    rowsByDateSlot.get(key).push(r);
+  });
+
+  // خلية واحدة لكل (يوم، وقت) — لو تعدد قياسات لنفس الوقت نعرض أول واحدة (أو نختصر)
+  const cellHTML = (list)=>{
+    if(!list || !list.length) return '';
+    const r = list[0]; // أبسط اختيار
+    const reading = readingText(r);
+    const arrow = arrowFor(r.state);
+    const dose = (r.corr!=null && r.corr!=='') ? `جرعة: ${r.corr}U` : (r.hypo? `رفع: ${r.hypo}` : '');
+    const note = (r.notes && String(r.notes).trim()) ? `ملاحظات: ${r.notes}` : '';
+    return `
+      <div class="filled-cell">
+        <div class="reading">${reading} ${arrow}</div>
+        ${dose? `<div class="dose">${dose}</div>`:''}
+        ${note? `<div class="note">${note}</div>`:''}
+      </div>`;
+  };
+
+  const dayName = (dStr)=>{
+    const d = new Date(dStr);
+    const names = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+    return names[d.getDay()];
+  };
+
+  // هيدر الجدول
+  let thead = `<thead><tr><th>اليوم</th>`;
+  GRID_COLS.forEach(c=> thead += `<th>${c.label}</th>`);
+  thead += `</tr></thead>`;
+
+  // جسم الجدول
+  let tbody = `<tbody>`;
+  dates.forEach(date=>{
+    tbody += `<tr>`;
+    tbody += `<td><div><strong>${dayName(date)}</strong></div><div class="small">${date}</div></td>`;
+    GRID_COLS.forEach(c=>{
+      const list = rowsByDateSlot.get(date+'|'+c.key);
+      tbody += `<td>${cellHTML(list)}</td>`;
+    });
+    tbody += `</tr>`;
+  });
+  tbody += `</tbody>`;
+
+  return `
+    <div class="table-wrap">
+      <table class="filled-grid">
+        ${thead}
+        ${tbody}
+      </table>
+    </div>
+  `;
 }
