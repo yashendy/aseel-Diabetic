@@ -10,7 +10,7 @@
 <body>
   <div class="page">
     <!-- شريط علوي -->
-    <header class="topbar no-print">
+    <header class="topbar">
       <div class="left">
         <button class="btn ghost" onclick="history.back()">⬅ رجوع</button>
         <h1>📘 مكتبة الأصناف</h1>
@@ -25,7 +25,7 @@
     </header>
 
     <!-- فلاتر وبحث -->
-    <section class="filters no-print">
+    <section class="filters">
       <input id="q" class="input" placeholder="بحث بالاسم أو الهاشتاج… (#أرز)" />
 
       <select id="fCat" class="input">
@@ -60,18 +60,12 @@
       <button id="btnClear" class="btn ghost">مسح الفلاتر</button>
     </section>
 
-    <!-- شريط إشعار (حذف/Undo) -->
-    <div id="snack" class="snack no-print" hidden>
-      <span id="snackText"></span>
-      <button id="snackUndo" class="btn ghost">تراجع</button>
-    </div>
-
     <!-- شبكة الأصناف -->
     <section id="grid" class="grid">جارِ التحميل…</section>
   </div>
 
   <!-- النافذة الجانبية (نموذج الصنف) -->
-  <aside id="drawer" class="drawer no-print">
+  <aside id="drawer" class="drawer">
     <div class="drawer__content">
       <header class="drawer__header">
         <h2 id="formTitle">إضافة صنف</h2>
@@ -153,7 +147,7 @@
 
         <div class="row">
           <label>ملاحظات</label>
-          <textarea id="notes" class="input" rows="2"></></textarea>
+          <textarea id="notes" class="input" rows="2"></textarea>
         </div>
 
         <div class="row two">
