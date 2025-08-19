@@ -1,14 +1,14 @@
+// 1. الاستيرادات والتعريفات الأساسية
 import { auth, db } from './firebase-config.js';
 import {
-  collection, addDoc, updateDoc, deleteDoc, getDocs, doc, query, orderBy,
-  serverTimestamp, setDoc
+  collection, addDoc, updateDoc, deleteDoc, getDocs,
+  doc, query, orderBy, serverTimestamp, setDoc
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* --------- tiny helpers --------- */
 const $$ = id => document.getElementById(id);
 const on = (el, ev, fn) => { if (el) el.addEventListener(ev, fn); };
-const must = (el, name) => { if (!el) console.warn(`[food-items] عنصر مفقود: #${name}`); return el; };
+const must = (el, name) => { if(!el) console.warn(`[food-items] عنصر مفقود: #${name}`); return el; };
 
 const grid = must($$('grid'), 'grid');
 const qEl = $$('#q'), fCat = $$('#fCat'), fSource = $$('#fSource'), fPhoto = $$('#fPhoto'), fSort = $$('#fSort');
@@ -26,15 +26,15 @@ const currentChild = new URLSearchParams(location.search).get('child') || '';
 const toNumber = v => (v === '' || v == null ? 0 : Number(v));
 const calcCalories = (c, p, f) => Math.round(4 * toNumber(c) + 4 * toNumber(p) + 9 * toNumber(f));
 const fmt = n => (n == null || isNaN(+n) ? '—' : (+n).toFixed(1));
-const esc = s => (s ?? '').toString().replace(/[&<>"']/g, m => ({
-  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-}[m]));
+const esc = s => (s ?? '').toString().replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const normalTags = str => !str ? [] : str.split(',').map(t => t.trim()).filter(Boolean).map(t => t.startsWith('#') ? t : '#' + t).map(t => t.toLowerCase());
 const setGrid = html => { if (grid) grid.innerHTML = html; };
-const ABSORPTION_THRESHOLD = 20; // الحد الأدنى للدهون أو البروتين لاعتبار الصنف بطيء الامتصاص
 
+const ABSORPTION_THRESHOLD = 20; // بروتين أو دهون ≥ 20g = بطء امتصاص
+
+// 2. تحميل وعرض الأصناف (renderGrid)
 function showLoading() {
-  setGrid(`<div class="meta">جارِ التحميل…</div>`);
+  setGrid(`<div class="meta">جارٍ التحميل…</div>`);
 }
 
 function showError(msg, retryFn) {
@@ -76,12 +76,11 @@ function renderGrid() {
 
   if (q) {
     arr = arr.filter(it => {
-      const inName = (it.name || '').toLowerCase().includes(q);
-      const inTags = (it.tags || []).some(t => t.toLowerCase().includes(q));
+      const inName = (it.name||'').toLowerCase().includes(q);
+      const inTags = (it.tags||[]).some(t => t.toLowerCase().includes(q));
       return inName || inTags || (q.startsWith('#') && (it.tags || []).includes(q));
     });
   }
-
   if (cat) arr = arr.filter(it => it.category === cat);
   if (src) arr = arr.filter(it => (it.source || 'manual') === src);
   if (ph === 'with') arr = arr.filter(it => !!it.imageUrl);
@@ -112,7 +111,7 @@ function renderGrid() {
     card.className = 'card';
     card.innerHTML = `
       <div class="head">
-        <img class="thumb" src="${esc(img)}" onerror="this.src='${autoImageFor(it.name || 'صنف')}'" alt="">
+        <img class="thumb" src="${esc(img)}" onerror="this.src='${autoImageFor(it.name||'صنف')}'" alt="">
         <div>
           <div class="title">${esc(it.name || '—')}</div>
           <div class="meta">${esc(it.brand || '—')} • ${esc(it.category || '—')}</div>
@@ -147,33 +146,25 @@ function renderGrid() {
       <div class="meta">${esc((it.tags || []).join(', '))}</div>
     `;
 
-    // حساب سريع للقيم حسب الوزن
+    // حساب سريع
     const qG = card.querySelector('.qG'), qU = card.querySelector('.qU'), qOut = card.querySelector('.qOut');
     card.querySelector('.qCalc')?.addEventListener('click', () => {
       const grams = Number(qU.value || qG.value);
-      if (!grams) {
-        qOut.textContent = 'أدخل وزنًا أو اختر مقدار';
-        return;
-      }
+      if (!grams) { qOut.textContent = 'أدخل وزنًا أو اختر مقدار'; return; }
       const factor = grams / 100;
       const carbs = factor * (it.carbs_100g || 0);
       const kcal2 = factor * (it.calories_100g ?? calcCalories(it.carbs_100g, it.protein_100g, it.fat_100g));
       qOut.textContent = `كارب: ${carbs.toFixed(1)}g • سعرات: ${Math.round(kcal2)} kcal`;
     });
 
-    // زر "استخدام في الوجبات"
     if (pickMode && currentChild) {
       card.querySelector('.qSend')?.addEventListener('click', () => {
         const grams = Number(qU.value || qG.value);
-        if (!grams) {
-          alert('أدخل وزنًا أو اختر مقدار');
-          return;
-        }
+        if (!grams) { alert('أدخل وزنًا أو اختر مقدار'); return; }
         location.href = `meals.html?child=${encodeURIComponent(currentChild)}&item=${encodeURIComponent(it.id)}&grams=${grams}`;
       });
     }
 
-    // أزرار التعديل/النسخ/الحذف
     card.querySelector('.qEdit')?.addEventListener('click', () => openEdit(it));
     card.querySelector('.qCopy')?.addEventListener('click', () => openCopy(it));
     card.querySelector('.qDel')?.addEventListener('click', async () => {
@@ -187,79 +178,52 @@ function renderGrid() {
     grid.appendChild(card);
   });
 }
+
+// 3. إدارة النموذج (reset, fill, open, copy, close)
 function autoImageFor(name = 'صنف') {
   const hue = (Array.from(name).reduce((a, c) => a + c.charCodeAt(0), 0) % 360);
   const bg = `hsl(${hue} 80% 90%)`, fg = `hsl(${hue} 60% 40%)`, ch = esc(name[0] || 'ص');
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(
-    `<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'>
-      <rect width='100%' height='100%' fill='${bg}'/>
-      <text x='50%' y='56%' dominant-baseline='middle' text-anchor='middle'
-        font-family='Segoe UI' font-size='140' fill='${fg}'>${ch}</text>
-    </svg>`
+    `<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><rect width='100%' height='100%' fill='${bg}'/><text x='50%' y='56%' dominant-baseline='middle' text-anchor='middle' font-family='Segoe UI' font-size='140' fill='${fg}'>${ch}</text></svg>`
   );
 }
 
 function resetForm() {
   if (!form) return;
-  itemId.value = '';
-  if (formTitle) formTitle.textContent = 'إضافة صنف';
+  itemId.value = ''; formTitle.textContent = 'إضافة صنف';
   nameEl.value = ''; brandEl.value = ''; categoryEl.value = '';
   carb100El.value = ''; prot100El.value = ''; fat100El.value = ''; kcal100El.value = '';
   UNITS = []; renderUnits();
-  imageUrlEl.value = ''; tagsEl.value = ''; notesEl.value = '';
-  sourceEl.value = 'manual';
-  if (metaText) metaText.textContent = '—';
-  checkAbsorptionDelay(); // لضمان فحص البطء فورًا
+  imageUrlEl.value = ''; tagsEl.value = ''; notesEl.value = ''; sourceEl.value = 'manual';
+  metaText.textContent = '—';
+  checkAbsorptionDelay();
 }
 
 function fillForm(it) {
   if (!form) return;
   itemId.value = it.id || '';
-  if (formTitle) formTitle.textContent = it.id ? 'تعديل صنف' : 'إضافة صنف';
-  nameEl.value = it.name || '';
-  brandEl.value = it.brand || '';
-  categoryEl.value = it.category || '';
+  formTitle.textContent = it.id ? 'تعديل صنف' : 'إضافة صنف';
+  nameEl.value = it.name || ''; brandEl.value = it.brand || ''; categoryEl.value = it.category || '';
   carb100El.value = it.carbs_100g ?? '';
   prot100El.value = it.protein_100g ?? '';
   fat100El.value = it.fat_100g ?? '';
   kcal100El.value = it.calories_100g ?? '';
   UNITS = (it.householdUnits || []).map(u => ({ name: u.name, grams: u.grams }));
   renderUnits();
-  imageUrlEl.value = it.imageUrl || '';
-  tagsEl.value = (it.tags || []).join(', ');
-  notesEl.value = it.notes || '';
-  sourceEl.value = it.source || 'manual';
-
+  imageUrlEl.value = it.imageUrl || ''; tagsEl.value = (it.tags || []).join(', ');
+  notesEl.value = it.notes || ''; sourceEl.value = it.source || 'manual';
   const c = it.createdAt?.toDate ? it.createdAt.toDate() : null;
   const u = it.updatedAt?.toDate ? it.updatedAt.toDate() : null;
-  if (metaText) {
-    metaText.textContent = `أُنشئ: ${c ? c.toLocaleString('ar-EG') : '—'} • آخر تحديث: ${u ? u.toLocaleString('ar-EG') : '—'}`;
-  }
-
-  checkAbsorptionDelay(); // لفحص تنبيه البطء عند فتح النموذج
+  metaText.textContent = `أُنشئ: ${c ? c.toLocaleString('ar-EG') : '—'} • آخر تحديث: ${u ? u.toLocaleString('ar-EG') : '—'}`;
+  checkAbsorptionDelay();
 }
 
-function openEdit(it) {
-  fillForm(it);
-  openDrawer();
-}
+function openEdit(it) { fillForm(it); openDrawer(); }
+function openCopy(it) { fillForm({ ...it, id: undefined, name: (it.name || '') + ' - نسخة' }); openDrawer(); }
+function openDrawer() { drawer?.classList.add('open'); }
+function closeDrawer() { drawer?.classList.remove('open'); resetForm(); }
 
-function openCopy(it) {
-  const x = { ...it };
-  delete x.id;
-  x.name = (x.name || '') + ' - نسخة';
-  fillForm(x);
-  openDrawer();
-}
-
-function openDrawer() {
-  drawer?.classList.add('open');
-}
-
-function closeDrawer() {
-  drawer?.classList.remove('open');
-  resetForm();
-}
+// 4. الأحدث: أحداث الواجهة + التراجع
 function renderUnits() {
   if (!unitsList) return;
   unitsList.innerHTML = UNITS.length ? '' : '<span class="meta">لا توجد مقادير مضافة.</span>';
@@ -272,20 +236,14 @@ function renderUnits() {
 }
 
 function checkAbsorptionDelay() {
-  const prot = toNumber(prot100El.value);
-  const fat = toNumber(fat100El.value);
+  const prot = toNumber(prot100El.value), fat = toNumber(fat100El.value);
   const hintEl = $$('#absorptionHint');
-  if (!hintEl) return;
-
-  if (prot >= ABSORPTION_THRESHOLD || fat >= ABSORPTION_THRESHOLD) {
-    hintEl.textContent = '⚠ هذه الوجبة قد تكون بطيئة الامتصاص بسبب الدهون أو البروتين المرتفع';
-  } else {
-    hintEl.textContent = '';
-  }
+  hintEl.textContent = (prot >= ABSORPTION_THRESHOLD || fat >= ABSORPTION_THRESHOLD)
+    ? '⚠ هذه الوجبة قد تكون بطيئة الامتصاص بسبب الدهون أو البروتين المرتفع'
+    : '';
 }
 
 function showSnack(t) {
-  if (!snack || !snackText) return;
   snackText.textContent = t;
   snack.hidden = false;
   clearTimeout(snackTimer);
@@ -293,20 +251,15 @@ function showSnack(t) {
 }
 
 on(snackUndo, 'click', async () => {
-  if (!snack) return;
   snack.hidden = true;
   if (!lastDeleted) return;
-  const data = { ...lastDeleted };
-  lastDeleted = null;
+  const data = { ...lastDeleted }; lastDeleted = null;
   try {
     await setDoc(doc(db, `parents/${USER.uid}/foodItems/${data.id}`), { ...data, updatedAt: serverTimestamp() });
   } catch {
-    await addDoc(collection(db, `parents/${USER.uid}/foodItems`), {
-      ...data, id: undefined, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    });
+    await addDoc(collection(db, `parents/${USER.uid}/foodItems`), { ...data, id: undefined, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
   }
-  await safeLoadItems();
-  showSnack('تم التراجع عن الحذف');
+  await safeLoadItems(); showSnack('تم التراجع عن الحذف');
 });
 
 on(btnAdd, 'click', () => { resetForm(); openDrawer(); });
@@ -315,59 +268,40 @@ on(btnCancel, 'click', closeDrawer);
 
 on(btnAddUnit, 'click', () => {
   const n = uNameEl.value.trim(), g = Number(uGramsEl.value);
-  if (!n || !g || g <= 0) {
-    alert('أدخل اسم المقدار والجرام (>0)');
-    return;
-  }
+  if (!n || !g || g <= 0) return alert('أدخل اسم المقدار والجرام (>0)');
   UNITS.push({ name: n, grams: g });
-  uNameEl.value = ''; uGramsEl.value = '';
-  renderUnits();
+  uNameEl.value = ''; uGramsEl.value = ''; renderUnits();
 });
 
 on(unitsList, 'click', e => {
-  const t = e.target;
-  if (t?.classList.contains('x')) {
-    UNITS.splice(Number(t.dataset.i), 1);
-    renderUnits();
-  }
+  const t = e.target; if (t?.classList.contains('x')) { UNITS.splice(Number(t.dataset.i), 1); renderUnits(); }
 });
 
 on(btnAutoImage, 'click', () => {
-  if (!nameEl.value.trim()) {
-    alert('أدخل اسم الصنف أولاً');
-    return;
-  }
+  if (!nameEl.value.trim()) return alert('أدخل اسم الصنف أولاً');
   imageUrlEl.value = autoImageFor(nameEl.value.trim());
 });
 
 [qEl, fCat, fSource, fPhoto, fSort].forEach(el => on(el, 'input', renderGrid));
 on(btnClear, 'click', () => {
-  if (qEl) qEl.value = '';
-  if (fCat) fCat.value = '';
-  if (fSource) fSource.value = '';
-  if (fPhoto) fPhoto.value = '';
+  [qEl, fCat, fSource, fPhoto].forEach(el => el && (el.value = ''));
   if (fSort) fSort.value = 'name_asc';
   renderGrid();
 });
 
 on(prot100El, 'input', checkAbsorptionDelay);
 on(fat100El, 'input', checkAbsorptionDelay);
+
+// 5. حفظ النموذج (submit)
 on(form, 'submit', async (e) => {
   e.preventDefault();
-  const name = nameEl.value.trim(), category = categoryEl.value;
-  const carbs = Number(carb100El.value);
+  const name = nameEl.value.trim(), category = categoryEl.value, carbs = Number(carb100El.value);
+  if (!name || !category || isNaN(carbs)) return alert('الاسم + التصنيف + كارب/100g مطلوبة');
+  if (carbs < 0 || toNumber(prot100El.value) < 0 || toNumber(fat100El.value) < 0) return alert('القيم ≥ 0');
 
-  if (!name || !category || isNaN(carbs)) {
-    alert('الاسم + التصنيف + كارب/100g مطلوبة');
-    return;
-  }
-
-  if (carbs < 0 || toNumber(prot100El.value) < 0 || toNumber(fat100El.value) < 0) {
-    alert('القيم ≥ 0');
-    return;
-  }
-
-  let kcal = kcal100El.value === '' ? calcCalories(carb100El.value, prot100El.value, fat100El.value) : Number(kcal100El.value);
+  let kcal = (kcal100El.value === '')
+    ? calcCalories(carb100El.value, prot100El.value, fat100El.value)
+    : Number(kcal100El.value);
   if (isNaN(kcal)) kcal = 0;
 
   const payload = {
@@ -391,16 +325,19 @@ on(form, 'submit', async (e) => {
       await updateDoc(doc(db, `parents/${USER.uid}/foodItems/${itemId.value}`), payload);
       alert('تم التحديث بنجاح');
     } else {
-      await addDoc(collection(db, `parents/${USER.uid}/foodItems`), {
-        ...payload,
-        createdAt: serverTimestamp()
-      });
+      await addDoc(collection(db, `parents/${USER.uid}/foodItems`), { ...payload, createdAt: serverTimestamp() });
       alert('تمت الإضافة بنجاح');
     }
-    closeDrawer();
-    await safeLoadItems();
+    closeDrawer(); await safeLoadItems();
   } catch (err) {
     console.error(err);
     alert('حدث خطأ أثناء الحفظ');
   }
+});
+
+// 6. تحقق من صلاحية المستخدم وتحميل البيانات
+onAuthStateChanged(auth, async (user) => {
+  if (!user) return window.location.href = 'index.html';
+  USER = user;
+  await safeLoadItems();
 });
