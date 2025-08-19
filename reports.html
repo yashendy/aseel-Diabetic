@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>التقارير</title>
-  <link rel="stylesheet" href="css/reports.css?v=2" />
+  <link rel="stylesheet" href="css/reports.css?v=3" />
   <link rel="icon" href="data:,">
 </head>
 <body>
@@ -27,17 +27,23 @@
           <input type="date" id="fromDate">
           <label>إلى</label>
           <input type="date" id="toDate">
+          <label>الوحدة</label>
+          <select id="unitSel">
+            <option value="mmol">mmol/L</option>
+            <option value="mgdl">mg/dL</option>
+          </select>
         </div>
 
         <div class="actions">
           <button id="toggleNotes" class="btn">👁️‍🗨️ إخفاء الملاحظات</button>
           <button id="blankWeek" class="btn">📄 تقرير فارغ لأسبوع</button>
-          <a id="openAnalytics" class="btn primary">تحليل القياسات</a>
-          <button id="printBtn" class="btn">🖨️ طباعة / PDF</button>
+          <a id="openAnalytics" class="btn">تحليل القياسات</a>
+          <button id="printFilledBtn" class="btn primary">🖨️ طباعة التقرير (ممتلئ)</button>
         </div>
       </div>
     </header>
 
+    <!-- جدول الشاشة العادي -->
     <section class="card table" id="tableSection">
       <h2>قياسات الفترة</h2>
       <div class="table-wrap">
@@ -60,10 +66,10 @@
       <div id="densityHint" class="muted small hidden">تم تصغير الخط تلقائيًا لملاءمة الصفحة في الطباعة.</div>
     </section>
 
-    <!-- قالب التقرير الفارغ للأسبوع (يظهر فقط عند الطباعة بوضع "blank") -->
+    <!-- تقرير فارغ للأسبوع (للطباعة اليدوية) -->
     <section class="card blank-week hidden" id="blankWeekSection" aria-hidden="true">
       <h2>تقرير أسبوعي فارغ — للكتابة اليدوية</h2>
-      <p class="muted">الوحدة: mmol/L — بدون عمود السناك</p>
+      <p class="muted">الوحدة: <span id="blankUnit">mmol/L</span> — بدون “سناك”</p>
       <div class="table-wrap">
         <table class="blank">
           <thead>
@@ -80,15 +86,20 @@
               <th>أثناء النوم</th>
             </tr>
           </thead>
-          <tbody id="blankBody">
-            <!-- يُملأ بـ7 صفوف ديناميكيًا من JS -->
-          </tbody>
+          <tbody id="blankBody"><!-- 7 صفوف من JS --></tbody>
         </table>
       </div>
-      <div class="muted small">تنبيه: هذه الصفحة معدّة للطباعة والكتابة اليدوية — السناك غير مشمول.</div>
+      <div class="muted small">ملاحظة: هذه الصفحة للطباعة اليدوية — السناك غير مشمول.</div>
+    </section>
+
+    <!-- تقرير ممتلئ للطباعة (شبكة أسبوعية بدون سناك) -->
+    <section class="card print-filled hidden" id="printFilledSection" aria-hidden="true">
+      <h2>تقرير مطبوع — منظم أسبوعيًا</h2>
+      <p class="muted">الوحدة: <span id="filledUnit">mmol/L</span> — بدون “سناك”</p>
+      <div id="printFilledContainer"><!-- جداول تُبنى تلقائيًا (كل 7 أيام جدول) --></div>
     </section>
   </div>
 
-  <script type="module" src="js/reports.js?v=2"></script>
+  <script type="module" src="js/reports.js?v=3"></script>
 </body>
 </html>
