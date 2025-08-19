@@ -98,3 +98,19 @@ body.notes-hidden td.col-notes{display:none}
   /* إخفاء السناك في الطباعة فقط */
   .col-snack, .slot-snack, th.col-snack{display:none !important}
 }
+/* تلوين صفوف الحالة */
+tr.state-low    { background: #f0f7ff; }  /* أزرق فاتح */
+tr.state-ok     { background: #f6fffa; }  /* أخضر فاتح */
+tr.state-high   { background: #fff6f6; }  /* أحمر فاتح */
+
+/* إبراز السهم والقراءة داخل الخلية */
+td .val {
+  font-weight: 700;
+}
+td .val.low  { color: #2563eb; }  /* أزرق */
+td .val.ok   { color: #10b981; }  /* أخضر */
+td .val.high { color: #ef4444; }  /* أحمر */
+
+/* إخفاء/إظهار الملاحظات بالزر */
+.notes.hidden-cell { color: #999; }
+.hide-notes td.notes { visibility: hidden; height: 0; padding-top: 0; padding-bottom: 0; }
