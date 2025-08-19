@@ -39,7 +39,7 @@ h1{font-size:22px;margin:0}
 .badge{background:#f1f5f9;border:1px solid var(--border);border-radius:8px;padding:2px 6px;font-size:12px}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 
-.quick{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.quick{display:flex;gap:6px;align-items:center}
 .quick input, .quick select{height:34px}
 
 .drawer{position:fixed;inset:0;display:none;z-index:50;background:rgba(0,0,0,.3)}
@@ -58,16 +58,12 @@ h1{font-size:22px;margin:0}
 .req{color:var(--red);margin-inline:4px}
 .hint{color:var(--muted);font-size:12px;margin-top:4px}
 
-/* شارة المصدر/الوحدات/التاجات */
 .badge.src{background:#eef2ff;color:#3730a3}
 .badge.units{background:#ecfeff;color:#155e75}
 .badge.tags{background:#fff7ed;color:#92400e}
 
-/* Snack (إشعار صغير) */
-.snack{position:fixed;inset-inline:50%;translate:-50% 0;bottom:16px;background:#111827;color:#fff;padding:10px 12px;border-radius:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,.25)}
-
 @media print{
-  .no-print,.drawer{display:none !important}
+  .no-print,.topbar,.filters,.drawer{display:none !important}
   body{background:#fff}
   .grid{grid-template-columns:1fr 1fr}
 }
