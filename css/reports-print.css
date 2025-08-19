@@ -16,7 +16,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 
 .btn{border:1px solid var(--border);background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer}
 .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
-.btn.back{background:#eef0ff;border-color:var(--brand);color:var(--brand)}
+.btn.back{background:#eef0ff;border-color:var(--brand);color:#4f46e5}
 
 .muted{color:var(--muted);margin:6px 0 0}
 .chips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px}
@@ -34,14 +34,14 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 .lg.high{color:var(--warn);background:#fff1f1;border-color:#ffe1e1}
 
 table.report{width:100%;border-collapse:collapse}
-table.report th,table.report td{border:1px solid var(--border);padding:10px;vertical-align:top}
+table.report th,table.report td{border:1px solid var(--border);padding:12px 10px;vertical-align:top}
 table.report thead th{background:#f7f7fb;text-align:center}
 td.details .line{display:block;margin:2px 0}
 td.details .val{font-weight:700}
 td.details .val.low{color:var(--info)}
 td.details .val.ok{color:var(--ok)}
 td.details .val.high{color:var(--warn)}
-.arrow{font-weight:700;margin-inline:2px}
+.arrow{font-weight:700;margin-inline:4px}
 .notesLine{color:#374151}
 .notesLine.hidden{display:none}
 
@@ -49,6 +49,7 @@ tr.state-low{background:#f0f7ff}
 tr.state-ok{background:#f6fffa}
 tr.state-high{background:#fff6f6}
 
+/* QR box */
 .qr{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:6px}
 .qr-caption{font-size:10px;color:#64748b}
 
@@ -68,5 +69,5 @@ tr.state-high{background:#fff6f6}
   /* إخفاء سناك في الطباعة فقط */
   tr.is-snack{display:none !important;}
   /* تحجيم نظيف */
-  table.report th,table.report td{padding:8px}
+  table.report th,table.report td{padding:10px}
 }
