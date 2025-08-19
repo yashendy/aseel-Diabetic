@@ -27,7 +27,17 @@
     <div id="empty" class="empty hidden">لا يوجد أطفال بعد… ابدئي بإضافة طفل جديد.</div>
   </div>
 
- 
+  <!-- المساعد الذكي -->
+  <script src="https://cdn.jsdelivr.net/npm/@helixml/chat-embed@latest" crossorigin="anonymous"></script>
+  <script>
+    ChatWidget({
+      url: 'https://api.openai.com/v1/chat/completions',
+      model: 'gpt-3.5-turbo',
+      bearerToken: 'YOUR_OPENAI_KEY', // استبدلي المفتاح بمفتاح OpenAI الخاص بك
+      title: 'مساعدك الغذائي',
+      placeholder: 'اسأل عن الوجبات، الجرعة، أو حالة الطفل…'
+    });
+  </script>
 
   <script type="module" src="js/parent.js"></script>
 </body>
