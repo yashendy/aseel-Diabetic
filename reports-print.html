@@ -12,36 +12,44 @@
   <div class="a4 page">
 
     <!-- رأس -->
-    <header class="header">
-      <div class="left">
-        <button class="btn back" onclick="history.back()">⬅ رجوع</button>
-      </div>
-      <div class="center">
-        <h1>🧾 تقرير قياسات — <span id="childName">طفل</span></h1>
-        <p class="muted" id="childMeta">—</p>
-        <div class="chips">
-          <span class="chip" id="chipRange">النطاق: —</span>
-          <span class="chip" id="chipCR">CR: —</span>
-          <span class="chip" id="chipCF">CF: —</span>
-        </div>
-      </div>
-      <div class="right">
-        <label class="ctl">
-          الوحدة:
-          <select id="unitSel">
-            <option value="mmol">mmol/L</option>
-            <option value="mgdl">mg/dL</option>
-          </select>
-        </label>
-        <label class="ctl">
-          الملاحظات:
-          <select id="notesMode">
-            <option value="show">إظهار</option>
-            <option value="hide" selected>إخفاء</option>
-          </select>
-        </label>
-      </div>
-    </header>
+   <header class="header">
+  <div class="left">
+    <button class="btn back" onclick="history.back()">⬅ رجوع</button>
+    <div class="qr">
+      <img id="qrImg" alt="QR" width="96" height="96">
+      <div class="qr-caption">تفاصيل التقرير</div>
+    </div>
+  </div>
+
+  <div class="center">
+    <h1>🧾 تقرير قياسات — <span id="childName">طفل</span></h1>
+    <p class="muted" id="childMeta">—</p>
+    <div class="chips">
+      <span class="chip" id="chipRange">النطاق: —</span>
+      <span class="chip" id="chipCR">CR: —</span>
+      <span class="chip" id="chipCF">CF: —</span>
+    </div>
+  </div>
+
+  <div class="right">
+    <label class="ctl">
+      الوحدة:
+      <select id="unitSel">
+        <option value="mmol">mmol/L</option>
+        <option value="mgdl">mg/dL</option>
+      </select>
+    </label>
+    <label class="ctl">
+      الملاحظات:
+      <select id="notesMode">
+        <option value="show">إظهار</option>
+        <option value="hide" selected>إخفاء</option>
+      </select>
+    </label>
+    <button id="btnPrint" class="btn">طباعة PDF</button>
+  </div>
+</header>
+
 
     <!-- نطاق التاريخ -->
     <section class="range card">
