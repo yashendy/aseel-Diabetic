@@ -1,15 +1,19 @@
 :root{
   --bg:#f7f8fb; --card:#fff; --ink:#111827; --muted:#6b7280;
-  --line:#e5e7eb; --brand:#4f46e5; --ok:#10b981; --warn:#ef4444;
+  --line:#e5e7eb; --brand:#4f46e5; --ok:#10b981; --warn:#ef4444; --blue:#2563eb;
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,Arial,sans-serif}
 .container{max-width:1120px;margin:16px auto;padding:0 12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+
 .child-info{display:grid;gap:10px}
 .head h1{margin:0 0 4px}
 .ic{opacity:.6}
 .muted{color:var(--muted);margin:0}
+.small{font-size:12px}
+.hidden{display:none !important}
+
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chip{background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;padding:4px 8px;border-radius:999px;font-size:12px}
 
@@ -20,8 +24,63 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
 .btn.back{margin-inline-end:auto}
 
-table{width:100%;border-collapse:collapse}
-th,td{border:1px solid var(--line);padding:10px;vertical-align:top}
-thead th{background:#fafafa}
-.muted{color:var(--muted);text-align:center}
+.table h2{margin:6px 0 10px}
+.table-wrap{max-width:100%;overflow:auto;border-radius:10px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{border:1px solid var(--line);padding:8px 10px;vertical-align:top}
+thead th{background:#fafafa;position:sticky;top:0;z-index:1}
+
+td.reading{white-space:nowrap}
+.arrow{font-weight:700;margin-inline-start:6px}
+.arrow.up{color:var(--warn)}   /* ↑ */
+.arrow.down{color:var(--blue)}  /* ↓ */
+
+/* تلوين الصف حسب الحالة */
+tr.state-high{border-inline-start:6px solid var(--warn);background:rgba(239,68,68,.05)}
+tr.state-low{ border-inline-start:6px solid var(--blue);background:rgba(37,99,235,.05)}
+tr.state-normal{border-inline-start:6px solid var(--ok);background:rgba(16,185,129,.05)}
+
+.muted.center{text-align:center}
 .notes{white-space:pre-wrap}
+.small-note{font-size:12px;color:var(--muted)}
+
+/* جدول التقرير الفارغ */
+.blank-week h2{margin:6px 0 10px}
+table.blank{width:100%;border-collapse:collapse;font-size:13px}
+table.blank th, table.blank td{border:1px solid var(--line);padding:10px;height:42px}
+table.blank thead th{background:#fafafa}
+table.blank td{color:#111}
+
+/* كثافة أعلى عند صُغر المساحة */
+body.dense table{font-size:13px}
+body.very-dense table{font-size:12px}
+#densityHint{margin-top:8px}
+
+/* طباعة */
+@media print{
+  .back,.controls,.actions,.range,.btn{display:none !important}
+  .container{max-width:none;margin:0;padding:0}
+  .card{box-shadow:none;border:none;margin:0 0 8mm}
+
+  /* تكبير الجدول في الطباعة مع تصغير محسوب */
+  table{font-size:12px}
+  body.dense table{font-size:11px}
+  body.very-dense table{font-size:10px}
+
+  /* إخفاء السناك في الطباعة فقط */
+  tr.slot-snack{display:none !important}
+
+  /* إخفاء الملاحظات عند تفعيل زر الإخفاء */
+  body.notes-hidden .col-notes,
+  body.notes-hidden td.col-notes { display:none !important; }
+
+  thead th{position:static}
+}
+
+/* عند إخفاء الملاحظات في العرض أيضًا */
+body.notes-hidden .col-notes,
+body.notes-hidden td.col-notes{display:none}
+
+/* صف فارغ للكتابة اليدوية يظهر فقط عند وضع الطباعة الفارغ */
+body.print-blank #tableSection{display:none !important}
+body.print-blank #blankWeekSection{display:block !important}
