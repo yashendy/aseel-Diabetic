@@ -2,6 +2,7 @@
   --bg:#f7fbff; --card:#fff; --txt:#1f2937; --muted:#748094;
   --border:#e5e7eb; --shadow:0 6px 18px rgba(0,0,0,.06);
   --primary:#4f46e5; --chip:#f3f4f6; --ok:#16a34a; --bad:#ef4444;
+  --blue:#2563eb; --warn:#f59e0b;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);font-family:"Segoe UI",Tahoma,Arial,sans-serif}
@@ -23,6 +24,11 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);font-family:"
 .filters select,.filters input[type="date"]{padding:8px 10px;border:1px solid var(--border);border-radius:10px}
 .hidden{display:none !important}
 
+/* segmented slot filters */
+.slot-filters{display:flex;gap:6px;flex-wrap:wrap}
+.seg{border:1px solid var(--border);background:#fff;padding:6px 10px;border-radius:999px;cursor:pointer}
+.seg.active{background:#eef0ff;border-color:var(--primary);color:var(--primary);font-weight:600}
+
 .kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
 @media(max-width:900px){.kpis{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)}}
@@ -30,12 +36,35 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);font-family:"
 .kpi .v{font-size:22px;font-weight:700}
 .kpi.bad .v{color:var(--bad)}
 .kpi .l{font-size:13px;color:var(--muted);margin-top:6px}
+.kpi .d{margin-top:4px;font-size:12px;color:#6b7280}
+.kpi .d.pos{color:var(--ok)}
+.kpi .d.neg{color:var(--bad)}
+.kpi .d.neu{color:var(--muted)}
 
 h2{margin:6px 0 12px}
 .list{margin:0;padding-inline-start:18px}
 .list li{margin:6px 0}
 
+/* charts responsive & crisp */
+.charts canvas{
+  width:100%;
+  height:240px; /* يكبّر الرسم */
+  display:block;
+  border-radius:10px;
+  background:#fff;
+  border:1px solid var(--border);
+}
+
+/* loader */
 .loader{
   position:fixed;inset-inline:0;bottom:14px;margin:auto;width:230px;text-align:center;
   background:#111827;color:#fff;padding:10px 12px;border-radius:10px;opacity:.92;z-index:9999
+}
+
+/* print */
+@media print{
+  .btn,.filters,.slot-filters,.back{display:none !important}
+  .container{max-width:none;margin:0;padding:0}
+  .card{box-shadow:none;border:none;margin:0 0 12mm}
+  .charts canvas{height:300px}
 }
