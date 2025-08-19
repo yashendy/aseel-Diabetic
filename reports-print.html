@@ -1,18 +1,23 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>التقارير</title>
-  <link rel="stylesheet" href="css/reports.css?v=2" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>تقرير مطبوع</title>
+  <link rel="stylesheet" href="css/reports-print.css?v=3">
   <link rel="icon" href="data:,">
 </head>
 <body>
-  <div class="container">
-    <header class="card child-info">
-      <button class="btn back" onclick="history.back()">⬅ رجوع</button>
-      <div class="head">
-        <h1>التقارير — <span id="childName">طفل</span> <span class="ic">🧾</span></h1>
+
+  <div class="a4 page">
+
+    <!-- رأس -->
+    <header class="header">
+      <div class="left">
+        <button class="btn back" onclick="history.back()">⬅ رجوع</button>
+      </div>
+      <div class="center">
+        <h1>🧾 تقرير قياسات — <span id="childName">طفل</span></h1>
         <p class="muted" id="childMeta">—</p>
         <div class="chips">
           <span class="chip" id="chipRange">النطاق: —</span>
@@ -20,75 +25,81 @@
           <span class="chip" id="chipCF">CF: —</span>
         </div>
       </div>
-
-      <div class="controls">
-        <div class="range">
-          <label>من</label>
-          <input type="date" id="fromDate">
-          <label>إلى</label>
-          <input type="date" id="toDate">
-        </div>
-
-        <div class="actions">
-          <button id="toggleNotes" class="btn">👁️‍🗨️ إخفاء الملاحظات</button>
-          <button id="blankWeek" class="btn">📄 تقرير فارغ لأسبوع</button>
-          <a id="openAnalytics" class="btn primary">تحليل القياسات</a>
-          <button id="printBtn" class="btn">🖨️ طباعة / PDF</button>
-        </div>
+      <div class="right">
+        <label class="ctl">
+          الوحدة:
+          <select id="unitSel">
+            <option value="mmol">mmol/L</option>
+            <option value="mgdl">mg/dL</option>
+          </select>
+        </label>
+        <label class="ctl">
+          الملاحظات:
+          <select id="notesMode">
+            <option value="show">إظهار</option>
+            <option value="hide" selected>إخفاء</option>
+          </select>
+        </label>
       </div>
     </header>
 
-    <section class="card table" id="tableSection">
-      <h2>قياسات الفترة</h2>
-      <div class="table-wrap">
-        <table id="reportTable">
-          <thead>
-            <tr>
-              <th>التاريخ</th>
-              <th>الوقت</th>
-              <th>القراءة</th>
-              <th>الحالة</th>
-              <th>التصحيح</th>
-              <th class="col-notes">ملاحظات</th>
-            </tr>
-          </thead>
-          <tbody id="tbody">
-            <tr><td colspan="6" class="muted">—</td></tr>
-          </tbody>
-        </table>
+    <!-- نطاق التاريخ -->
+    <section class="range card">
+      <div>
+        من <input type="date" id="fromDate">
+        إلى <input type="date" id="toDate">
+        <button id="applyRange" class="btn primary">تطبيق</button>
       </div>
-      <div id="densityHint" class="muted small hidden">تم تصغير الخط تلقائيًا لملاءمة الصفحة في الطباعة.</div>
+      <div class="legend">
+        <span class="lg lg-low">هبوط ↓</span>
+        <span class="lg lg-ok">طبيعي ↔</span>
+        <span class="lg lg-high">ارتفاع ↑</span>
+        <span class="muted sm">(يتم إخفاء "سناك" في الجدول فقط)</span>
+      </div>
     </section>
 
-    <!-- قالب التقرير الفارغ للأسبوع (يظهر فقط عند الطباعة بوضع "blank") -->
-    <section class="card blank-week hidden" id="blankWeekSection" aria-hidden="true">
-      <h2>تقرير أسبوعي فارغ — للكتابة اليدوية</h2>
-      <p class="muted">الوحدة: mmol/L — بدون عمود السناك</p>
-      <div class="table-wrap">
-        <table class="blank">
-          <thead>
-            <tr>
-              <th>اليوم</th>
-              <th>الاستيقاظ</th>
-              <th>ق.الفطار</th>
-              <th>ب.الفطار</th>
-              <th>ق.الغداء</th>
-              <th>ب.الغداء</th>
-              <th>ق.العشاء</th>
-              <th>ب.العشاء</th>
-              <th>ق.النوم</th>
-              <th>أثناء النوم</th>
-            </tr>
-          </thead>
-          <tbody id="blankBody">
-            <!-- يُملأ بـ7 صفوف ديناميكيًا من JS -->
-          </tbody>
-        </table>
+    <!-- الجدول -->
+    <section class="table card">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:120px">التاريخ</th>
+            <th style="width:140px">وقت القياس</th>
+            <th>تفاصيل</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="3" class="muted">—</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </div><!-- /page 1 -->
+
+  <!-- صفحة ثانية: رسوم + ملخص ذكي -->
+  <div class="a4 page break-before">
+    <section class="card">
+      <h2>📊 ملخص رسومي للفترة</h2>
+      <div class="charts">
+        <div class="chart">
+          <h3>توزيع القياسات حسب الوقت</h3>
+          <canvas id="slotBar" width="760" height="220"></canvas>
+        </div>
+        <div class="chart">
+          <h3>متوسط يومي</h3>
+          <canvas id="dailyLine" width="760" height="220"></canvas>
+        </div>
       </div>
-      <div class="muted small">تنبيه: هذه الصفحة معدّة للطباعة والكتابة اليدوية — السناك غير مشمول.</div>
+    </section>
+
+    <section class="card">
+      <h2>🤖 ملخص ذكي للطبيب</h2>
+      <ul id="insightsList" class="list"></ul>
     </section>
   </div>
 
-  <script type="module" src="js/reports.js?v=2"></script>
+  <div id="loader" class="loader hidden">جارِ التحميل…</div>
+
+  <script type="module" src="js/reports-print.js?v=3"></script>
 </body>
 </html>
