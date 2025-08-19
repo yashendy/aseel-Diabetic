@@ -9,7 +9,7 @@
 </head>
 <body>
   <div class="page">
-    <!-- شريط علوي -->
+    <!-- الشريط العلوي -->
     <header class="topbar">
       <div class="left">
         <button class="btn ghost" onclick="history.back()">⬅ رجوع</button>
@@ -27,7 +27,6 @@
     <!-- فلاتر وبحث -->
     <section class="filters">
       <input id="q" class="input" placeholder="بحث بالاسم أو الهاشتاج… (#أرز)" />
-
       <select id="fCat" class="input">
         <option value="">كل التصنيفات</option>
         <option>نشويات</option>
@@ -37,26 +36,22 @@
         <option>لحوم</option>
         <option>دهون</option>
       </select>
-
       <select id="fSource" class="input">
         <option value="">كل المصادر</option>
         <option value="manual">manual</option>
         <option value="openfoodfacts">openfoodfacts</option>
       </select>
-
       <select id="fPhoto" class="input">
         <option value="">الصورة: الكل</option>
         <option value="with">فقط يوجد صورة</option>
         <option value="without">فقط بلا صورة</option>
       </select>
-
       <select id="fSort" class="input">
         <option value="name_asc">الاسم (أ→ي)</option>
         <option value="name_desc">الاسم (ي→أ)</option>
         <option value="newest">الأحدث</option>
         <option value="oldest">الأقدم</option>
       </select>
-
       <button id="btnClear" class="btn ghost">مسح الفلاتر</button>
     </section>
 
@@ -72,7 +67,7 @@
         <button id="btnClose" class="icon-btn" title="إغلاق">✖</button>
       </header>
 
-      <form id="itemForm" class="form">
+      <form id="itemForm" class="form" novalidate>
         <input type="hidden" id="itemId" />
 
         <div class="row">
@@ -170,6 +165,12 @@
       </form>
     </div>
   </aside>
+
+  <!-- Snackbar (تنبيه + تراجع) -->
+  <div id="snack" class="snackbar" hidden>
+    <span id="snackText">تم</span>
+    <button id="snackUndo" class="btn ghost">تراجع</button>
+  </div>
 
   <script type="module" src="js/food-items.js"></script>
 </body>
