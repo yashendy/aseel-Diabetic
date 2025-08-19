@@ -1,113 +1,94 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>تقرير مطبوع</title>
-  <link rel="stylesheet" href="css/reports-print.css?v=3">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>تقرير قياسات</title>
+  <link rel="stylesheet" href="css/reports-print.css" />
   <link rel="icon" href="data:,">
 </head>
 <body>
+  <div class="container">
 
-  <div class="a4 page">
-
-    <!-- رأس -->
-   <header class="header">
-  <div class="left">
-    <button class="btn back" onclick="history.back()">⬅ رجوع</button>
-    <div class="qr">
-      <img id="qrImg" alt="QR" width="96" height="96">
-      <div class="qr-caption">تفاصيل التقرير</div>
-    </div>
-  </div>
-
-  <div class="center">
-    <h1>🧾 تقرير قياسات — <span id="childName">طفل</span></h1>
-    <p class="muted" id="childMeta">—</p>
-    <div class="chips">
-      <span class="chip" id="chipRange">النطاق: —</span>
-      <span class="chip" id="chipCR">CR: —</span>
-      <span class="chip" id="chipCF">CF: —</span>
-    </div>
-  </div>
-
-  <div class="right">
-    <label class="ctl">
-      الوحدة:
-      <select id="unitSel">
-        <option value="mmol">mmol/L</option>
-        <option value="mgdl">mg/dL</option>
-      </select>
-    </label>
-    <label class="ctl">
-      الملاحظات:
-      <select id="notesMode">
-        <option value="show">إظهار</option>
-        <option value="hide" selected>إخفاء</option>
-      </select>
-    </label>
-    <button id="btnPrint" class="btn">طباعة PDF</button>
-  </div>
-</header>
-
-
-    <!-- نطاق التاريخ -->
-    <section class="range card">
-      <div>
-        من <input type="date" id="fromDate">
-        إلى <input type="date" id="toDate">
-        <button id="applyRange" class="btn primary">تطبيق</button>
+    <!-- Header -->
+    <header class="header card">
+      <div class="left">
+        <button class="btn back" onclick="history.back()">⬅ رجوع</button>
+        <div class="qr">
+          <img id="qrImg" alt="QR" width="96" height="96">
+          <div class="qr-caption">تفاصيل التقرير</div>
+        </div>
       </div>
-      <div class="legend">
-        <span class="lg lg-low">هبوط ↓</span>
-        <span class="lg lg-ok">طبيعي ↔</span>
-        <span class="lg lg-high">ارتفاع ↑</span>
-        <span class="muted sm">(يتم إخفاء "سناك" في الجدول فقط)</span>
+
+      <div class="center">
+        <h1>🧾 تقرير قياسات — <span id="childName">طفل</span></h1>
+        <p class="muted" id="childMeta">—</p>
+        <div class="chips">
+          <span class="chip" id="chipRange">النطاق: —</span>
+          <span class="chip" id="chipCR">CR: —</span>
+          <span class="chip" id="chipCF">CF: —</span>
+        </div>
+      </div>
+
+      <div class="right controls">
+        <label class="ctl">
+          الوحدة:
+          <select id="unitSel">
+            <option value="mmol" selected>mmol/L</option>
+            <option value="mgdl">mg/dL</option>
+          </select>
+        </label>
+
+        <label class="ctl">
+          الملاحظات:
+          <select id="notesMode">
+            <option value="show">إظهار</option>
+            <option value="hide" selected>إخفاء</option>
+          </select>
+        </label>
+
+        <button id="btnPrint" class="btn">طباعة PDF</button>
+      </div>
+    </header>
+
+    <!-- Filters -->
+    <section class="filters card">
+      <div class="row">
+        <label>من</label>
+        <input type="date" id="fromDate">
+        <label>إلى</label>
+        <input type="date" id="toDate">
+        <button id="apply" class="btn primary">تطبيق</button>
+
+        <div class="legend">
+          <span class="lg low">هبوط</span>
+          <span class="lg ok">طبيعي</span>
+          <span class="lg high">ارتفاع</span>
+          <span class="chip small">*(تم إخفاء “سناك” في الطباعة فقط)</span>
+        </div>
       </div>
     </section>
 
-    <!-- الجدول -->
-    <section class="table card">
-      <table>
+    <!-- Table -->
+    <section class="card">
+      <table class="report">
         <thead>
           <tr>
-            <th style="width:120px">التاريخ</th>
-            <th style="width:140px">وقت القياس</th>
+            <th>التاريخ</th>
+            <th>وقت القياس</th>
             <th>تفاصيل</th>
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="3" class="muted">—</td></tr>
+          <tr><td colspan="3" class="muted">جارِ التحميل…</td></tr>
         </tbody>
       </table>
     </section>
 
-  </div><!-- /page 1 -->
-
-  <!-- صفحة ثانية: رسوم + ملخص ذكي -->
-  <div class="a4 page break-before">
-    <section class="card">
-      <h2>📊 ملخص رسومي للفترة</h2>
-      <div class="charts">
-        <div class="chart">
-          <h3>توزيع القياسات حسب الوقت</h3>
-          <canvas id="slotBar" width="760" height="220"></canvas>
-        </div>
-        <div class="chart">
-          <h3>متوسط يومي</h3>
-          <canvas id="dailyLine" width="760" height="220"></canvas>
-        </div>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>🤖 ملخص ذكي للطبيب</h2>
-      <ul id="insightsList" class="list"></ul>
-    </section>
   </div>
 
   <div id="loader" class="loader hidden">جارِ التحميل…</div>
 
-  <script type="module" src="js/reports-print.js?v=3"></script>
+  <script type="module" src="js/reports-print.js"></script>
 </body>
 </html>
