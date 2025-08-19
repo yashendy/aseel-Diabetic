@@ -43,27 +43,60 @@
           <option value="mgdl">mg/dL</option>
         </select>
 
+        <div class="slot-filters" role="group" aria-label="فلترة حسب وقت القياس">
+          <button class="seg active" data-slot="all">الكل</button>
+          <button class="seg" data-slot="pre">قبل الوجبات</button>
+          <button class="seg" data-slot="post">بعد الوجبات</button>
+          <button class="seg" data-slot="sleep">النوم</button>
+          <button class="seg" data-slot="snack">السناك</button>
+        </div>
+
+        <button class="btn" id="printBtn">🖨️ طباعة / PDF</button>
         <button class="btn primary" id="apply">تطبيق</button>
       </div>
     </header>
 
     <!-- KPIs -->
     <section class="card kpis">
-      <div class="kpi"><div class="v" id="kpiTIR">—%</div><div class="l">وقت داخل النطاق (TIR)</div></div>
-      <div class="kpi bad"><div class="v" id="kpiHigh">—%</div><div class="l">ارتفاعات</div></div>
-      <div class="kpi bad"><div class="v" id="kpiLow">—%</div><div class="l">هبوطات</div></div>
-      <div class="kpi"><div class="v" id="kpiMean">—</div><div class="l">المتوسط</div></div>
-      <div class="kpi"><div class="v" id="kpiSD">—</div><div class="l">الانحراف المعياري</div></div>
-      <div class="kpi"><div class="v" id="kpiCount">—</div><div class="l">عدد القياسات</div></div>
+      <div class="kpi">
+        <div class="v" id="kpiTIR">—%</div>
+        <div class="d" id="deltaTIR">—</div>
+        <div class="l">وقت داخل النطاق (TIR)</div>
+      </div>
+      <div class="kpi bad">
+        <div class="v" id="kpiHigh">—%</div>
+        <div class="d" id="deltaHigh">—</div>
+        <div class="l">ارتفاعات</div>
+      </div>
+      <div class="kpi bad">
+        <div class="v" id="kpiLow">—%</div>
+        <div class="d" id="deltaLow">—</div>
+        <div class="l">هبوطات</div>
+      </div>
+      <div class="kpi">
+        <div class="v" id="kpiMean">—</div>
+        <div class="d" id="deltaMean">—</div>
+        <div class="l">المتوسط</div>
+      </div>
+      <div class="kpi">
+        <div class="v" id="kpiSD">—</div>
+        <div class="d" id="deltaSD">—</div>
+        <div class="l">الانحراف المعياري</div>
+      </div>
+      <div class="kpi">
+        <div class="v" id="kpiCount">—</div>
+        <div class="d" id="deltaCount">—</div>
+        <div class="l">عدد القياسات</div>
+      </div>
     </section>
 
     <!-- رسوم بسيطة (Canvas بدون مكتبات) -->
     <section class="card charts">
       <h2>توزيع حسب وقت القياس</h2>
-      <canvas id="slotBar" height="180"></canvas>
+      <canvas id="slotBar"></canvas>
 
       <h2>متوسط كل يوم</h2>
-      <canvas id="dailyLine" height="180"></canvas>
+      <canvas id="dailyLine"></canvas>
     </section>
 
     <!-- توصيات -->
@@ -75,6 +108,6 @@
 
   <div id="loader" class="loader hidden">جارِ التحميل…</div>
 
-  <script type="module" src="js/analytics.js?v=1"></script>
+  <script type="module" src="js/analytics.js?v=2"></script>
 </body>
 </html>
