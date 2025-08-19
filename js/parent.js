@@ -10,10 +10,31 @@ const emptyEl  = document.getElementById('empty');
 const searchEl = document.getElementById('search');
 const loaderEl = document.getElementById('loader');
 
+/* عناصر المساعد الذكي */
+const aiFab     = document.getElementById('aiFab');
+const aiWidget  = document.getElementById('aiWidget');
+const aiClose   = document.getElementById('aiClose');
+const aiMin     = document.getElementById('aiMin');
+const aiMessages= document.getElementById('aiMessages');
+const aiInput   = document.getElementById('aiInput');
+const aiSend    = document.getElementById('aiSend');
+const aiContext = document.getElementById('aiContext');
+const quickBtns = document.querySelectorAll('.ai-quick-btn');
+
+/* إعدادات المساعد (عدّلي endpoint لو عندك باك-إند مختلف) */
+const AI_ENDPOINT = window.AI_ENDPOINT || '/api/chat'; // Proxy آمن على السيرفر
+const AI_MODEL    = 'gpt-4o-mini'; // اسم نموذجي المُفضّل، غيّريه حسب الباك-إند
+
 /* حالة */
 let currentUser;
 let kids = [];      // كل الأطفال
 let filtered = [];  // بعد البحث
+
+// حالة المساعد
+const aiState = {
+  child: null,
+  history: [] // [{role:'system'|'user'|'assistant', content:'...'}]
+};
 
 /* أدوات */
 const pad = n => String(n).padStart(2,'0');
@@ -46,6 +67,7 @@ onAuthStateChanged(auth, async (user)=>{
   await loadKids();
 });
 
+/* بحث */
 searchEl.addEventListener('input', ()=>{
   const q = searchEl.value.trim().toLowerCase();
   if (!q){ filtered = kids; render(); return; }
@@ -64,7 +86,6 @@ async function loadKids(){
     kids = [];
     const today = todayStr();
 
-    // نجيب لكل طفل إحصائيات سريعة
     for (const d of snap.docs){
       const kid = { id:d.id, ...d.data() };
 
@@ -95,7 +116,6 @@ async function loadKids(){
     alert('تعذّر تحميل قائمة الأطفال');
   }finally{
     loader(false);
-    // fallback أمان
     setTimeout(()=>{ try{ loader(false); }catch{} }, 5000);
   }
 }
@@ -130,11 +150,174 @@ function render(){
       </div>
 
       <div class="next">🩺 أقرب متابعة: <b>${k.nextFollowUp}</b></div>
+
+      <div class="kid-actions">
+        <button class="btn kid-open" data-id="${k.id}">📂 فتح لوحة الطفل</button>
+        <button class="btn kid-ai"   data-id="${k.id}">🤖 مساعد هذا الطفل</button>
+      </div>
     `;
-    // البطاقة كلها قابلة للنقر
+
+    // فتح لوحة الطفل
+    card.querySelector('.kid-open')?.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      location.href = `child.html?child=${encodeURIComponent(k.id)}`;
+    });
+
+    // فتح المساعد بسياق الطفل
+    card.querySelector('.kid-ai')?.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openAIForChild(k);
+    });
+
+    // النقر على البطاقة كلها يفتح لوحة الطفل (سلوك قديم)
     card.addEventListener('click', ()=>{
       location.href = `child.html?child=${encodeURIComponent(k.id)}`;
     });
+
     kidsGrid.appendChild(card);
   });
 }
+
+/* ===== المساعد الذكي: منطق الواجهة ===== */
+function buildSystemPrompt(child){
+  // ملخص سياق للالتزام الطبي (لا إرشادات علاجية مباشرة، حسابات وشرح فقط)
+  const base = `
+أنت مساعد صحي ذكي للأسرة يدعم داء السكري من النوع الأول للأطفال.
+- قدّم شرحًا تعليميًا مبسطًا باللغة العربية الفصحى.
+- تجنب إعطاء تعليمات دوائية إلزامية؛ اكتفِ بالحسابات والاقتراحات العامة، واطلب مراجعة الطبيب عند الشك.
+- استخدم بيانات الطفل (CR "نسبة الكربوهيدرات", CF "عامل التصحيح", نطاقه الطبيعي) إن توفرت.
+- عند حساب الجرعة: الجرعة ≈ إجمالي الكربوهيدرات / CR. بالنسبة للتصحيح: (السكر الحالي - الهدف)/CF (لو تجاوز النطاق).
+- انتبه أن الدهون/البروتين العالي قد يسبب بطء امتصاص الكربوهيدرات.
+`.trim();
+
+  if(!child) return base + `\nلا يوجد طفل محدد في السياق الحالي.`;
+
+  const age = calcAge(child.birthDate);
+  const cr  = child.carbRatio ?? 'غير معروف';
+  const cf  = child.correctionFactor ?? 'غير معروف';
+  const min = child.normalRange?.min ?? 'غير معلوم';
+  const max = child.normalRange?.max ?? 'غير معلوم';
+
+  return `${base}
+بيانات الطفل:
+- الاسم: ${child.name || 'غير معروف'}
+- العمر التقريبي: ${age} سنة
+- CR: ${cr} g/U
+- CF: ${cf} mmol/L/U
+- النطاق المستهدف: ${min}–${max} mmol/L
+استخدم هذه المعلومات عند الحساب والتفسير.`;
+}
+
+function openAIWidget(){
+  aiWidget.classList.remove('hidden');
+  aiWidget.dataset.minimized = '0';
+}
+
+function closeAIWidget(){
+  aiWidget.classList.add('hidden');
+  aiMessages.innerHTML = '';
+  aiState.child = null;
+  aiState.history = [];
+  aiContext.textContent = 'بدون سياق طفل';
+}
+
+function minimizeAI(){
+  const isMin = aiWidget.dataset.minimized === '1';
+  aiWidget.dataset.minimized = isMin ? '0' : '1';
+  aiWidget.style.height = isMin ? '560px' : '64px';
+  aiMessages.style.display = isMin ? 'flex' : 'none';
+  document.querySelector('.ai-input').style.display = isMin ? 'block' : 'none';
+}
+
+function appendMsg(role, text){
+  const div = document.createElement('div');
+  div.className = role === 'system' ? 'msg sys' : (role === 'assistant' ? 'msg assistant' : 'msg user');
+  div.textContent = text;
+  aiMessages.appendChild(div);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+}
+
+function openAIForChild(child){
+  aiState.child = child;
+  aiState.history = [];
+  openAIWidget();
+  aiContext.textContent = `سياق: ${child.name || 'طفل'}`;
+  appendMsg('system', 'تم فتح المساعد بسياق هذا الطفل. يمكنك طرح سؤالك الآن.');
+  // أضف رسالة system للـ history (لا تُعرض للعميل الباك-إند إن أردت)
+}
+
+function openAIGeneric(){
+  aiState.child = null;
+  aiState.history = [];
+  openAIWidget();
+  aiContext.textContent = 'بدون سياق طفل';
+  appendMsg('system', 'مرحبًا! أنا مساعدك الذكي. يمكنك سؤالي عن الجرعات، الوجبات، والمقاييس.');
+}
+
+/* إرسال رسالة إلى الباك-إند */
+async function sendAI(){
+  const text = aiInput.value.trim();
+  if(!text) return;
+  aiInput.value = '';
+  appendMsg('user', text);
+
+  // جهّز الرسائل
+  const system = buildSystemPrompt(aiState.child);
+  const history = [
+    { role:'system', content: system },
+    ...aiState.history,
+    { role:'user', content: text }
+  ];
+
+  // احفظ محليًا
+  aiState.history = history;
+
+  // مؤشّر انتظار
+  const waitEl = document.createElement('div');
+  waitEl.className = 'msg assistant';
+  waitEl.textContent = '… جارٍ التفكير';
+  aiMessages.appendChild(waitEl);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+
+  try{
+    // 🚩 استدعي باك-إندك الآمن (Proxy) — يُفترض أن يوجّه إلى OpenAI أو أي مزود
+    const res = await fetch(AI_ENDPOINT, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ model: AI_MODEL, messages: history })
+    });
+    if(!res.ok) throw new Error('فشل الاتصال بالمساعد');
+    const data = await res.json();
+
+    // توقّع { reply: "..." } من الباك-إند
+    const reply = data.reply || 'تعذّر الحصول على رد حالياً.';
+    waitEl.remove();
+    appendMsg('assistant', reply);
+
+    // ضمّ الرد للتاريخ
+    aiState.history.push({ role:'assistant', content: reply });
+
+  }catch(err){
+    waitEl.remove();
+    appendMsg('assistant', 'حدث خطأ أثناء الاتصال بالمساعد. حاول مجددًا.');
+    console.error(err);
+  }
+}
+
+/* روابط واجهة المساعد */
+aiFab?.addEventListener('click', openAIGeneric);
+aiClose?.addEventListener('click', closeAIWidget);
+aiMin?.addEventListener('click', minimizeAI);
+aiSend?.addEventListener('click', sendAI);
+aiInput?.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter' && !e.shiftKey){
+    e.preventDefault();
+    sendAI();
+  }
+});
+quickBtns.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    aiInput.value = btn.dataset.q || '';
+    aiInput.focus();
+  });
+});
