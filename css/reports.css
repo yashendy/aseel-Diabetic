@@ -7,12 +7,13 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 .container{max-width:1120px;margin:16px auto;padding:0 12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
 
-.child-info{display:grid;gap:10px}
-.head h1{margin:0 0 4px}
+.hidden{display:none !important}
+.small{font-size:12px}
 .ic{opacity:.6}
 .muted{color:var(--muted);margin:0}
-.small{font-size:12px}
-.hidden{display:none !important}
+
+.child-info{display:grid;gap:10px}
+.head h1{margin:0 0 4px}
 
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chip{background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;padding:4px 8px;border-radius:999px;font-size:12px}
@@ -24,6 +25,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
 .btn.back{margin-inline-end:auto}
 
+/* جدول الشاشة */
 .table h2{margin:6px 0 10px}
 .table-wrap{max-width:100%;overflow:auto;border-radius:10px;border:1px solid var(--line)}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -35,52 +37,64 @@ td.reading{white-space:nowrap}
 .arrow.up{color:var(--warn)}   /* ↑ */
 .arrow.down{color:var(--blue)}  /* ↓ */
 
-/* تلوين الصف حسب الحالة */
 tr.state-high{border-inline-start:6px solid var(--warn);background:rgba(239,68,68,.05)}
 tr.state-low{ border-inline-start:6px solid var(--blue);background:rgba(37,99,235,.05)}
 tr.state-normal{border-inline-start:6px solid var(--ok);background:rgba(16,185,129,.05)}
 
 .muted.center{text-align:center}
 .notes{white-space:pre-wrap}
-.small-note{font-size:12px;color:var(--muted)}
 
-/* جدول التقرير الفارغ */
-.blank-week h2{margin:6px 0 10px}
-table.blank{width:100%;border-collapse:collapse;font-size:13px}
-table.blank th, table.blank td{border:1px solid var(--line);padding:10px;height:42px}
-table.blank thead th{background:#fafafa}
-table.blank td{color:#111}
-
-/* كثافة أعلى عند صُغر المساحة */
 body.dense table{font-size:13px}
 body.very-dense table{font-size:12px}
 #densityHint{margin-top:8px}
 
-/* طباعة */
+/* جداول الطباعة (الفارغ + الممتلئ) */
+.blank-week h2, .print-filled h2{margin:6px 0 10px}
+table.blank, .filled-grid{width:100%;border-collapse:collapse;font-size:13px}
+table.blank th, table.blank td,
+.filled-grid th, .filled-grid td{border:1px solid var(--line);padding:8px;vertical-align:top}
+
+table.blank thead th,
+.filled-grid thead th{background:#fafafa}
+
+.filled-cell{
+  min-height:46px; line-height:1.25; color:#111;
+  display:flex; flex-direction:column; gap:4px;
+}
+.filled-cell .reading{
+  font-weight:700;
+}
+.filled-cell .dose, .filled-cell .note{
+  font-size:12px; color:#374151;
+}
+.filled-cell .arrow.up{color:var(--warn)}
+.filled-cell .arrow.down{color:var(--blue)}
+
+/* تحكم عمود الملاحظات في العرض والطباعة */
+body.notes-hidden .col-notes,
+body.notes-hidden td.col-notes{display:none}
+
+/* الطباعة */
 @media print{
   .back,.controls,.actions,.range,.btn{display:none !important}
   .container{max-width:none;margin:0;padding:0}
   .card{box-shadow:none;border:none;margin:0 0 8mm}
 
-  /* تكبير الجدول في الطباعة مع تصغير محسوب */
+  /* تصغير تلقائي متدرّج */
   table{font-size:12px}
   body.dense table{font-size:11px}
   body.very-dense table{font-size:10px}
 
+  /* وضع الطباعة الفارغ */
+  body.print-blank #tableSection{display:none !important}
+  body.print-blank #printFilledSection{display:none !important}
+  body.print-blank #blankWeekSection{display:block !important}
+
+  /* وضع الطباعة الممتلئ */
+  body.print-filled #tableSection{display:none !important}
+  body.print-filled #blankWeekSection{display:none !important}
+  body.print-filled #printFilledSection{display:block !important}
+
   /* إخفاء السناك في الطباعة فقط */
-  tr.slot-snack{display:none !important}
-
-  /* إخفاء الملاحظات عند تفعيل زر الإخفاء */
-  body.notes-hidden .col-notes,
-  body.notes-hidden td.col-notes { display:none !important; }
-
-  thead th{position:static}
+  .col-snack, .slot-snack, th.col-snack{display:none !important}
 }
-
-/* عند إخفاء الملاحظات في العرض أيضًا */
-body.notes-hidden .col-notes,
-body.notes-hidden td.col-notes{display:none}
-
-/* صف فارغ للكتابة اليدوية يظهر فقط عند وضع الطباعة الفارغ */
-body.print-blank #tableSection{display:none !important}
-body.print-blank #blankWeekSection{display:block !important}
