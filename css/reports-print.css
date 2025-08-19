@@ -1,40 +1,66 @@
+/* صفحة A4 للطباعة */
 :root{
-  --bg:#f7f8fb; --card:#fff; --ink:#111827; --muted:#6b7280;
-  --line:#e5e7eb; --brand:#4f46e5;
+  --bg:#f7fbff; --card:#fff; --ink:#1f2937; --muted:#6b7280;
+  --border:#e5e7eb; --ok:#16a34a; --low:#2563eb; --high:#ef4444;
+  --brand:#4f46e5;
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,Arial,sans-serif}
-.container{max-width:1120px;margin:16px auto;padding:0 12px}
 
-.no-print{display:flex;gap:12px;align-items:center}
-.toolbar{background:var(--card);border:1px solid var(--line);padding:10px;border-radius:10px;margin-bottom:12px;flex-wrap:wrap}
-.toolbar .range{display:flex;gap:8px;align-items:center;margin-inline-start:auto}
-.controls{display:flex;gap:8px;align-items:center}
-.toggle{display:flex;gap:6px;align-items:center;color:var(--muted)}
-.btn{border:1px solid var(--line);padding:8px 12px;border-radius:8px;background:#fff;cursor:pointer}
-.btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
-.btn.print{background:#10b981;color:#fff;border-color:#10b981}
+.a4{width:210mm; min-height:297mm; margin:0 auto; padding:12mm}
+.page{display:block}
+.break-before{page-break-before:always}
 
-.child-card{background:var(--card);border:1px solid var(--line);padding:10px;border-radius:10px;margin-bottom:12px}
-.child-card .row{display:flex;gap:16px;flex-wrap:wrap;margin:4px 0}
-.child-card strong{color:var(--muted);margin-inline-end:6px}
+.header{display:grid;grid-template-columns:1fr 2fr 1fr;gap:10px;align-items:center;margin-bottom:10px}
+.header h1{margin:0 0 6px}
+.muted{color:var(--muted);margin:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.chip{background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; padding:4px 8px; border-radius:999px; font-size:12px}
+.btn{border:1px solid var(--border); background:#fff; border-radius:8px; padding:6px 10px; cursor:pointer; color:inherit}
+.btn.primary{background:var(--brand); color:#fff; border-color:var(--brand)}
+.back{justify-self:start}
+.right{display:flex; gap:8px; justify-self:end; align-items:center; flex-wrap:wrap}
+.ctl{display:flex;align-items:center;gap:6px}
+.ctl select{border:1px solid var(--border); border-radius:8px; padding:6px 8px; background:#fff}
 
-.print-area{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
-.sheet{width:100%;border-collapse:collapse}
-.sheet th, .sheet td{border:1px solid #000;padding:8px;vertical-align:top}
-.sheet thead th{background:#fafafa;text-align:center}
-.sheet .cell{min-height:70px}
-.sheet .val{font-weight:bold}
-.sheet .sub{font-size:12px;color:#555;margin-top:6px;display:flex;flex-direction:column;gap:2px}
-.sheet.hide-notes .sub .note{display:none}
+.card{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:10px; margin-bottom:10px}
+.range{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px}
+.range input[type="date"]{border:1px solid var(--border); border-radius:8px; padding:6px 8px}
+.legend{display:flex; gap:8px; align-items:center}
+.lg{font-size:12px; border-radius:999px; padding:2px 8px; border:1px solid var(--border)}
+.lg-low{color:var(--low)}
+.lg-ok{color:var(--ok)}
+.lg-high{color:var(--high)}
+.sm{font-size:12px}
 
-.foot-note{margin:12px 2px;color:#6b7280;font-size:12px}
+.table table{width:100%; border-collapse:collapse}
+.table th,.table td{border:1px solid var(--border); padding:8px; vertical-align:top; font-size:13px}
+.table thead th{background:#f3f4f6}
+.details{line-height:1.45}
+.value{font-weight:700}
+.value.low{color:var(--low)}
+.value.ok{color:var(--ok)}
+.value.high{color:var(--high)}
+.sub{color:var(--muted); font-size:12px}
+.sub.hidden{display:none}
+
+.loader{
+  position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+  background:#111827; color:#fff; padding:8px 12px; border-radius:8px; opacity:.92; z-index:999
+}
+
+/* صفحة الرسوم */
+h2{margin:6px 0 10px}
+.charts{display:grid;grid-template-columns:1fr;gap:10px}
+.chart h3{margin:0 0 6px; font-size:14px; color:#334155}
+.list{margin:0; padding-inline-start:18px}
+.list li{margin:6px 0}
 
 /* طباعة */
 @media print{
-  .no-print, .print-only ~ * { display:none !important; }
-  .print-only{display:block}
-  body{background:#fff}
-  .container{max-width:none;margin:0;padding:0}
-  .child-card, .print-area{border:none}
+  @page{ size:A4; margin:10mm }
+  .back, .btn, .ctl select, #applyRange{ display:none !important }
+  body{ background:white }
+  .a4{ width:auto; padding:0 }
+  .card{ break-inside:avoid }
 }
