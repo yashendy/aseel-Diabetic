@@ -1,3 +1,6 @@
+/* == أساسي – أنماط عامة للصفحة والمكونات == */
+
+/* رسومات نمطية للمقادير المنزلية */
 .absorption-hint {
   margin-top: 5px;
   font-size: 0.9em;
@@ -5,6 +8,7 @@
   font-weight: bold;
 }
 
+/* Badge لتمييز الأصناف بطيئة الامتصاص */
 .badge.danger {
   background-color: #f87171;
   color: white;
@@ -13,4 +17,158 @@
   font-size: 0.9em;
   margin: 6px 0;
   display: inline-block;
+}
+
+/* بطاقة الصنف */
+.card {
+  background-color: #fefefe;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* رأس البطاقة: الصورة والعنوان */
+.card .head {
+  display: flex;
+  align-items: center;
+}
+
+.card .head .thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-right: 10px;
+}
+
+.card .head .title {
+  font-size: 1.1em;
+  font-weight: bold;
+}
+
+.card .head .meta {
+  font-size: 0.9em;
+  color: #555;
+}
+
+/* الشرائح - chips */
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.chip {
+  background: #e0e0e0;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 0.8em;
+}
+
+/* قسم الحساب السريع */
+.quick {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quick .input {
+  width: auto;
+  flex: 1;
+}
+
+/* أزرار الإجراء (تعديل – حذف – إرسال) */
+.actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.actions .btn {
+  padding: 6px 10px;
+  font-size: 0.9em;
+}
+
+/* تنسيق الوحدة المنزلية داخل الشبكة (tag-like) */
+.badge.units,
+.badge.tags {
+  background-color: #cbd5e1;
+  color: #1f2937;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8em;
+}
+
+/* القائمة (كتلة شبكة) */
+.grid {
+  display: grid;
+  gap: 12px;
+}
+
+/* كونتينر النموذج (drawer) */
+.drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: -100%;
+  width: 320px;
+  background: white;
+  box-shadow: -2px 0 6px rgba(0,0,0,0.1);
+  transition: right 0.3s ease;
+}
+
+.drawer.open {
+  right: 0;
+}
+
+/* تنسيق عناصر form */
+.form .row {
+  margin-bottom: 10px;
+}
+
+.form .row.two {
+  display: flex;
+  gap: 10px;
+}
+
+.form .row.three {
+  display: flex;
+  gap: 10px;
+}
+
+.form .input,
+.form select,
+.form textarea {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+/* زر الحفظ والإلغاء في النموذج */
+.form__actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Snackbar (تنبيه صغير مع تراجع) */
+.snackbar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #323232;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
