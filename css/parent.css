@@ -18,7 +18,7 @@ label{font-size:12px;color:var(--muted);margin-bottom:6px}
 input{padding:10px;border:1px solid #ccc;border-radius:10px;background:#fff;font-size:14px;min-width:220px}
 .add-btn{background:var(--primary);color:#fff;text-decoration:none;border-radius:10px;padding:10px 12px}
 
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:16px}
 
 /* ===== بطاقة الطفل ===== */
 .kid{
@@ -55,10 +55,13 @@ input{padding:10px;border:1px solid #ccc;border-radius:10px;background:#fff;font
 .stat b{font-size:15px}
 
 .next{font-size:12px;color:#444}
+.kid-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.kid-actions .btn{border:1px solid var(--border);background:#fff;border-radius:10px;padding:6px 10px;cursor:pointer}
 
+/* Empty */
 .empty{padding:20px;text-align:center;color:#666}
 
-/* === عناصر مساعدة === */
+/* Helpers */
 .hidden{ display:none; }
 
 .loader{
@@ -67,3 +70,41 @@ input{padding:10px;border:1px solid #ccc;border-radius:10px;background:#fff;font
   display:flex; align-items:center; justify-content:center;
   font-weight:700; z-index:1000; color:#333;
 }
+
+/* ===== المساعد الذكي ===== */
+.ai-fab{
+  position:fixed; bottom:18px; right:18px;
+  width:56px; height:56px; border-radius:50%;
+  border:none; background:var(--accent); color:#fff; font-size:22px;
+  box-shadow:0 8px 20px rgba(0,0,0,.2); cursor:pointer; z-index:1100;
+}
+.ai-fab:hover{ transform: translateY(-1px); }
+
+.ai-widget{
+  position:fixed; bottom:86px; right:18px; width:380px; height:560px;
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  box-shadow:0 14px 40px rgba(0,0,0,.18); display:flex; flex-direction:column; z-index:1100;
+}
+.ai-header{
+  display:flex; align-items:center; justify-content:space-between; padding:10px 12px;
+  border-bottom:1px solid var(--border); background:#f8fbff; border-top-left-radius:14px; border-top-right-radius:14px;
+}
+.ai-title strong{display:block}
+.ai-title small{color:var(--muted);font-size:12px}
+.icon-btn{background:transparent;border:none;font-size:16px;cursor:pointer}
+
+.ai-messages{
+  padding:10px; gap:8px; display:flex; flex-direction:column; overflow:auto; height:100%;
+}
+.msg{max-width:92%; padding:8px 10px; border-radius:12px; font-size:14px; line-height:1.5}
+.msg.user{ align-self:flex-start; background:#e9f5ff; border:1px solid #d6ecff; }
+.msg.assistant{ align-self:flex-end; background:#f5fff4; border:1px solid #dff3de; }
+.msg.sys{ align-self:center; color:#666; font-size:12px; background:#fafafa; border:1px dashed #ddd }
+
+.ai-input{ border-top:1px solid var(--border); padding:8px; }
+.ai-quick{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
+.ai-quick .chip{ background:#eef6ff; border:1px solid #dbeaff; cursor:pointer; }
+.ai-row{ display:flex; gap:6px; align-items:flex-end; }
+.ai-row textarea{ flex:1; resize:none; border:1px solid #ccd; border-radius:10px; padding:8px; background:#fff; }
+.btn.primary{ background:var(--primary); color:#fff; border:none; border-radius:10px; padding:8px 12px; cursor:pointer; }
+.btn.primary:hover{ filter:brightness(.96); }
