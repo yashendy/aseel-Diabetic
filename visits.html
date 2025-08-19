@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>الزيارات الطبية</title>
-  <link rel="stylesheet" href="css/visits.css">
+  <link rel="stylesheet" href="css/visits.css?v=5">
   <link rel="icon" href="data:,">
 </head>
 <body>
@@ -24,14 +24,44 @@
       </div>
     </header>
 
-    <!-- شريط الأزرار -->
+    <!-- شريط الأزرار / الفلاتر -->
     <section class="actions card">
-      <button id="newVisitBtn">➕ إضافة زيارة</button>
+      <div class="filters">
+        <select id="filterType" title="نوع الزيارة">
+          <option value="">كل الأنواع</option>
+          <option>متابعة دورية</option>
+          <option>طارئة</option>
+          <option>فحص معملي</option>
+          <option>استشارة أونلاين</option>
+        </select>
+
+        <select id="filterApplied" title="حالة التطبيق">
+          <option value="">كل الحالات</option>
+          <option value="false">بانتظار التطبيق</option>
+          <option value="true">تم التطبيق</option>
+        </select>
+
+        <label class="range">
+          من
+          <input type="date" id="fromDate">
+          إلى
+          <input type="date" id="toDate">
+        </label>
+
+        <input type="search" id="searchBox" placeholder="بحث: الطبيب / السبب …" />
+
+        <button id="newVisitBtn">➕ إضافة زيارة</button>
+        <button id="exportCSV">⬇️ تصدير CSV</button>
+        <button id="printList">🖨️ طباعة</button>
+      </div>
     </section>
 
     <!-- ذكاء مساعد -->
     <section class="ai card">
-      <h3>💡 اقتراحات ذكية</h3>
+      <div class="ai-head">
+        <h3>💡 اقتراحات ذكية (آخر 7 أيام)</h3>
+        <button id="copyAgenda" class="ghost">📋 نسخ الأجندة</button>
+      </div>
       <ul id="aiList">
         <li>سيتم تحليل آخر 7 أيام من القياسات واقتراح نقاط للطبيب…</li>
       </ul>
@@ -41,6 +71,11 @@
     <section class="card">
       <div class="table-head">
         <h3>سجل الزيارات</h3>
+        <div class="legend">
+          <span class="tag upcoming">موعد قادم</span>
+          <span class="tag due">بحاجة لمتابعة</span>
+          <span class="tag labdone">فحص مكتمل</span>
+        </div>
       </div>
       <div id="visitsList" class="list"></div>
     </section>
@@ -135,6 +170,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/visits.js"></script>
+  <script type="module" src="js/visits.js?v=5"></script>
 </body>
 </html>
