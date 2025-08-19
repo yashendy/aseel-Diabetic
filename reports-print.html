@@ -1,67 +1,94 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تقرير مطبوع</title>
-  <link rel="stylesheet" href="css/reports-print.css" />
+  <title>التقارير</title>
+  <link rel="stylesheet" href="css/reports.css?v=2" />
   <link rel="icon" href="data:,">
 </head>
 <body>
   <div class="container">
-    <header class="toolbar no-print">
-      <button class="btn" onclick="history.back()">⬅ رجوع</button>
-
-      <div class="range">
-        <label>من</label>
-        <input type="date" id="fromDate">
-        <label>إلى</label>
-        <input type="date" id="toDate">
-        <button id="btnLoad" class="btn primary">تحميل التقرير</button>
+    <header class="card child-info">
+      <button class="btn back" onclick="history.back()">⬅ رجوع</button>
+      <div class="head">
+        <h1>التقارير — <span id="childName">طفل</span> <span class="ic">🧾</span></h1>
+        <p class="muted" id="childMeta">—</p>
+        <div class="chips">
+          <span class="chip" id="chipRange">النطاق: —</span>
+          <span class="chip" id="chipCR">CR: —</span>
+          <span class="chip" id="chipCF">CF: —</span>
+        </div>
       </div>
 
       <div class="controls">
-        <label class="toggle">
-          <input type="checkbox" id="chkNotes" checked>
-          <span>إظهار الملاحظات في الطباعة</span>
-        </label>
+        <div class="range">
+          <label>من</label>
+          <input type="date" id="fromDate">
+          <label>إلى</label>
+          <input type="date" id="toDate">
+        </div>
 
-        <!-- 🆕 اختيار نوع القياس للطباعة -->
-        <label class="toggle">
-          <span>الوحدة:</span>
-          <select id="outUnit" class="btn" style="padding:6px 10px">
-            <option value="mmol">mmol/L</option>
-            <option value="mgdl">mg/dL</option>
-          </select>
-        </label>
-
-        <button id="btnBlank" class="btn">ورقة فارغة لأسبوع</button>
-        <button id="btnPrint" class="btn print">🖨️ طباعة</button>
+        <div class="actions">
+          <button id="toggleNotes" class="btn">👁️‍🗨️ إخفاء الملاحظات</button>
+          <button id="blankWeek" class="btn">📄 تقرير فارغ لأسبوع</button>
+          <a id="openAnalytics" class="btn primary">تحليل القياسات</a>
+          <button id="printBtn" class="btn">🖨️ طباعة / PDF</button>
+        </div>
       </div>
     </header>
 
-    <section class="child-card">
-      <div class="row">
-        <div><strong>الطفل:</strong> <span id="childName">—</span></div>
-        <div><strong>العمر:</strong> <span id="childAge">—</span></div>
-        <div><strong>الجنس:</strong> <span id="childGender">—</span></div>
+    <section class="card table" id="tableSection">
+      <h2>قياسات الفترة</h2>
+      <div class="table-wrap">
+        <table id="reportTable">
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>الوقت</th>
+              <th>القراءة</th>
+              <th>الحالة</th>
+              <th>التصحيح</th>
+              <th class="col-notes">ملاحظات</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="6" class="muted">—</td></tr>
+          </tbody>
+        </table>
       </div>
-      <div class="row">
-        <div><strong>النطاق الطبيعي:</strong> <span id="chipRange">—</span></div>
-        <div><strong>CF:</strong> <span id="chipCF">—</span></div>
-        <div><strong>CR:</strong> <span id="chipCR">—</span></div>
-        <div><strong>الوحدة المختارة:</strong> <span id="unit">mmol/L</span></div>
-        <div class="no-print"><strong>تاريخ التوليد:</strong> <span id="generatedAt">—</span></div>
-      </div>
+      <div id="densityHint" class="muted small hidden">تم تصغير الخط تلقائيًا لملاءمة الصفحة في الطباعة.</div>
     </section>
 
-    <section id="printArea" class="print-area show-notes"></section>
-
-    <footer class="foot-note print-only">
-      تنبيه: هذه المعلومات مساعدة وليست بديلاً عن استشارة الطبيب المختص.
-    </footer>
+    <!-- قالب التقرير الفارغ للأسبوع (يظهر فقط عند الطباعة بوضع "blank") -->
+    <section class="card blank-week hidden" id="blankWeekSection" aria-hidden="true">
+      <h2>تقرير أسبوعي فارغ — للكتابة اليدوية</h2>
+      <p class="muted">الوحدة: mmol/L — بدون عمود السناك</p>
+      <div class="table-wrap">
+        <table class="blank">
+          <thead>
+            <tr>
+              <th>اليوم</th>
+              <th>الاستيقاظ</th>
+              <th>ق.الفطار</th>
+              <th>ب.الفطار</th>
+              <th>ق.الغداء</th>
+              <th>ب.الغداء</th>
+              <th>ق.العشاء</th>
+              <th>ب.العشاء</th>
+              <th>ق.النوم</th>
+              <th>أثناء النوم</th>
+            </tr>
+          </thead>
+          <tbody id="blankBody">
+            <!-- يُملأ بـ7 صفوف ديناميكيًا من JS -->
+          </tbody>
+        </table>
+      </div>
+      <div class="muted small">تنبيه: هذه الصفحة معدّة للطباعة والكتابة اليدوية — السناك غير مشمول.</div>
+    </section>
   </div>
 
-  <script type="module" src="js/reports-print.js"></script>
+  <script type="module" src="js/reports.js?v=2"></script>
 </body>
 </html>
