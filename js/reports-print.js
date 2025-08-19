@@ -227,9 +227,15 @@ function renderTable(rows){
   }).join('');
 }
 
-function escapeHtml(s){ return (s||'').toString()
-  .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
-  .replaceAll('"','&quot;').replaceAll("'","&#039;'); }
+function escapeHtml(s){
+  return (s || '').toString()
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#039;");
+}
+
 
 /* ===== Charts (Canvas بسيط بدون مكتبات) ===== */
 function renderCharts(rows){
