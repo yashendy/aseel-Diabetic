@@ -62,8 +62,16 @@ h1{font-size:22px;margin:0}
 .badge.units{background:#ecfeff;color:#155e75}
 .badge.tags{background:#fff7ed;color:#92400e}
 
+/* Snackbar */
+.snackbar{
+  position:fixed; inset-inline:0; bottom:16px; margin:auto; width:max-content; max-width:95%;
+  background:#111827; color:#fff; padding:10px 12px; border-radius:10px;
+  display:flex; align-items:center; gap:10px; box-shadow:0 6px 22px rgba(0,0,0,.25); z-index:9999;
+}
+.snackbar .btn{color:#fff; border-color:#475569}
+
 @media print{
-  .no-print,.topbar,.filters,.drawer{display:none !important}
+  .no-print,.topbar,.filters,.drawer,.snackbar{display:none !important}
   body{background:#fff}
   .grid{grid-template-columns:1fr 1fr}
 }
