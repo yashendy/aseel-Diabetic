@@ -1,4 +1,4 @@
-// js/reports-print.js — FULL
+// js/reports-print.js — PRINT VIEW (details | slot | date + QR + PDF)
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
@@ -11,7 +11,6 @@ const childId   = qs.get('child') || localStorage.getItem('lastChildId');
 const paramFrom = qs.get('from')  || '';
 const paramTo   = qs.get('to')    || '';
 const paramUnit = (qs.get('unit') || 'mmol').toLowerCase();   // 'mmol'|'mgdl'
-const mode      = (qs.get('mode') || '').toLowerCase();       // 'blank' => ورقة فارغة
 
 const childNameEl = document.getElementById('childName');
 const childMetaEl = document.getElementById('childMeta');
@@ -62,7 +61,6 @@ function stateOf(mmol, min, max){
   if(mmol > max) return 'high';
   return 'ok';
 }
-function stateLabel(s){ return {low:'هبوط',ok:'طبيعي',high:'ارتفاع'}[s] || '—'; }
 
 /* ========== State ========== */
 let USER=null, CHILD=null;
@@ -105,7 +103,6 @@ async function loadChild(){
   chipCREl.textContent = `CR: ${CR ?? '—'} g/U`;
   chipCFEl.textContent = `CF: ${CF ?? '—'} mmol/L/U`;
 }
-
 function calcAge(bd){
   if(!bd) return '—';
   const b = new Date(bd), t=new Date();
@@ -117,7 +114,6 @@ function calcAge(bd){
 
 /* ========== Controls ========== */
 function initControls(){
-  // تاريخ افتراضي
   const today = todayStr();
   fromEl.value = paramFrom || addDays(today,-7);
   toEl.value   = paramTo   || today;
@@ -129,7 +125,7 @@ function initControls(){
   btnPrint.addEventListener('click', ()=> window.print());
 }
 
-/* ========== Load Data & Render ========== */
+/* ========== Load & Render ========== */
 async function loadAndRender(){
   const from = fromEl.value;
   const to   = toEl.value;
@@ -138,7 +134,6 @@ async function loadAndRender(){
   showLoader(true);
   try{
     const base = collection(db, `parents/${USER.uid}/children/${childId}/measurements`);
-    // شرط التاريخ في Firestore (لو محفوظ كنص yyyy-mm-dd يسمح بالمقارنة النصية)
     const qy = query(base, where('date','>=',from), where('date','<=',to), orderBy('date','asc'));
     const snap = await getDocs(qy);
 
@@ -147,8 +142,6 @@ async function loadAndRender(){
       const r = d.data();
       const date = r.date;
       const slot = r.slot || r.input?.slot || '';
-
-      // اقرأ بالـ mmol
       const mmol = (r.value_mmol!=null) ? Number(r.value_mmol)
                  : (r.unit==='mmol/L' ? Number(r.value)
                  :  (r.value_mgdl!=null ? Number(r.value_mgdl)/18 : null));
@@ -161,7 +154,6 @@ async function loadAndRender(){
       rows.push({date, slot, mmol, mgdl, corr, notes});
     });
 
-    // ترتيب الأوقات داخل اليوم
     const order = new Map(
       ['wake','pre_bf','post_bf','pre_ln','post_ln','pre_dn','post_dn','snack','pre_sleep','during_sleep','pre_ex','post_ex']
       .map((k,i)=>[k,i])
@@ -171,7 +163,7 @@ async function loadAndRender(){
     rowsCache = rows;
     renderTable(rows);
 
-    renderQR(); // بعد اكتمال بيانات الهيدر والفترة
+    renderQR();
   }catch(e){
     console.error(e);
     tbody.innerHTML = `<tr><td colspan="3" class="muted">خطأ في تحميل البيانات.</td></tr>`;
@@ -180,7 +172,7 @@ async function loadAndRender(){
   }
 }
 
-/* ========== Render Table ========== */
+/* ========== Render Table (تفاصيل | وقت | تاريخ) ========== */
 function renderTable(rows){
   if(!rows.length){ tbody.innerHTML = `<tr><td colspan="3" class="muted">لا يوجد قياسات للفترة المحددة.</td></tr>`; return; }
 
@@ -188,32 +180,32 @@ function renderTable(rows){
   const showNotes = (notesMode.value!=='hide');
 
   tbody.innerHTML = rows.map(r=>{
-    const state = stateOf(r.mmol, normalMin, normalMax);
-    const arrow = state==='low'?'↓' : state==='high'?'↑' : '↔';
+    const st = stateOf(r.mmol, normalMin, normalMax);
+    const arrow = st==='low'?'↓' : st==='high'?'↑' : '↔';
     const valText = unit==='mgdl' ? `${Math.round(r.mgdl)} mg/dL` : `${r.mmol.toFixed(1)} mmol/L`;
-    const valCls = `val ${state}`;
-    const trCls  = `state-${state} ${r.slot==='snack'?'is-snack':''}`;
+    const valCls = `val ${st}`;
+    const trCls  = `state-${st} ${r.slot==='snack'?'is-snack':''}`;
 
-    const corrLine = (r.corr!=null && r.corr!=='') ? `جرعة تصحيح: ${r.corr} U` : 'جرعة تصحيحية: —';
+    const corrLine = (r.corr!=null && r.corr!=='') ? `جرعة تصحيح: ${r.corr} U` : '— جرعة تصحيحية: —';
     const notesHtml = showNotes
-      ? `<span class="line notesLine">${r.notes && String(r.notes).trim()? 'ملاحظات: '+escapeHtml(r.notes) : 'ملاحظات: —'}</span>`
+      ? `<span class="line notesLine">${r.notes && String(r.notes).trim()? '— '+escapeHtml(r.notes) : '—'}</span>`
       : `<span class="line notesLine hidden">—</span>`;
 
     return `
       <tr class="${trCls}">
-        <td>${r.date}</td>
-        <td>${slotLabel(r.slot)}</td>
         <td class="details">
-          <span class="line"><span class="arrow">${arrow}</span> <span class="${valCls}">${valText}</span></span>
+          <span class="line"><span class="val ${valCls}">${valText}</span> <span class="arrow">${arrow}</span></span>
           <span class="line">${corrLine}</span>
           ${notesHtml}
         </td>
+        <td>${slotLabel(r.slot)}</td>
+        <td>${r.date}</td>
       </tr>
     `;
   }).join('');
 }
 
-/* ========== QR ========== */
+/* ========== QR with dual fallback ========== */
 function renderQR(){
   const img = document.getElementById('qrImg');
   if(!img) return;
@@ -236,7 +228,9 @@ function renderQR(){
     deepLink.toString()
   ].join('\n');
 
-  // Google Chart API (خفيف وسريع)
-  const url = 'https://chart.googleapis.com/chart?cht=qr&chs=150x150&chl=' + encodeURIComponent(payload);
-  img.src = url;
+  const url1 = 'https://chart.googleapis.com/chart?cht=qr&chs=150x150&chl=' + encodeURIComponent(payload);
+  const url2 = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(payload);
+
+  img.onerror = ()=> { img.onerror = null; img.src = url2; };
+  img.src = url1;
 }
