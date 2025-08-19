@@ -59,7 +59,7 @@
     <section id="grid" class="grid">جارِ التحميل…</section>
   </div>
 
-  <!-- النافذة الجانبية (نموذج الصنف) -->
+  <!-- النموذج الجانبي لإضافة/تعديل الصنف -->
   <aside id="drawer" class="drawer">
     <div class="drawer__content">
       <header class="drawer__header">
@@ -69,7 +69,6 @@
 
       <form id="itemForm" class="form" novalidate>
         <input type="hidden" id="itemId" />
-
         <div class="row">
           <label>اسم الصنف<span class="req">*</span></label>
           <input id="name" class="input" required />
@@ -117,6 +116,7 @@
             </div>
             <div class="hint">السعرات ≈ 4×كارب + 4×بروتين + 9×دهون</div>
           </div>
+          <div id="absorptionHint" class="absorption-hint"></div>
         </fieldset>
 
         <fieldset class="group">
@@ -166,7 +166,6 @@
     </div>
   </aside>
 
-  <!-- Snackbar (تنبيه + تراجع) -->
   <div id="snack" class="snackbar" hidden>
     <span id="snackText">تم</span>
     <button id="snackUndo" class="btn ghost">تراجع</button>
