@@ -15,7 +15,7 @@
       <div class="left">
         <button class="btn back" onclick="history.back()">⬅ رجوع</button>
         <div class="qr">
-          <img id="qrImg" alt="QR" width="96" height="96">
+          <img id="qrImg" alt="QR" width="88" height="88">
           <div class="qr-caption">تفاصيل التقرير</div>
         </div>
       </div>
@@ -64,23 +64,20 @@
           <span class="lg low">هبوط</span>
           <span class="lg ok">طبيعي</span>
           <span class="lg high">ارتفاع</span>
-          <span class="chip small">*(تم إخفاء “سناك” في الطباعة فقط)</span>
+          <span class="chip small">* “سناك” مخفي في الطباعة</span>
+          <label class="ctl small" title="تقرير فارغ للكتابة اليدوية">
+            <input type="checkbox" id="blankMode"> تقرير فاضي (أسبوع)
+          </label>
         </div>
       </div>
     </section>
 
-    <!-- Table -->
+    <!-- Pivot table -->
     <section class="card">
-      <table class="report">
-        <thead>
-          <tr>
-            <th style="width:58%">تفاصيل</th>
-            <th style="width:22%">وقت القياس</th>
-            <th style="width:20%">التاريخ</th>
-          </tr>
-        </thead>
+      <table class="pivot" id="pivot">
+        <thead id="thead"></thead>
         <tbody id="tbody">
-          <tr><td colspan="3" class="muted">جارِ التحميل…</td></tr>
+          <tr><td class="muted" style="text-align:center;padding:12px" colspan="10">جارِ التحميل…</td></tr>
         </tbody>
       </table>
     </section>
