@@ -229,12 +229,13 @@ function renderTable(rows){
 
 function escapeHtml(s){
   return (s || '').toString()
-    .replaceall('&','&amp;')
+    .replaceAll('&','&amp;')
     .replaceAll('<','&lt;')
     .replaceAll('>','&gt;')
     .replaceAll('"','&quot;')
     .replaceAll("'","&#039;");
 }
+
 
 
 /* ===== Charts (Canvas بسيط بدون مكتبات) ===== */
