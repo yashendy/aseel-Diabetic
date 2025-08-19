@@ -35,7 +35,7 @@ const brandEl    = $$('#brand');
 const categoryEl = $$('#category');
 
 const carb100El  = $$('#carb100');
-const prot100El  = $$('#prot100');
+the prot100El  = $$('#prot100');
 const fat100El   = $$('#fat100');
 const kcal100El  = $$('#kcal100');
 
