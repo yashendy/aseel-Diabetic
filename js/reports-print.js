@@ -229,7 +229,7 @@ function renderTable(rows){
 
 function escapeHtml(s){
   return (s || '').toString()
-    .replaceAll('&','&amp;')
+    .replaceall('&','&amp;')
     .replaceAll('<','&lt;')
     .replaceAll('>','&gt;')
     .replaceAll('"','&quot;')
