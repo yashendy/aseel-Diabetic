@@ -1,5 +1,5 @@
 // js/food-items.js
-import { auth, db, storage } from './firebase-config.js';
+import { auth, db } from './firebase-config.js';
 import {
   collection, addDoc, getDocs, query, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
