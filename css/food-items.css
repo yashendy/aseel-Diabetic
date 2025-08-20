@@ -12,6 +12,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Taho
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;box-shadow:0 6px 16px rgba(0,0,0,.06)}
 .meta{color:var(--muted);font-size:12px}
 .req{color:#e11d48;margin:0 4px}
+.visually-hidden{position:absolute!important;left:-10000px!important;width:1px;height:1px;overflow:hidden}
 
 /* الترويسة */
 .topbar{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
@@ -57,12 +58,16 @@ h1{margin:0;font-size:20px}
 .star.active{background:#fde68a;border-color:#fcd34d}
 
 /* Drawer */
-.drawer { z-index: 10000; }
-.drawer{position:fixed;top:0;bottom:0;right:-100%;width:380px;background:#fff;border-left:1px solid var(--border);box-shadow:-6px 0 20px rgba(0,0,0,.08);transition:right .25s ease;z-index:50}
-.drawer.open{right:0}
+.drawer{
+  position:fixed; top:0; bottom:0; right:-100%;
+  width:380px; background:#fff; border-left:1px solid var(--border);
+  box-shadow:-6px 0 20px rgba(0,0,0,.08);
+  transition:right .25s ease, opacity .2s ease;
+  opacity:0; visibility:hidden; z-index:10000; /* رفعناه فوق أي طبقة */
+}
+.drawer.open{ right:0; opacity:1; visibility:visible; }
 .drawer__content{height:100%;display:flex;flex-direction:column}
 .drawer__header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:12px}
-
 .form{padding:12px;overflow:auto}
 .form .row{margin-bottom:10px}
 .form .row.two{display:flex;gap:10px}
@@ -83,9 +88,10 @@ h1{margin:0;font-size:20px}
 
 /* Modal (QR) */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;z-index:80}
-.modal.hidden { display: none !important; }
+.modal.hidden{display:none !important}
 .modal__card{background:#fff;border:1px solid var(--border);border-radius:14px;min-width:300px;max-width:90vw}
 .modal__head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border)}
 .modal__body{padding:16px;display:flex;flex-direction:column;gap:8px;align-items:center}
 .modal__body img{width:220px;height:220px;object-fit:contain;border:1px solid var(--border);border-radius:10px}
+
 .fav-toggle{display:flex;align-items:center;gap:8px}
