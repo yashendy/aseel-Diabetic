@@ -1,4 +1,4 @@
-// js/meals.js (compat)
+// js/meals.js (compat, v3) — مسارات foodItems على مستوى الـ parent + زر رجوع + كل التحسينات
 
 // ===== عناصر عامة =====
 const params = new URLSearchParams(location.search);
@@ -16,6 +16,7 @@ const postReadingEl = document.getElementById('postReading');
 const itemsBodyEl   = document.getElementById('itemsBody');
 const addItemBtn    = document.getElementById('addItemBtn');
 const repeatLastBtn = document.getElementById('repeatLastBtn');
+const backBtn       = document.getElementById('backBtn');
 
 const tGramsEl = document.getElementById('tGrams');
 const tCarbsEl = document.getElementById('tCarbs');
@@ -49,18 +50,18 @@ const pickerEmpty     = document.getElementById('pickerEmpty');
 // ===== حالة =====
 let currentUser, childData;
 let editingMealId = null;
-let currentItems = []; // [{ itemId,name,brand,unit,qty,measure,grams,per100:{carbs,cal,prot,fat}, calc:{...}, measures:[{name,grams}] }]
+let currentItems = [];
 let cachedFood = [];
 let cachedMeasurements = [];
-let lastUsedMap = {};  // (اختياري) اقتراح كميات بناءً على آخر استخدام لكل itemId
+let lastUsedMap = {};
 
-// ===== ثوابت/أدوات =====
+// ===== أدوات =====
 const pad = n => String(n).padStart(2,'0');
 function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function setMaxToday(inp){ inp && inp.setAttribute('max', todayStr()); }
 setMaxToday(mealDateEl);
 
-function esc(s){ 
+function esc(s){
   return (s||'').toString()
     .replaceAll('&','&amp;')
     .replaceAll('<','&lt;')
@@ -68,11 +69,10 @@ function esc(s){
     .replaceAll('"','&quot;')
     .replaceAll("'",'&#039;');
 }
-
 function toNumber(x){ const n = Number(String(x ?? '').replace(',','.')); return isNaN(n)?0:n; }
 function round1(x){ return Math.round((x||0)*10)/10; }
 function roundHalf(x){ return Math.round((x||0)*2)/2; }
-function showToast(msg, type='info'){ toastEl.innerHTML = `<div class="msg">${esc(msg)}</div>`; toastEl.classList.remove('hidden'); setTimeout(()=>toastEl.classList.add('hidden'), 2000); }
+function showToast(msg){ toastEl.innerHTML = `<div class="msg">${esc(msg)}</div>`; toastEl.classList.remove('hidden'); setTimeout(()=>toastEl.classList.add('hidden'), 2000); }
 
 const SLOT_MAP = {
   'فطور': { pre:'ق.الفطار', post:'ب.الفطار', window:[{s:'04:30',e:'09:30'}] },
@@ -94,7 +94,6 @@ function inWindow(dateObj, win){
   return cur>=start && cur<=end;
 }
 
-// Draft key per child+date+type
 function draftKey(){ return `draft:meal:${currentUser?.uid||'u'}:${childId||'c'}:${mealDateEl.value||todayStr()}:${mealTypeEl.value||'فطور'}`; }
 function saveDraft(){
   const payload = {
@@ -115,20 +114,20 @@ function loadDraft(){
     appliedDoseEl.value = d.applied || '';
     mealNotesEl.value   = d.notes || '';
     renderItems(); recalcAll();
-    // defer selects until measurements loaded
     setTimeout(()=>{ preReadingEl.value=d.preId||''; postReadingEl.value=d.postId||''; },100);
     showToast('تم استرجاع المسوّدة');
   }catch(_){}
 }
 function clearDraft(){ localStorage.removeItem(draftKey()); }
 
-// ===== تهيئة أولية =====
+// ===== تهيئة =====
 (function init(){
   mealDateEl.value = todayStr();
   tableDateEl.textContent = mealDateEl.value;
+  backBtn.addEventListener('click', ()=> history.back());
 })();
 
-// ===== تحميل الجلسة والطفل =====
+// ===== جلسة + طفل =====
 firebase.auth().onAuthStateChanged(async (user)=>{
   if(!user){ location.href = 'index.html'; return; }
   if(!childId){ alert('لا يوجد معرف طفل في الرابط'); return; }
@@ -142,9 +141,7 @@ firebase.auth().onAuthStateChanged(async (user)=>{
   childNameEl.textContent = childData.name || 'طفل';
   childMetaEl.textContent = `${childData.gender || '-'} • العمر: ${calcAge(childData.birthDate)} سنة`;
 
-  // آخر كميات مستخدمة
   lastUsedMap = loadLastUsed();
-
   await loadMeasurements();
   await loadMealsOfDay();
   loadDraft();
@@ -160,7 +157,7 @@ function calcAge(bd){
   return a;
 }
 
-// ===== قياسات اليوم =====
+// ===== القياسات =====
 async function loadMeasurements(){
   const d = mealDateEl.value;
   const ref = firebase.firestore().collection(`parents/${currentUser.uid}/children/${childId}/measurements`);
@@ -185,7 +182,6 @@ function populateReadingSelects(){
   const postf = SLOT_MAP[type]?.post || null;
   const win   = SLOT_MAP[type]?.window?.[0];
 
-  // ترتيب القياسات
   const sorted = [...cachedMeasurements].sort((a,b)=>{
     const ia = SLOTS_ORDER.indexOf(a.slot);
     const ib = SLOTS_ORDER.indexOf(b.slot);
@@ -197,26 +193,17 @@ function populateReadingSelects(){
 
   const build = (prefSlot)=>{
     const opts = ['<option value="">— لا يوجد —</option>'];
-    // المفضلة داخل نافذة الوقت أولاً
     sorted.forEach(m=>{
       const label = `${m.slot} • ${m.value_mmol.toFixed(1)} mmol/L${m.when?` • ${pad(m.when.getHours())}:${pad(m.when.getMinutes())}`:''}`;
-      if (prefSlot && m.slot===prefSlot && inWindow(m.when, win)){
-        opts.push(`<option value="${m.id}">${esc(label)} (مفضّل)</option>`);
-      }
+      if (prefSlot && m.slot===prefSlot && inWindow(m.when, win)){ opts.push(`<option value="${m.id}">${esc(label)} (مفضّل)</option>`); }
     });
-    // باقي القياسات داخل النافذة
     sorted.forEach(m=>{
       const label = `${m.slot} • ${m.value_mmol.toFixed(1)} mmol/L${m.when?` • ${pad(m.when.getHours())}:${pad(m.when.getMinutes())}`:''}`;
-      if (inWindow(m.when, win) && (!prefSlot || m.slot!==prefSlot)){
-        opts.push(`<option value="${m.id}">${esc(label)}</option>`);
-      }
+      if (inWindow(m.when, win) && (!prefSlot || m.slot!==prefSlot)){ opts.push(`<option value="${m.id}">${esc(label)}</option>`); }
     });
-    // خارج النافذة
     sorted.forEach(m=>{
       const label = `${m.slot} • ${m.value_mmol.toFixed(1)} mmol/L${m.when?` • ${pad(m.when.getHours())}:${pad(m.when.getMinutes())}`:''}`;
-      if (!inWindow(m.when, win)){
-        opts.push(`<option value="${m.id}">${esc(label)} (خارج النطاق)</option>`);
-      }
+      if (!inWindow(m.when, win)){ opts.push(`<option value="${m.id}">${esc(label)} (خارج النطاق)</option>`); }
     });
     return opts.join('');
   };
@@ -229,11 +216,8 @@ function populateReadingSelects(){
 async function loadMealsOfDay(){
   const d = mealDateEl.value;
   const ref = firebase.firestore().collection(`parents/${currentUser.uid}/children/${childId}/meals`);
-  let qy = ref.where('date','==', d).orderBy('createdAt','asc');
-  const snap = await qy.get();
-
-  const rows = [];
-  snap.forEach(s=> rows.push({ id:s.id, ...s.data() }));
+  const snap = await ref.where('date','==', d).orderBy('createdAt','asc').get();
+  const rows = []; snap.forEach(s=> rows.push({ id:s.id, ...s.data() }));
   renderMealsList(rows);
 }
 
@@ -249,7 +233,6 @@ function renderMealsList(rows){
     const card = document.createElement('div');
     card.className = 'meal-card';
     const doseWarn = r.suggestedMealDose && r.appliedMealDose!=null && Math.abs(r.appliedMealDose - r.suggestedMealDose) >= 1.5;
-
     card.innerHTML = `
       <div class="type">${esc(r.type||'-')}</div>
       <div>كارب: <strong>${round1(r.totals?.carbs_g||0)}</strong> g • سعرات: ${Math.round(r.totals?.cal_kcal||0)} kcal</div>
@@ -266,9 +249,8 @@ function renderMealsList(rows){
   });
 }
 
-// ===== إدارة العناصر =====
+// ===== عناصر الوجبة =====
 function addItemRow(itemDoc){
-  // اقتراح كمية من آخر استخدام
   const lastQty = lastUsedMap[itemDoc.id]?.qty ?? 100;
   const row = {
     itemId: itemDoc.id,
@@ -288,9 +270,7 @@ function addItemRow(itemDoc){
     measures: Array.isArray(itemDoc.measures) ? itemDoc.measures.filter(m=>m.name && m.grams>0) : []
   };
   currentItems.push(row);
-  renderItems();
-  recalcAll();
-  saveDraft();
+  renderItems(); recalcAll(); saveDraft();
 }
 
 function renderItems(){
@@ -379,7 +359,7 @@ function recomputeRow(r, div){
   }
 }
 
-// ===== تجميع الإجماليات + الجرعة المقترحة + نطاق =====
+// ===== الجرعة + النطاق =====
 function recalcAll(){
   const totals = currentItems.reduce((a,r)=>{
     a.grams += r.grams||0;
@@ -396,18 +376,16 @@ function recalcAll(){
   tProtEl.textContent  = round1(totals.prot);
   tFatEl.textContent   = round1(totals.fat);
 
-  // جرعة كارب
-  const carbRatio = Number(childData?.carbRatio || 12); // جرام/وحدة
+  const carbRatio = Number(childData?.carbRatio || 12);
   const mealDose = totals.carbs>0 ? (totals.carbs / carbRatio) : 0;
 
-  // تصحيح بناءً على قياس قبل
   let corr = 0, explain = `carbs ${round1(totals.carbs)} / CR ${carbRatio}`;
   const preId = preReadingEl.value;
   if (preId){
     const pre = cachedMeasurements.find(m=> m.id===preId);
     const mmol = pre?.value_mmol || 0;
     const nMax = Number(childData?.normalRange?.max ?? 7.8);
-    const CF   = Number(childData?.correctionFactor || 0); // mmol/L لكل 1U
+    const CF   = Number(childData?.correctionFactor || 0);
     if (CF>0 && mmol>nMax){
       corr = (mmol - nMax)/CF;
       explain += ` + ((pre ${mmol.toFixed(1)} - ${nMax}) / CF ${CF})`;
@@ -417,15 +395,12 @@ function recalcAll(){
   suggestedDoseEl.textContent = Number.isFinite(totalDose) ? (totalDose.toFixed(1).replace('.0','')) : '0';
   doseExplainEl.textContent = `= ${mealDose.toFixed(2)} + ${corr.toFixed(2)} ⇒ تقريب ${totalDose.toFixed(1)}`;
 
-  // نطاق الجرعة (ذكاء خفيف: ±10% كارب + ±0.5U كقيمة أمان بسيطة)
   const range = computeDoseRange(totals.carbs, carbRatio, preId);
   doseRangeEl.textContent = range ? `${range.min}–${range.max} U` : '—';
 }
 
 function computeDoseRange(carbs, CR, preId){
   if(!(carbs>0) || !(CR>0)) return null;
-  const base = carbs/CR;
-
   let corr=0;
   if (preId){
     const pre = cachedMeasurements.find(m=> m.id===preId);
@@ -434,8 +409,6 @@ function computeDoseRange(carbs, CR, preId){
     const CF = Number(childData?.correctionFactor || 0);
     if(CF>0 && mmol>target) corr = (mmol-target)/CF;
   }
-
-  // ±10% كارب + تحجيم لخطوة النصف
   const low  = roundHalf( (carbs*0.9)/CR + corr );
   const high = roundHalf( (carbs*1.1)/CR + corr );
   const min = Math.max(0, Math.min(low, high));
@@ -445,7 +418,7 @@ function computeDoseRange(carbs, CR, preId){
 
 // ===== حفظ/تعديل/حذف =====
 saveMealBtn.addEventListener('click', saveMeal);
-resetMealBtn.addEventListener('click', resetForm);
+resetMealBtn.addEventListener('click', ()=> resetForm(false));
 printDayBtn.addEventListener('click', ()=> window.print());
 filterTypeEl.addEventListener('change', async ()=>{ await loadMealsOfDay(); });
 
@@ -455,7 +428,6 @@ mealDateEl.addEventListener('change', async ()=>{
   tableDateEl.textContent = mealDateEl.value;
   await loadMeasurements();
   await loadMealsOfDay();
-  // reset draft scope for new date
   loadDraft();
   recalcAll();
 });
@@ -467,10 +439,8 @@ async function saveMeal(){
   const date = mealDateEl.value;
   if (!date || date>todayStr()){ alert('اختر تاريخًا صحيحًا (ليس مستقبلًا)'); return; }
 
-  // تأمين واجهة
   setBusy(saveMealBtn, true);
 
-  // العناصر
   const items = currentItems.map(r=> ({
     itemId: r.itemId, name: r.name, brand: r.brand || null,
     unit: r.unit, qty: Number(r.qty)||0, measure: r.measure || null,
@@ -489,8 +459,7 @@ async function saveMeal(){
     fat_g: round1(items.reduce((a,i)=>a+i.fat_g,0))
   };
 
-  // حفظ آخر استخدام للكميات (local)
-  items.forEach(i=> { lastUsedMap[i.itemId]={ qty:i.qty }; });
+  items.forEach(i=> { lastUsedMap[i.itemId]={ qty:i.qty, ts:Date.now() }; });
   saveLastUsed(lastUsedMap);
 
   const payload = {
@@ -515,11 +484,10 @@ async function saveMeal(){
       payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await ref.add(payload);
       showToast('✅ تم حفظ الوجبة');
-      // تخزين نسخة أخيرة لهذا النوع للتكرار السريع
       saveLastMealTemplate(mealTypeEl.value, payload);
     }
     await loadMealsOfDay();
-    resetForm(false); // لا تعيد النوع/التاريخ
+    resetForm(false);
     clearDraft();
   }catch(e){
     console.error(e);
@@ -529,11 +497,11 @@ async function saveMeal(){
   }
 }
 
-function resetForm(clearType=true){
+function resetForm(restoreType=true){
   editingMealId = null;
   currentItems = [];
   itemsBodyEl.innerHTML = '';
-  if (clearType){ mealTypeEl.value = 'فطور'; }
+  if (restoreType){ mealTypeEl.value = 'فطور'; }
   appliedDoseEl.value = '';
   mealNotesEl.value = '';
   preReadingEl.value = '';
@@ -567,10 +535,10 @@ function editMeal(r){
     measures: []
   }));
 
-  // جلب المقاييس لكل عنصر من مكتبة الأصناف (اختياري)
+  // جلب المقاييس البيتية من مكتبة الأصناف (عند مستوى الـ parent)
   Promise.all(currentItems.map(async (row)=>{
     if (!row.itemId) return;
-    const d = await firebase.firestore().doc(`parents/${currentUser.uid}/children/${childId}/foodItems/${row.itemId}`).get();
+    const d = await firebase.firestore().doc(`parents/${currentUser.uid}/foodItems/${row.itemId}`).get();
     if (d.exists){
       const item = d.data();
       row.measures = Array.isArray(item.measures)? item.measures.filter(m=>m.name && m.grams>0) : [];
@@ -583,7 +551,6 @@ function editMeal(r){
 
 async function deleteMeal(r){
   if(!confirm('هل تريد حذف هذه الوجبة؟')) return;
-  setBusyButton(r.id, true);
   try{
     await firebase.firestore().doc(`parents/${currentUser.uid}/children/${childId}/meals/${r.id}`).delete();
     showToast('🗑️ تم حذف الوجبة');
@@ -591,8 +558,6 @@ async function deleteMeal(r){
   }catch(e){
     console.error(e);
     alert('تعذر حذف الوجبة');
-  }finally{
-    setBusyButton(r.id, false);
   }
 }
 
@@ -600,11 +565,8 @@ function setBusy(btn, busy){
   btn.disabled = !!busy;
   btn.textContent = busy ? 'جارٍ الحفظ…' : 'حفظ الوجبة';
 }
-function setBusyButton(mealId, busy){
-  // يعطل زر الحذف في البطاقة المقابلة (اختياري تبسيط)
-}
 
-// ===== مودال الأصناف =====
+// ===== مودال الأصناف (على مستوى parent) =====
 addItemBtn.addEventListener('click', openPicker);
 closePicker.addEventListener('click', ()=> pickerModal.classList.add('hidden'));
 pickSearchEl.addEventListener('input', debounce(applyPickerFilters, 250));
@@ -618,7 +580,7 @@ function openPicker(){
 }
 
 async function loadFoodItems(){
-  const ref = firebase.firestore().collection(`parents/${currentUser.uid}/children/${childId}/foodItems`);
+  const ref = firebase.firestore().collection(`parents/${currentUser.uid}/foodItems`);
   const snap = await ref.orderBy('nameLower','asc').get();
   cachedFood = [];
   snap.forEach(d=> cachedFood.push({ id:d.id, ...d.data() }));
@@ -629,27 +591,24 @@ async function applyPickerFilters(){
   const q = (pickSearchEl.value||'').trim();
   const cat = pickCategoryEl.value;
 
-  // هاشتاج
   if (q.startsWith('#') && q.length>1){
     const tag = q.slice(1).trim().toLowerCase();
-    const ref = firebase.firestore().collection(`parents/${currentUser.uid}/children/${childId}/foodItems`);
+    const ref = firebase.firestore().collection(`parents/${currentUser.uid}/foodItems`);
     const snap= await ref.where('tags','array-contains', tag).get();
     const arr = []; snap.forEach(d=> arr.push({ id:d.id, ...d.data() }));
     renderPicker(cat==='الكل'?arr:arr.filter(x=>x.category===cat));
     return;
   }
 
-  // بحث بالكلمات
   if (q.length>=2){
     const token = q.toLowerCase();
-    const ref = firebase.firestore().collection(`parents/${currentUser.uid}/children/${childId}/foodItems`);
+    const ref = firebase.firestore().collection(`parents/${currentUser.uid}/foodItems`);
     const snap= await ref.where('keywords','array-contains', token).get();
     const arr = []; snap.forEach(d=> arr.push({ id:d.id, ...d.data() }));
     renderPicker(cat==='الكل'?arr:arr.filter(x=>x.category===cat));
     return;
   }
 
-  // بدون بحث: اعرض الكاش + الأحدث استخدامًا في الأعلى (بناءً على lastUsedMap)
   const base = (cat==='الكل')? [...cachedFood] : cachedFood.filter(x=> x.category===cat);
   base.sort((a,b)=>{
     const la = lastUsedMap[a.id]?.ts || 0;
@@ -686,7 +645,6 @@ function renderPicker(items){
       </div>
     `;
     card.querySelector('.chooseBtn').addEventListener('click', ()=>{
-      // ختم آخر استخدام
       lastUsedMap[it.id] = { qty: lastUsedMap[it.id]?.qty ?? 100, ts: Date.now() };
       saveLastUsed(lastUsedMap);
       addItemRow(it);
@@ -708,14 +666,12 @@ function categoryIcon(cat){
     default: return '🍽️';
   }
 }
-
 function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 
-// ===== تكرار آخر وجبة من نفس النوع =====
+// ===== تكرار آخر وجبة =====
 function repeatLastMealTemplate(){
   const tpl = loadLastMealTemplate(mealTypeEl.value);
   if(!tpl){ showToast('لا توجد وجبة محفوظة لهذا النوع بعد'); return; }
-  // لا نغيّر التاريخ/القياسات، فقط العناصر والجرعات
   currentItems = (tpl.items||[]).map(i=>({
     itemId: i.itemId, name: i.name, brand: i.brand || null,
     unit: i.unit || 'grams', qty: Number(i.qty)||0, measure: i.measure || null,
@@ -732,7 +688,7 @@ function repeatLastMealTemplate(){
   renderItems(); recalcAll(); saveDraft();
 }
 
-// ===== Helpers: تخزين محلي للقوالب/آخر استخدام =====
+// ===== LocalStorage Helpers =====
 function saveLastMealTemplate(type, payload){
   try{
     const k = `tpl:lastMeal:${currentUser.uid}:${childId}:${type}`;
