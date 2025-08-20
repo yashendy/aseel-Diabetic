@@ -1,11 +1,9 @@
-// firebase-config.js
-
-// 🧠 استيراد الوظائف المطلوبة من Firebase (CDN version 12.1.0)
+// js/firebase-config.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-// 🔥 إعدادات مشروع Firebase بتاعك (انسختها من الصورة اللي بعتيها)
+// إعدادات مشروع Firebase بتاعك
 const firebaseConfig = {
   apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
   authDomain: "sugar-kids-tracker.firebaseapp.com",
@@ -16,12 +14,11 @@ const firebaseConfig = {
   measurementId: "G-L7YGX3PHLB"
 };
 
-// ✅ تهيئة Firebase
+// تهيئة Firebase
 const app = initializeApp(firebaseConfig);
 
-// 🧩 الخدمات الأساسية اللي هنستخدمها
+// تصدير الخدمات
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// 📤 تصدير المتغيرات علشان نستخدمهم في باقي الملفات
 export { auth, db };
