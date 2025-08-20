@@ -1,16 +1,16 @@
-<!-- meals.html (نسخة compat) -->
+<!-- meals.html (compat, مع زر رجوع + كل التحسينات) -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>الوجبات</title>
-  <link rel="stylesheet" href="css/meals.css" />
+  <link rel="stylesheet" href="css/meals.css?v=2" />
   <link rel="icon" href="data:,">
 </head>
 <body>
   <div class="container">
-    <!-- رسائل عامة -->
+    <!-- Toast -->
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
     <!-- أعلى الصفحة -->
@@ -44,9 +44,14 @@
           </div>
         </div>
       </div>
+
+      <!-- زر الرجوع -->
+      <div class="top-actions">
+        <button id="backBtn" class="secondary">⬅️ رجوع</button>
+      </div>
     </header>
 
-    <!-- مصنّع الوجبة -->
+    <!-- مُنشئ الوجبة -->
     <section class="builder card">
       <div class="builder-head">
         <h3>مكوّنات الوجبة</h3>
@@ -73,29 +78,14 @@
         <div id="itemsBody"></div>
       </div>
 
-      <!-- ملخص الوجبة (Sticky) -->
+      <!-- ملخص (Sticky) -->
       <div class="summary sticky">
         <div class="sum-grid">
-          <div class="sum-box">
-            <div class="label">إجمالي الجرامات</div>
-            <div class="value"><span id="tGrams">0</span> g</div>
-          </div>
-          <div class="sum-box">
-            <div class="label">إجمالي الكارب</div>
-            <div class="value"><span id="tCarbs">0</span> g</div>
-          </div>
-          <div class="sum-box">
-            <div class="label">السعرات</div>
-            <div class="value"><span id="tCal">0</span> kcal</div>
-          </div>
-          <div class="sum-box">
-            <div class="label">البروتين</div>
-            <div class="value"><span id="tProt">0</span> g</div>
-          </div>
-          <div class="sum-box">
-            <div class="label">الدهون</div>
-            <div class="value"><span id="tFat">0</span> g</div>
-          </div>
+          <div class="sum-box"><div class="label">إجمالي الجرامات</div><div class="value"><span id="tGrams">0</span> g</div></div>
+          <div class="sum-box"><div class="label">إجمالي الكارب</div><div class="value"><span id="tCarbs">0</span> g</div></div>
+          <div class="sum-box"><div class="label">السعرات</div><div class="value"><span id="tCal">0</span> kcal</div></div>
+          <div class="sum-box"><div class="label">البروتين</div><div class="value"><span id="tProt">0</span> g</div></div>
+          <div class="sum-box"><div class="label">الدهون</div><div class="value"><span id="tFat">0</span> g</div></div>
         </div>
 
         <div class="dose">
@@ -147,7 +137,7 @@
     </section>
   </div>
 
-  <!-- مودال اختيار الأصناف -->
+  <!-- مودال الأصناف -->
   <div id="pickerModal" class="modal hidden" aria-modal="true" role="dialog">
     <div class="modal-body" role="document">
       <div class="modal-header">
@@ -177,15 +167,15 @@
     </div>
   </div>
 
-  <!-- سكربتات Firebase v8 compat (ثبّتي نفس الإصدار في كل الصفحات) -->
+  <!-- Firebase v8 compat -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <!-- تهيئة compat: غيّري المسار هنا لملف التهيئة المتوافق (الذي يعرّف window.db / window.auth) -->
-  <script src="firebase-config.js"></script>
+  <!-- ملف التهيئة المتوافق (يعرّف window.firebase / window.auth / window.db) -->
+  <script src="js/firebase-config-compat.js?v=2"></script>
 
   <!-- سكربت الصفحة -->
-  <script src="js/meals.js"></script>
+  <script src="js/meals.js?v=3"></script>
 </body>
 </html>
