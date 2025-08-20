@@ -16,9 +16,15 @@
           <p class="muted tiny">سيتم حفظ الأصناف على: parents/{uid}/foodItems</p>
         </div>
         <div class="actions">
-          <a class="btn secondary" href="meals.html">🍽️ الوجبات</a>
-          <a class="btn secondary" href="index.html">🏠 الرئيسية</a>
-        </div>
+  <a id="goMeals" class="btn secondary">🍽️ الوجبات</a>
+  <a id="goHome" class="btn secondary">🏠 الرئيسية</a>
+</div>
+
+<!-- سكربتات الصفحة -->
+<script type="module" src="js/food-items.js?v=2"></script>
+
+
+
       </div>
     </header>
 
@@ -111,5 +117,13 @@
 
   <!-- Firebase (modular) -->
   <script type="module" src="js/food-items.js?v=2"></script>
+  <!-- سكربت تعديل الروابط -->
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const childId = params.get("child");
+
+  document.getElementById("goMeals").href = `meals.html?child=${childId}`;
+  document.getElementById("goHome").href = `parent.html?child=${childId}`;
+</script>
 </body>
 </html>
