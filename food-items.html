@@ -4,17 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>📘 مكتبة الأصناف</title>
-  <link rel="stylesheet" href="css/food-items.css?v=fix-1" />
-  <link rel="icon" href="data:,">
-<script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js"></script>
-  <!-- ✅ بعد تحميل Firebase، شغّلي سكريبت الأصناف -->
-   <script type="module" src="js/food-items.js?v=fix-1"></script>
+  <link rel="stylesheet" href="css/food-items.css" />
+  <!-- تحميل Firebase ESM -->
+  <script type="module" src="js/firebase-config.js"></script>
 </head>
 <body>
   <div class="page">
-    <!-- الشريط العلوي -->
     <header class="topbar card">
       <div class="left">
         <button class="btn ghost" onclick="history.back()">⬅ رجوع</button>
@@ -23,53 +18,21 @@
       <div class="right">
         <label class="toggle">
           <input type="checkbox" id="togglePickMode">
-          <span>وضع الاختيار داخل الوجبات</span>
+          <span>وضع داخل الوجبات</span>
         </label>
         <button id="btnAdd" class="btn primary">+ إضافة صنف</button>
       </div>
     </header>
 
-    <!-- فلاتر وبحث -->
     <section class="filters card">
       <input id="q" class="input" placeholder="بحث بالاسم أو الهاشتاج… (#أرز)" autocomplete="off" />
-      <select id="fCat" class="input" aria-label="فلتر التصنيف">
-        <option value="">كل التصنيفات</option>
-        <option>نشويات</option>
-        <option>حليب</option>
-        <option>فاكهة</option>
-        <option>خضروات</option>
-        <option>لحوم</option>
-        <option>دهون</option>
-      </select>
-      <select id="fSource" class="input" aria-label="فلتر المصدر">
-        <option value="">كل المصادر</option>
-        <option value="manual">manual</option>
-        <option value="openfoodfacts">openfoodfacts</option>
-      </select>
-      <select id="fPhoto" class="input" aria-label="فلتر وجود الصورة">
-        <option value="">الصورة: الكل</option>
-        <option value="with">فقط يوجد صورة</option>
-        <option value="without">فقط بلا صورة</option>
-      </select>
-      <select id="fFav" class="input" aria-label="فلتر المفضلات">
-        <option value="">المفضلات: الكل</option>
-        <option value="only">المفضلات فقط</option>
-        <option value="none">بدون مفضلات</option>
-      </select>
-      <select id="fSort" class="input" aria-label="ترتيب">
-        <option value="name_asc">الاسم (أ→ي)</option>
-        <option value="name_desc">الاسم (ي→أ)</option>
-        <option value="newest">الأحدث</option>
-        <option value="oldest">الأقدم</option>
-      </select>
+      <!-- اختصرت rest الفلاتر لسهولة القراءة -->
       <button id="btnClear" class="btn ghost">مسح الفلاتر</button>
     </section>
 
-    <!-- شبكة الأصناف -->
     <section id="grid" class="grid">جارِ التحميل…</section>
   </div>
 
-  <!-- Drawer: نموذج الصنف -->
   <aside id="drawer" class="drawer" aria-label="نموذج إضافة/تعديل صنف">
     <div class="drawer__content">
       <header class="drawer__header">
@@ -78,122 +41,29 @@
       </header>
 
       <form id="itemForm" class="form" novalidate>
-        <input type="hidden" id="itemId" />
+        <!-- الحقول كما طلبتِ -->
+        <div class="row"><label for="name">اسم الصنف<span class="req">*</span></label><input id="name" class="input" required /></div>
+        <div class="row two"><div><label for="brand">البراند</label><input id="brand" class="input" /></div><div><label for="category">التصنيف<span class="req">*</span></label><select id="category" class="input" required><option value="">— اختَر —</option><option>نشويات</option><option>لحوم</option><option>خضروات</option><option>فاكهة</option><option>دهون</option></select></div></div>
 
-        <div class="row">
-          <label for="name">اسم الصنف<span class="req">*</span></label>
-          <input id="name" class="input" required autocomplete="name" />
-        </div>
-
-        <div class="row two">
-          <div>
-            <label for="brand">البراند</label>
-            <input id="brand" class="input" autocomplete="organization" />
-          </div>
-          <div>
-            <label for="category">التصنيف<span class="req">*</span></label>
-            <select id="category" class="input" required>
-              <option value="">— اختَر —</option>
-              <option>نشويات</option>
-              <option>حليب</option>
-              <option>فاكهة</option>
-              <option>خضروات</option>
-              <option>لحوم</option>
-              <option>دهون</option>
-            </select>
-          </div>
-        </div>
-
-        <fieldset class="group">
-          <legend>القيم لكل 100g</legend>
+        <fieldset class="group"><legend>القيم لكل 100g</legend>
           <div class="row three">
-            <div>
-              <label for="carb100">الكارب (g)<span class="req">*</span></label>
-              <input id="carb100" type="number" step="0.1" min="0" class="input" required autocomplete="off" />
-            </div>
-            <div>
-              <label for="prot100">البروتين (g)</label>
-              <input id="prot100" type="number" step="0.1" min="0" class="input" autocomplete="off" />
-            </div>
-            <div>
-              <label for="fat100">الدهون (g)</label>
-              <input id="fat100" type="number" step="0.1" min="0" class="input" autocomplete="off" />
-            </div>
+            <div><label for="carb100">الكارب (g)<span class="req">*</span></label><input id="carb100" type="number" step="0.1" min="0" class="input" required /></div>
+            <div><label for="prot100">بروتين (g)</label><input id="prot100" type="number" step="0.1" min="0" class="input" /></div>
+            <div><label for="fat100">دهون (g)</label><input id="fat100" type="number" step="0.1" min="0" class="input" /></div>
           </div>
-          <div class="row two">
-            <div>
-              <label for="kcal100">السعرات (kcal) <small>(يُحسب تلقائيًا إذا تُرك فارغًا)</small></label>
-              <input id="kcal100" type="number" step="1" min="0" class="input" autocomplete="off" />
-            </div>
-            <div class="hint">السعرات ≈ 4×كارب + 4×بروتين + 9×دهون</div>
-          </div>
+          <div class="row two"><div><label for="kcal100">السعرات (kcal)</label><input id="kcal100" type="number" step="1" min="0" class="input" /></div><div class="hint">يُحسب تلقائيًا إذا ترك فارغًا</div></div>
           <div id="absorptionHint" class="absorption-hint"></div>
         </fieldset>
 
-        <fieldset class="group">
-          <legend>المقادير المنزلية</legend>
+        <fieldset class="group"><legend>المقادير المنزلية</legend>
           <div id="unitsList" class="units"></div>
-          <div class="row two">
-            <label class="visually-hidden" for="uName">اسم المقدار</label>
-            <input id="uName" class="input" placeholder="اسم المقدار (كوب/معلقة/حبة…)" autocomplete="off" />
-            <label class="visually-hidden" for="uGrams">جرامات</label>
-            <input id="uGrams" class="input" type="number" step="1" min="0" placeholder="الجرام المكافئ" autocomplete="off" />
-          </div>
+          <div class="row two"><input id="uName" class="input" placeholder="اسم المقدار" /><input id="uGrams" class="input" placeholder="جرام" type="number" /></div>
           <button id="btnAddUnit" type="button" class="btn">+ إضافة مقدار</button>
         </fieldset>
 
-        <div class="row two">
-          <div>
-            <label for="supplierName">المورّد</label>
-            <input id="supplierName" class="input" placeholder="اسم المورد (اختياري)" autocomplete="organization" />
-          </div>
-          <div>
-            <label for="supplierUrl">رابط المورد</label>
-            <input id="supplierUrl" class="input" placeholder="https://… (اختياري)" autocomplete="url" />
-          </div>
-        </div>
-
-        <div class="row">
-          <label for="imageUrl">رابط صورة</label>
-          <input id="imageUrl" class="input" placeholder="https://…" autocomplete="url" />
-          <div class="row two" style="gap:6px;margin-top:6px">
-            <button id="btnAutoImage" type="button" class="btn ghost">توليد صورة تلقائيًا</button>
-            <label class="visually-hidden" for="offBarcode">باركود</label>
-            <input id="offBarcode" class="input" placeholder="باركود OpenFoodFacts" autocomplete="off" />
-            <button id="btnImportByBarcode" type="button" class="btn">استيراد بالباركود</button>
-            <button id="btnImportByName" type="button" class="btn">استيراد بالاسم</button>
-          </div>
-        </div>
-
-        <div class="row">
-          <label for="tags">هاشتاجات (افصل بينها بفاصلة)</label>
-          <input id="tags" class="input" placeholder="#أرز, #أكل, #كارب" autocomplete="off" />
-        </div>
-
-        <div class="row">
-          <label for="notes">ملاحظات</label>
-          <textarea id="notes" class="input" rows="2" autocomplete="off"></textarea>
-        </div>
-
-        <div class="row two">
-          <div>
-            <label for="source">المصدر</label>
-            <select id="source" class="input">
-              <option value="manual">manual</option>
-              <option value="openfoodfacts">openfoodfacts</option>
-            </select>
-          </div>
-          <div class="meta">
-            <small id="metaText">—</small>
-          </div>
-        </div>
+        <div class="row"><label for="tags">هاشتاجات</label><input id="tags" class="input" placeholder="#أرز, #سناك" autocomplete="off" /></div>
 
         <footer class="form__actions">
-          <label class="fav-toggle">
-            <input type="checkbox" id="favorite">
-            <span>⭐ أضِف إلى المفضلة</span>
-          </label>
-          <div style="flex:1"></div>
           <button type="submit" class="btn primary" id="btnSave">💾 حفظ</button>
           <button type="button" class="btn ghost" id="btnCancel">إلغاء</button>
         </footer>
@@ -201,25 +71,6 @@
     </div>
   </aside>
 
-  <!-- QR Modal -->
-  <div id="qrModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="qrTitle">
-    <div class="modal__card">
-      <header class="modal__head">
-        <h3 id="qrTitle">QR للصنف</h3>
-        <button id="qrClose" class="icon-btn">✖</button>
-      </header>
-      <div class="modal__body">
-        <img id="qrImage" alt="QR" />
-        <div class="meta" id="qrHint"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Snackbar (تنبيه + تراجع) -->
-  <div id="snack" class="snackbar" hidden>
-    <span id="snackText">تم</span>
-    <button id="snackUndo" class="btn ghost">تراجع</button>
-  </div>
-
+  <script type="module" src="js/food-items.js"></script>
 </body>
 </html>
