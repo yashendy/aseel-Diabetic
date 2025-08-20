@@ -1,9 +1,6 @@
 // js/food-items.js
 import { auth, db } from './firebase-config.js';
-import {
-  collection, addDoc, getDocs, query, orderBy, serverTimestamp
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 const $ = id => document.getElementById(id);
@@ -24,70 +21,47 @@ function renderGrid(items) {
   const grid = $("grid");
   if (!items.length) {
     grid.innerHTML = `<div class="meta">لا توجد أصناف</div>`;
-  } else {
-    grid.innerHTML = items.map(it =>
-      `<div class="card">
-         <img src="${it.imageUrl||''}" alt="" class="thumb"/>
-         <div><strong>${it.name}</strong></div>
-         <div>كارب: ${it.carbs_100g}g • بروتين: ${it.protein_100g||0}g • دهون: ${it.fat_100g||0}g • سعرات: ${it.calories_100g}</div>
-       </div>`
-    ).join('');
+    return;
   }
+  grid.innerHTML = items.map(it =>
+    `<div class="card">
+       <img src="${it.imageUrl || ''}" alt="" class="thumb" />
+       <div><strong>${it.name}</strong></div>
+       <div>كارب: ${it.carbs_100g}g • سعرات: ${it.calories_100g}</div>
+     </div>`
+  ).join('');
 }
 
-// UI handlers
+// UI Bindings...
 $("btnAdd").onclick = () => { UNITS=[]; renderUnits(); $("itemForm").reset(); openDrawer(); };
 $("btnClose").onclick = closeDrawer;
 $("btnCancel").onclick = closeDrawer;
 $("btnAddUnit").onclick = () => {
-  const name = $("uName").value.trim(), g = parseFloat($("uGrams").value);
-  if (!name || !g) return alert('أكمل البيانات');
-  UNITS.push({ name, grams: g }); renderUnits();
-  $("uName").value = ''; $("uGrams").value = '';
+  const n = $("uName").value.trim(), g = +$("uGrams").value;
+  if (!n || !g) return alert('أكمل البيانات'); UNITS.push({ name:n, grams:g }); renderUnits(); $("uName").value=''; $("uGrams").value='';
 };
-function renderUnits(){
-  const html = UNITS.map((u,i) => `<span class="unit">${u.name} = ${u.grams}g <span class="x" data-i="${i}">✖</span></span>`).join('');
-  $("unitsList").innerHTML = html || '<div class="meta">لا توجد مقادير</div>';
-  $("unitsList").querySelectorAll(".x").forEach(el => el.onclick = () => { UNITS.splice(el.dataset.i,1); renderUnits(); });
+function renderUnits() {
+  $("unitsList").innerHTML = UNITS.map((u,i)=>`<span class="unit">${u.name} = ${u.grams}g <span class="x" data-i="${i}">✖</span></span>`).join('') ||
+    '<div class="meta">لا توجد مقادير</div>';
+  $("unitsList").querySelectorAll('.x').forEach(el=>el.onclick=()=>{UNITS.splice(el.dataset.i,1); renderUnits();});
 }
+
+$("btnAutoImage").onclick = () => {
+  const name = $("name").value.trim();
+  if (!name) return alert('اكتب اسم الصنف أولاً');
+  const hue = Array.from(name).reduce((a,c)=>a+c.charCodeAt(0),0) % 360;
+  const bg = `hsl(${hue} 80% 90%)`, fg = `hsl(${hue} 60% 40%)`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="100%" height="100%" fill="${bg}"/><text x="50%" y="56%" dominant-baseline="middle" text-anchor="middle" font-size="140" fill="${fg}">${name[0]||''}</text></svg>`;
+  $("imageUrl").value = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+};
 
 $("itemForm").onsubmit = async e => {
   e.preventDefault();
   const name = $("name").value.trim(), category = $("category").value;
-  let carbs = parseFloat($("carb100").value), prot = parseFloat($("prot100").value)||0, fat = parseFloat($("fat100").value)||0;
-  let kcal = parseInt($("kcal100").value);
+  const carbs = +$("carb100").value, kcal = +$("kcal100").value || Math.round(4*carbs);
   const tags = $("tags").value.split(',').map(t=>t.trim()).filter(Boolean).map(t=>t.startsWith('#')?t:'#'+t);
-  if (!kcal) kcal = Math.round(4*carbs + 4*prot + 9*fat);
-  if (carbs>=60) tags.push('#كارب_عالي');
-  const uniqueTags = [...new Set(tags)];
-  const payload = { name, category, carbs_100g: carbs, protein_100g: prot, fat_100g: fat, calories_100g: kcal, householdUnits: UNITS, tags: uniqueTags, createdAt: serverTimestamp() };
-
-  // Upload image if file selected
-  const file = $("imageFile").files[0];
-  if (file) {
-    const storageRef = ref(storage, `images/${USER.uid}/${Date.now()}_${file.name}`);
-    await uploadBytes(storageRef, file);
-    payload.imageUrl = await getDownloadURL(storageRef);
-  } else if ($("imageUrl").value) {
-    payload.imageUrl = $("imageUrl").value.trim();
-  }
-
-  // Barcode import handler
-  const code = $("offBarcode").value.trim();
-  if (code) {
-    try {
-      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`);
-      const j = await r.json();
-      if (j.product?.nutriments) {
-        payload.carbs_100g ||= j.product.nutriments.carbohydrates_100g || payload.carbs_100g;
-        payload.protein_100g ||= j.product.nutriments.proteins_100g || payload.protein_100g;
-        payload.fat_100g ||= j.product.nutriments.fat_100g || payload.fat_100g;
-        payload.imageUrl ||= j.product.image_url;
-        payload.name ||= j.product.product_name;
-      }
-    } catch {}
-  }
-
+  if (carbs >= 60) tags.push('#كارب_عالي');
+  const payload = { name, category, carbs_100g:carbs, calories_100g:kcal, householdUnits:UNITS, tags, imageUrl: $("imageUrl").value.trim()||null, createdAt: serverTimestamp() };
   await addDoc(collection(db, `parents/${USER.uid}/foodItems`), payload);
   closeDrawer();
   loadItems();
