@@ -60,7 +60,15 @@ function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getM
 function setMaxToday(inp){ inp && inp.setAttribute('max', todayStr()); }
 setMaxToday(mealDateEl);
 
-function esc(s){ return (s||'').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;'); }
+function esc(s){ 
+  return (s||'').toString()
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
+}
+
 function toNumber(x){ const n = Number(String(x ?? '').replace(',','.')); return isNaN(n)?0:n; }
 function round1(x){ return Math.round((x||0)*10)/10; }
 function roundHalf(x){ return Math.round((x||0)*2)/2; }
