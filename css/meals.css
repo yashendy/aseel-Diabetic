@@ -1,54 +1,74 @@
 /* css/meals.css */
 :root{
-  --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#333; --muted:#666;
+  --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#333; --muted:#555;
   --primary:#4CAF50; --accent:#2196F3; --danger:#E53935; --warn:#FB8C00;
+  --focus:#2962FF;
 }
 
 *{box-sizing:border-box}
-body{font-family:'Segoe UI',sans-serif;background:var(--bg);margin:0;color:var(--text)}
+html{scroll-behavior:smooth}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);margin:0;color:var(--text)}
 .container{max-width:1200px;margin:auto;padding:16px}
 
+/* Cards & Basics */
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
-.muted{color:#666}
+.muted{color:var(--muted)}
+.tiny{font-size:12px}
 
-.head-grid{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;min-width:380px}
+/* Toast */
+.toast{position:fixed;inset-block-start:16px;inset-inline:0;display:flex;justify-content:center;z-index:200}
+.toast .msg{background:#111;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.toast.hidden{display:none}
+
+/* Inputs */
 .field{display:flex;flex-direction:column}
 label{font-size:13px;color:var(--muted);margin-bottom:6px}
 input,select,button{padding:10px;border:1px solid #ccc;border-radius:8px;background:#fff;font-size:14px}
-button{background:var(--primary);color:#fff;border:none;cursor:pointer}
-button.secondary{background:#ddd;color:#222}
+input:focus-visible, select:focus-visible, button:focus-visible{outline:3px solid color-mix(in srgb, var(--focus) 35%, transparent);outline-offset:2px}
+button{background:var(--primary);color:#fff;border:none;cursor:pointer;transition:opacity .15s ease,transform .06s ease}
+button.secondary{background:#e5e5e5;color:#222}
 button:hover{opacity:.96}
+button:active{transform:scale(.99)}
+button[disabled]{opacity:.6;cursor:not-allowed}
 
+/* Header */
+.head-grid{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;min-width:380px}
+
+/* Builder */
 .builder-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .actions{display:flex;gap:8px}
 
-.items-table{border:1px solid var(--border);border-radius:12px;overflow:hidden}
-.row{display:grid;grid-template-columns:2fr 120px 110px 140px 110px 110px 110px 110px 110px 80px;gap:0;border-bottom:1px solid var(--border);align-items:center}
-.row>div{padding:8px;border-left:1px solid var(--border)}
-.row.header{background:#F0F6FF;font-weight:600}
+/* Items table */
+.items-table{border:1px solid var(--border);border-radius:12px;overflow:auto}
+.row{display:grid;grid-template-columns:2fr 120px 110px 140px 110px 110px 110px 110px 110px 80px;gap:0;border-bottom:1px solid var(--border);align-items:center;min-width:920px}
+.row>div{padding:8px;border-inline-start:1px solid var(--border)}
+.row.header{background:#F0F6FF;font-weight:600;position:sticky;top:0;z-index:1}
 .row .del{background:#ffdfe0;color:#b3122f}
 .row .name{display:flex;flex-direction:column}
 .row .sub{font-size:12px;color:#666}
 .row input[type="number"]{width:100%}
 
+/* Summary (sticky) */
 .summary{margin-top:12px;border-top:1px dashed var(--border);padding-top:12px}
+.summary.sticky{position:sticky;bottom:0;background:linear-gradient(180deg,rgba(255,255,255,.6),#fff 30%);backdrop-filter:saturate(1.2) blur(4px);border-radius:12px;padding-bottom:12px}
 .sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
 .sum-box{background:#f7fbff;border:1px solid var(--border);border-radius:10px;padding:10px}
 .sum-box .label{font-size:12px;color:#555}
-.sum-box .value{font-weight:700}
+.sum-box .value{font-weight:700; font-variant-numeric:tabular-nums}
 
 .dose{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.dose .dose-line{display:flex;align-items:center;gap:8px}
+.dose .dose-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .dose input{max-width:160px}
-.save-actions{margin-top:10px;display:flex;gap:10px}
+.save-actions{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
+.dose-badge{background:#E8F5E9;border:1px solid #C8E6C9;color:#2E7D32;border-radius:999px;padding:4px 8px;font-size:12px;display:inline-block}
+.dose-badge.danger{background:#FFEBEE;border-color:#FFCDD2;color:#C62828}
 
-.table-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+/* Meals list */
+.table-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap}
 .meals-list{display:flex;flex-direction:column;gap:10px}
-.meal-card{border:1px solid var(--border);border-radius:12px;padding:10px;display:grid;grid-template-columns:120px 1fr 1fr 140px 160px;gap:10px;align-items:center}
+.meal-card{border:1px solid var(--border);border-radius:12px;padding:10px;display:grid;grid-template-columns:120px 1fr 1fr 140px 160px;gap:10px;align-items:center;background:#fff}
 .meal-card .type{font-weight:700}
-.meal-card .dose-badge{background:#E8F5E9;border:1px solid #C8E6C9;color:#2E7D32;border-radius:999px;padding:4px 8px;font-size:12px;display:inline-block}
-.meal-card .danger{background:#FFEBEE;border-color:#FFCDD2;color:#C62828}
 .meal-card .actions{display:flex;gap:8px;justify-content:flex-end}
 
 .empty{padding:20px;text-align:center;color:#666}
@@ -57,7 +77,7 @@ button:hover{opacity:.96}
 /* Modal */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.25);display:flex;align-items:flex-start;justify-content:center;padding:30px;z-index:100}
 .modal.hidden{display:none}
-.modal-body{background:#fff;border-radius:12px;max-width:960px;width:100%;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.modal-body{background:#fff;border-radius:12px;max-width:960px;width:100%;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2);max-height:80vh;overflow:auto}
 .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .close{background:#eee;border:none;border-radius:8px;padding:6px 10px;cursor:pointer}
 
@@ -70,8 +90,20 @@ button:hover{opacity:.96}
 .pick-actions{display:flex;gap:6px;margin-top:6px}
 .badge{background:#f7fbff;border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:12px;color:#444}
 
+/* Print */
+@media print{
+  body{background:#fff}
+  .top .controls, .actions, .save-actions, .modal, #toast, .table-tools{display:none !important}
+  .summary{position:static;background:#fff}
+}
+
+/* Responsive */
 @media (max-width:1000px){
   .row{grid-template-columns:2fr 110px 100px 130px 100px 100px 100px 100px 100px 70px}
   .dose{grid-template-columns:1fr}
   .meal-card{grid-template-columns:100px 1fr 1fr 140px 140px}
+}
+@media (max-width:600px){
+  .controls{min-width:auto}
+  .sum-grid{grid-template-columns:repeat(2,1fr)}
 }
