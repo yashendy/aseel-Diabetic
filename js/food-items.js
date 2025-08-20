@@ -1,4 +1,4 @@
-// js/food-items.js — مكتبة الأصناف (مطوّرة)
+// js/food-items.js — مكتبة الأصناف (مطوّرة + باتش فتح الدروَر)
 import { auth, db } from './firebase-config.js';
 import {
   collection, addDoc, updateDoc, deleteDoc, getDocs,
@@ -36,7 +36,7 @@ const brandEl    = $$('#brand');
 const categoryEl = $$('#category');
 
 const carb100El  = $$('#carb100');
-const prot100El  = $$('#prot100'); // ✅ إصلاح
+const prot100El  = $$('#prot100'); // ✅
 const fat100El   = $$('#fat100');
 const kcal100El  = $$('#kcal100');
 
@@ -187,7 +187,7 @@ function renderGrid(){
     const highCarb   = (toNumber(it.carbs_100g) >= HIGH_CARB);
     const highFat    = (toNumber(it.fat_100g)   >= HIGH_FAT);
 
-    // إحصائيات الاستهلاك (اختيارية لو موجودة في usage)
+    // usage (اختياري)
     let usage = { timesUsed: 0, totalGrams: 0 };
     try{
       const udoc = await getDoc(doc(db, `parents/${USER.uid}/usage/foodItems/${it.id}`));
@@ -196,7 +196,7 @@ function renderGrid(){
         usage.timesUsed  = u.timesUsed  ?? 0;
         usage.totalGrams = u.totalGrams ?? 0;
       }
-    }catch{ /* تجاهل بهدوء */ }
+    }catch{}
 
     const card = document.createElement('div');
     card.className='card';
@@ -255,7 +255,6 @@ function renderGrid(){
       <div class="meta">${esc((it.tags||[]).join(', '))}</div>
     `;
 
-    // الحساب السريع
     const qG=card.querySelector('.qG'), qU=card.querySelector('.qU'), qOut=card.querySelector('.qOut');
     card.querySelector('.qCalc')?.addEventListener('click', ()=>{
       const grams=Number(qU.value||qG.value);
@@ -266,7 +265,6 @@ function renderGrid(){
       qOut.textContent=`كارب: ${carbs.toFixed(1)}g • سعرات: ${Math.round(kcal2)} kcal`;
     });
 
-    // استخدام داخل الوجبات
     if(pickMode && currentChild){
       card.querySelector('.qSend')?.addEventListener('click', ()=>{
         const grams=Number(qU.value||qG.value);
@@ -275,7 +273,6 @@ function renderGrid(){
       });
     }
 
-    // مفضلة
     card.querySelector('.qFav')?.addEventListener('click', async ()=>{
       const nowFav = !it.favorite;
       try{
@@ -285,12 +282,7 @@ function renderGrid(){
       }catch(e){ alert('تعذر تحديث المفضلة'); }
     });
 
-    // QR
-    card.querySelector('.qQR')?.addEventListener('click', ()=>{
-      openQR(it);
-    });
-
-    // إجراءات
+    card.querySelector('.qQR')?.addEventListener('click', ()=> openQR(it));
     card.querySelector('.qEdit')?.addEventListener('click', ()=> openEdit(it));
     card.querySelector('.qCopy')?.addEventListener('click', ()=> openCopy(it));
     card.querySelector('.qDel')?.addEventListener('click', async ()=>{
@@ -320,18 +312,43 @@ function autoImageFor(name='صنف'){
 
 function resetForm(){
   if(!form) return;
-  itemId.value=''; if(formTitle) formTitle.textContent='إضافة صنف';
-  nameEl.value=''; brandEl.value=''; categoryEl.value='';
-  carb100El.value=''; prot100El.value=''; fat100El.value=''; kcal100El.value='';
-  UNITS=[]; renderUnits();
-  imageUrlEl.value=''; tagsEl.value=''; notesEl.value='';
-  supplierNameEl.value=''; supplierUrlEl.value='';
-  favoriteEl.checked=false;
-  sourceEl.value='manual'; if(metaText) metaText.textContent='—';
-  checkAbsorptionDelay();
+  itemId && (itemId.value='');
+  formTitle && (formTitle.textContent='إضافة صنف');
+  nameEl && (nameEl.value='');
+  brandEl && (brandEl.value='');
+  categoryEl && (categoryEl.value='');
+  carb100El && (carb100El.value='');
+  prot100El && (prot100El.value='');
+  fat100El && (fat100El.value='');
+  kcal100El && (kcal100El.value='');
+  UNITS=[]; renderUnits?.();
+  imageUrlEl && (imageUrlEl.value='');
+  tagsEl && (tagsEl.value='');
+  notesEl && (notesEl.value='');
+  supplierNameEl && (supplierNameEl.value='');
+  supplierUrlEl && (supplierUrlEl.value='');
+  favoriteEl && (favoriteEl.checked=false);
+  sourceEl && (sourceEl.value='manual');
+  metaText && (metaText.textContent='—');
+  checkAbsorptionDelay?.();
 }
-function openDrawer(){ drawer?.classList.add('open'); }
-function closeDrawer(){ drawer?.classList.remove('open'); resetForm(); }
+
+/* باتش: فتح/إغلاق الدروَر مع Fallback inline */
+function openDrawer(){
+  if(!drawer) return;
+  drawer.classList.add('open');
+  drawer.style.right = '0';
+  drawer.style.visibility = 'visible';
+  drawer.style.opacity = '1';
+  drawer.style.transition = 'right .25s ease, opacity .2s ease';
+}
+function closeDrawer(){
+  if(!drawer) return;
+  drawer.classList.remove('open');
+  drawer.style.right = '-100%';
+  drawer.style.opacity = '0';
+  try { resetForm?.(); } catch(e){ console.error('resetForm failed', e); }
+}
 
 function renderUnits(){
   if(!unitsList) return;
@@ -356,13 +373,13 @@ function fillForm(it){
   sourceEl.value=it.source||'manual';
   const c=it.createdAt?.toDate?it.createdAt.toDate():null, u=it.updatedAt?.toDate?it.updatedAt.toDate():null;
   if(metaText) metaText.textContent=`أُنشئ: ${c?c.toLocaleString('ar-EG'):'—'} • آخر تحديث: ${u?u.toLocaleString('ar-EG'):'—'}`;
-  checkAbsorptionDelay();
+  checkAbsorptionDelay?.();
 }
 function openEdit(it){ fillForm(it); openDrawer(); }
 function openCopy(it){ const x={...it}; delete x.id; x.name=(x.name||'')+' - نسخة'; fillForm(x); openDrawer(); }
 
 /* --------- Bindings --------- */
-on(btnAdd,'click', ()=>{ resetForm(); openDrawer(); });
+on(btnAdd,'click', ()=>{ try{ resetForm?.(); }catch{} openDrawer(); });
 on(btnClose,'click', closeDrawer);
 on(btnCancel,'click', closeDrawer);
 
@@ -408,7 +425,6 @@ async function importOFF({ barcode, name }){
     }
     if(!data){ alert('لم يتم العثور على بيانات'); return; }
 
-    // تعيين حقول
     nameEl.value       = nameEl.value || (data.product_name_ar || data.product_name || nameEl.value);
     brandEl.value      = brandEl.value || (data.brands || '');
     imageUrlEl.value   = imageUrlEl.value || (data.image_url || data.image_front_url || '');
@@ -420,7 +436,7 @@ async function importOFF({ barcode, name }){
     fat100El.value  = n.fat_100g           ?? fat100El.value;
     kcal100El.value = n['energy-kcal_100g'] ?? n.energy_kcal ?? kcal100El.value;
 
-    checkAbsorptionDelay();
+    checkAbsorptionDelay?.();
     alert('تم الاستيراد من OpenFoodFacts');
   }catch(e){
     console.error(e); alert('فشل الاستيراد من OpenFoodFacts');
@@ -442,13 +458,7 @@ function checkAbsorptionDelay(){
 
 /* --------- QR --------- */
 function openQR(it){
-  const payload = {
-    type: 'foodItem',
-    id: it.id,
-    name: it.name,
-    grams: 100
-  };
-  // خدمة QR مجانية (بدون تبعية): ترميز نص JSON صغير
+  const payload = { type:'foodItem', id: it.id, name: it.name, grams: 100 };
   const data = encodeURIComponent(JSON.stringify(payload));
   const src  = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${data}`;
   if(qrImage) qrImage.src = src;
@@ -511,3 +521,28 @@ on(snackUndo,'click', async ()=>{
   }
   await safeLoadItems(); showSnack('تم التراجع عن الحذف');
 });
+
+/* --- Failsafe: تأكيد ربط زر (+ إضافة صنف) مع فتح الدروَر، مع لوج للتشخيص --- */
+console.log('[food-items] script loaded v-fix');
+(function attachSafeAdd(){
+  const btn = document.getElementById('btnAdd');
+  const drawer = document.getElementById('drawer');
+  if(!btn || !drawer){ console.warn('[food-items] btnAdd/drawer missing'); return; }
+
+  const safeOpen = ()=>{ try{ resetForm?.(); }catch(e){}; openDrawer(); };
+
+  btn.addEventListener('click', (e)=>{
+    e.preventDefault();
+    console.log('[food-items] add clicked');
+    safeOpen();
+  });
+
+  document.addEventListener('click', (e)=>{
+    const t = e.target;
+    if (t?.id === 'btnAdd' || t?.closest?.('#btnAdd')) {
+      e.preventDefault();
+      console.log('[food-items] add (delegated) clicked');
+      safeOpen();
+    }
+  }, true);
+})();
