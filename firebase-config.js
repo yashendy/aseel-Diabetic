@@ -1,25 +1,23 @@
-// firebase-config.js
-
-// 🧠 استيراد الوظائف الأساسية من Firebase (بدون storage)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+// firebase-config.js (v8 compat)
 
 // 🔥 إعدادات Firebase الخاصة بمشروعك
 const firebaseConfig = {
   apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
   authDomain: "sugar-kids-tracker.firebaseapp.com",
   projectId: "sugar-kids-tracker",
-  storageBucket: "sugar-kids-tracker.appspot.com", // ده مش هنستخدمه لكن يفضل تسيبيه لو هتضيفيه بعدين
+  storageBucket: "sugar-kids-tracker.appspot.com",
   messagingSenderId: "251830888114",
   appId: "1:251830888114:web:a20716d3d4ad86a6724bab",
   measurementId: "G-L7YGX3PHLB"
 };
 
-// ✅ تهيئة التطبيق والخدمات
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// ✅ تهيئة Firebase
+firebase.initializeApp(firebaseConfig);
 
-// 📤 تصدير المتغيرات لاستخدامها في ملفات تانية
-export { auth, db };
+// 📦 الخدمات اللي هنحتاجها
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// 📤 إتاحة المتغيرات للاستخدام في باقي الملفات
+window.auth = auth;
+window.db   = db;
