@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>مكتبة الأصناف</title>
+  <title>📘 مكتبة الأصناف</title>
   <link rel="stylesheet" href="css/food-items.css" />
   <link rel="icon" href="data:,">
 </head>
 <body>
   <div class="page">
     <!-- الشريط العلوي -->
-    <header class="topbar">
+    <header class="topbar card">
       <div class="left">
         <button class="btn ghost" onclick="history.back()">⬅ رجوع</button>
         <h1>📘 مكتبة الأصناف</h1>
@@ -25,7 +25,7 @@
     </header>
 
     <!-- فلاتر وبحث -->
-    <section class="filters">
+    <section class="filters card">
       <input id="q" class="input" placeholder="بحث بالاسم أو الهاشتاج… (#أرز)" />
       <select id="fCat" class="input">
         <option value="">كل التصنيفات</option>
@@ -46,6 +46,11 @@
         <option value="with">فقط يوجد صورة</option>
         <option value="without">فقط بلا صورة</option>
       </select>
+      <select id="fFav" class="input">
+        <option value="">المفضلات: الكل</option>
+        <option value="only">المفضلات فقط</option>
+        <option value="none">بدون مفضلات</option>
+      </select>
       <select id="fSort" class="input">
         <option value="name_asc">الاسم (أ→ي)</option>
         <option value="name_desc">الاسم (ي→أ)</option>
@@ -59,7 +64,7 @@
     <section id="grid" class="grid">جارِ التحميل…</section>
   </div>
 
-  <!-- النموذج الجانبي لإضافة/تعديل الصنف -->
+  <!-- Drawer: نموذج الصنف -->
   <aside id="drawer" class="drawer">
     <div class="drawer__content">
       <header class="drawer__header">
@@ -69,6 +74,7 @@
 
       <form id="itemForm" class="form" novalidate>
         <input type="hidden" id="itemId" />
+
         <div class="row">
           <label>اسم الصنف<span class="req">*</span></label>
           <input id="name" class="input" required />
@@ -129,10 +135,26 @@
           <button id="btnAddUnit" type="button" class="btn">+ إضافة مقدار</button>
         </fieldset>
 
+        <div class="row two">
+          <div>
+            <label>المورّد</label>
+            <input id="supplierName" class="input" placeholder="اسم المورد (اختياري)" />
+          </div>
+          <div>
+            <label>رابط المورد</label>
+            <input id="supplierUrl" class="input" placeholder="https://… (اختياري)" />
+          </div>
+        </div>
+
         <div class="row">
           <label>رابط صورة</label>
           <input id="imageUrl" class="input" placeholder="https://…" />
-          <button id="btnAutoImage" type="button" class="btn ghost">توليد صورة تلقائيًا</button>
+          <div class="row two" style="gap:6px;margin-top:6px">
+            <button id="btnAutoImage" type="button" class="btn ghost">توليد صورة تلقائيًا</button>
+            <input id="offBarcode" class="input" placeholder="باركود OpenFoodFacts" />
+            <button id="btnImportByBarcode" type="button" class="btn">استيراد بالباركود</button>
+            <button id="btnImportByName" type="button" class="btn">استيراد بالاسم</button>
+          </div>
         </div>
 
         <div class="row">
@@ -159,6 +181,11 @@
         </div>
 
         <footer class="form__actions">
+          <label class="fav-toggle">
+            <input type="checkbox" id="favorite">
+            <span>⭐ أضِف إلى المفضلة</span>
+          </label>
+          <div style="flex:1"></div>
           <button type="submit" class="btn primary" id="btnSave">💾 حفظ</button>
           <button type="button" class="btn ghost" id="btnCancel">إلغاء</button>
         </footer>
@@ -166,6 +193,21 @@
     </div>
   </aside>
 
+  <!-- QR Modal -->
+  <div id="qrModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="qrTitle">
+    <div class="modal__card">
+      <header class="modal__head">
+        <h3 id="qrTitle">QR للصنف</h3>
+        <button id="qrClose" class="icon-btn">✖</button>
+      </header>
+      <div class="modal__body">
+        <img id="qrImage" alt="QR" />
+        <div class="meta" id="qrHint"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Snackbar (تنبيه + تراجع) -->
   <div id="snack" class="snackbar" hidden>
     <span id="snackText">تم</span>
     <button id="snackUndo" class="btn ghost">تراجع</button>
