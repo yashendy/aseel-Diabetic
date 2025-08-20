@@ -1,3 +1,4 @@
+// js/parent.js
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
@@ -21,9 +22,12 @@ const aiSend    = document.getElementById('aiSend');
 const aiContext = document.getElementById('aiContext');
 const quickBtns = document.querySelectorAll('.ai-quick-btn');
 
-/* إعدادات المساعد (عدّلي endpoint لو عندك باك-إند مختلف) */
-const AI_ENDPOINT = window.AI_ENDPOINT || '/api/chat'; // Proxy آمن على السيرفر
-const AI_MODEL    = 'gpt-4o-mini'; // اسم نموذجي المُفضّل، غيّريه حسب الباك-إند
+/* إعدادات المساعد
+   - لو عندك باك-إند (Proxy) خليه على /api/chat وهيرجع { reply: "..." }
+   - لو عرّفت window.GEMINI_API_KEY هيستخدم Gemini مباشرة من المتصفح (للتجربة فقط) */
+const AI_ENDPOINT = window.AI_ENDPOINT || '/api/chat';
+const GEMINI_API_KEY = window.GEMINI_API_KEY || '';          // ضعيه في HTML للتجربة
+const GEMINI_MODEL   = 'gemini-2.0-flash';                    // نموذج سريع واقتصادي
 
 /* حالة */
 let currentUser;
@@ -243,7 +247,6 @@ function openAIForChild(child){
   openAIWidget();
   aiContext.textContent = `سياق: ${child.name || 'طفل'}`;
   appendMsg('system', 'تم فتح المساعد بسياق هذا الطفل. يمكنك طرح سؤالك الآن.');
-  // أضف رسالة system للـ history (لا تُعرض للعميل الباك-إند إن أردت)
 }
 
 function openAIGeneric(){
@@ -254,25 +257,58 @@ function openAIGeneric(){
   appendMsg('system', 'مرحبًا! أنا مساعدك الذكي. يمكنك سؤالي عن الجرعات، الوجبات، والمقاييس.');
 }
 
-/* إرسال رسالة إلى الباك-إند */
+/* ======== مزوّد Gemini مباشرة (للتجربة السريعة) ======== */
+async function callGeminiDirect(systemText, history){
+  if(!GEMINI_API_KEY){
+    throw new Error('لا يوجد GEMINI_API_KEY مُعرّف في الصفحة.');
+  }
+
+  // نحول التاريخ إلى صيغة Gemini: contents[{role, parts:[{text}]}]
+  // نضع الـ system كجزء من أول رسالة user
+  const contents = [];
+  if (systemText) {
+    contents.push({ role:'user', parts:[{ text: `SYSTEM:\n${systemText}` }] });
+  }
+  for (const m of history) {
+    if (m.role === 'system') continue; // تم تضمينه بالفعل
+    const role = (m.role === 'assistant') ? 'model' : 'user';
+    contents.push({ role, parts:[{ text: m.content }] });
+  }
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+
+  const res = await fetch(endpoint, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ contents })
+  });
+
+  if(!res.ok){
+    const errText = await res.text().catch(()=> res.statusText);
+    throw new Error(`فشل اتصال Gemini: ${res.status} ${errText}`);
+  }
+
+  const data = await res.json();
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  const text  = parts.map(p=>p.text).join('\n').trim();
+  return text || 'لا توجد إجابة مناسبة حالياً.';
+}
+
+/* ===== إرسال رسالة إلى المساعد ===== */
 async function sendAI(){
   const text = aiInput.value.trim();
   if(!text) return;
   aiInput.value = '';
   appendMsg('user', text);
 
-  // جهّز الرسائل
   const system = buildSystemPrompt(aiState.child);
   const history = [
     { role:'system', content: system },
     ...aiState.history,
     { role:'user', content: text }
   ];
-
-  // احفظ محليًا
   aiState.history = history;
 
-  // مؤشّر انتظار
   const waitEl = document.createElement('div');
   waitEl.className = 'msg assistant';
   waitEl.textContent = '… جارٍ التفكير';
@@ -280,21 +316,25 @@ async function sendAI(){
   aiMessages.scrollTop = aiMessages.scrollHeight;
 
   try{
-    // 🚩 استدعي باك-إندك الآمن (Proxy) — يُفترض أن يوجّه إلى OpenAI أو أي مزود
-    const res = await fetch(AI_ENDPOINT, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ model: AI_MODEL, messages: history })
-    });
-    if(!res.ok) throw new Error('فشل الاتصال بالمساعد');
-    const data = await res.json();
+    let reply;
 
-    // توقّع { reply: "..." } من الباك-إند
-    const reply = data.reply || 'تعذّر الحصول على رد حالياً.';
+    if (GEMINI_API_KEY) {
+      // وضع التجربة المباشر مع Gemini
+      reply = await callGeminiDirect(system, history);
+    } else {
+      // وضع الـ Proxy (باك-إندك يرجّع { reply })
+      const res = await fetch(AI_ENDPOINT, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ model: GEMINI_MODEL, messages: history })
+      });
+      if(!res.ok) throw new Error('فشل الاتصال بالمساعد');
+      const data = await res.json();
+      reply = data.reply || 'تعذّر الحصول على رد حالياً.';
+    }
+
     waitEl.remove();
     appendMsg('assistant', reply);
-
-    // ضمّ الرد للتاريخ
     aiState.history.push({ role:'assistant', content: reply });
 
   }catch(err){
