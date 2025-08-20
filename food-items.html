@@ -1,93 +1,46 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>📘 مكتبة الأصناف</title>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>مكتبة الأصناف</title>
   <link rel="stylesheet" href="css/food-items.css" />
-
-  <!-- ESM Firebase setup -->
-  <script type="module" src="js/firebase-config.js"></script>
 </head>
 <body>
   <div class="page">
-    <header class="topbar card">
-      <div class="left">
-        <button class="btn ghost" onclick="history.back()">⬅ رجوع</button>
-        <h1>📘 مكتبة الأصناف</h1>
-      </div>
-      <div class="right">
-        <button id="btnAdd" class="btn primary">+ إضافة صنف</button>
-      </div>
-    </header>
-
-    <section class="filters card">
-      <input id="q" class="input" placeholder="بحث بالاسم أو #تاج" autocomplete="off" />
-      <select id="fCat" class="input"><option value="">كل التصنيفات</option><option>نشويات</option><option>لحوم</option><option>خضروات</option><option>فاكهة</option><option>دهون</option></select>
-      <select id="fSort" class="input"><option value="name">الاسم</option><option value="newest">الأحدث</option></select>
-      <button id="btnClear" class="btn ghost">مسح الفلاتر</button>
-    </section>
-
+    <header class="topbar card"><div class="left"><button class="btn ghost" onclick="history.back()">⬅ رجوع</button><h1>مكتبة الأصناف</h1></div><div class="right"><button id="btnAdd" class="btn primary">+ إضافة صنف</button></div></header>
+    <section class="filters card"><input id="q" class="input" placeholder="بحث…" /><button id="btnClear" class="btn ghost">مسح الفلاتر</button></section>
     <section id="grid" class="grid">جارِ التحميل…</section>
   </div>
 
   <aside id="drawer" class="drawer">
     <div class="drawer__content">
-      <header class="drawer__header">
-        <h2 id="formTitle">إضافة صنف</h2>
-        <button id="btnClose" class="icon-btn">✖</button>
-      </header>
-
+      <header class="drawer__header"><h2 id="formTitle">إضافة صنف</h2><button id="btnClose" class="icon-btn">✖</button></header>
       <form id="itemForm" class="form" novalidate>
-        <!-- Basic Info -->
-        <div class="row"><label for="name">اسم الصنف*</label><input id="name" required class="input" /></div>
-        <div class="row two">
-          <div><label for="category">التصنيف*</label><select id="category" required class="input"><option value="">— اختَر —</option><option>نشويات</option><option>لحوم</option><option>خضروات</option><option>فاكهة</option><option>دهون</option></select></div>
-          <div><label for="brand">البراند</label><input id="brand" class="input" /></div>
-        </div>
+        <!-- Basic Fields -->
+        <div class="row"><label for="name">اسم الصنف*</label><input id="name" required class="input"/></div>
+        <div class="row two"><div><label for="category">التصنيف*</label><select id="category" required class="input"><option value="">— اختار —</option><option>نشويات</option><option>فاكهة</option></select></div><div><label for="brand">البراند</label><input id="brand" class="input"/></div></div>
 
         <!-- Nutrition -->
-        <fieldset class="group"><legend>القيم لكل 100 g</legend>
-          <div class="row three">
-            <div><label for="carb100">كارب*</label><input id="carb100" type="number" step="0.1" min="0" required class="input" /></div>
-            <div><label for="prot100">بروتين</label><input id="prot100" type="number" step="0.1" min="0" class="input" /></div>
-            <div><label for="fat100">دهون</label><input id="fat100" type="number" step="0.1" min="0" class="input" /></div>
-          </div>
-          <div class="row two"><div><label for="kcal100">سعرات</label><input id="kcal100" type="number" step="1" min="0" class="input" /></div><div class="hint">تُحسب تلقائيًا لو فارغ</div></div>
+        <fieldset class="group"><legend>لـ100 g</legend>
+          <div class="row three"><div><label for="carb100">كارب*</label><input id="carb100" type="number" step="0.1" min="0" required class="input"/></div><div><label for="prot100">بروتين</label><input id="prot100" type="number" step="0.1" min="0" class="input"/></div><div><label for="fat100">دهون</label><input id="fat100" type="number" step="0.1" min="0" class="input"/></div></div>
+          <div class="row two"><div><label for="kcal100">سعرات</label><input id="kcal100" type="number" step="1" min="0" class="input"/></div><div class="hint">تحسب تلقائي لو فاضي</div></div>
           <div id="absorptionHint" class="absorption-hint"></div>
         </fieldset>
 
         <!-- Image -->
-        <div class="row">
-          <label>صورة الصنف</label>
-          <input type="file" id="imageFile" accept="image/*" />
-          <input type="text" id="imageUrl" placeholder="أو رابط صورة" class="input" />
-        </div>
+        <div class="row"><label for="imageUrl">رابط صورة</label><input id="imageUrl" placeholder="https://..." class="input"/><button type="button" id="btnAutoImage" class="btn ghost">توليد تلقائي</button></div>
 
-        <!-- Barcode import -->
-        <div class="row two">
-          <input id="offBarcode" class="input" placeholder="باركود OpenFoodFacts" />
-          <button type="button" id="btnImportByBarcode" class="btn">استيراد</button>
-        </div>
-
-        <!-- Household Units -->
-        <fieldset class="group"><legend>مقادير منزلية</legend>
-          <div id="unitsList" class="units"></div>
-          <div class="row two"><input id="uName" placeholder="اسم المقدار" class="input" /><input id="uGrams" placeholder="جرام" type="number" class="input" /></div>
-          <button type="button" id="btnAddUnit" class="btn">+ إضافة مقدار</button>
-        </fieldset>
+        <!-- Units -->
+        <fieldset class="group"><legend>مقادير منزلية</legend><div id="unitsList" class="units"></div><div class="row two"><input id="uName" placeholder="اسم المقدار" class="input"/><input id="uGrams" placeholder="جرام" type="number" class="input"/></div><button type="button" id="btnAddUnit" class="btn">+ إضافة مقدار</button></fieldset>
 
         <!-- Tags -->
-        <div class="row"><label for="tags">تاجات</label><input id="tags" placeholder="#أرز, #سناك" class="input" /></div>
-
-        <footer class="form__actions">
-          <button type="submit" class="btn primary">حفظ</button>
-          <button type="button" class="btn ghost" id="btnCancel">إلغاء</button>
-        </footer>
+        <div class="row"><label for="tags">تاجات</label><input id="tags" placeholder="#أرز, #سناك" class="input"/></div>
+        <footer class="form__actions"><button type="submit" class="btn primary">حفظ</button><button type="button" class="btn ghost" id="btnCancel">إلغاء</button></footer>
       </form>
     </div>
   </aside>
 
+  <script type="module" src="js/firebase-config.js"></script>
   <script type="module" src="js/food-items.js"></script>
 </body>
 </html>
