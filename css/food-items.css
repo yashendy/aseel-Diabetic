@@ -57,11 +57,11 @@ h1{margin:0;font-size:20px}
 .star.active{background:#fde68a;border-color:#fcd34d}
 
 /* Drawer */
+.drawer { z-index: 10000; }
 .drawer{position:fixed;top:0;bottom:0;right:-100%;width:380px;background:#fff;border-left:1px solid var(--border);box-shadow:-6px 0 20px rgba(0,0,0,.08);transition:right .25s ease;z-index:50}
 .drawer.open{right:0}
 .drawer__content{height:100%;display:flex;flex-direction:column}
 .drawer__header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:12px}
-.drawer { z-index: 10000; }
 
 .form{padding:12px;overflow:auto}
 .form .row{margin-bottom:10px}
