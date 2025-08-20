@@ -1,97 +1,39 @@
-:root{
-  --bg:#F7FAFF; --card:#fff; --border:#e6eef7; --text:#222; --muted:#666;
-  --primary:#2563EB; --ghost:#e9eef7; --danger:#EF4444; --chip:#eef4ff;
-  --ok:#16a34a; --warn:#f59e0b;
+:root {
+  --bg: #f9fbff; --card: #fff; --border: #dce4ef; --text: #111;
+  --primary: #2563eb; --warn: #f59e0b;
 }
 
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Tahoma,Arial,sans-serif}
-.page{max-width:1100px;margin:auto;padding:16px}
-
-/* عامة */
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;box-shadow:0 6px 16px rgba(0,0,0,.06)}
-.meta{color:var(--muted);font-size:12px}
-.req{color:#e11d48;margin:0 4px}
-.visually-hidden{position:absolute!important;left:-10000px!important;width:1px;height:1px;overflow:hidden}
-
-/* الترويسة */
-.topbar{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-.topbar .left{display:flex;gap:10px;align-items:center}
-.topbar .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-h1{margin:0;font-size:20px}
-
-/* أزرار ومدخلات */
-.btn{border:1px solid var(--border);background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
-.btn.primary{background:var(--primary);color:#fff;border-color:transparent}
-.btn.ghost{background:var(--ghost)}
-.icon-btn{border:none;background:transparent;cursor:pointer;font-size:16px}
-.input, select, textarea{padding:8px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;font-size:14px}
-.toggle{display:flex;align-items:center;gap:6px}
-
-/* الفلاتر */
-.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-
-/* الشبكة */
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
-
-/* بطاقة الصنف */
-.card .head{display:flex;gap:10px}
-.thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;border:1px solid var(--border)}
-.title{font-weight:700}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-.chip{background:var(--chip);border:1px solid var(--border);border-radius:999px;padding:3px 8px;font-size:12px;color:#111}
-.badge{background:#eef2ff;border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-size:12px;color:#111}
-.badge.danger{background:#fee2e2;border-color:#fecaca;color:#991b1b}
-.badge.warn{background:#fff7ed;border-color:#ffedd5;color:#9a3412}
-.badge.ok{background:#ecfdf5;border-color:#d1fae5;color:#065f46}
-
-.supplier{font-size:12px;color:#334155;margin-top:4px}
-
-/* الحساب السريع */
-.quick{margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.quick .input{min-width:120px}
-
-/* أزرار الأكشن */
-.actions{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
-.actions .btn.qDel{background:var(--danger);color:#fff;border:0}
-.actions .btn.star{display:flex;align-items:center;gap:6px}
-.star.active{background:#fde68a;border-color:#fcd34d}
-
-/* Drawer */
-.drawer{
-  position:fixed; top:0; bottom:0; right:-100%;
-  width:380px; background:#fff; border-left:1px solid var(--border);
-  box-shadow:-6px 0 20px rgba(0,0,0,.08);
-  transition:right .25s ease, opacity .2s ease;
-  opacity:0; visibility:hidden; z-index:10000; /* رفعناه فوق أي طبقة */
+body {
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  background: var(--bg); margin: 0; color: var(--text);
 }
-.drawer.open{ right:0; opacity:1; visibility:visible; }
-.drawer__content{height:100%;display:flex;flex-direction:column}
-.drawer__header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:12px}
-.form{padding:12px;overflow:auto}
-.form .row{margin-bottom:10px}
-.form .row.two{display:flex;gap:10px}
-.form .row.three{display:flex;gap:10px}
-.form .group{border:1px dashed var(--border);border-radius:12px;padding:10px;margin-bottom:12px}
-.form__actions{display:flex;align-items:center;gap:10px}
 
-.units{display:flex;gap:6px;flex-wrap:wrap}
-.unit{background:#f8fafc;border:1px solid var(--border);border-radius:999px;padding:4px 8px;font-size:12px}
-.unit .x{margin-inline-start:6px;color:#991b1b;cursor:pointer}
+.page { max-width: 800px; margin: auto; padding: 16px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
 
-/* تنبيه بطء الامتصاص */
-.absorption-hint{margin-top:5px;font-size:12px;color:#b91c1c;font-weight:600}
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.btn { border: none; cursor: pointer; padding: 8px 12px; border-radius: 8px; }
+.btn.primary { background: var(--primary); color: white; }
+.btn.ghost { background: #e4ecf9; color: var(--text); }
 
-/* Snackbar */
-.snackbar{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#222;color:#fff;border-radius:12px;padding:8px 12px;display:flex;gap:10px;align-items:center;z-index:60}
-.snackbar .btn{background:transparent;border:1px solid #444;color:#fff}
+.input, select, textarea { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 8px; }
+.grid .card { margin-inline-start: 8px; margin-block-end: 8px; }
 
-/* Modal (QR) */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;z-index:80}
-.modal.hidden{display:none !important}
-.modal__card{background:#fff;border:1px solid var(--border);border-radius:14px;min-width:300px;max-width:90vw}
-.modal__head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border)}
-.modal__body{padding:16px;display:flex;flex-direction:column;gap:8px;align-items:center}
-.modal__body img{width:220px;height:220px;object-fit:contain;border:1px solid var(--border);border-radius:10px}
+.drawer { position: fixed; top: 0; right: -100%; bottom: 0; width: 360px; background: white; transition: right .3s; }
+.drawer.open { right: 0; }
 
-.fav-toggle{display:flex;align-items:center;gap:8px}
+.drawer__header { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--border); }
+
+.row { margin-block-end: 12px; }
+.row.two { display: flex; gap: 8px; }
+.row.three { display: flex; gap: 8px; }
+.group { border: 1px dashed var(--border); padding: 10px; border-radius: 8px; margin-block-end: 12px; }
+
+.units { display: flex; gap: 6px; flex-wrap: wrap; }
+.unit { background: #f8fafc; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; font-size: 12px; }
+.unit .x { margin-inline-start: 6px; color: #991b1b; cursor: pointer; }
+
+.absorption-hint { color: var(--warn); font-size: 12px; margin-block-start: 4px; }
+.form__actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.meta { font-size: 12px; color: var(--border); }
