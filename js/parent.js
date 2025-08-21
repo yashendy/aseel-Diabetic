@@ -4,7 +4,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/fi
 import {
   collection, getDocs, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-// تم تغيير رابط المكتبة ليعمل بشكل صحيح
+// الرابط الصحيح لمكتبة Gemini API
 import { GoogleGenerativeAI } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-gemini.js";
 
 /* عناصر */
@@ -25,7 +25,7 @@ const aiContext = document.getElementById('aiContext');
 const quickBtns = document.querySelectorAll('.ai-quick-btn');
 
 /* إعدادات المساعد */
-const GEMINI_API_KEY = 'AIzaSyBJOzP2znhOTBeVDdLn7XwMs_KtYn_tMV4'; // مفتاحك الجديد
+const GEMINI_API_KEY = window.GEMINI_API_KEY || '';
 const GEMINI_MODEL   = 'gemini-1.5-flash';
 
 /* حالة */
@@ -36,7 +36,7 @@ let filtered = [];  // بعد البحث
 // حالة المساعد
 const aiState = {
   child: null,
-  chatSession: null, // سيتم تخزين جلسة الدردشة هنا
+  chatSession: null,
 };
 
 /* أدوات */
