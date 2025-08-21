@@ -1,67 +1,78 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>لوحة وليّ الأمر</title>
-  <link rel="stylesheet" href="css/parent.css">
-  <link rel="icon" href="data:,">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>لوحة وليّ الأمر</title>
+
+  <!-- ✅ أيقونة الموقع (اختاري واحد فقط من الأسطر أدناه) -->
+  <!-- لو عندك ملف favicon.ico في جذر المشروع -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <!-- أو لو عندك PNG صغيرة -->
+  <!-- <link rel="icon" type="image/png" href="assets/favicon.png" /> -->
+
+  <link rel="stylesheet" href="css/parent.css" />
 </head>
 <body>
-  <div class="container">
-    <header class="top card">
-      <div class="head">
-        <h1>👨‍👩‍👧‍👦 أطفالك</h1>
-        <p class="muted">اختَر طفلاً لفتح لوحة التحكم الخاصة به.</p>
-      </div>
-      <div class="tools">
-        <div class="field">
-          <label for="search">بحث بالاسم</label>
-          <input type="text" id="search" placeholder="مثال: سارة">
-        </div>
-        <a class="add-btn" href="add-child.html">➕ إضافة طفل</a>
-      </div>
-    </header>
+  <div class="container">
+    <header class="top card">
+      <div class="head">
+        <h1>👨‍👩‍👧‍👦 أطفالك</h1>
+        <p class="muted">اختَر طفلًا لفتح لوحة التحكم الخاصة به.</p>
+      </div>
+      <div class="tools">
+        <div class="field">
+          <label for="search">بحث بالاسم</label>
+          <input type="text" id="search" placeholder="مثال: سارة" />
+        </div>
+        <a class="add-btn" href="add-child.html">➕ إضافة طفل</a>
+      </div>
+    </header>
 
-    <section id="kidsGrid" class="grid"></section>
-    <div id="empty" class="empty hidden">لا يوجد أطفال بعد… ابدئي بإضافة طفل جديد.</div>
-  </div>
+    <section id="kidsGrid" class="grid"></section>
+    <div id="empty" class="empty hidden">لا يوجد أطفال بعد… ابدئي بإضافة طفل جديد.</div>
+  </div>
 
-    <button class="ai-fab" id="aiFab">🤖</button>
+  <!-- زر فتح المساعد -->
+  <button class="ai-fab" id="aiFab" title="مساعد ذكي">🤖</button>
 
-    <div class="ai-widget hidden" id="aiWidget">
-    <div class="ai-header">
-      <div class="ai-title">
-        <strong>مساعدك الغذائي</strong>
-        <small id="aiContext">بدون سياق طفل</small>
-      </div>
-      <div>
-        <button class="icon-btn" id="aiMin">➖</button>
-        <button class="icon-btn" id="aiClose">❌</button>
-      </div>
-    </div>
-    <div class="ai-messages" id="aiMessages"></div>
-    <div class="ai-input">
-      <div class="ai-quick">
-        <span class="chip ai-quick-btn" data-q="ما هو الأنسولين؟">ما الأنسولين؟</span>
-        <span class="chip ai-quick-btn" data-q="كيف أحسب جرعة الوجبة؟">حساب جرعة الوجبة؟</span>
-      </div>
-      <div class="ai-row">
-        <textarea id="aiInput" placeholder="اكتب سؤالك هنا..."></textarea>
-        <button class="btn primary" id="aiSend">إرسال</button>
-      </div>
-    </div>
-  </div>
+  <!-- ودجت المساعد -->
+  <div class="ai-widget hidden" id="aiWidget">
+    <div class="ai-header">
+      <div class="ai-title">
+        <strong>مساعدك الغذائي</strong>
+        <small id="aiContext">بدون سياق طفل</small>
+      </div>
+      <div>
+        <button class="icon-btn" id="aiMin" title="تصغير">➖</button>
+        <button class="icon-btn" id="aiClose" title="إغلاق">❌</button>
+      </div>
+    </div>
 
-  <div id="loader" class="loader">
-    <p>جارٍ تحميل البيانات...</p>
-  </div>
+    <div class="ai-messages" id="aiMessages"></div>
 
-  <script>
-    // ضع مفتاح API الجديد هنا
-    window.GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY_HERE';
-  </script>
+    <div class="ai-input">
+      <div class="ai-quick">
+        <span class="chip ai-quick-btn" data-q="كيف أحسب جرعة الوجبة؟">حساب جرعة الوجبة؟</span>
+        <span class="chip ai-quick-btn" data-q="ما الفرق بين CR و CF؟">ما هو CR و CF؟</span>
+        <span class="chip ai-quick-btn" data-q="لطفًا لخص لي يوم الطفل.">ملخص اليوم</span>
+      </div>
+      <div class="ai-row">
+        <textarea id="aiInput" placeholder="اكتبي سؤالك هنا…"></textarea>
+        <button class="btn primary" id="aiSend">إرسال</button>
+      </div>
+    </div>
+  </div>
 
-  <script type="module" src="js/parent.js"></script>
+  <div id="loader" class="loader hidden">جارٍ تحميل البيانات…</div>
+
+  <!-- ✅ API Key (للتجربة من الفرونت) -->
+  <script>
+    // تقدري تبدليه لاحقًا. للمستقبل الأفضل وضعه على سرفر/Functions.
+    window.GEMINI_API_KEY = "AIzaSyBJOzP2znhOTBeVDdLn7XwMs_KtYn_tMV4";
+  </script>
+
+  <!-- ✅ سكربت الصفحة -->
+  <script type="module" src="js/parent.js"></script>
 </body>
 </html>
