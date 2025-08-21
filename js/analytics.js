@@ -44,6 +44,12 @@ const deltaMean = $('#deltaMean');
 const deltaSD   = $('#deltaSD');
 const deltaCount= $('#deltaCount');
 
+// زر/صندوق الذكاء الاصطناعي (اختياري)
+const aiBtn = $('#aiBtn');
+const aiBox = $('#aiBox');
+const aiOut = $('#aiOut');
+const GEMINI_API_KEY = window.GEMINI_API_KEY; // ضعيه آمنًا من الخارج
+
 // خريطة سلوطات موحّدة (lowercase مثل القياسات)
 const SLOT_MAP = {
   WAKE:'wake',
@@ -92,6 +98,7 @@ onAuthStateChanged(auth, async (u)=>{
     await loadChild();
     initFilters();
     readRangeFromURL();
+    if (GEMINI_API_KEY) aiBtn.classList.remove('hidden');
     await apply(true); // with comparison
   }finally{
     loader(false);
@@ -157,6 +164,9 @@ function initFilters(){
   // اضبط الكانفاس للدقة العالية
   makeCrispCanvas(slotBar);
   makeCrispCanvas(dailyLine);
+
+  // AI
+  aiBtn?.addEventListener('click', aiAnalyze);
 }
 
 function readRangeFromURL(){
@@ -199,6 +209,9 @@ async function apply(withComparison){
       const prevRows  = filterByGroup(prevAll, activeGroup);
       renderDeltas(rows, prevRows);
     }
+
+    // حضّري البيانات لأزرار الذكاء إن احتجت
+    aiBtn.dataset.payload = JSON.stringify({ rows, start, end });
   }catch(e){
     console.error(e); alert('تعذر تحميل التحليل');
   }finally{ loader(false); }
@@ -216,7 +229,7 @@ async function fetchRows(start,end){
 
   // طبيع القيم: slot و value_mmol
   return snap.docs.map(d=>d.data()).map(r=>{
-    const slot = r.slot || SLOT_MAP[r.slotKey] || r.slotKey || 'other';
+    const slot = r.slot || r.slotKey || SLOT_MAP[r.slotKey] || 'other'; // نحافظ على lowercase keys
     let mmol = (typeof r.value_mmol==='number') ? r.value_mmol : null;
     if(mmol==null && typeof r.value_mgdl==='number') mmol = toMmol(r.value_mgdl);
     return {
@@ -285,9 +298,9 @@ function renderDeltas(currRows, prevRows){
   };
 
   const a = pct(currRows), b = pct(prevRows);
-  setDelta(deltaTIR,  percent(a.tir - b.tir), false); // higher is better
-  setDelta(deltaHigh, percent(b.high - a.high), false); // show as improvement when down
-  setDelta(deltaLow,  percent(b.low  - a.low ), false); // down is better (أقل هبوطات)
+  setDelta(deltaTIR,  percent(a.tir - b.tir), false); // أعلى = أفضل
+  setDelta(deltaHigh, percent(b.high - a.high), false); // نزول ارتفاعات = أفضل
+  setDelta(deltaLow,  percent(b.low  - a.low ), false); // نزول هبوطات = أفضل
   setDelta(deltaMean, (unitSel.value==='mgdl' ? (toMgdl(a.mean)-toMgdl(b.mean)) : (a.mean-b.mean)), true);
   setDelta(deltaSD,   (unitSel.value==='mgdl' ? (toMgdl(a.sd)-toMgdl(b.sd))     : (a.sd-b.sd)), true);
   setDelta(deltaCount, a.count - b.count, false);
@@ -296,14 +309,19 @@ function renderDeltas(currRows, prevRows){
 // --------- رسم: إعداد Canvas بدقة عالية ----------
 function makeCrispCanvas(canvas){
   if(!canvas) return;
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  const rect = canvas.getBoundingClientRect();
-  canvas.width  = Math.round(rect.width  * dpr);
-  canvas.height = Math.round(rect.height * dpr);
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  // ملاحظة: عند تغيير حجم الوعاء (CSS) أعِد استدعاء makeCrispCanvas ثم أعد الرسم
-  window.addEventListener('resize', ()=>{ makeCrispCanvas(canvas); apply(false); }, {passive:true});
+  const doResize = ()=>{
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const rect = canvas.getBoundingClientRect();
+    canvas.width  = Math.round(rect.width  * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  };
+  doResize();
+  if(!canvas._resizeBound){
+    window.addEventListener('resize', ()=>{ doResize(); apply(false); }, {passive:true});
+    canvas._resizeBound = true;
+  }
 }
 
 function clearCanvas(c){ c.getContext('2d').clearRect(0,0,c.width,c.height); }
@@ -360,7 +378,7 @@ function renderSlotBar(rows){
     // الليبل
     ctx.fillStyle = '#555';
     const lbl = labels[i];
-    ctx.save(); // لو ضيّق، نقلب نص بزاوية خفيفة في الشاشات الصغيرة
+    ctx.save();
     ctx.translate(x+barW/2, h-12);
     if(barW<40){ ctx.rotate(-Math.PI/12); }
     ctx.fillText(lbl, 0, 0);
@@ -490,3 +508,61 @@ function topSlot(bySlot, pred){
 }
 
 function li(html){ const e=document.createElement('li'); e.innerHTML=html; return e; }
+
+// ========= الذكاء الاصطناعي (Gemini) اختياري =========
+async function aiAnalyze(){
+  if(!GEMINI_API_KEY){ alert('أضف مفتاح Gemini أولاً'); return; }
+  try{
+    aiBox.classList.remove('hidden');
+    aiOut.textContent = 'جارٍ توليد التحليل…';
+
+    const payload = JSON.parse(aiBtn.dataset.payload||'{}');
+    const rows = payload.rows||[];
+
+    const vals = rows.map(r=>r.value_mmol);
+    const n = vals.length||1;
+    const mean = vals.reduce((a,b)=>a+b,0)/n;
+    const inR = vals.filter(v=> v>=limits.min && v<=limits.max ).length/n;
+    const hi  = vals.filter(v=> v>limits.max).length/n;
+    const lo  = vals.filter(v=> v<limits.min).length/n;
+
+    // ملخص موجّه للنموذج (غير علاجي، تعليمي فقط)
+    const prompt = `
+أنت مساعد صحي تعليمي لسكري الأطفال (نوع 1). قدّم شرحًا مبسطًا وغير علاجي.
+بيانات الطفل: الاسم ${child.name||'غير معروف'}، النطاق ${limits.min}–${limits.max} mmol/L، CR ${cr??'—'} g/U، CF ${cf??'—'} mmol/L/U.
+الفترة: ${payload.start} → ${payload.end}.
+إحصائيات مختصرة: TIR ${(inR*100).toFixed(0)}%، ارتفاعات ${(hi*100).toFixed(0)}%، هبوطات ${(lo*100).toFixed(0)}%، المتوسط ${mean.toFixed(1)} mmol/L.
+قدّم 4-6 نقاط عملية على:
+- الأوقات الأكثر تحفّزًا للارتفاع/الهبوط وأسباب محتملة.
+- كيف نُحسّن قبل/بعد الوجبات (توقيت القياس، تقدير الكارب).
+- متى نراجع CF أو CR (إشاريًا فقط، لا جرعات).
+- ملاحظة تربوية قصيرة للأهل.
+اكتب بالعربية الفصحى، نقاط واضحة ومختصرة.
+`.trim();
+
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+      {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'x-goog-api-key': GEMINI_API_KEY
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }]}],
+        })
+      }
+    );
+
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error('Gemini error: '+t);
+    }
+    const data = await res.json();
+    const txt = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم يصل رد من Gemini.';
+    aiOut.textContent = txt;
+  }catch(e){
+    console.error(e);
+    aiOut.textContent = 'تعذر الحصول على تحليل ذكي حالياً.';
+  }
+}
