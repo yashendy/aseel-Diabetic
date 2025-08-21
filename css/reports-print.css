@@ -73,6 +73,8 @@ table.pivot{width:100%;border-collapse:collapse;table-layout:fixed}
   .controls, .btn.back, .filters .row .btn, .legend .chip.small, #blankMode { display:none !important; }
   .container{max-width:100%;margin:0;padding:0}
   .header, .filters, .card{border:none}
+  /* منع انقسام صف اليوم على صفحتين */
+  .pivot tr{ page-break-inside: avoid; }
   /* إخفاء سناك في الطباعة فقط (مش موجود كعمود أصلاً) */
   .pivot th.snack, .pivot td.snack { display:none !important; }
   /* حجم خط أصغر للطباعة */
