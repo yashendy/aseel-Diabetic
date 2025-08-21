@@ -4,7 +4,8 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/fi
 import {
   collection, getDocs, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { GoogleGenerativeAI } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-gemini.js";
+// تم تغيير رابط المكتبة ليعمل بشكل صحيح
+import { GoogleGenerativeAI } from "https://cdn.jsdelivr.net/npm/@google/generative-ai";
 
 /* عناصر */
 const kidsGrid = document.getElementById('kidsGrid');
@@ -24,8 +25,8 @@ const aiContext = document.getElementById('aiContext');
 const quickBtns = document.querySelectorAll('.ai-quick-btn');
 
 /* إعدادات المساعد */
-const GEMINI_API_KEY = window.GEMINI_API_KEY || '';
-const GEMINI_MODEL   = 'gemini-1.5-flash'; // نموذج سريع واقتصادي
+const GEMINI_API_KEY = 'AIzaSyBJOzP2znhOTBeVDdLn7XwMs_KtYn_tMV4'; // مفتاحك الجديد
+const GEMINI_MODEL   = 'gemini-1.5-flash';
 
 /* حالة */
 let currentUser;
@@ -255,7 +256,7 @@ function openAIGeneric(){
   appendMsg('system', 'مرحبًا! أنا مساعدك الذكي. يمكنك سؤالي عن الجرعات، الوجبات، والمقاييس.');
 }
 
-/* ======== مزوّد Gemini مباشرة باستخدام SDK (للتجربة السريعة) ======== */
+/* ======== مزوّد Gemini مباشرة باستخدام SDK ======== */
 async function callGeminiDirect(systemText, userText){
   if(!GEMINI_API_KEY){
     throw new Error('لا يوجد GEMINI_API_KEY مُعرّف في الصفحة.');
@@ -295,7 +296,6 @@ async function sendAI(){
   try{
     let reply;
 
-    // نستخدم دالة الاتصال المباشر الجديدة
     reply = await callGeminiDirect(system, text);
 
     waitEl.remove();
