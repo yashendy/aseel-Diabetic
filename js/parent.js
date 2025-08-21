@@ -5,7 +5,7 @@ import {
   collection, getDocs, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 // تم تغيير رابط المكتبة ليعمل بشكل صحيح
-import "https://cdn.jsdelivr.net/npm/@google/generative-ai";
+import { GoogleGenerativeAI } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-gemini.js";
 
 /* عناصر */
 const kidsGrid = document.getElementById('kidsGrid');
