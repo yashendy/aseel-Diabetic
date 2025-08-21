@@ -11,6 +11,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 .small{font-size:12px}
 .ic{opacity:.6}
 .muted{color:var(--muted);margin:0}
+.center{text-align:center}
 
 .child-info{display:grid;gap:10px}
 .head h1{margin:0 0 4px}
@@ -25,7 +26,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
 .btn.back{margin-inline-end:auto}
 
-/* جدول الشاشة */
+/* جدول */
 .table h2{margin:6px 0 10px}
 .table-wrap{max-width:100%;overflow:auto;border-radius:10px;border:1px solid var(--line)}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -34,83 +35,45 @@ thead th{background:#fafafa;position:sticky;top:0;z-index:1}
 
 td.reading{white-space:nowrap}
 .arrow{font-weight:700;margin-inline-start:6px}
-.arrow.up{color:var(--warn)}   /* ↑ */
-.arrow.down{color:var(--blue)}  /* ↓ */
+.arrow.up{color:var(--warn)}
+.arrow.down{color:var(--blue)}
 
 tr.state-high{border-inline-start:6px solid var(--warn);background:rgba(239,68,68,.05)}
 tr.state-low{ border-inline-start:6px solid var(--blue);background:rgba(37,99,235,.05)}
-tr.state-normal{border-inline-start:6px solid var(--ok);background:rgba(16,185,129,.05)}
+tr.state-ok{  border-inline-start:6px solid var(--ok);background:rgba(16,185,129,.06)}
 
-.muted.center{text-align:center}
 .notes{white-space:pre-wrap}
 
+/* كثافة تلقائية */
 body.dense table{font-size:13px}
 body.very-dense table{font-size:12px}
 #densityHint{margin-top:8px}
 
-/* جداول الطباعة (الفارغ + الممتلئ) */
-.blank-week h2, .print-filled h2{margin:6px 0 10px}
-table.blank, .filled-grid{width:100%;border-collapse:collapse;font-size:13px}
-table.blank th, table.blank td,
-.filled-grid th, .filled-grid td{border:1px solid var(--line);padding:8px;vertical-align:top}
-
-table.blank thead th,
-.filled-grid thead th{background:#fafafa}
-
-.filled-cell{
-  min-height:46px; line-height:1.25; color:#111;
-  display:flex; flex-direction:column; gap:4px;
-}
-.filled-cell .reading{
-  font-weight:700;
-}
-.filled-cell .dose, .filled-cell .note{
-  font-size:12px; color:#374151;
-}
-.filled-cell .arrow.up{color:var(--warn)}
-.filled-cell .arrow.down{color:var(--blue)}
-
-/* تحكم عمود الملاحظات في العرض والطباعة */
+/* إخفاء الملاحظات */
 body.notes-hidden .col-notes,
 body.notes-hidden td.col-notes{display:none}
 
-/* الطباعة */
+/* لودر سفلي */
+.loader{
+  position:fixed;inset-inline:0;bottom:14px;margin:auto;width:230px;text-align:center;
+  background:#111827;color:#fff;padding:10px 12px;border-radius:10px;opacity:.92;z-index:9999
+}
+
+/* طباعة */
 @media print{
-  .back,.controls,.actions,.range,.btn{display:none !important}
+  .back,.controls,.actions,.range,.btn,#densityHint{display:none !important}
   .container{max-width:none;margin:0;padding:0}
   .card{box-shadow:none;border:none;margin:0 0 8mm}
-
-  /* تصغير تلقائي متدرّج */
   table{font-size:12px}
   body.dense table{font-size:11px}
   body.very-dense table{font-size:10px}
 
-  /* وضع الطباعة الفارغ */
+  /* وضع الطباعة الفارغ/الممتلئ (لو استخدمتي reports-print.html) */
   body.print-blank #tableSection{display:none !important}
-  body.print-blank #printFilledSection{display:none !important}
+  body.print-blank #printFilledSection{display:block !important}
   body.print-blank #blankWeekSection{display:block !important}
 
-  /* وضع الطباعة الممتلئ */
   body.print-filled #tableSection{display:none !important}
-  body.print-filled #blankWeekSection{display:none !important}
   body.print-filled #printFilledSection{display:block !important}
-
-  /* إخفاء السناك في الطباعة فقط */
-  .col-snack, .slot-snack, th.col-snack{display:none !important}
+  body.print-filled #blankWeekSection{display:none !important}
 }
-/* تلوين صفوف الحالة */
-tr.state-low    { background: #f0f7ff; }  /* أزرق فاتح */
-tr.state-ok     { background: #f6fffa; }  /* أخضر فاتح */
-tr.state-high   { background: #fff6f6; }  /* أحمر فاتح */
-
-/* إبراز السهم والقراءة داخل الخلية */
-td .val {
-  font-weight: 700;
-}
-td .val.low  { color: #2563eb; }  /* أزرق */
-td .val.ok   { color: #10b981; }  /* أخضر */
-td .val.high { color: #ef4444; }  /* أحمر */
-
-/* إخفاء/إظهار الملاحظات بالزر */
-.notes.hidden-cell { color: #999; }
-.hide-notes td.notes { visibility: hidden; height: 0; padding-top: 0; padding-bottom: 0; }
