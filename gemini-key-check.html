@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>فحص مفتاح Gemini</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Tahoma,Arial;margin:2rem;direction:rtl}
+    input,button{padding:.6rem;border:1px solid #ddd;border-radius:10px}
+    .row{display:flex;gap:.5rem;flex-wrap:wrap}
+    #out{white-space:pre-wrap;background:#f7f7fb;border:1px solid #eee;border-radius:12px;padding:1rem;margin-top:1rem}
+  </style>
+</head>
+<body>
+  <h2>فحص مفتاح Gemini</h2>
+  <p>الصقي مفتاحك ثم اضغطي <b>اختبار</b>. لو نجح هتشوفي رد من Gemini.</p>
+  <div class="row">
+    <input id="key" placeholder="AIza... (Gemini API Key)" style="min-width:360px" />
+    <button id="btn">اختبار</button>
+  </div>
+  <div id="out">النتيجة ستظهر هنا…</div>
+
+  <script type="module">
+    // SDK للمتصفح
+    import { GoogleGenerativeAI } from "https://cdn.jsdelivr.net/npm/@google/generative-ai@latest/dist/browser.mjs";
+
+    const keyInp = document.getElementById('key');
+    const btn    = document.getElementById('btn');
+    const out    = document.getElementById('out');
+
+    btn.onclick = async () => {
+      const key = keyInp.value.trim();
+      if(!key){ out.textContent = '⚠️ ضعي المفتاح أولًا.'; return; }
+
+      try{
+        const genAI = new GoogleGenerativeAI(key);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const res   = await model.generateContent("قولي: المفتاح شغال ✅");
+        out.textContent = "نجاح ✅\n\n" + (res.response.text()||"(بدون نص)");
+      }catch(e){
+        out.textContent = "فشل ❌\n\n" + (e?.message || e);
+      }
+    };
+  </script>
+</body>
+</html>
