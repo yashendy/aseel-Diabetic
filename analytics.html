@@ -4,14 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>تحليل القياسات</title>
+
+  <!-- ✅ أيقونة الموقع (كرري هذا السطر في كل الصفحات الأخرى) -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+
   <link rel="stylesheet" href="css/analytics.css" />
-  <link rel="icon" href="data:,">
+  <!-- Chart.js (نسخة UMD بسيطة، بدون import modules) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <div class="container">
-    <!-- رأس -->
     <header class="card header">
       <button class="btn back" onclick="history.back()">⬅ رجوع</button>
+
       <div class="title">
         <h1>📈 تحليل القياسات — <span id="childName">طفل</span></h1>
         <p class="muted" id="childMeta">—</p>
@@ -23,7 +28,6 @@
         <span class="chip" id="chipCF">CF: —</span>
       </div>
 
-      <!-- فلاتر -->
       <div class="filters">
         <label>الفترة</label>
         <select id="range">
@@ -32,10 +36,9 @@
           <option value="30d">آخر 30 يوم</option>
           <option value="custom">مخصص</option>
         </select>
-
         <input type="date" id="start" class="hidden">
         <span>↔</span>
-        <input type="date" id="end"   class="hidden">
+        <input type="date" id="end" class="hidden">
 
         <label>الوحدة</label>
         <select id="unit">
@@ -51,6 +54,7 @@
           <button class="seg" data-slot="snack">السناك</button>
         </div>
 
+        <button class="btn" id="csvBtn">📥 تنزيل CSV</button>
         <button class="btn" id="printBtn">🖨️ طباعة / PDF</button>
         <button class="btn primary" id="apply">تطبيق</button>
         <button class="btn ai hidden" id="aiBtn">🤖 تحليل ذكي</button>
@@ -59,39 +63,15 @@
 
     <!-- KPIs -->
     <section class="card kpis">
-      <div class="kpi">
-        <div class="v" id="kpiTIR">—%</div>
-        <div class="d" id="deltaTIR">—</div>
-        <div class="l">وقت داخل النطاق (TIR)</div>
-      </div>
-      <div class="kpi bad">
-        <div class="v" id="kpiHigh">—%</div>
-        <div class="d" id="deltaHigh">—</div>
-        <div class="l">ارتفاعات</div>
-      </div>
-      <div class="kpi bad">
-        <div class="v" id="kpiLow">—%</div>
-        <div class="d" id="deltaLow">—</div>
-        <div class="l">هبوطات</div>
-      </div>
-      <div class="kpi">
-        <div class="v" id="kpiMean">—</div>
-        <div class="d" id="deltaMean">—</div>
-        <div class="l">المتوسط</div>
-      </div>
-      <div class="kpi">
-        <div class="v" id="kpiSD">—</div>
-        <div class="d" id="deltaSD">—</div>
-        <div class="l">الانحراف المعياري</div>
-      </div>
-      <div class="kpi">
-        <div class="v" id="kpiCount">—</div>
-        <div class="d" id="deltaCount">—</div>
-        <div class="l">عدد القياسات</div>
-      </div>
+      <div class="kpi"><div class="v" id="kpiTIR">—%</div><div class="d" id="deltaTIR">—</div><div class="l">وقت داخل النطاق (TIR)</div></div>
+      <div class="kpi bad"><div class="v" id="kpiHigh">—%</div><div class="d" id="deltaHigh">—</div><div class="l">ارتفاعات</div></div>
+      <div class="kpi bad"><div class="v" id="kpiLow">—%</div><div class="d" id="deltaLow">—</div><div class="l">هبوطات</div></div>
+      <div class="kpi"><div class="v" id="kpiMean">—</div><div class="d" id="deltaMean">—</div><div class="l">المتوسط</div></div>
+      <div class="kpi"><div class="v" id="kpiSD">—</div><div class="d" id="deltaSD">—</div><div class="l">الانحراف المعياري</div></div>
+      <div class="kpi"><div class="v" id="kpiCount">—</div><div class="d" id="deltaCount">—</div><div class="l">عدد القياسات</div></div>
     </section>
 
-    <!-- رسوم بسيطة (Canvas بدون مكتبات) -->
+    <!-- Charts -->
     <section class="card charts">
       <h2>توزيع حسب وقت القياس</h2>
       <canvas id="slotBar"></canvas>
@@ -100,13 +80,13 @@
       <canvas id="dailyLine"></canvas>
     </section>
 
-    <!-- توصيات -->
+    <!-- Insights -->
     <section class="card insights">
       <h2>ملاحظات واقتراحات</h2>
       <ul id="insightsList" class="list"></ul>
     </section>
 
-    <!-- نتيجة التحليل الذكي (اختياري) -->
+    <!-- AI -->
     <section id="aiBox" class="card hidden">
       <h2>تحليل ذكي (Gemini)</h2>
       <div id="aiOut" class="aiout"></div>
@@ -115,8 +95,9 @@
 
   <div id="loader" class="loader hidden">جارِ التحميل…</div>
 
-  <!-- ضعي مفتاح Gemini بشكل آمن، أو عبر <script> قبل هذا الملف:
-       window.GEMINI_API_KEY = 'AIza...'; -->
-  <script type="module" src="js/analytics.js?v=3"></script>
+  <!-- اختياري: إن حطيتي المفتاح هنا يظهر زر الذكاء -->
+  <!-- <script>window.GEMINI_API_KEY='AIza...';</script> -->
+
+  <script type="module" src="js/analytics.js?v=4"></script>
 </body>
 </html>
