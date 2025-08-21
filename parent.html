@@ -1,44 +1,68 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>لوحة وليّ الأمر</title>
-  <link rel="stylesheet" href="css/parent.css">
-  <link rel="icon" href="data:,">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>لوحة وليّ الأمر</title>
+  <link rel="stylesheet" href="css/parent.css">
+  <link rel="icon" href="data:,">
 </head>
 <body>
-  <div class="container">
-    <header class="top card">
-      <div class="head">
-        <h1>👨‍👩‍👧‍👦 أطفالك</h1>
-        <p class="muted">اختَر طفلاً لفتح لوحة التحكم الخاصة به.</p>
-      </div>
-      <div class="tools">
-        <div class="field">
-          <label for="search">بحث بالاسم</label>
-          <input type="text" id="search" placeholder="مثال: سارة">
-        </div>
-        <a class="add-btn" href="add-child.html">➕ إضافة طفل</a>
-      </div>
-    </header>
+  <div class="container">
+    <header class="top card">
+      <div class="head">
+        <h1>👨‍👩‍👧‍👦 أطفالك</h1>
+        <p class="muted">اختَر طفلاً لفتح لوحة التحكم الخاصة به.</p>
+      </div>
+      <div class="tools">
+        <div class="field">
+          <label for="search">بحث بالاسم</label>
+          <input type="text" id="search" placeholder="مثال: سارة">
+        </div>
+        <a class="add-btn" href="add-child.html">➕ إضافة طفل</a>
+      </div>
+    </header>
 
-    <section id="kidsGrid" class="grid"></section>
-    <div id="empty" class="empty hidden">لا يوجد أطفال بعد… ابدئي بإضافة طفل جديد.</div>
-  </div>
+    <section id="kidsGrid" class="grid"></section>
+    <div id="empty" class="empty hidden">لا يوجد أطفال بعد… ابدئي بإضافة طفل جديد.</div>
+  </div>
 
-  <!-- المساعد الذكي -->
-  <script src="https://cdn.jsdelivr.net/npm/@helixml/chat-embed@latest" crossorigin="anonymous"></script>
-  <script>
-    ChatWidget({
-      url: 'https://api.openai.com/v1/chat/completions',
-      model: 'gpt-3.5-turbo',
-      bearerToken: 'YOUR_OPENAI_KEY', // استبدلي المفتاح بمفتاح OpenAI الخاص بك
-      title: 'مساعدك الغذائي',
-      placeholder: 'اسأل عن الوجبات، الجرعة، أو حالة الطفل…'
-    });
-  </script>
+    <button class="ai-fab" id="aiFab">🤖</button>
 
-  <script type="module" src="js/parent.js"></script>
+    <div class="ai-widget hidden" id="aiWidget">
+    <div class="ai-header">
+      <div class="ai-title">
+        <strong>مساعدك الغذائي</strong>
+        <small id="aiContext">بدون سياق طفل</small>
+      </div>
+      <div>
+        <button class="icon-btn" id="aiMin">➖</button>
+        <button class="icon-btn" id="aiClose">❌</button>
+      </div>
+    </div>
+    <div class="ai-messages" id="aiMessages"></div>
+    <div class="ai-input">
+      <div class="ai-quick">
+        <span class="chip ai-quick-btn" data-q="ما هو الأنسولين؟">ما الأنسولين؟</span>
+        <span class="chip ai-quick-btn" data-q="كيف أحسب جرعة الوجبة؟">حساب جرعة الوجبة؟</span>
+      </div>
+      <div class="ai-row">
+        <textarea id="aiInput" placeholder="اكتب سؤالك هنا..."></textarea>
+        <button class="btn primary" id="aiSend">إرسال</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="loader" class="loader">
+    <p>جارٍ تحميل البيانات...</p>
+  </div>
+
+  <script>
+    // ضع مفتاح Gemini API الخاص بك هنا.
+    // يمكنك استبدال هذا بـ "YOUR_GEMINI_API_KEY"
+    window.GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY';
+  </script>
+
+  <script type="module" src="js/parent.js"></script>
 </body>
 </html>
