@@ -1,4 +1,4 @@
-// js/measurements.js — النسخة الموحدة (slotKey/slotOrder + when)
+// js/measurements.js — النسخة الموحدة (slotKey/slotOrder + when + min-thresholds)
 import { auth, db } from './firebase-config.js';
 import {
   collection, addDoc, updateDoc, getDocs, query, where, doc, getDoc, serverTimestamp
@@ -27,6 +27,7 @@ const slotEl     = document.getElementById('slot');
 const valueEl    = document.getElementById('value');
 const inUnitEl   = document.getElementById('inUnit');
 const convHint   = document.getElementById('convHint');
+const valueErr   = document.getElementById('valueErr');
 
 const wrapCorrection   = document.getElementById('wrapCorrection');
 const correctionDoseEl = document.getElementById('correctionDose');
@@ -55,8 +56,10 @@ const toMmol = mgdl => Number(mgdl)/18;
 const fmtMmol = v => (v==null||isNaN(+v)?'—':Number(v).toFixed(1));
 const fmtMgdl = v => (v==null||isNaN(+v)?'—':Math.round(Number(v)));
 
-/* ========= Slot Enum (ثابت) =========
-   key ثابت + order + ترجمة عربية/إنجليزية */
+const MIN_MMOL = 2.0;
+const MIN_MGDL = 36;
+
+/* ========= Slot Enum ========= */
 const SLOT_ENUM = [
   { key:'WAKE',            ar:'الاستيقاظ',    en:'Wake',            order:10 },
   { key:'PRE_BREAKFAST',   ar:'ق.الفطار',     en:'Pre‑Breakfast',   order:20 },
@@ -74,23 +77,15 @@ const SLOT_ENUM = [
 const SLOT_BY_KEY = new Map(SLOT_ENUM.map(s=>[s.key,s]));
 const SLOT_BY_AR  = new Map(SLOT_ENUM.map(s=>[s.ar,s]));
 const SLOT_BY_EN  = new Map(SLOT_ENUM.map(s=>[s.en,s]));
-
-// سماح بتكرار Slot (سناك فقط)
 const ALLOW_DUP_KEYS = new Set(['SNACK']);
-
-// للعرض بالعربي
 const arLabel = key => (SLOT_BY_KEY.get(key)?.ar || key);
 
-/* تطبيع أي قيمة قديمة (عربي/إنجليزي/مفاتيح قديمة) → {key, order, ar, en} */
+/* تطبيع */
 function normalizeSlot(value){
   if(!value) return null;
-  // 1) إن كانت key حديثة
   if (SLOT_BY_KEY.has(value)) return SLOT_BY_KEY.get(value);
-  // 2) عربي/إنجليزي مطابقين
   if (SLOT_BY_AR.has(value))  return SLOT_BY_AR.get(value);
   if (SLOT_BY_EN.has(value))  return SLOT_BY_EN.get(value);
-
-  // 3) مفاتيح قديمة مختصرة (من نسخ سابقة)
   const LEGACY = {
     'pre_bf':'PRE_BREAKFAST','post_bf':'POST_BREAKFAST',
     'pre_ln':'PRE_LUNCH','post_ln':'POST_LUNCH',
@@ -104,11 +99,10 @@ function normalizeSlot(value){
   };
   const mapped = LEGACY[value];
   if (mapped && SLOT_BY_KEY.has(mapped)) return SLOT_BY_KEY.get(mapped);
-
   return null;
 }
 
-/* ========= حالة عامة ========= */
+/* ========= حالة ========= */
 let USER=null, CHILD=null;
 let normalMin=4.0, normalMax=7.0, CR=null, CF=null, severeHigh=13.9;
 let editingId=null;
@@ -120,16 +114,18 @@ onAuthStateChanged(auth, async (user)=>{
   USER=user;
   if(!childId){ alert('لا يوجد معرف طفل'); history.back(); return; }
 
-  // إعداد اليوم
   dayEl.value = todayStr();
   btnToday.addEventListener('click', ()=>{ dayEl.value=todayStr(); loadTable(); });
 
-  // وحدات الإدخال/العرض
+  // إعداد الوحدات الافتراضية
   inUnitEl.value  = localStorage.getItem('meas_in_unit') || 'mmol';
   outUnitEl.value = localStorage.getItem('meas_out_unit')|| 'mmol';
 
   inUnitEl.addEventListener('change', ()=>{
     localStorage.setItem('meas_in_unit', inUnitEl.value);
+    // ضبط الـ min بناء على الوحدة + إعادة التحقق
+    setInputMinByUnit();
+    validateValue();
     updatePreviewAndVisibility();
   });
   outUnitEl.addEventListener('change', ()=>{
@@ -137,7 +133,7 @@ onAuthStateChanged(auth, async (user)=>{
     renderRows(_rows);
   });
 
-  // القوائم: وقت القياس بالعربي مع قيمة key
+  // بناء قائمة الـ Slots
   slotEl.innerHTML = SLOT_ENUM
     .sort((a,b)=>a.order-b.order)
     .map(s=> `<option value="${s.key}">${s.ar}</option>`).join('');
@@ -150,12 +146,14 @@ onAuthStateChanged(auth, async (user)=>{
     location.href = `meals.html?child=${encodeURIComponent(childId)}`;
   });
 
-  // تحميل بيانات الطفل وجدول اليوم
   await loadChild();
   await loadTable();
 
   // أحداث فورية
-  valueEl.addEventListener('input', updatePreviewAndVisibility);
+  valueEl.addEventListener('input', ()=>{
+    validateValue();
+    updatePreviewAndVisibility();
+  });
   slotEl.addEventListener('change', updatePreviewAndVisibility);
   dayEl.addEventListener('change', async ()=>{
     const t = todayStr();
@@ -165,8 +163,46 @@ onAuthStateChanged(auth, async (user)=>{
 
   btnSave.addEventListener('click', saveMeasurement);
   btnReset.addEventListener('click', ()=> fillForm({}));
+
+  // اضبط min الأولي حسب الوحدة
+  setInputMinByUnit();
+  validateValue();
 });
 
+/* ====== إعداد min حسب الوحدة ====== */
+function setInputMinByUnit(){
+  if (inUnitEl.value === 'mmol') {
+    valueEl.min = String(MIN_MMOL);
+    valueEl.step = '0.1';
+    valueEl.placeholder = 'مثال: 6.5';
+  } else {
+    valueEl.min = String(MIN_MGDL);
+    valueEl.step = '1';
+    valueEl.placeholder = 'مثال: 120';
+  }
+}
+
+/* ====== التحقق الأدنى ====== */
+function validateValue(){
+  const raw = Number(valueEl.value);
+  let ok = true;
+
+  if (isNaN(raw)) {
+    ok = false; // فاضي
+  } else {
+    if (inUnitEl.value === 'mmol') {
+      ok = raw >= MIN_MMOL;
+    } else {
+      ok = raw >= MIN_MGDL;
+    }
+  }
+
+  valueErr.classList.toggle('hidden', ok || valueEl.value==='');
+  btnSave.disabled = !ok;
+  return ok;
+}
+
+/* ========= تحميل بيانات الطفل ========= */
 async function loadChild(){
   loader(true);
   try{
@@ -196,23 +232,9 @@ async function loadChild(){
 }
 
 /* ========= Preview & Visibility ========= */
-function readInputMmol(){
-  const raw = Number(valueEl.value);
-  if(isNaN(raw)) return null;
-  return inUnitEl.value==='mmol' ? raw : toMmol(raw);
-}
-function readInputMgdl(){
-  const raw = Number(valueEl.value);
-  if(isNaN(raw)) return null;
-  return inUnitEl.value==='mgdl' ? raw : toMgdl(raw);
-}
-
-function getState(mmol, min, max){
-  if(mmol==null||isNaN(+mmol)) return '';
-  if(mmol < min) return 'low';
-  if(mmol > max) return 'high';
-  return 'normal';
-}
+const getState=(mmol,min,max)=> mmol==null||isNaN(+mmol)? '' : (mmol<min?'low': (mmol>max?'high':'normal'));
+const readInputMmol=()=>{const raw=Number(valueEl.value); if(isNaN(raw)) return null; return inUnitEl.value==='mmol'? raw : toMmol(raw);};
+const readInputMgdl=()=>{const raw=Number(valueEl.value); if(isNaN(raw)) return null; return inUnitEl.value==='mgdl'? raw : toMgdl(raw);};
 
 function updatePreviewAndVisibility(){
   const mmol = readInputMmol();
@@ -228,7 +250,6 @@ function updatePreviewAndVisibility(){
   const isLow = (mmol!=null && mmol < normalMin);
   const isSevereHigh = (mmol!=null && mmol >= severeHigh);
 
-  // Meal times: pre-*
   const mealKeys = new Set(['PRE_BREAKFAST','PRE_LUNCH','PRE_DINNER','SNACK']);
   const isMealTime = mealKeys.has(slotEl.value);
 
@@ -252,7 +273,6 @@ async function loadTable(){
     const base = collection(db, `parents/${USER.uid}/children/${childId}/measurements`);
     const snap = await getDocs(query(base, where('date','==', dayEl.value)));
     _rows = snap.docs.map(d=> normalizeRow({ id:d.id, ...d.data() }));
-    // ترتيب حسب order ثم when (إن وجد)
     _rows.sort((a,b)=>{
       const ao = a.slotOrder ?? 999, bo = b.slotOrder ?? 999;
       if(ao!==bo) return ao-bo;
@@ -268,26 +288,14 @@ async function loadTable(){
   }
 }
 
-/* تطبيع صف قديم → يحوي دومًا slotKey/slotOrder لسهولة العرض */
 function normalizeRow(r){
-  // لو عنده key جاهز
   if (r.slotKey && (r.slotOrder!=null)) {
-    return {
-      ...r,
-      whenTs: r.when?.toMillis ? r.when.toMillis() : (r.when || 0)
-    };
+    return { ...r, whenTs: r.when?.toMillis ? r.when.toMillis() : (r.when || 0) };
   }
-  // لو قديم: فيه slot (عربي/قديم)
   const norm = normalizeSlot(r.slot || r.slotAr || r.slotEn);
   if (norm) {
-    return {
-      ...r,
-      slotKey: norm.key,
-      slotOrder: norm.order,
-      whenTs: r.when?.toMillis ? r.when.toMillis() : (r.when || 0)
-    };
+    return { ...r, slotKey:norm.key, slotOrder:norm.order, whenTs: r.when?.toMillis ? r.when.toMillis() : (r.when || 0) };
   }
-  // غير معروف: حطه في آخر القائمة
   return { ...r, slotKey:'UNKNOWN', slotOrder:999, whenTs:0 };
 }
 
@@ -347,18 +355,25 @@ async function isDuplicate(date, slotKey, ignoreId=null){
 
 /* ========= حفظ ========= */
 async function saveMeasurement(){
-  const date = dayEl.value || todayStr();
-  const slotKey = slotEl.value;         // قيمة المفتاح الحديث
-  const slotObj = SLOT_BY_KEY.get(slotKey);
+  // تحقق الحد الأدنى قبل أي شيء
+  if (!validateValue()) {
+    valueErr.classList.remove('hidden');
+    return;
+  }
 
+  const date = dayEl.value || todayStr();
+  const slotKey = slotEl.value;
+  const slotObj = SLOT_BY_KEY.get(slotKey);
   if(!slotObj){ alert('اختيار وقت القياس غير صالح'); return; }
 
   const raw  = Number(valueEl.value);
-  if(isNaN(raw) || raw<0){ alert('أدخلي قيمة قياس صحيحة'); return; }
+  const unit = inUnitEl.value; // mmol | mgdl
 
-  const mmol = (inUnitEl.value==='mmol') ? raw : toMmol(raw);
-  const mgdl = (inUnitEl.value==='mgdl') ? raw : toMgdl(raw);
-  const unitLabel = (inUnitEl.value==='mgdl') ? 'mg/dL' : 'mmol/L';
+  // لو دخل mg/dL وهو >=36، ولو mmol وهو >=2 — خلاص اعتبر صالح
+  const mmol = (unit==='mmol') ? raw : toMmol(raw);
+  const mgdl = (unit==='mgdl') ? raw : toMgdl(raw);
+
+  const unitLabel = (unit==='mgdl') ? 'mg/dL' : 'mmol/L';
   const state = getState(mmol, normalMin, normalMax);
 
   if(await isDuplicate(date, slotKey, editingId)){
@@ -367,19 +382,16 @@ async function saveMeasurement(){
   }
 
   const payload = {
-    // مفاتيح موحّدة
     date,
     when: serverTimestamp(),
     slotKey,
     slotOrder: slotObj.order,
 
-    // قيم القياس بصيغ متعددة (للتوافق)
     unit: unitLabel,
     value: (unitLabel==='mg/dL') ? Number(mgdl) : Number(mmol.toFixed(1)),
     value_mmol: Number(mmol.toFixed(2)),
     value_mgdl: Number(mgdl),
 
-    // حالة وحقول إضافية
     state,
     correctionDose: (correctionDoseEl.value==='') ? null : Number(correctionDoseEl.value),
     bolusDose:      (bolusDoseEl.value==='')      ? null : Number(bolusDoseEl.value),
@@ -431,6 +443,9 @@ function fillForm(r={}){
     notesEl.value = '';
   }
 
+  // تحديث الـ min + التحقق + المعاينة
+  setInputMinByUnit();
+  validateValue();
   updatePreviewAndVisibility();
 }
 
