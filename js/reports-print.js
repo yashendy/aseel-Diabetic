@@ -11,7 +11,8 @@ const childId   = qs.get('child') || localStorage.getItem('lastChildId');
 const paramFrom = qs.get('from') || '';
 const paramTo   = qs.get('to')   || '';
 const paramUnit = (qs.get('unit') || 'mmol').toLowerCase();
-const paramBlank= qs.get('blank') === '1';
+// يدعم الطريقتين: ?blank=1 أو ?mode=blank
+const paramBlank= qs.get('blank') === '1' || qs.get('mode') === 'blank';
 
 const childNameEl = document.getElementById('childName');
 const childMetaEl = document.getElementById('childMeta');
@@ -45,19 +46,34 @@ function stateOf(mmol, min, max){ if(mmol<min) return 'low'; if(mmol>max) return
 function valueText(mmol, mgdl, unit){ return unit==='mgdl' ? `${Math.round(mgdl)} mg/dL` : `${Number(mmol).toFixed(1)} mmol/L`; }
 function arrowOf(st){ return st==='low'?'↓':(st==='high'?'↑':'↔'); }
 
+/* توحيد الأوقات (عربي → مفاتيح) */
+const AR2KEY = {
+  'الاستيقاظ':'wake',
+  'ق.الفطار':'pre_bf','ب.الفطار':'post_bf',
+  'ق.الغدا':'pre_ln','ب.الغدا':'post_ln',
+  'ق.العشا':'pre_dn','ب.العشا':'post_dn',
+  'سناك':'snack',
+  'ق.النوم':'pre_sleep','أثناء النوم':'during_sleep',
+  'ق.الرياضة':'pre_sport','ب.الرياضة':'post_sport'
+};
+
+/* ترتيب الأعمدة المطبوعة (بدون سناك/رياضة للحفاظ على الشكل) */
 const SLOT_ORDER = [
   ['wake','الاستيقاظ'],
   ['pre_bf','ق.الفطار'],  ['post_bf','ب.الفطار'],
   ['pre_ln','ق.الغدا'],   ['post_ln','ب.الغدا'],
   ['pre_dn','ق.العشا'],   ['post_dn','ب.العشا'],
   ['pre_sleep','قبل النوم'], ['during_sleep','أثناء النوم'],
-  // snack مستبعد من الأعمدة المطبوعة
 ];
 
 let USER=null, CHILD=null;
 let limits={min:4,max:7}, CR=null, CF=null;
 let pivotDates=[];  // sorted dates
 let pivotRows={};   // date -> { slotKey: {mmol,mgdl,corr,notes,state} }
+
+/* عتبات تحذير إضافية (لا تغيّر الشكل، بس تضيف ⚠︎ لو شديد) */
+const CRIT_LOW = 3.5;   // mmol/L  ≈ 63 mg/dL
+const CRIT_HIGH= 13.9;  // mmol/L  ≈ 250 mg/dL
 
 /* ==== boot ==== */
 onAuthStateChanged(auth, async (u)=>{
@@ -96,6 +112,12 @@ async function loadChild(){
   chipRangeEl.textContent = `النطاق: ${limits.min}–${limits.max} mmol/L`;
   chipCREl.textContent = `CR: ${CR ?? '—'} g/U`;
   chipCFEl.textContent = `CF: ${CF ?? '—'} mmol/L/U`;
+
+  // تهيئة تفضيلات العرض من التخزين المحلي
+  const prefUnit = localStorage.getItem('rp_unit');
+  const prefNotes= localStorage.getItem('rp_notes');
+  if(prefUnit) unitSel.value = prefUnit;
+  if(prefNotes) notesMode.value = prefNotes;
 }
 function calcAge(bd){
   if(!bd) return '—';
@@ -111,12 +133,22 @@ function initControls(){
   const today=todayStr();
   fromEl.value = paramFrom || addDays(today,-7);
   toEl.value   = paramTo   || today;
-  unitSel.value = (paramUnit==='mgdl') ? 'mgdl' : 'mmol';
-  blankMode.checked = paramBlank;
+
+  // paramUnit أو المخزن محليًا
+  if(paramUnit==='mgdl') unitSel.value = 'mgdl';
+
+  // blank param
+  blankMode.checked = !!paramBlank;
 
   applyEl.addEventListener('click', loadAndRender);
-  unitSel.addEventListener('change', renderTable);
-  notesMode.addEventListener('change', renderTable);
+  unitSel.addEventListener('change', ()=>{
+    localStorage.setItem('rp_unit', unitSel.value);
+    renderTable();
+  });
+  notesMode.addEventListener('change', ()=>{
+    localStorage.setItem('rp_notes', notesMode.value);
+    renderTable();
+  });
   blankMode.addEventListener('change', loadAndRender);
   btnPrint.addEventListener('click', ()=>window.print());
 }
@@ -138,6 +170,7 @@ async function loadAndRender(){
         pivotRows[d] = {};
       }
     }else{
+      // ✅ فلترة على السيرفر + ترتيب
       const base = collection(db, `parents/${USER.uid}/children/${childId}/measurements`);
       const qy = query(base, where('date','>=',from), where('date','<=',to), orderBy('date','asc'));
       const snap = await getDocs(qy);
@@ -145,7 +178,9 @@ async function loadAndRender(){
       snap.forEach(docSnap=>{
         const r = docSnap.data();
         const date = r.date;
-        const slot = r.slot || r.input?.slot || '';
+        // slot قد يأتي عربي/قديم أو مفتاح حديث
+        let rawSlot = r.slotKey || r.slot || r.input?.slot || '';
+        let slot = AR2KEY[rawSlot] || rawSlot;
         if(!date || !slot) return;
 
         // استبعاد السناك من الطباعة
@@ -159,7 +194,10 @@ async function loadAndRender(){
         const corr = r.correctionDose ?? r.input?.correctionDose ?? null;
         const notes= r.notes || r.input?.notes || '';
 
-        (pivotRows[date]??=( {} ))[slot] = { mmol, mgdl, corr, notes, state: stateOf(mmol, limits.min, limits.max) };
+        (pivotRows[date]??=( {} ))[slot] = {
+          mmol, mgdl, corr, notes,
+          state: stateOf(mmol, limits.min, limits.max)
+        };
       });
 
       pivotDates = Object.keys(pivotRows).sort();
@@ -203,12 +241,16 @@ function renderTable(){
         return `<td class="cell ${slotKey}">
           <span class="line dash">ـــ</span>
           <span class="line dash">جرعة التصحيح: ـــ</span>
-          <span class="line ${showNotes?'dash':'dash'}">${showNotes?'ملاحظات: ـــ':''}</span>
+          ${showNotes?`<span class="line dash">ملاحظات: ـــ</span>`:''}
         </td>`;
       }
-      const valTxt = valueText(cell.mmol, cell.mgdl, unit);
       const st = cell.state;
       const clsBg = st==='low'?'bg-low':(st==='high'?'bg-high':'bg-ok');
+
+      // ⚠︎ تنبيه لو قيمة حرجة
+      const warn = (cell.mmol<CRIT_LOW || cell.mmol>CRIT_HIGH) ? ' ⚠︎' : '';
+
+      const valTxt = valueText(cell.mmol, cell.mgdl, unit) + warn;
       const corrLine = (cell.corr!=null && cell.corr!=='') ? `${cell.corr} U` : 'ـــ';
       const notesLine = showNotes ? (cell.notes && String(cell.notes).trim()? esc(cell.notes) : 'ـــ') : '';
 
