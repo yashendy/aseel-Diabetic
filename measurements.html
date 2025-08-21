@@ -10,21 +10,27 @@
 <body>
   <div class="container">
 
-    <!-- بيانات الطفل -->
+    <!-- شريط علوي -->
     <header class="card child-info">
-      <button class="btn back" onclick="history.back()">⬅ رجوع</button>
-      <div class="head">
-        <h1>📊 القياسات — <span id="childName">طفل</span></h1>
-        <p class="muted" id="childMeta">—</p>
-        <div class="chips">
-          <span class="chip" id="chipRange">النطاق: —</span>
-          <span class="chip" id="chipCR">CR: —</span>
-          <span class="chip" id="chipCF">CF: —</span>
+      <div class="topbar">
+        <div class="nav">
+          <button class="btn back" id="btnBack">⬅ رجوع</button>
+          <button class="btn" id="btnMeals">🍽️ الوجبات</button>
         </div>
-      </div>
-      <div class="datebar">
-        <label for="day">اليوم:</label>
-        <input type="date" id="day" />
+        <div class="who">
+          <h1>📊 القياسات — <span id="childName">طفل</span></h1>
+          <p class="muted" id="childMeta">—</p>
+          <div class="chips">
+            <span class="chip" id="chipRange">النطاق: —</span>
+            <span class="chip" id="chipCR">CR: —</span>
+            <span class="chip" id="chipCF">CF: —</span>
+          </div>
+        </div>
+        <div class="datebar">
+          <label for="day">اليوم:</label>
+          <input type="date" id="day" />
+          <button class="btn tiny" id="btnToday">اليوم</button>
+        </div>
       </div>
     </header>
 
@@ -32,10 +38,11 @@
     <section class="card form">
       <h2>إدخال قياس</h2>
       <div class="grid">
-        <!-- وقت القياس (التصنيف) -->
+        <!-- وقت القياس -->
         <div class="field">
           <label for="slot">وقت القياس</label>
           <select id="slot"></select>
+          <div class="hint">الاختيارات مرتبة زمنيًا.</div>
         </div>
 
         <!-- قيمة القياس + وحدة الإدخال -->
@@ -82,6 +89,7 @@
         <button class="btn primary" id="btnSave">💾 حفظ القياس</button>
         <button class="btn" id="btnReset">مسح الحقول</button>
       </div>
+      <div id="toast" class="toast hidden"></div>
     </section>
 
     <!-- جدول اليوم -->
