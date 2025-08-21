@@ -53,6 +53,7 @@
 
         <button class="btn" id="printBtn">🖨️ طباعة / PDF</button>
         <button class="btn primary" id="apply">تطبيق</button>
+        <button class="btn ai hidden" id="aiBtn">🤖 تحليل ذكي</button>
       </div>
     </header>
 
@@ -104,10 +105,18 @@
       <h2>ملاحظات واقتراحات</h2>
       <ul id="insightsList" class="list"></ul>
     </section>
+
+    <!-- نتيجة التحليل الذكي (اختياري) -->
+    <section id="aiBox" class="card hidden">
+      <h2>تحليل ذكي (Gemini)</h2>
+      <div id="aiOut" class="aiout"></div>
+    </section>
   </div>
 
   <div id="loader" class="loader hidden">جارِ التحميل…</div>
 
-  <script type="module" src="js/analytics.js?v=2"></script>
+  <!-- ضعي مفتاح Gemini بشكل آمن، أو عبر <script> قبل هذا الملف:
+       window.GEMINI_API_KEY = 'AIza...'; -->
+  <script type="module" src="js/analytics.js?v=3"></script>
 </body>
 </html>
