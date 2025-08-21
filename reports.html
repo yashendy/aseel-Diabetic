@@ -4,8 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>التقارير</title>
+
+  <!-- ✅ أيقونة الموقع (كرري هذا السطر في باقي الصفحات) -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+
   <link rel="stylesheet" href="css/reports.css" />
-  <link rel="icon" href="data:,">
 </head>
 <body>
   <div class="container">
@@ -36,35 +39,45 @@
         </div>
 
         <div class="actions">
-          <button id="toggleNotes" class="btn">إظهار الملاحظات</button>
-          <a id="openBlank" class="btn">تفريغ ورق أسبوع 📄</a>
+          <button id="toggleNotes" class="btn">إخفاء الملاحظات</button>
+          <button id="csvBtn" class="btn">📥 تنزيل CSV</button>
           <a id="openAnalytics" class="btn primary">تحليل القياسات</a>
           <a id="openPrint" class="btn">مراجعة التقرير (مطبوع) 🖨️</a>
+          <a id="openBlank" class="btn">تفريغ ورق أسبوع 📄</a>
         </div>
       </div>
+      <p id="densityHint" class="muted small">سيتم تفعيل عرض كثيف تلقائيًا عند تعدّي 150 صف.</p>
     </header>
 
-    <section class="card table">
+    <section class="card table" id="tableSection">
       <h2>قياسات الفترة</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>التاريخ</th>
-            <th>الوقت</th>
-            <th>القراءة</th>
-            <th>الحالة</th>
-            <th>التصحيح</th>
-            <th>علاج الهبوط</th>
-            <th>ملاحظات</th>
-          </tr>
-        </thead>
-        <tbody id="tbody">
-          <tr><td colspan="7" class="muted">—</td></tr>
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>الوقت</th>
+              <th>القراءة</th>
+              <th>الحالة</th>
+              <th>التصحيح</th>
+              <th>علاج الهبوط</th>
+              <th class="col-notes">ملاحظات</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="7" class="muted center">—</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
+
+    <!-- وضع الطباعة الممتلئ/الفارغ (يُستخدم من reports-print.html لو أردتي) -->
+    <section id="printFilledSection" class="card print-filled hidden"></section>
+    <section id="blankWeekSection"   class="card blank-week hidden"></section>
   </div>
 
-  <script type="module" src="js/reports.js"></script>
+  <div id="loader" class="loader hidden">جارِ التحميل…</div>
+
+  <script type="module" src="js/reports.js?v=2"></script>
 </body>
 </html>
