@@ -2,354 +2,354 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, getDocs, query, where, orderBy, doc, getDoc
+  collection, getDocs, query, orderBy, doc, getDoc
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-/* عناصر */
-const qs = s => document.querySelector(s);
-const childNameEl = qs('#childName');
-const childMetaEl = qs('#childMeta');
+/* ---------- عناصر ---------- */
+const params      = new URLSearchParams(location.search);
+const childId     = params.get('child');
+const rangeParam  = params.get('range') || '14d';
 
-const dateFromEl = qs('#dateFrom');
-const dateToEl   = qs('#dateTo');
-const unitSel    = qs('#unitSelect');
-const applyBtn   = qs('#applyBtn');
-const rangeBtns  = [...document.querySelectorAll('.range-btn')];
-const slotBtns   = [...document.querySelectorAll('.slot')];
+const childNameEl = document.getElementById('childName');
+const childMetaEl = document.getElementById('childMeta');
 
-const stCount = qs('#stCount'), stAvg=qs('#stAvg'), stStd=qs('#stStd'),
-      stTir=qs('#stTir'), stHigh=qs('#stHigh'), stLow=qs('#stLow');
+const backBtn  = document.getElementById('backBtn');
+const aiBtn    = document.getElementById('aiBtn');
 
-const btnCSV = qs('#btnCSV'), btnPDF=qs('#btnPDF'), backBtn=qs('#backBtn');
+const dateFromEl = document.getElementById('dateFrom');
+const dateToEl   = document.getElementById('dateTo');
+const unitSel    = document.getElementById('unitSel');
+const applyBtn   = document.getElementById('applyBtn');
 
-/* AI */
-const aiWidget = qs('#aiWidget'), aiMin=qs('#aiMin'), aiClose=qs('#aiClose'),
-      aiMessages=qs('#aiMessages'), aiInput=qs('#aiInput'), aiSend=qs('#aiSend'),
-      aiContext=qs('#aiContext'), btnAI=qs('#btnAI');
+const rangeChips = [...document.querySelectorAll('[data-range]')];
+const slotChips  = [...document.querySelectorAll('.chip.filter')];
 
-/* حالة */
-const params = new URLSearchParams(location.search);
-const childId = params.get('child');
+const kCount = document.getElementById('kCount');
+const kAvg   = document.getElementById('kAvg');
+const kStd   = document.getElementById('kStd');
+const kTIR   = document.getElementById('kTIR');
+const kHigh  = document.getElementById('kHigh');
+const kLow   = document.getElementById('kLow');
+
+const cmpRangeEl = document.getElementById('cmpRange');
+
+/* ---------- حالة ---------- */
 let currentUser, childData;
-let allPoints = []; // {t:Date, mmol:number, slotKey:'PRE_BREAKFAST', raw:{}}
-let activeSlot = 'ALL';
+let allMeasure = []; // {when:Date, value_mmol, value_mgdl, slotKey:'PRE_BREAKFAST'|'POST_LUNCH'|...}
+let lineChart, cmpChart;
 
-/* توابع مساعدة */
-const pad = n=>String(n).padStart(2,'0');
-const todayStr = ()=>{const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;};
-function addDays(d,delta){const x=new Date(d);x.setDate(x.getDate()+delta);return x;}
-function fmtDate(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
-function safeNumber(x){ const n=Number(x); return isNaN(n)?0:n; }
-function stddev(arr, avg){
-  const n=arr.length; if(!n) return 0;
-  const v = arr.reduce((a,x)=>a+Math.pow(x-avg,2),0)/n;
-  return Math.sqrt(v);
+/* ---------- أدوات ---------- */
+const df = window.dateFns; // من UMD
+const pad = n => String(n).padStart(2,'0');
+const toDayStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+function convert(val, fromUnit, toUnit){
+  if (val==null) return null;
+  if (fromUnit === toUnit) return val;
+  // mg/dL <-> mmol/L
+  return (toUnit === 'mmol') ? (val/18) : (val*18);
 }
 
-/* تعريب/تطبيع slot */
-const AR_TO_KEY = {
-  'ق.الفطار':'PRE_BREAKFAST','ب.الفطار':'POST_BREAKFAST',
-  'ق.الغدا':'PRE_LUNCH','ب.الغدا':'POST_LUNCH',
-  'ق.العشا':'PRE_DINNER','ب.العشا':'POST_DINNER',
-  'سناك':'SNACK'
-};
-const KEY_TO_AR = Object.entries(AR_TO_KEY).reduce((a,[ar,key])=> (a[key]=ar,a),{});
+function slotGroup(slotKey){
+  if (!slotKey) return 'OTHER';
+  if (slotKey.startsWith('PRE_'))  return 'PRE';
+  if (slotKey.startsWith('POST_')) return 'POST';
+  if (slotKey.includes('SNACK'))   return 'SNACK';
+  if (slotKey.includes('SLEEP') || slotKey.includes('BED')) return 'SLEEP';
+  return 'OTHER';
+}
 
-/* ضبط مبدئي */
-(function initUI(){
+function withinRange(v, min, max){ return v>=min && v<=max; }
+
+function stats(values){
+  const n = values.length;
+  if (!n) return { n:0, avg:0, std:0, hiPct:0, loPct:0, tir:0 };
+  const avg = values.reduce((a,b)=>a+b,0)/n;
+  const std = Math.sqrt(values.reduce((a,b)=>a+Math.pow(b-avg,2),0)/n);
+  return { n, avg, std };
+}
+
+/* ---------- تهيئة نطاق التاريخ ---------- */
+(function initDates(){
   const today = new Date();
-  const from = addDays(today,-13);
-  dateFromEl.value = fmtDate(from);
-  dateToEl.value   = fmtDate(today);
-  unitSel.value    = 'mmol';
+  const from  = df.addDays(today, -13);
+  dateFromEl.value = toDayStr(from);
+  dateToEl.value   = toDayStr(today);
 })();
 
-/* جلسة */
+/* نطاق جاهز */
+rangeChips.forEach(ch=>{
+  ch.addEventListener('click', ()=>{
+    rangeChips.forEach(x=>x.classList.remove('active'));
+    ch.classList.add('active');
+    const v = ch.dataset.range;
+    const to = new Date();
+    let from;
+    if (v==='14d') from=df.addDays(to,-13);
+    else if (v==='30d') from=df.addDays(to,-29);
+    else if (v==='90d') from=df.addDays(to,-89);
+    else from = df.addYears(to, -10); // الكل
+    dateFromEl.value = toDayStr(from);
+    dateToEl.value   = toDayStr(to);
+  });
+});
+
+/* فلاتر */
+slotChips.forEach(ch=>{
+  ch.addEventListener('click', ()=>{
+    slotChips.forEach(x=>x.classList.remove('active'));
+    ch.classList.add('active');
+  });
+});
+
+/* رجوع */
+backBtn.addEventListener('click', ()=>{
+  history.length>1 ? history.back() : location.href = `parent.html`;
+});
+
+/* AI */
+aiBtn.addEventListener('click', async ()=>{
+  const prompt = buildAIPrompt();
+  const reply = await window.askGemini(prompt);
+  alert(reply);
+});
+
+/* حساب الفترة */
+function getRange(){
+  const from = new Date(dateFromEl.value+'T00:00:00');
+  const to   = new Date(dateToEl.value+'T23:59:59');
+  return { from, to };
+}
+
+/* ---------- جلسة وتحميل ---------- */
 onAuthStateChanged(auth, async (user)=>{
-  if(!user) return location.href='index.html';
+  if(!user) return location.href = 'index.html';
   if(!childId){ alert('لا يوجد معرف طفل في الرابط'); return; }
   currentUser = user;
   await loadChild();
   await loadMeasurements();
-  computeAndRender();
+  renderAll();
 });
 
-/* تحميل بيانات الطفل */
+/* الطفل */
 async function loadChild(){
   const ref = doc(db, `parents/${currentUser.uid}/children/${childId}`);
-  const s = await getDoc(ref);
-  if(!s.exists()) { alert('لم يتم العثور على الطفل'); return; }
-  childData = s.data();
-
-  const age = (()=>{ if(!childData.birthDate) return '—';
-    const b=new Date(childData.birthDate), t=new Date();
-    let a=t.getFullYear()-b.getFullYear();
-    const m=t.getMonth()-b.getMonth();
-    if(m<0 || (m===0 && t.getDate()<b.getDate())) a--;
-    return a;
-  })();
-
+  const snap= await getDoc(ref);
+  if(!snap.exists()){ alert('لم يتم العثور على الطفل'); return; }
+  childData = snap.data();
   childNameEl.textContent = childData.name || 'طفل';
-  childMetaEl.textContent =
-    `السن: ${age} • النطاق: ${childData?.normalRange?.min ?? '—'}–${childData?.normalRange?.max ?? '—'} mmol/L • CR: ${childData?.carbRatio ?? '—'} g/U • CF: ${childData?.correctionFactor ?? '—'} mmol/L/U`;
+  const age = (()=>{ if(!childData.birthDate) return '-';
+    const b=new Date(childData.birthDate),t=new Date();
+    let a=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth();
+    if(m<0||(m===0&&t.getDate()<b.getDate())) a--;
+    return a; })();
+  const cr = childData.carbRatio ?? '—';
+  const cf = childData.correctionFactor ?? '—';
+  const min= childData.normalRange?.min ?? 4.0;
+  const max= childData.normalRange?.max ?? 11.0;
+  childMetaEl.textContent = `النطاق: ${min}–${max} mmol/L • CR: ${cr} g/U • CF: ${cf} mmol/L/U`;
 }
 
-/* تحميل القياسات */
+/* القياسات */
 async function loadMeasurements(){
-  const from = new Date(dateFromEl.value);
-  const to   = new Date(dateToEl.value);
-  // تو تاريخ النهاية ليس شاملاً: نزوده يوم
-  const toInc = addDays(to,1);
-
   const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
-  const qy  = query(ref, where('when','>=', from), where('when','<', toInc), orderBy('when','asc'));
+  const qy  = query(ref, orderBy('when','asc'));
   const snap= await getDocs(qy);
-
-  allPoints = [];
-  snap.forEach(d=>{
-    const m = d.data();
-
-    // وقت القياس
-    const when = m.when?.toDate ? m.when.toDate() : (m.when ? new Date(m.when) : null);
-    if(!when || isNaN(when)) return;
-
-    // القيمة: نجمع كل الاحتمالات
-    let mmol = null;
-    if (typeof m.value_mmol === 'number') mmol = m.value_mmol;
-    else if (typeof m.value === 'number' && (m.unit?.toLowerCase()||'')==='mmol/l') mmol = m.value;
-    else if (typeof m.value_mgdl === 'number') mmol = m.value_mgdl / 18;
-    else if (typeof m.value === 'number' && (m.unit?.toLowerCase()||'')==='mg/dl') mmol = m.value / 18;
-    if (mmol==null) return;
-
-    // Slot باللغة الإنجليزية إن أمكن
-    let key = m.slotKey || null;
-    if(!key && m.slot && AR_TO_KEY[m.slot]) key = AR_TO_KEY[m.slot];
-    if(!key) key = 'OTHER';
-
-    allPoints.push({ t: when, mmol: Number(mmol), slotKey: key, raw: m });
+  allMeasure = [];
+  snap.forEach(s=>{
+    const d = s.data();
+    const when = d.when?.toDate ? d.when.toDate() : (d.when ? new Date(d.when) : null);
+    const mmol = d.value_mmol ?? (d.value_mgdl!=null ? d.value_mgdl/18 : null);
+    const mgdl = d.value_mgdl ?? (d.value_mmol!=null ? Math.round(d.value_mmol*18) : null);
+    allMeasure.push({
+      id:s.id, when, date: d.date || (when?toDayStr(when):null),
+      unit: d.unit || 'mmol/L',
+      value_mmol: mmol, value_mgdl: mgdl,
+      slotKey: d.slot || d.slotKey || ''
+    });
   });
 }
 
-/* إحصاءات + رسوم */
-let lineChart, pieChart;
+/* ---------- عرض وتحليل ---------- */
+applyBtn.addEventListener('click', renderAll);
 
-function filteredPoints(){
-  if(activeSlot==='ALL') return allPoints;
-  return allPoints.filter(p=> p.slotKey===activeSlot);
+function pickSlot(arr){
+  const want = document.querySelector('.chip.filter.active')?.dataset.slot || 'ALL';
+  if (want==='ALL') return arr;
+  return arr.filter(x=> slotGroup(x.slotKey) === want);
 }
 
-function computeAndRender(){
-  const pts = filteredPoints();
-  const unit = unitSel.value; // 'mmol' | 'mgdl'
-
-  // تحويل للقيمة المطلوبة للعرض
-  const toDisp = (x)=> unit==='mmol' ? x : Math.round(x*18);
-  const dispUnit = unit==='mmol' ? 'mmol/L' : 'mg/dL';
-
-  // بيانات المنحنى
-  const dataset = pts.map(p=> ({ x:p.t, y: toDisp(p.mmol) }));
-
-  // إحصاءات
-  const arrMmol = pts.map(p=> p.mmol);
-  const count = arrMmol.length;
-  const avgM = count ? (arrMmol.reduce((a,b)=>a+b,0)/count) : 0;
-  const stdM = stddev(arrMmol, avgM);
-
-  // TIR حسب نطاق الطفل
-  const nMin = Number(childData?.normalRange?.min ?? 4.0);
-  const nMax = Number(childData?.normalRange?.max ?? 10.0);
-
-  let inRange=0, high=0, low=0;
-  arrMmol.forEach(v=>{
-    if (v < nMin) low++; else if (v>nMax) high++; else inRange++;
-  });
-  const tir = count? Math.round((inRange/count)*100):0;
-
-  stCount.textContent = count || '—';
-  stAvg.textContent   = count? (unit==='mmol'? avgM.toFixed(1) : Math.round(avgM*18)) : '—';
-  stStd.textContent   = count? (unit==='mmol'? stdM.toFixed(1) : Math.round(stdM*18)) : '—';
-  stTir.textContent   = count? `${tir}%`:'—';
-  stHigh.textContent  = count? `${Math.round(high*100/count)}%`:'—';
-  stLow.textContent   = count? `${Math.round(low*100/count)}%`:'—';
-
-  // خط الزمن
-  renderLine(dataset, dispUnit, unit==='mmol'? null : {y: {suggestedMin:40, suggestedMax:220}});
-
-  // باي حسب slot
-  renderPie();
+function inRange(arr){
+  const {from,to} = getRange();
+  return arr.filter(x=> x.when && x.when>=from && x.when<=to);
 }
 
-function renderLine(data, unitLabel, opts){
-  const ctx = document.getElementById('lineChart');
-  if(lineChart) lineChart.destroy();
+function valuesInUnit(arr, unit){
+  return arr.map(x => unit==='mmol' ? x.value_mmol : x.value_mgdl).filter(v=>v!=null);
+}
 
-  lineChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      datasets: [{
-        label: `Glucose (${unitLabel})`,
-        data,
-        borderColor: '#4F46E5',
-        backgroundColor: 'rgba(79,70,229,.12)',
-        pointRadius: 2,
-        tension: .25
-      }]
-    },
-    options: {
-      parsing:false,
+function limitsInUnit(unit){
+  const minM = Number(childData?.normalRange?.min ?? 4.0);
+  const maxM = Number(childData?.normalRange?.max ?? 11.0);
+  return unit==='mmol' ? {min:minM,max:maxM} : {min:Math.round(minM*18),max:Math.round(maxM*18)};
+}
+
+function computeKPI(arr, unit){
+  const vals = valuesInUnit(arr, unit);
+  const {min,max} = limitsInUnit(unit);
+  const N = vals.length;
+  const st = stats(vals);
+  const highs = vals.filter(v=> v>max).length;
+  const lows  = vals.filter(v=> v<min).length;
+  const tir   = N? Math.round((N-highs-lows)*100/N) : 0;
+  return {
+    n:N, avg:st.avg, std:st.std,
+    hiPct: N? Math.round(highs*100/N):0,
+    loPct: N? Math.round(lows*100/N):0,
+    tir
+  };
+}
+
+function renderKPIs(kpi, unit){
+  const fmt = (x,dec=1)=> isFinite(x)? (unit==='mmol'? x.toFixed(dec): Math.round(x)) : '—';
+  kCount.textContent = kpi.n || 0;
+  kAvg.textContent   = fmt(kpi.avg);
+  kStd.textContent   = isFinite(kpi.std)? kpi.std.toFixed(1) : '—';
+  kTIR.textContent   = (kpi.tir||0)+'%';
+  kHigh.textContent  = (kpi.hiPct||0)+'%';
+  kLow.textContent   = (kpi.loPct||0)+'%';
+}
+
+function renderLine(arr, unit){
+  const {min,max} = limitsInUnit(unit);
+  const data = arr.map(x=>({
+    x: x.when, y: unit==='mmol' ? x.value_mmol : x.value_mgdl
+  })).filter(p=> p.x && p.y!=null);
+
+  const ds = [{
+    label: unit==='mmol'?'mmol/L':'mg/dL',
+    data, borderWidth:2, pointRadius:0, tension:.2
+  },{
+    label:'الحد الأعلى', data:data.map(p=>({x:p.x,y:max})), borderDash:[6,6], borderWidth:1, pointRadius:0
+  },{
+    label:'الحد الأدنى', data:data.map(p=>({x:p.x,y:min})), borderDash:[6,6], borderWidth:1, pointRadius:0
+  }];
+
+  const cfg = {
+    type:'line',
+    data:{ datasets: ds },
+    options:{
       responsive:true,
-      maintainAspectRatio:false,
+      parsing:false,
       scales:{
-        x:{
-          type:'time',
-          adapters:{ date: { locale: dateFns.localeArEG } },
-          time:{ unit:'day' }
-        },
-        y:{ title:{ display:true, text:unitLabel }, grid:{ color:'#eee' }, ...opts?.y }
+        x:{ type:'time', time:{unit:'day'} },
+        y:{ beginAtZero:false }
       },
       plugins:{
-        legend:{ display:false },
-        tooltip:{ mode:'nearest', intersect:false }
+        legend:{display:false},
+        tooltip:{mode:'nearest',intersect:false}
       }
     }
-  });
-}
-
-function renderPie(){
-  const counts = {
-    PRE_BREAKFAST:0, POST_BREAKFAST:0,
-    PRE_LUNCH:0, POST_LUNCH:0,
-    PRE_DINNER:0, POST_DINNER:0,
-    SNACK:0, OTHER:0
   };
-  allPoints.forEach(p=>{ counts[p.slotKey] = (counts[p.slotKey]||0)+1; });
-
-  const labels = Object.keys(counts).map(k=> KEY_TO_AR[k] || k);
-  const values = Object.keys(counts).map(k=> counts[k]);
-
-  const ctx = document.getElementById('pieChart');
-  if(pieChart) pieChart.destroy();
-
-  pieChart = new Chart(ctx, {
-    type:'doughnut',
-    data:{ labels, datasets:[{ data:values }]},
-    options:{ plugins:{ legend:{ position:'bottom' } } }
-  });
+  if(lineChart){ lineChart.destroy(); }
+  const ctx = document.getElementById('lineChart').getContext('2d');
+  lineChart = new Chart(ctx, cfg);
 }
 
-/* CSV */
-btnCSV?.addEventListener('click', ()=>{
-  const unit = unitSel.value;
-  const header = 'date,time,slot,value,'+unit+'\n';
-  const rows = filteredPoints().map(p=>{
-    const d = p.t; const ds = fmtDate(d); const ts = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    const v = unit==='mmol' ? p.mmol.toFixed(1) : Math.round(p.mmol*18);
-    return `${ds},${ts},${KEY_TO_AR[p.slotKey]||p.slotKey},${v},${unit}`;
-  }).join('\n');
-  const blob = new Blob([header+rows], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download='measurements.csv'; a.click();
+function renderCompare(arr, unit){
+  // آخر 7 أيام مقابل الأسبوع السابق (مبني على تاريخ "إلى")
+  const to   = new Date(dateToEl.value+'T23:59:59');
+  const from = df.addDays(to, -6);
+  const prevFrom = df.addDays(from,-7);
+  const prevTo   = df.addDays(from,-1);
+
+  const cur = arr.filter(x=> x.when>=from && x.when<=to);
+  const prv = arr.filter(x=> x.when>=prevFrom && x.when<=prevTo);
+
+  const curK = computeKPI(cur, unit);
+  const prvK = computeKPI(prv, unit);
+
+  cmpRangeEl.textContent = `الحالي: ${toDayStr(from)} → ${toDayStr(to)} • السابق: ${toDayStr(prevFrom)} → ${toDayStr(prevTo)}`;
+
+  const labels = ['المتوسط', 'الارتفاعات %', 'الهبوطات %'];
+  const curVals = [
+    unit==='mmol' ? Number(curK.avg.toFixed(1)) : Math.round(curK.avg),
+    curK.hiPct, curK.loPct
+  ];
+  const prvVals = [
+    unit==='mmol' ? Number(prvK.avg.toFixed(1)) : Math.round(prvK.avg),
+    prvK.hiPct, prvK.loPct
+  ];
+
+  const cfg = {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'الأسبوع الحالي', data:curVals},
+        {label:'الأسبوع السابق', data:prvVals}
+      ]
+    },
+    options:{
+      responsive:true,
+      scales:{ x:{stacked:false}, y:{beginAtZero:true} }
+    }
+  };
+  if(cmpChart){ cmpChart.destroy(); }
+  const ctx = document.getElementById('cmpChart').getContext('2d');
+  cmpChart = new Chart(ctx, cfg);
+}
+
+function renderAll(){
+  // 1) فلترة بالمدى + الفئة
+  const inR   = inRange(allMeasure);
+  const pick  = pickSlot(inR);
+  const unit  = unitSel.value; // 'mmol' | 'mgdl'
+
+  // 2) KPIs
+  const k = computeKPI(pick, unit);
+  renderKPIs(k, unit);
+
+  // 3) الرسوم
+  renderLine(pick, unit);
+  renderCompare(inR, unit);
+}
+
+/* CSV / PDF */
+document.getElementById('csvBtn').addEventListener('click', ()=>{
+  const unit  = unitSel.value;
+  const rows  = inRange(pickSlot(allMeasure)).map(x=>[
+    toDayStr(x.when), x.when.toTimeString().slice(0,8),
+    unit==='mmol' ? (x.value_mmol?.toFixed(1) ?? '') : (x.value_mgdl ?? ''),
+    x.slotKey || ''
+  ]);
+  const head = ['date','time', unit==='mmol'?'mmol/L':'mg/dL','slot'];
+  const csv = [head, ...rows].map(r=>r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='analytics.csv'; a.click();
   URL.revokeObjectURL(url);
 });
 
-/* PDF/طباعة */
-btnPDF?.addEventListener('click', ()=> window.print() );
+document.getElementById('pdfBtn').addEventListener('click', ()=> window.print());
 
-/* Range / Apply */
-applyBtn.addEventListener('click', async ()=>{
-  await loadMeasurements(); computeAndRender();
-});
-rangeBtns.forEach(b=>{
-  b.addEventListener('click', async ()=>{
-    rangeBtns.forEach(x=>x.classList.remove('active')); b.classList.add('active');
-    const r = b.dataset.range;
-    const to = new Date();
-    let from = new Date('2000-01-01');
-    if (r==='14d') from = addDays(to,-13);
-    if (r==='30d') from = addDays(to,-29);
-    if (r==='90d') from = addDays(to,-89);
-    dateFromEl.value=fmtDate(from); dateToEl.value=fmtDate(to);
-    await loadMeasurements(); computeAndRender();
-  });
-});
-slotBtns.forEach(b=>{
-  b.addEventListener('click', ()=>{
-    slotBtns.forEach(x=>x.classList.remove('active'));
-    b.classList.add('active');
-    activeSlot = b.dataset.slot || 'ALL';
-    computeAndRender();
-  });
-});
-unitSel.addEventListener('change', computeAndRender);
+/* مساعد Gemini: نبني ملخصاً للسياق */
+function buildAIPrompt(){
+  const unit  = unitSel.value;
+  const {min,max} = limitsInUnit(unit);
+  const arr   = pickSlot(inRange(allMeasure));
+  const k     = computeKPI(arr, unit);
+  const avg   = unit==='mmol'? k.avg.toFixed(1) : Math.round(k.avg);
+  const unitLabel = unit==='mmol'?'mmol/L':'mg/dL';
 
-/* رجوع */
-backBtn?.addEventListener('click', ()=>{
-  // لو وصلنا من child.html نرجع له بنفس childId
-  location.href = `child.html?child=${encodeURIComponent(childId)}`;
-});
+  return `
+أنت مساعد صحي تعليمي. حلّل هذه الأرقام لطفل اسمه "${childData?.name || 'طفل'}".
+- الوحدة: ${unitLabel}, النطاق المستهدف: ${min}–${max} ${unitLabel}
+- عدد القياسات: ${k.n}
+- المتوسط: ${avg}, الانحراف المعياري: ${k.std.toFixed(1)}
+- وقت داخل النطاق (TIR): ${k.tir}%
+- ارتفاعات: ${k.hiPct}%, هبوطات: ${k.loPct}%
 
-/* ========== مساعد Gemini (اختياري) ========== */
-// ضعي مفتاح Gemini في window.GEMINI_API_KEY من صفحة parent.html أو ملف منفصل
-const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-
-btnAI?.addEventListener('click', ()=>{
-  aiWidget.classList.remove('hidden');
-  aiContext.textContent = `سياق: ${childData?.name || 'طفل'} / ${filteredPoints().length} قياسًا في الفترة المحددة.`;
-  addMsg('sys', 'مرحبًا! اسأل عن المتوسط، TIR، المرتفعات، أو امنحني فترة محددة للمقارنة.');
-});
-aiClose?.addEventListener('click', ()=> aiWidget.classList.add('hidden'));
-aiMin?.addEventListener('click', ()=>{
-  const b = aiWidget.style.height==='54px';
-  aiWidget.style.height = b? '' : '54px';
-  qs('.ai-body').style.display = b? '' : 'none';
-  qs('.ai-input').style.display= b? '' : 'none';
-});
-aiSend?.addEventListener('click', sendAI);
-aiInput?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey){e.preventDefault(); sendAI();}});
-
-function addMsg(role, text){
-  const div=document.createElement('div');
-  div.className = 'msg ' + (role==='assistant'?'assistant': role==='user'?'user':'sys');
-  div.textContent = text;
-  aiMessages.appendChild(div);
-  aiMessages.scrollTop = aiMessages.scrollHeight;
-}
-
-async function sendAI(){
-  const key = (window.GEMINI_API_KEY||'').trim();
-  const q = aiInput.value.trim();
-  if(!q) return;
-  aiInput.value=''; addMsg('user', q);
-
-  const stats = {
-    count: stCount.textContent, avg: stAvg.textContent, std: stStd.textContent,
-    tir: stTir.textContent, high: stHigh.textContent, low: stLow.textContent,
-    unit: unitSel.value
-  };
-  const prompt = `
-حلّل القياسات لطفل سكري بناءً على الإحصاءات التالية:
-count=${stats.count}, avg=${stats.avg}, std=${stats.std}, tir=${stats.tir}, high=${stats.high}, low=${stats.low}, unit=${stats.unit}.
-سؤال المستخدم: ${q}
-قدّم إجابة عربية مبسطة وتعليمية، وتجنّب أي إرشادات علاجية إلزامية.
+اكتب ملخصًا موجزًا (٤-٦ أسطر) عن الوضع العام ومقترحات تحسين السلوك الغذائي/النشاط دون نصائح دوائية مباشرة.
 `.trim();
-
-  if(!key){ addMsg('assistant','⚠️ لم يتم ضبط مفتاح Gemini.'); return; }
-
-  addMsg('assistant','… جارِ التحليل');
-
-  try{
-    const res = await fetch(`${GEMINI_ENDPOINT}?key=${encodeURIComponent(key)}`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        contents:[{ parts:[{text: prompt}] }]
-      })
-    });
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أحصل على رد.';
-    aiMessages.lastChild.textContent = text;
-  }catch(e){
-    aiMessages.lastChild.textContent = 'تعذّر الاتصال بالمساعد.';
-    console.error(e);
-  }
 }
