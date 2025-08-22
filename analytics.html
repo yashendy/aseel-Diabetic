@@ -1,4 +1,3 @@
-<!-- analytics.html -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -6,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>تحليل القياسات</title>
   <link rel="icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/analytics.css?v=3" />
+  <link rel="stylesheet" href="css/analytics.css?v=7" />
 </head>
 <body>
   <div class="container">
@@ -17,7 +16,6 @@
           <h1>📈 تحليل القياسات — <span id="childName">طفل</span></h1>
           <div id="childMeta" class="muted tiny">—</div>
         </div>
-
         <div class="actions">
           <button id="backBtn" class="btn secondary">↩️ رجوع</button>
         </div>
@@ -28,9 +26,9 @@
           <div class="field">
             <label>الفترة</label>
             <div class="chip-row">
-              <button id="rng14" class="chip" data-range="14">آخر 14 يوم</button>
-              <button id="rng30" class="chip" data-range="30">آخر 30 يوم</button>
-              <button id="rng90" class="chip" data-range="90">آخر 90 يوم</button>
+              <button class="chip" data-range="14">آخر 14 يوم</button>
+              <button class="chip" data-range="30">آخر 30 يوم</button>
+              <button class="chip" data-range="90">آخر 90 يوم</button>
             </div>
           </div>
           <div class="field">
@@ -58,53 +56,50 @@
             <button id="fltSleep" class="chip">النوم</button>
             <button id="fltSport" class="chip">الرياضة</button>
           </div>
-
           <div class="btn-row">
             <button id="applyBtn" class="btn primary">تطبيق</button>
             <button id="pdfBtn" class="btn">🖨️ PDF / طباعة</button>
             <button id="csvBtn" class="btn secondary">📥 CSV تنزيل</button>
+            <button id="aiOpen" class="btn">🤖 مساعد التحليل</button>
           </div>
         </div>
       </div>
     </header>
 
-    <!-- البطاقات -->
+    <!-- كروت الملخص -->
     <section class="cards">
-      <div class="card stat">
-        <div class="lab">عدد القياسات</div>
-        <div class="val" id="cntCard">—</div>
-      </div>
-      <div class="card stat">
-        <div class="lab">الانحراف المعياري</div>
-        <div class="val" id="trendCard">—</div>
-      </div>
-      <div class="card stat">
-        <div class="lab">المتوسط</div>
-        <div class="val" id="avgCard">—</div>
-      </div>
-      <div class="card stat">
-        <div class="lab">هبوطات</div>
-        <div class="val" id="hypoCard">—</div>
-      </div>
-      <div class="card stat">
-        <div class="lab">(TIR) وقت داخل النطاق</div>
-        <div class="val" id="tirCard">—</div>
-      </div>
+      <div class="card stat"><div class="lab">عدد القياسات</div><div class="val" id="cntCard">—</div></div>
+      <div class="card stat"><div class="lab">الانحراف المعياري</div><div class="val" id="trendCard">—</div></div>
+      <div class="card stat"><div class="lab">المتوسط</div><div class="val" id="avgCard">—</div></div>
+      <div class="card stat"><div class="lab">هبوطات</div><div class="val" id="hypoCard">—</div></div>
+      <div class="card stat"><div class="lab">(TIR) وقت داخل النطاق</div><div class="val" id="tirCard">—</div></div>
     </section>
 
-    <!-- توزيع حسب وقت القياس -->
+    <!-- الرسم 1: خطّي زمني -->
     <section class="card">
       <div class="table-head">
-        <h3>توزيع حسب وقت القياس</h3>
+        <h3>منحنى الجلوكوز مع الزمن</h3>
+      </div>
+      <canvas id="timeChart" height="120"></canvas>
+    </section>
+
+    <!-- الرسم 2: دونات التوزيع -->
+    <section class="card">
+      <div class="table-head">
+        <h3>توزيع القياسات حسب الوقت</h3>
+      </div>
+      <canvas id="donutChart" height="120"></canvas>
+    </section>
+
+    <!-- جدول التوزيع -->
+    <section class="card">
+      <div class="table-head">
+        <h3>تفصيل حسب وقت القياس</h3>
       </div>
       <div class="table-wrap">
         <table class="table">
           <thead>
-            <tr>
-              <th>الوقت</th>
-              <th>العدد</th>
-              <th>متوسط mmol/L</th>
-            </tr>
+          <tr><th>الوقت</th><th>العدد</th><th>متوسط mmol/L</th></tr>
           </thead>
           <tbody id="slotTableBody"></tbody>
         </table>
@@ -113,7 +108,29 @@
 
   </div>
 
-  <!-- Firebase config (modular v12) -->
-  <script type="module" src="js/analytics.js?v=6"></script>
+  <!-- ويدجت الذكاء الاصطناعي -->
+  <div id="aiWidget" class="ai hidden">
+    <div class="ai-head">
+      <div class="ai-title">🤖 مساعد التحليل</div>
+      <div class="ai-actions">
+        <button id="aiMin" class="ai-btn">—</button>
+        <button id="aiClose" class="ai-btn">✕</button>
+      </div>
+    </div>
+    <div class="ai-body">
+      <div id="aiContext" class="ai-context muted tiny">—</div>
+      <div id="aiMessages" class="ai-messages"></div>
+      <div class="ai-input">
+        <textarea id="aiInput" rows="2" placeholder="اسأل عن التحليل أو اطلب تفسيرًا..."></textarea>
+        <button id="aiSend" class="btn primary">إرسال</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart.js UMD (مستقر) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <!-- Firebase + منطق الصفحة -->
+  <script type="module" src="js/analytics.js?v=7"></script>
 </body>
 </html>
