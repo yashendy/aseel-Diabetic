@@ -1,35 +1,34 @@
+<!-- analytics.html -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>تحليل القياسات</title>
-
-  <!-- أيقونة الموقع (تظهر في كل الصفحات) -->
   <link rel="icon" href="favicon.ico" />
-
-  <!-- ستايل الصفحة -->
-  <link rel="stylesheet" href="css/analytics.css?v=10" />
-
-  <!-- Chart.js + date-fns adapter (مهم جدًا للمحور الزمني) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-
-  <!-- ملاحظة: لا نحمّل date-fns كـ <script> عادي؛ سنستوردها في ملف الـ JS كـ ESM -->
+  <link rel="stylesheet" href="css/analytics.css" />
 </head>
 <body>
   <div class="container">
 
     <header class="top card">
-      <div class="row header-row">
-        <button id="backBtn" class="btn icon">↩︎ رجوع</button>
-        <h1>تحليل القياسات — <span id="childName">—</span> <span class="icon">📈</span></h1>
+      <div class="row space">
+        <button id="goBack" class="btn secondary">↩︎ رجوع</button>
+        <h1>تحليل القياسات — <span id="childName">…</span> <span class="logo">📈</span></h1>
       </div>
-
       <div id="childMeta" class="muted tiny">—</div>
 
       <div class="filters">
-        <div class="row gap">
+        <div class="row wrap gap">
+          <div class="field">
+            <label>من</label>
+            <input type="date" id="fromDate">
+          </div>
+          <div class="field">
+            <label>إلى</label>
+            <input type="date" id="toDate">
+          </div>
+
           <div class="field">
             <label>الوحدة</label>
             <select id="unitSel">
@@ -38,77 +37,68 @@
             </select>
           </div>
 
-          <div class="field">
-            <label>من</label>
-            <input type="date" id="dateFrom" />
+          <div class="row gap quicks">
+            <button class="chip" data-range="14">آخر 14 يوم</button>
+            <button class="chip" data-range="30">آخر 30 يوم</button>
+            <button class="chip" data-range="90">آخر 90 يوم</button>
+            <button class="chip" data-range="all">الكل</button>
           </div>
 
-          <div class="field">
-            <label>إلى</label>
-            <input type="date" id="dateTo" />
-          </div>
-
-          <div class="field">
-            <label>&nbsp;</label>
-            <button id="applyBtn" class="btn">تطبيق</button>
-          </div>
-        </div>
-
-        <div class="row chips">
-          <button class="chip range" data-r="14">آخر 14 يوم</button>
-          <button class="chip range" data-r="30">آخر 30 يوم</button>
-          <button class="chip range" data-r="90">آخر 90 يوم</button>
-          <span class="sep"></span>
-          <button class="chip slot" data-slot="ALL">الكل</button>
-          <button class="chip slot" data-slot="PRE_BREAKFAST">قبل الفطور</button>
-          <button class="chip slot" data-slot="POST_BREAKFAST">بعد الفطور</button>
-          <button class="chip slot" data-slot="PRE_LUNCH">قبل الغداء</button>
-          <button class="chip slot" data-slot="POST_LUNCH">بعد الغداء</button>
-          <button class="chip slot" data-slot="PRE_DINNER">قبل العشاء</button>
-          <button class="chip slot" data-slot="POST_DINNER">بعد العشاء</button>
-          <button class="chip slot" data-slot="SNACK">سناك</button>
-          <button class="chip slot" data-slot="SLEEP">النوم</button>
-        </div>
-
-        <div class="row tools">
-          <button id="btnPdf" class="btn light">🖨️ طباعة / PDF</button>
-          <button id="btnCsv" class="btn light">🧾 تنزيل CSV</button>
-          <button id="aiBtn" class="btn light">🤖 مساعد التحليل</button>
+          <button id="applyBtn" class="btn">تطبيق</button>
         </div>
       </div>
     </header>
 
-    <!-- بطاقات المؤشرات -->
-    <section class="cards">
-      <div class="card stat"><div class="label">عدد القياسات</div><div id="kCnt" class="value">—</div></div>
-      <div class="card stat"><div class="label">المتوسط</div><div id="kAvg" class="value">—</div></div>
-      <div class="card stat"><div class="label">الانحراف المعياري</div><div id="kSd" class="value">—</div></div>
-      <div class="card stat"><div class="label">وقت داخل النطاق (TIR)</div><div id="kTir" class="value">—</div></div>
-      <div class="card stat"><div class="label">ارتفاعات</div><div id="kHigh" class="value">—</div></div>
-      <div class="card stat"><div class="label">هبوطات</div><div id="kLow" class="value">—</div></div>
-    </section>
-
-    <!-- رسم: متوسط/ارتفاع/هبوط -->
-    <section class="card">
-      <div class="table-head">
-        <h3>منحنى الجلوكوز مع الزمن</h3>
+    <section class="cards row wrap gap">
+      <div class="kpi card">
+        <div class="label">عدد القياسات</div>
+        <div id="kpiCount" class="value">—</div>
       </div>
-      <canvas id="mainChart" height="110"></canvas>
-    </section>
 
-    <!-- مقارنة أسبوع بأسبوع سابق -->
-    <section class="card">
-      <div class="table-head">
-        <h3>مقارنة أسبوع بالأسبوع السابق</h3>
+      <div class="kpi card">
+        <div class="label">المتوسط</div>
+        <div id="kpiAvg" class="value">—</div>
       </div>
-      <canvas id="cmpChart" height="80"></canvas>
+
+      <div class="kpi card">
+        <div class="label">الانحراف المعياري</div>
+        <div id="kpiStd" class="value">—</div>
+      </div>
+
+      <div class="kpi card">
+        <div class="label">(TIR) وقت داخل النطاق</div>
+        <div id="kpiTir" class="value">—</div>
+      </div>
+
+      <div class="kpi card">
+        <div class="label">ارتفاعات</div>
+        <div id="kpiHigh" class="value">—</div>
+      </div>
+
+      <div class="kpi card">
+        <div class="label">هبوطات</div>
+        <div id="kpiLow" class="value">—</div>
+      </div>
     </section>
 
-    <!-- تنبيه -->
-    <p class="note muted tiny">هذا التحليل للتوعية فقط وليس بديلاً عن استشارة الطبيب.</p>
+    <section class="card">
+      <div class="row space">
+        <h3>منحنى الجلوكوز حسب الأيام</h3>
+      </div>
+      <canvas id="dayChart" height="100"></canvas>
+      <div id="emptyMsg" class="empty hidden">لا توجد قياسات ضمن الفترة المختارة.</div>
+    </section>
+
   </div>
 
-  <!-- Firebase config (نسخة v12 modular كما تستخدمينها) -->
-  <script type="module" src="js/analytics.js?v=10"></script>
+  <!-- Chart.js + محول التاريخ -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+
+  <!-- Firebase config (v12 modules عبر CDN) -->
+  <script type="module" src="js/firebase-config.js"></script>
+
+  <!-- منطق الصفحة -->
+  <script type="module" src="js/analytics.js"></script>
 </body>
 </html>
