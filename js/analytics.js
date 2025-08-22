@@ -1,355 +1,420 @@
-// js/analytics.js
-import { auth, db } from './firebase-config.js';
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+// js/analytics.js (Module)
+
+// Firebase (v12 modules)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, getDocs, query, orderBy, doc, getDoc
+  getFirestore, collection, doc, getDoc, getDocs, query, where, orderBy
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-/* ---------- عناصر ---------- */
-const params      = new URLSearchParams(location.search);
-const childId     = params.get('child');
-const rangeParam  = params.get('range') || '14d';
+// date-fns (ESM)
+import {
+  addDays, parseISO, isAfter, isBefore, format, subDays, startOfDay, endOfDay
+} from "https://cdn.jsdelivr.net/npm/date-fns@3.6.0/+esm";
 
+// --------- عناصر ---------
+const params = new URLSearchParams(location.search);
+const childId = params.get('child');
+const rangeParam = params.get('range'); // مثل 14d
+
+const backBtn = document.getElementById('backBtn');
 const childNameEl = document.getElementById('childName');
 const childMetaEl = document.getElementById('childMeta');
-
-const backBtn  = document.getElementById('backBtn');
-const aiBtn    = document.getElementById('aiBtn');
 
 const dateFromEl = document.getElementById('dateFrom');
 const dateToEl   = document.getElementById('dateTo');
 const unitSel    = document.getElementById('unitSel');
 const applyBtn   = document.getElementById('applyBtn');
 
-const rangeChips = [...document.querySelectorAll('[data-range]')];
-const slotChips  = [...document.querySelectorAll('.chip.filter')];
+const countEl = document.getElementById('kCnt');
+const avgEl   = document.getElementById('kAvg');
+const sdEl    = document.getElementById('kSd');
+const tirEl   = document.getElementById('kTir');
+const highEl  = document.getElementById('kHigh');
+const lowEl   = document.getElementById('kLow');
 
-const kCount = document.getElementById('kCount');
-const kAvg   = document.getElementById('kAvg');
-const kStd   = document.getElementById('kStd');
-const kTIR   = document.getElementById('kTIR');
-const kHigh  = document.getElementById('kHigh');
-const kLow   = document.getElementById('kLow');
+const btnCsv  = document.getElementById('btnCsv');
+const btnPdf  = document.getElementById('btnPdf');
+const aiBtn   = document.getElementById('aiBtn');
 
-const cmpRangeEl = document.getElementById('cmpRange');
+const mainCanvas = document.getElementById('mainChart');
+const cmpCanvas  = document.getElementById('cmpChart');
 
-/* ---------- حالة ---------- */
 let currentUser, childData;
-let allMeasure = []; // {when:Date, value_mmol, value_mgdl, slotKey:'PRE_BREAKFAST'|'POST_LUNCH'|...}
-let lineChart, cmpChart;
+let allMeas = [];  // جميع القياسات (داخل الفترة)
+let slotFilter = 'ALL';
 
-/* ---------- أدوات ---------- */
-const df = window.dateFns; // من UMD
-const pad = n => String(n).padStart(2,'0');
-const toDayStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+// --------- إعدادات Firebase (كما تستخدمينها في المشروع) ---------
+const firebaseConfig = {
+  apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
+  authDomain: "sugar-kids-tracker.firebaseapp.com",
+  projectId: "sugar-kids-tracker",
+  appId: "1:251830888114:web:a20716d3d4ad86a6724bab"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
 
-function convert(val, fromUnit, toUnit){
-  if (val==null) return null;
-  if (fromUnit === toUnit) return val;
-  // mg/dL <-> mmol/L
-  return (toUnit === 'mmol') ? (val/18) : (val*18);
+// --------- أدوات ---------
+const pad2 = n => String(n).padStart(2,'0');
+const toYMD = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+
+function clamp(x, a, b){ return Math.min(Math.max(x,a),b); }
+
+function mgdlToMmol(x){ return x/18; }
+function mmolToMgdl(x){ return x*18; }
+
+function convVal(v, unit){
+  if (unit === 'mmol') return v;        // مخزن بالـ mmol/L
+  return Math.round(v*18);              // إلى mg/dL
 }
 
-function slotGroup(slotKey){
-  if (!slotKey) return 'OTHER';
-  if (slotKey.startsWith('PRE_'))  return 'PRE';
-  if (slotKey.startsWith('POST_')) return 'POST';
-  if (slotKey.includes('SNACK'))   return 'SNACK';
-  if (slotKey.includes('SLEEP') || slotKey.includes('BED')) return 'SLEEP';
-  return 'OTHER';
+function readSlotKey(slot){
+  // خريطة قياساتك القديمة/الجديدة
+  const map = {
+    "PRE_BREAKFAST":"ق.الفطار",
+    "POST_BREAKFAST":"ب.الفطار",
+    "PRE_LUNCH":"ق.الغدا",
+    "POST_LUNCH":"ب.الغدا",
+    "PRE_DINNER":"ق.العشا",
+    "POST_DINNER":"ب.العشا",
+    "SNACK":"سناك",
+    "SLEEP":"النوم"
+  };
+  return map[slot] || slot || "-";
 }
 
-function withinRange(v, min, max){ return v>=min && v<=max; }
-
-function stats(values){
-  const n = values.length;
-  if (!n) return { n:0, avg:0, std:0, hiPct:0, loPct:0, tir:0 };
-  const avg = values.reduce((a,b)=>a+b,0)/n;
-  const std = Math.sqrt(values.reduce((a,b)=>a+Math.pow(b-avg,2),0)/n);
-  return { n, avg, std };
-}
-
-/* ---------- تهيئة نطاق التاريخ ---------- */
-(function initDates(){
+// --------- تحميل الطفل والفترة الافتراضية ---------
+(function initUI(){
   const today = new Date();
-  const from  = df.addDays(today, -13);
-  dateFromEl.value = toDayStr(from);
-  dateToEl.value   = toDayStr(today);
+
+  if (rangeParam && rangeParam.endsWith('d')){
+    const n = Number(rangeParam.replace('d','')) || 14;
+    dateFromEl.value = toYMD(addDays(today, -n+1));
+    dateToEl.value   = toYMD(today);
+  }else{
+    dateFromEl.value = toYMD(addDays(today, -13));
+    dateToEl.value   = toYMD(today);
+  }
+  unitSel.value = 'mmol';
+
+  document.querySelectorAll('.chip.range').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const n = Number(b.dataset.r||'14');
+      const t = new Date();
+      dateFromEl.value = toYMD(addDays(t, -n+1));
+      dateToEl.value   = toYMD(t);
+      loadAndRender();
+    });
+  });
+
+  document.querySelectorAll('.chip.slot').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      slotFilter = b.dataset.slot || 'ALL';
+      renderAll();
+    });
+  });
+
+  backBtn.addEventListener('click', ()=> history.back());
+  applyBtn.addEventListener('click', loadAndRender);
+
+  btnCsv.addEventListener('click', exportCsv);
+  btnPdf.addEventListener('click', ()=> window.print());
+
+  aiBtn.addEventListener('click', openAIHelper);
 })();
 
-/* نطاق جاهز */
-rangeChips.forEach(ch=>{
-  ch.addEventListener('click', ()=>{
-    rangeChips.forEach(x=>x.classList.remove('active'));
-    ch.classList.add('active');
-    const v = ch.dataset.range;
-    const to = new Date();
-    let from;
-    if (v==='14d') from=df.addDays(to,-13);
-    else if (v==='30d') from=df.addDays(to,-29);
-    else if (v==='90d') from=df.addDays(to,-89);
-    else from = df.addYears(to, -10); // الكل
-    dateFromEl.value = toDayStr(from);
-    dateToEl.value   = toDayStr(to);
-  });
-});
-
-/* فلاتر */
-slotChips.forEach(ch=>{
-  ch.addEventListener('click', ()=>{
-    slotChips.forEach(x=>x.classList.remove('active'));
-    ch.classList.add('active');
-  });
-});
-
-/* رجوع */
-backBtn.addEventListener('click', ()=>{
-  history.length>1 ? history.back() : location.href = `parent.html`;
-});
-
-/* AI */
-aiBtn.addEventListener('click', async ()=>{
-  const prompt = buildAIPrompt();
-  const reply = await window.askGemini(prompt);
-  alert(reply);
-});
-
-/* حساب الفترة */
-function getRange(){
-  const from = new Date(dateFromEl.value+'T00:00:00');
-  const to   = new Date(dateToEl.value+'T23:59:59');
-  return { from, to };
-}
-
-/* ---------- جلسة وتحميل ---------- */
+// --------- جلسة ---------
 onAuthStateChanged(auth, async (user)=>{
-  if(!user) return location.href = 'index.html';
+  if(!user) return location.href='index.html';
   if(!childId){ alert('لا يوجد معرف طفل في الرابط'); return; }
   currentUser = user;
   await loadChild();
-  await loadMeasurements();
-  renderAll();
+  await loadAndRender();
 });
 
-/* الطفل */
+// --------- تحميل الطفل ---------
 async function loadChild(){
   const ref = doc(db, `parents/${currentUser.uid}/children/${childId}`);
-  const snap= await getDoc(ref);
-  if(!snap.exists()){ alert('لم يتم العثور على الطفل'); return; }
+  const snap = await getDoc(ref);
+  if (!snap.exists()){
+    alert('لم يتم العثور على الطفل'); history.back(); return;
+  }
   childData = snap.data();
+  const ageY = (()=> {
+    const bd = childData.birthDate ? new Date(childData.birthDate) : null;
+    if(!bd) return '—';
+    const t = new Date();
+    let a = t.getFullYear()-bd.getFullYear();
+    const m = t.getMonth()-bd.getMonth();
+    if (m<0 || (m===0 && t.getDate()<bd.getDate())) a--;
+    return a;
+  })();
+
   childNameEl.textContent = childData.name || 'طفل';
-  const age = (()=>{ if(!childData.birthDate) return '-';
-    const b=new Date(childData.birthDate),t=new Date();
-    let a=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth();
-    if(m<0||(m===0&&t.getDate()<b.getDate())) a--;
-    return a; })();
-  const cr = childData.carbRatio ?? '—';
-  const cf = childData.correctionFactor ?? '—';
-  const min= childData.normalRange?.min ?? 4.0;
-  const max= childData.normalRange?.max ?? 11.0;
-  childMetaEl.textContent = `النطاق: ${min}–${max} mmol/L • CR: ${cr} g/U • CF: ${cf} mmol/L/U`;
+  childMetaEl.textContent = `النطاق: ${childData?.normalRange?.min ?? 4.5}–${childData?.normalRange?.max ?? 11} mmol/L • CR: ${childData?.carbRatio ?? '—'} g/U • CF: ${childData?.correctionFactor ?? '—'} mmol/L/U`;
 }
 
-/* القياسات */
-async function loadMeasurements(){
+// --------- تحميل القياسات للفترة ---------
+async function loadAndRender(){
+  const from = parseISO(dateFromEl.value);
+  const to   = parseISO(dateToEl.value);
+  if (!from || !to || isAfter(from, to)){ alert('اختر فترة صحيحة'); return; }
+
   const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
-  const qy  = query(ref, orderBy('when','asc'));
-  const snap= await getDocs(qy);
-  allMeasure = [];
-  snap.forEach(s=>{
-    const d = s.data();
-    const when = d.when?.toDate ? d.when.toDate() : (d.when ? new Date(d.when) : null);
-    const mmol = d.value_mmol ?? (d.value_mgdl!=null ? d.value_mgdl/18 : null);
-    const mgdl = d.value_mgdl ?? (d.value_mmol!=null ? Math.round(d.value_mmol*18) : null);
-    allMeasure.push({
-      id:s.id, when, date: d.date || (when?toDayStr(when):null),
-      unit: d.unit || 'mmol/L',
-      value_mmol: mmol, value_mgdl: mgdl,
-      slotKey: d.slot || d.slotKey || ''
+  // مخزن عندك date = "YYYY-MM-DD"
+  const qy = query(ref, where('date','>=', toYMD(from)), where('date','<=', toYMD(to)), orderBy('date','asc'));
+  const snap = await getDocs(qy);
+
+  allMeas = [];
+  snap.forEach(d=>{
+    const m = d.data();
+    // دعم حقول مختلفة (value_mmol أو value_mgdl)
+    const mmol = (m.value_mmol != null) ? Number(m.value_mmol)
+                 : (m.value_mgdl != null) ? Number(m.value_mgdl)/18
+                 : (m.input?.unit === 'mg/dL') ? Number(m.input?.value || 0)/18
+                 : Number(m.input?.value || 0);
+
+    // when: Timestamp أو ISO أو millis
+    let when = new Date();
+    if (m.when?.toDate) when = m.when.toDate();
+    else if (typeof m.when === 'string') when = new Date(m.when);
+    else if (typeof m.when === 'number') when = new Date(m.when);
+
+    allMeas.push({
+      id: d.id,
+      mmol,
+      mgdl: mmol*18,
+      date: m.date || toYMD(when),
+      when,
+      slotKey: m.slotKey || slotFromArabic(m.slot) || 'UNSPEC',
+      state: m.state || 'normal'
     });
+  });
+
+  renderAll();
+}
+
+function slotFromArabic(s){
+  const map = {
+    "ق.الفطار":"PRE_BREAKFAST","ب.الفطار":"POST_BREAKFAST",
+    "ق.الغدا":"PRE_LUNCH","ب.الغدا":"POST_LUNCH",
+    "ق.العشا":"PRE_DINNER","ب.العشا":"POST_DINNER",
+    "سناك":"SNACK","النوم":"SLEEP"
+  };
+  return map[s] || null;
+}
+
+// --------- حسابات وعرض ---------
+let mainChart, cmpChart;
+
+function renderAll(){
+  const unit = unitSel.value; // mmol | mgdl
+  const min = Number(childData?.normalRange?.min ?? 4.5);
+  const max = Number(childData?.normalRange?.max ?? 11);
+
+  // فلترة حسب الـ slot إن لزم
+  const dataF = (slotFilter==='ALL') ? allMeas : allMeas.filter(m=> m.slotKey===slotFilter);
+
+  // تحضير بيانات الرسم الرئيسي
+  const points = dataF
+    .slice()
+    .sort((a,b)=> a.when - b.when)
+    .map(m=>({ x: m.when, y: unit==='mmol' ? m.mmol : Math.round(m.mgdl) }));
+
+  // مؤشرات
+  const arr = points.map(p=> p.y);
+  const n = arr.length;
+
+  const avg = n? arr.reduce((a,b)=>a+b,0)/n : 0;
+  const sd  = n? Math.sqrt(arr.reduce((s,v)=> s + Math.pow(v-avg,2),0)/n) : 0;
+
+  // داخل/خارج النطاق (حسب الوحدة المختارة)
+  const rMin = unit==='mmol' ? min : Math.round(min*18);
+  const rMax = unit==='mmol' ? max : Math.round(max*18);
+  let inRange=0, hi=0, lo=0;
+  arr.forEach(v=>{
+    if (v<rMin) lo++;
+    else if (v>rMax) hi++;
+    else inRange++;
+  });
+
+  countEl.textContent = n;
+  avgEl.textContent   = n? (unit==='mmol'? avg.toFixed(1) : Math.round(avg)) : '—';
+  sdEl.textContent    = n? (unit==='mmol'? sd.toFixed(1) : Math.round(sd)) : '—';
+  tirEl.textContent   = n? Math.round(inRange*100/n)+'%' : '—';
+  highEl.textContent  = n? Math.round(hi*100/n)+'%' : '—';
+  lowEl.textContent   = n? Math.round(lo*100/n)+'%' : '—';
+
+  // رسم رئيسي: نقاط + حدود النطاق
+  drawMain(points, rMin, rMax);
+
+  // مقارنة أسبوع بأسبوع سابق (يونِت نفس المختارة)
+  drawWeekCompare(unit);
+}
+
+function drawMain(points, rMin, rMax){
+  if (mainChart) mainChart.destroy();
+
+  mainChart = new Chart(mainCanvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'القراءات',
+          data: points,
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: .2
+        },
+        {
+          label: 'حد أدنى للنطاق',
+          data: points.map(p=>({x:p.x,y:rMin})),
+          borderDash: [6,6], borderWidth:1, pointRadius:0
+        },
+        {
+          label: 'حد أعلى للنطاق',
+          data: points.map(p=>({x:p.x,y:rMax})),
+          borderDash: [6,6], borderWidth:1, pointRadius:0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      parsing: false,
+      scales: {
+        x: {
+          type: 'time',
+          time: { tooltipFormat: 'yyyy-MM-dd HH:mm' }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { mode: 'nearest', intersect: false }
+      }
+    }
   });
 }
 
-/* ---------- عرض وتحليل ---------- */
-applyBtn.addEventListener('click', renderAll);
+function drawWeekCompare(unit){
+  if (cmpChart) cmpChart.destroy();
 
-function pickSlot(arr){
-  const want = document.querySelector('.chip.filter.active')?.dataset.slot || 'ALL';
-  if (want==='ALL') return arr;
-  return arr.filter(x=> slotGroup(x.slotKey) === want);
-}
+  const today = endOfDay(new Date());
+  const last7_from = startOfDay(subDays(today,6));
+  const last7_to   = today;
+  const prev7_from = startOfDay(subDays(today,13));
+  const prev7_to   = endOfDay(subDays(today,7));
 
-function inRange(arr){
-  const {from,to} = getRange();
-  return arr.filter(x=> x.when && x.when>=from && x.when<=to);
-}
+  const last7 = allMeas.filter(m => !isBefore(m.when,last7_from) && !isAfter(m.when,last7_to));
+  const prev7 = allMeas.filter(m => !isBefore(m.when,prev7_from) && !isAfter(m.when,prev7_to));
 
-function valuesInUnit(arr, unit){
-  return arr.map(x => unit==='mmol' ? x.value_mmol : x.value_mgdl).filter(v=>v!=null);
-}
-
-function limitsInUnit(unit){
-  const minM = Number(childData?.normalRange?.min ?? 4.0);
-  const maxM = Number(childData?.normalRange?.max ?? 11.0);
-  return unit==='mmol' ? {min:minM,max:maxM} : {min:Math.round(minM*18),max:Math.round(maxM*18)};
-}
-
-function computeKPI(arr, unit){
-  const vals = valuesInUnit(arr, unit);
-  const {min,max} = limitsInUnit(unit);
-  const N = vals.length;
-  const st = stats(vals);
-  const highs = vals.filter(v=> v>max).length;
-  const lows  = vals.filter(v=> v<min).length;
-  const tir   = N? Math.round((N-highs-lows)*100/N) : 0;
-  return {
-    n:N, avg:st.avg, std:st.std,
-    hiPct: N? Math.round(highs*100/N):0,
-    loPct: N? Math.round(lows*100/N):0,
-    tir
+  const getAvg = a=>{
+    if(!a.length) return 0;
+    const arr = a.map(m=> unit==='mmol'? m.mmol : Math.round(m.mgdl));
+    return arr.reduce((s,v)=>s+v,0)/arr.length;
   };
-}
+  const getHi = a=>{
+    if(!a.length) return 0;
+    const min = unit==='mmol' ? (childData?.normalRange?.min ?? 4.5) : Math.round((childData?.normalRange?.min ?? 4.5)*18);
+    const max = unit==='mmol' ? (childData?.normalRange?.max ?? 11)  : Math.round((childData?.normalRange?.max ?? 11)*18);
+    const arr = a.map(m=> unit==='mmol'? m.mmol : Math.round(m.mgdl));
+    const hi = arr.filter(v=> v>max).length;
+    return Math.round(hi*100/arr.length);
+  };
+  const getLo = a=>{
+    if(!a.length) return 0;
+    const min = unit==='mmol' ? (childData?.normalRange?.min ?? 4.5) : Math.round((childData?.normalRange?.min ?? 4.5)*18);
+    const arr = a.map(m=> unit==='mmol'? m.mmol : Math.round(m.mgdl));
+    const lo = arr.filter(v=> v<min).length;
+    return Math.round(lo*100/arr.length);
+  };
 
-function renderKPIs(kpi, unit){
-  const fmt = (x,dec=1)=> isFinite(x)? (unit==='mmol'? x.toFixed(dec): Math.round(x)) : '—';
-  kCount.textContent = kpi.n || 0;
-  kAvg.textContent   = fmt(kpi.avg);
-  kStd.textContent   = isFinite(kpi.std)? kpi.std.toFixed(1) : '—';
-  kTIR.textContent   = (kpi.tir||0)+'%';
-  kHigh.textContent  = (kpi.hiPct||0)+'%';
-  kLow.textContent   = (kpi.loPct||0)+'%';
-}
-
-function renderLine(arr, unit){
-  const {min,max} = limitsInUnit(unit);
-  const data = arr.map(x=>({
-    x: x.when, y: unit==='mmol' ? x.value_mmol : x.value_mgdl
-  })).filter(p=> p.x && p.y!=null);
-
-  const ds = [{
-    label: unit==='mmol'?'mmol/L':'mg/dL',
-    data, borderWidth:2, pointRadius:0, tension:.2
-  },{
-    label:'الحد الأعلى', data:data.map(p=>({x:p.x,y:max})), borderDash:[6,6], borderWidth:1, pointRadius:0
-  },{
-    label:'الحد الأدنى', data:data.map(p=>({x:p.x,y:min})), borderDash:[6,6], borderWidth:1, pointRadius:0
-  }];
-
-  const cfg = {
-    type:'line',
-    data:{ datasets: ds },
-    options:{
-      responsive:true,
-      parsing:false,
-      scales:{
-        x:{ type:'time', time:{unit:'day'} },
-        y:{ beginAtZero:false }
+  const data = {
+    labels: ['متوسط','ارتفاعات %','هبوطات %'],
+    datasets: [
+      {
+        label: 'الأسبوع الحالي',
+        data: [getAvg(last7), getHi(last7), getLo(last7)],
+        borderWidth:2
       },
-      plugins:{
-        legend:{display:false},
-        tooltip:{mode:'nearest',intersect:false}
-      }
-    }
+      {
+        label: 'الأسبوع السابق',
+        data: [getAvg(prev7), getHi(prev7), getLo(prev7)],
+        borderWidth:2
+      },
+    ]
   };
-  if(lineChart){ lineChart.destroy(); }
-  const ctx = document.getElementById('lineChart').getContext('2d');
-  lineChart = new Chart(ctx, cfg);
-}
 
-function renderCompare(arr, unit){
-  // آخر 7 أيام مقابل الأسبوع السابق (مبني على تاريخ "إلى")
-  const to   = new Date(dateToEl.value+'T23:59:59');
-  const from = df.addDays(to, -6);
-  const prevFrom = df.addDays(from,-7);
-  const prevTo   = df.addDays(from,-1);
-
-  const cur = arr.filter(x=> x.when>=from && x.when<=to);
-  const prv = arr.filter(x=> x.when>=prevFrom && x.when<=prevTo);
-
-  const curK = computeKPI(cur, unit);
-  const prvK = computeKPI(prv, unit);
-
-  cmpRangeEl.textContent = `الحالي: ${toDayStr(from)} → ${toDayStr(to)} • السابق: ${toDayStr(prevFrom)} → ${toDayStr(prevTo)}`;
-
-  const labels = ['المتوسط', 'الارتفاعات %', 'الهبوطات %'];
-  const curVals = [
-    unit==='mmol' ? Number(curK.avg.toFixed(1)) : Math.round(curK.avg),
-    curK.hiPct, curK.loPct
-  ];
-  const prvVals = [
-    unit==='mmol' ? Number(prvK.avg.toFixed(1)) : Math.round(prvK.avg),
-    prvK.hiPct, prvK.loPct
-  ];
-
-  const cfg = {
-    type:'bar',
-    data:{
-      labels,
-      datasets:[
-        {label:'الأسبوع الحالي', data:curVals},
-        {label:'الأسبوع السابق', data:prvVals}
-      ]
-    },
+  cmpChart = new Chart(cmpCanvas.getContext('2d'), {
+    type: 'bar',
+    data,
     options:{
-      responsive:true,
-      scales:{ x:{stacked:false}, y:{beginAtZero:true} }
+      responsive: true,
+      scales:{ y:{ beginAtZero:true } }
     }
-  };
-  if(cmpChart){ cmpChart.destroy(); }
-  const ctx = document.getElementById('cmpChart').getContext('2d');
-  cmpChart = new Chart(ctx, cfg);
+  });
 }
 
-function renderAll(){
-  // 1) فلترة بالمدى + الفئة
-  const inR   = inRange(allMeasure);
-  const pick  = pickSlot(inR);
-  const unit  = unitSel.value; // 'mmol' | 'mgdl'
-
-  // 2) KPIs
-  const k = computeKPI(pick, unit);
-  renderKPIs(k, unit);
-
-  // 3) الرسوم
-  renderLine(pick, unit);
-  renderCompare(inR, unit);
+// --------- CSV ---------
+function exportCsv(){
+  if (!allMeas.length){ alert('لا توجد بيانات'); return; }
+  const unit = unitSel.value;
+  const rows = [
+    ['datetime','slot','value('+ (unit==='mmol'?'mmol/L':'mg/dL') +')']
+  ];
+  allMeas.forEach(m=>{
+    rows.push([
+      format(m.when,'yyyy-MM-dd HH:mm'),
+      readSlotKey(m.slotKey),
+      unit==='mmol' ? m.mmol.toFixed(1) : Math.round(m.mgdl)
+    ]);
+  });
+  const csv = rows.map(r=> r.join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'analytics.csv';
+  a.click();
 }
 
-/* CSV / PDF */
-document.getElementById('csvBtn').addEventListener('click', ()=>{
-  const unit  = unitSel.value;
-  const rows  = inRange(pickSlot(allMeasure)).map(x=>[
-    toDayStr(x.when), x.when.toTimeString().slice(0,8),
-    unit==='mmol' ? (x.value_mmol?.toFixed(1) ?? '') : (x.value_mgdl ?? ''),
-    x.slotKey || ''
-  ]);
-  const head = ['date','time', unit==='mmol'?'mmol/L':'mg/dL','slot'];
-  const csv = [head, ...rows].map(r=>r.join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-  const url  = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download='analytics.csv'; a.click();
-  URL.revokeObjectURL(url);
-});
+// --------- مساعد الذكاء (Gemini) بسيط جداً ---------
+async function openAIHelper(){
+  const key = localStorage.getItem('gemini_api_key') || prompt('أدخل مفتاح Gemini (لن يُحفظ إلا محليًا):');
+  if (!key) return;
+  localStorage.setItem('gemini_api_key', key);
 
-document.getElementById('pdfBtn').addEventListener('click', ()=> window.print());
+  const unit = unitSel.value;
+  const n = allMeas.length;
+  const avg = avgEl.textContent;
+  const tir = tirEl.textContent;
+  const hi  = highEl.textContent;
+  const lo  = lowEl.textContent;
 
-/* مساعد Gemini: نبني ملخصاً للسياق */
-function buildAIPrompt(){
-  const unit  = unitSel.value;
-  const {min,max} = limitsInUnit(unit);
-  const arr   = pickSlot(inRange(allMeasure));
-  const k     = computeKPI(arr, unit);
-  const avg   = unit==='mmol'? k.avg.toFixed(1) : Math.round(k.avg);
-  const unitLabel = unit==='mmol'?'mmol/L':'mg/dL';
+  const prompt = `
+حلّل هذه الإحصائيات لطفل سكري من النوع الأول:
+- عدد القياسات: ${n}
+- الوحدة: ${unit}
+- المتوسط: ${avg}
+- وقت داخل النطاق (TIR): ${tir}
+- ارتفاعات: ${hi}
+- هبوطات: ${lo}
+قدّم نصائح عامة غير طبية لتحسين التحكم، ودائمًا اطلب مراجعة الطبيب لتعديل العلاج. لغة عربية بسيطة.
+`;
 
-  return `
-أنت مساعد صحي تعليمي. حلّل هذه الأرقام لطفل اسمه "${childData?.name || 'طفل'}".
-- الوحدة: ${unitLabel}, النطاق المستهدف: ${min}–${max} ${unitLabel}
-- عدد القياسات: ${k.n}
-- المتوسط: ${avg}, الانحراف المعياري: ${k.std.toFixed(1)}
-- وقت داخل النطاق (TIR): ${k.tir}%
-- ارتفاعات: ${k.hiPct}%, هبوطات: ${k.loPct}%
-
-اكتب ملخصًا موجزًا (٤-٦ أسطر) عن الوضع العام ومقترحات تحسين السلوك الغذائي/النشاط دون نصائح دوائية مباشرة.
-`.trim();
+  try{
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + encodeURIComponent(key),
+      {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ contents:[{parts:[{text:prompt}]}] })
+      }
+    );
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join('\n') || 'تعذر الحصول على رد.';
+    alert(text);
+  }catch(e){
+    console.error(e);
+    alert('تعذر الاتصال بالمساعد.');
+  }
 }
