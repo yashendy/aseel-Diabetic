@@ -2,135 +2,118 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>تحليل القياسات</title>
-  <link rel="icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/analytics.css?v=7" />
+
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="stylesheet" href="css/analytics.css?v=7">
+
+  <!-- Chart.js v4 + time scale + date-fns adapter + ar locale -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/date-fns@3/locale/ar-EG/index.min.js"></script>
 </head>
 <body>
   <div class="container">
 
-    <header class="card top">
+    <header class="top card">
       <div class="head-row">
-        <div class="title-wrap">
-          <h1>📈 تحليل القياسات — <span id="childName">طفل</span></h1>
-          <div id="childMeta" class="muted tiny">—</div>
+        <div class="left">
+          <h1>📈 تحليل القياسات — <span id="childName">طفل</span>
+            <button id="backBtn" class="btn ghost">↩️ رجوع</button>
+          </h1>
+          <p class="muted tiny">
+            <span id="childMeta">—</span>
+          </p>
         </div>
-        <div class="actions">
-          <button id="backBtn" class="btn secondary">↩️ رجوع</button>
-        </div>
-      </div>
 
-      <div class="controls">
-        <div class="row">
-          <div class="field">
+        <div class="right controls">
+          <div class="row">
             <label>الفترة</label>
-            <div class="chip-row">
-              <button class="chip" data-range="14">آخر 14 يوم</button>
-              <button class="chip" data-range="30">آخر 30 يوم</button>
-              <button class="chip" data-range="90">آخر 90 يوم</button>
+            <div class="chips">
+              <button data-range="14d" class="chip range-btn">آخر 14 يوم</button>
+              <button data-range="30d" class="chip range-btn">آخر 30 يوم</button>
+              <button data-range="90d" class="chip range-btn">آخر 90 يوم</button>
+              <button data-range="all" class="chip range-btn">الكل</button>
             </div>
           </div>
-          <div class="field">
+
+          <div class="row">
             <label>من</label>
-            <input type="date" id="fromDate" />
-          </div>
-          <div class="field">
+            <input type="date" id="dateFrom">
             <label>إلى</label>
-            <input type="date" id="toDate" />
-          </div>
-          <div class="field">
+            <input type="date" id="dateTo">
             <label>الوحدة</label>
-            <select id="unitSel">
+            <select id="unitSelect">
               <option value="mmol">mmol/L</option>
               <option value="mgdl">mg/dL</option>
             </select>
+            <button id="applyBtn" class="btn">تطبيق</button>
           </div>
-        </div>
 
-        <div class="row">
-          <div class="chip-row">
-            <button id="fltAll"   class="chip active">الكل</button>
-            <button id="fltPre"   class="chip">قبل الوجبات</button>
-            <button id="fltPost"  class="chip">بعد الوجبات</button>
-            <button id="fltSleep" class="chip">النوم</button>
-            <button id="fltSport" class="chip">الرياضة</button>
+          <div class="row">
+            <div class="chips">
+              <button class="chip slot" data-slot="PRE_BREAKFAST">قبل الفطور</button>
+              <button class="chip slot" data-slot="POST_BREAKFAST">بعد الفطور</button>
+              <button class="chip slot" data-slot="PRE_LUNCH">قبل الغداء</button>
+              <button class="chip slot" data-slot="POST_LUNCH">بعد الغداء</button>
+              <button class="chip slot" data-slot="PRE_DINNER">قبل العشاء</button>
+              <button class="chip slot" data-slot="POST_DINNER">بعد العشاء</button>
+              <button class="chip slot" data-slot="SNACK">سناك</button>
+              <button class="chip slot active" data-slot="ALL">الكل</button>
+            </div>
           </div>
-          <div class="btn-row">
-            <button id="applyBtn" class="btn primary">تطبيق</button>
-            <button id="pdfBtn" class="btn">🖨️ PDF / طباعة</button>
-            <button id="csvBtn" class="btn secondary">📥 CSV تنزيل</button>
-            <button id="aiOpen" class="btn">🤖 مساعد التحليل</button>
+
+          <div class="row actions">
+            <button id="btnAI" class="btn secondary">🤖 مساعد التحليل</button>
+            <button id="btnCSV" class="btn secondary">🧾 تنزيل CSV</button>
+            <button id="btnPDF" class="btn secondary">🖨️ PDF / طباعة</button>
           </div>
         </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat"><div class="label">عدد القياسات</div><div class="value" id="stCount">—</div></div>
+        <div class="stat"><div class="label">المتوسط</div><div class="value" id="stAvg">—</div></div>
+        <div class="stat"><div class="label">الانحراف المعياري</div><div class="value" id="stStd">—</div></div>
+        <div class="stat"><div class="label">(TIR) وقت داخل النطاق</div><div class="value" id="stTir">—</div></div>
+        <div class="stat"><div class="label">ارتفاعات</div><div class="value red" id="stHigh">—</div></div>
+        <div class="stat"><div class="label">هبوطات</div><div class="value blue" id="stLow">—</div></div>
       </div>
     </header>
 
-    <!-- كروت الملخص -->
-    <section class="cards">
-      <div class="card stat"><div class="lab">عدد القياسات</div><div class="val" id="cntCard">—</div></div>
-      <div class="card stat"><div class="lab">الانحراف المعياري</div><div class="val" id="trendCard">—</div></div>
-      <div class="card stat"><div class="lab">المتوسط</div><div class="val" id="avgCard">—</div></div>
-      <div class="card stat"><div class="lab">هبوطات</div><div class="val" id="hypoCard">—</div></div>
-      <div class="card stat"><div class="lab">(TIR) وقت داخل النطاق</div><div class="val" id="tirCard">—</div></div>
+    <section class="card">
+      <h3>منحنى الجلوكوز مع الزمن</h3>
+      <canvas id="lineChart" height="110"></canvas>
     </section>
 
-    <!-- الرسم 1: خطّي زمني -->
     <section class="card">
-      <div class="table-head">
-        <h3>منحنى الجلوكوز مع الزمن</h3>
-      </div>
-      <canvas id="timeChart" height="120"></canvas>
-    </section>
-
-    <!-- الرسم 2: دونات التوزيع -->
-    <section class="card">
-      <div class="table-head">
-        <h3>توزيع القياسات حسب الوقت</h3>
-      </div>
-      <canvas id="donutChart" height="120"></canvas>
-    </section>
-
-    <!-- جدول التوزيع -->
-    <section class="card">
-      <div class="table-head">
-        <h3>تفصيل حسب وقت القياس</h3>
-      </div>
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-          <tr><th>الوقت</th><th>العدد</th><th>متوسط mmol/L</th></tr>
-          </thead>
-          <tbody id="slotTableBody"></tbody>
-        </table>
-      </div>
+      <h3>توزيع القياسات حسب الوقت</h3>
+      <canvas id="pieChart" height="110"></canvas>
     </section>
 
   </div>
 
-  <!-- ويدجت الذكاء الاصطناعي -->
-  <div id="aiWidget" class="ai hidden">
+  <!-- نافذة مساعد Gemini (اختياري) -->
+  <div id="aiWidget" class="ai hidden" aria-live="polite">
     <div class="ai-head">
-      <div class="ai-title">🤖 مساعد التحليل</div>
-      <div class="ai-actions">
-        <button id="aiMin" class="ai-btn">—</button>
-        <button id="aiClose" class="ai-btn">✕</button>
+      <b>🤖 مساعد التحليل</b>
+      <div>
+        <button id="aiMin" class="icon">—</button>
+        <button id="aiClose" class="icon">✕</button>
       </div>
     </div>
     <div class="ai-body">
-      <div id="aiContext" class="ai-context muted tiny">—</div>
+      <div class="ai-context tiny muted" id="aiContext">بدون سياق إضافي</div>
       <div id="aiMessages" class="ai-messages"></div>
-      <div class="ai-input">
-        <textarea id="aiInput" rows="2" placeholder="اسأل عن التحليل أو اطلب تفسيرًا..."></textarea>
-        <button id="aiSend" class="btn primary">إرسال</button>
-      </div>
+    </div>
+    <div class="ai-input">
+      <textarea id="aiInput" rows="2" placeholder="اسأل عن النتائج.."></textarea>
+      <button id="aiSend" class="btn">إرسال</button>
     </div>
   </div>
 
-  <!-- Chart.js UMD (مستقر) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-
-  <!-- Firebase + منطق الصفحة -->
+  <!-- سكربت الصفحة (نظام Firebase الحالي لديك) -->
   <script type="module" src="js/analytics.js?v=7"></script>
 </body>
 </html>
