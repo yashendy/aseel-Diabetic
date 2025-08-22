@@ -378,43 +378,59 @@ function exportCsv(){
 }
 
 // --------- مساعد الذكاء (Gemini) بسيط جداً ---------
-async function openAIHelper(){
-  const key = localStorage.getItem('gemini_api_key') || prompt('أدخل مفتاح Gemini (لن يُحفظ إلا محليًا):');
-  if (!key) return;
-  localStorage.setItem('gemini_api_key', key);
+async function openAIHelper() {
+  // الحصول على مفتاح Gemini API وتخزينه
+  let key = localStorage.getItem('gemini_api_key');
+  if (!key) {
+    key = prompt('أدخل مفتاح Gemini (لن يُحفظ إلا محليًا):');
+    if (!key) {
+      alert('لم يتم إدخال مفتاح API.');
+      return;
+    }
+    localStorage.setItem('gemini_api_key', key);
+  }
 
+  // جمع الإحصائيات من العناصر
   const unit = unitSel.value;
   const n = allMeas.length;
   const avg = avgEl.textContent;
   const tir = tirEl.textContent;
-  const hi  = highEl.textContent;
-  const lo  = lowEl.textContent;
+  const hi = highEl.textContent;
+  const lo = lowEl.textContent;
 
-  const prompt = `
-حلّل هذه الإحصائيات لطفل سكري من النوع الأول:
-- عدد القياسات: ${n}
-- الوحدة: ${unit}
-- المتوسط: ${avg}
-- وقت داخل النطاق (TIR): ${tir}
-- ارتفاعات: ${hi}
-- هبوطات: ${lo}
-قدّم نصائح عامة غير طبية لتحسين التحكم، ودائمًا اطلب مراجعة الطبيب لتعديل العلاج. لغة عربية بسيطة.
-`;
+  // صياغة الـ prompt
+  const promptText = `
+    حلّل هذه الإحصائيات لطفل سكري من النوع الأول:
+    - عدد القياسات: ${n}
+    - الوحدة: ${unit}
+    - المتوسط: ${avg}
+    - وقت داخل النطاق (TIR): ${tir}
+    - ارتفاعات: ${hi}
+    - هبوطات: ${lo}
+    قدّم نصائح عامة غير طبية لتحسين التحكم، ودائمًا اطلب مراجعة الطبيب لتعديل العلاج. لغة عربية بسيطة.
+  `;
 
-  try{
+  try {
     const res = await fetch(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + encodeURIComponent(key),
       {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ contents:[{parts:[{text:prompt}]}] })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] }),
       }
     );
+
+    // التحقق من استجابة ناجحة
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(`خطأ في استدعاء API: ${res.status} - ${errorData.error.message}`);
+    }
+
     const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join('\n') || 'تعذر الحصول على رد.';
+    const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || 'تعذر الحصول على رد.';
     alert(text);
-  }catch(e){
-    console.error(e);
-    alert('تعذر الاتصال بالمساعد.');
+  } catch (e) {
+    console.error('فشل الاتصال بالمساعد:', e);
+    alert('تعذر الاتصال بالمساعد. تأكد من أن مفتاح API صحيح أو حاول مرة أخرى لاحقاً.');
   }
 }
