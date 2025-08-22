@@ -1,103 +1,119 @@
+<!-- analytics.html -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>تحليل القياسات</title>
-
-  <!-- ✅ أيقونة الموقع (كرري هذا السطر في كل الصفحات الأخرى) -->
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
-
-  <link rel="stylesheet" href="css/analytics.css" />
-  <!-- Chart.js (نسخة UMD بسيطة، بدون import modules) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link rel="icon" href="favicon.ico" />
+  <link rel="stylesheet" href="css/analytics.css?v=3" />
 </head>
 <body>
   <div class="container">
-    <header class="card header">
-      <button class="btn back" onclick="history.back()">⬅ رجوع</button>
 
-      <div class="title">
-        <h1>📈 تحليل القياسات — <span id="childName">طفل</span></h1>
-        <p class="muted" id="childMeta">—</p>
-      </div>
-
-      <div class="chips">
-        <span class="chip" id="chipRange">النطاق: —</span>
-        <span class="chip" id="chipCR">CR: —</span>
-        <span class="chip" id="chipCF">CF: —</span>
-      </div>
-
-      <div class="filters">
-        <label>الفترة</label>
-        <select id="range">
-          <option value="7d">آخر 7 أيام</option>
-          <option value="14d" selected>آخر 14 يوم</option>
-          <option value="30d">آخر 30 يوم</option>
-          <option value="custom">مخصص</option>
-        </select>
-        <input type="date" id="start" class="hidden">
-        <span>↔</span>
-        <input type="date" id="end" class="hidden">
-
-        <label>الوحدة</label>
-        <select id="unit">
-          <option value="mmol" selected>mmol/L</option>
-          <option value="mgdl">mg/dL</option>
-        </select>
-
-        <div class="slot-filters" role="group" aria-label="فلترة حسب وقت القياس">
-          <button class="seg active" data-slot="all">الكل</button>
-          <button class="seg" data-slot="pre">قبل الوجبات</button>
-          <button class="seg" data-slot="post">بعد الوجبات</button>
-          <button class="seg" data-slot="sleep">النوم</button>
-          <button class="seg" data-slot="snack">السناك</button>
+    <header class="card top">
+      <div class="head-row">
+        <div class="title-wrap">
+          <h1>📈 تحليل القياسات — <span id="childName">طفل</span></h1>
+          <div id="childMeta" class="muted tiny">—</div>
         </div>
 
-        <button class="btn" id="csvBtn">📥 تنزيل CSV</button>
-        <button class="btn" id="printBtn">🖨️ طباعة / PDF</button>
-        <button class="btn primary" id="apply">تطبيق</button>
-        <button class="btn ai hidden" id="aiBtn">🤖 تحليل ذكي</button>
+        <div class="actions">
+          <button id="backBtn" class="btn secondary">↩️ رجوع</button>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="row">
+          <div class="field">
+            <label>الفترة</label>
+            <div class="chip-row">
+              <button id="rng14" class="chip" data-range="14">آخر 14 يوم</button>
+              <button id="rng30" class="chip" data-range="30">آخر 30 يوم</button>
+              <button id="rng90" class="chip" data-range="90">آخر 90 يوم</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>من</label>
+            <input type="date" id="fromDate" />
+          </div>
+          <div class="field">
+            <label>إلى</label>
+            <input type="date" id="toDate" />
+          </div>
+          <div class="field">
+            <label>الوحدة</label>
+            <select id="unitSel">
+              <option value="mmol">mmol/L</option>
+              <option value="mgdl">mg/dL</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="chip-row">
+            <button id="fltAll"   class="chip active">الكل</button>
+            <button id="fltPre"   class="chip">قبل الوجبات</button>
+            <button id="fltPost"  class="chip">بعد الوجبات</button>
+            <button id="fltSleep" class="chip">النوم</button>
+            <button id="fltSport" class="chip">الرياضة</button>
+          </div>
+
+          <div class="btn-row">
+            <button id="applyBtn" class="btn primary">تطبيق</button>
+            <button id="pdfBtn" class="btn">🖨️ PDF / طباعة</button>
+            <button id="csvBtn" class="btn secondary">📥 CSV تنزيل</button>
+          </div>
+        </div>
       </div>
     </header>
 
-    <!-- KPIs -->
-    <section class="card kpis">
-      <div class="kpi"><div class="v" id="kpiTIR">—%</div><div class="d" id="deltaTIR">—</div><div class="l">وقت داخل النطاق (TIR)</div></div>
-      <div class="kpi bad"><div class="v" id="kpiHigh">—%</div><div class="d" id="deltaHigh">—</div><div class="l">ارتفاعات</div></div>
-      <div class="kpi bad"><div class="v" id="kpiLow">—%</div><div class="d" id="deltaLow">—</div><div class="l">هبوطات</div></div>
-      <div class="kpi"><div class="v" id="kpiMean">—</div><div class="d" id="deltaMean">—</div><div class="l">المتوسط</div></div>
-      <div class="kpi"><div class="v" id="kpiSD">—</div><div class="d" id="deltaSD">—</div><div class="l">الانحراف المعياري</div></div>
-      <div class="kpi"><div class="v" id="kpiCount">—</div><div class="d" id="deltaCount">—</div><div class="l">عدد القياسات</div></div>
+    <!-- البطاقات -->
+    <section class="cards">
+      <div class="card stat">
+        <div class="lab">عدد القياسات</div>
+        <div class="val" id="cntCard">—</div>
+      </div>
+      <div class="card stat">
+        <div class="lab">الانحراف المعياري</div>
+        <div class="val" id="trendCard">—</div>
+      </div>
+      <div class="card stat">
+        <div class="lab">المتوسط</div>
+        <div class="val" id="avgCard">—</div>
+      </div>
+      <div class="card stat">
+        <div class="lab">هبوطات</div>
+        <div class="val" id="hypoCard">—</div>
+      </div>
+      <div class="card stat">
+        <div class="lab">(TIR) وقت داخل النطاق</div>
+        <div class="val" id="tirCard">—</div>
+      </div>
     </section>
 
-    <!-- Charts -->
-    <section class="card charts">
-      <h2>توزيع حسب وقت القياس</h2>
-      <canvas id="slotBar"></canvas>
-
-      <h2>متوسط كل يوم</h2>
-      <canvas id="dailyLine"></canvas>
+    <!-- توزيع حسب وقت القياس -->
+    <section class="card">
+      <div class="table-head">
+        <h3>توزيع حسب وقت القياس</h3>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>الوقت</th>
+              <th>العدد</th>
+              <th>متوسط mmol/L</th>
+            </tr>
+          </thead>
+          <tbody id="slotTableBody"></tbody>
+        </table>
+      </div>
     </section>
 
-    <!-- Insights -->
-    <section class="card insights">
-      <h2>ملاحظات واقتراحات</h2>
-      <ul id="insightsList" class="list"></ul>
-    </section>
-
-    <!-- AI -->
-    <section id="aiBox" class="card hidden">
-      <h2>تحليل ذكي (Gemini)</h2>
-      <div id="aiOut" class="aiout"></div>
-    </section>
   </div>
 
-  <div id="loader" class="loader hidden">جارِ التحميل…</div>
-
-  <!-- اختياري: إن حطيتي المفتاح هنا يظهر زر الذكاء -->
-  <!-- <script>window.GEMINI_API_KEY='AIza...';</script> -->
-
-  <script type="module" src="js/analytics.js?v=4"></script>
+  <!-- Firebase config (modular v12) -->
+  <script type="module" src="js/analytics.js?v=6"></script>
 </body>
 </html>
