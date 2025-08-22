@@ -1,119 +1,153 @@
+<!-- analytics.html -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>تحليل القياسات</title>
-
-  <link rel="icon" href="favicon.ico" sizes="any">
-  <link rel="stylesheet" href="css/analytics.css?v=7">
-
-  <!-- Chart.js v4 + time scale + date-fns adapter + ar locale -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
-  <script src="https://cdn.jsdelivr.net/npm/date-fns@3/locale/ar-EG/index.min.js"></script>
+  <link rel="icon" href="favicon.ico" />
+  <link rel="stylesheet" href="css/analytics.css?v=8" />
 </head>
 <body>
   <div class="container">
 
-    <header class="top card">
-      <div class="head-row">
-        <div class="left">
-          <h1>📈 تحليل القياسات — <span id="childName">طفل</span>
-            <button id="backBtn" class="btn ghost">↩️ رجوع</button>
-          </h1>
-          <p class="muted tiny">
-            <span id="childMeta">—</span>
-          </p>
-        </div>
-
-        <div class="right controls">
-          <div class="row">
-            <label>الفترة</label>
-            <div class="chips">
-              <button data-range="14d" class="chip range-btn">آخر 14 يوم</button>
-              <button data-range="30d" class="chip range-btn">آخر 30 يوم</button>
-              <button data-range="90d" class="chip range-btn">آخر 90 يوم</button>
-              <button data-range="all" class="chip range-btn">الكل</button>
-            </div>
-          </div>
-
-          <div class="row">
-            <label>من</label>
-            <input type="date" id="dateFrom">
-            <label>إلى</label>
-            <input type="date" id="dateTo">
-            <label>الوحدة</label>
-            <select id="unitSelect">
-              <option value="mmol">mmol/L</option>
-              <option value="mgdl">mg/dL</option>
-            </select>
-            <button id="applyBtn" class="btn">تطبيق</button>
-          </div>
-
-          <div class="row">
-            <div class="chips">
-              <button class="chip slot" data-slot="PRE_BREAKFAST">قبل الفطور</button>
-              <button class="chip slot" data-slot="POST_BREAKFAST">بعد الفطور</button>
-              <button class="chip slot" data-slot="PRE_LUNCH">قبل الغداء</button>
-              <button class="chip slot" data-slot="POST_LUNCH">بعد الغداء</button>
-              <button class="chip slot" data-slot="PRE_DINNER">قبل العشاء</button>
-              <button class="chip slot" data-slot="POST_DINNER">بعد العشاء</button>
-              <button class="chip slot" data-slot="SNACK">سناك</button>
-              <button class="chip slot active" data-slot="ALL">الكل</button>
-            </div>
-          </div>
-
-          <div class="row actions">
-            <button id="btnAI" class="btn secondary">🤖 مساعد التحليل</button>
-            <button id="btnCSV" class="btn secondary">🧾 تنزيل CSV</button>
-            <button id="btnPDF" class="btn secondary">🖨️ PDF / طباعة</button>
-          </div>
-        </div>
+    <header class="top">
+      <div class="left">
+        <button id="backBtn" class="btn ghost">↩︎ رجوع</button>
       </div>
-
-      <div class="stats-grid">
-        <div class="stat"><div class="label">عدد القياسات</div><div class="value" id="stCount">—</div></div>
-        <div class="stat"><div class="label">المتوسط</div><div class="value" id="stAvg">—</div></div>
-        <div class="stat"><div class="label">الانحراف المعياري</div><div class="value" id="stStd">—</div></div>
-        <div class="stat"><div class="label">(TIR) وقت داخل النطاق</div><div class="value" id="stTir">—</div></div>
-        <div class="stat"><div class="label">ارتفاعات</div><div class="value red" id="stHigh">—</div></div>
-        <div class="stat"><div class="label">هبوطات</div><div class="value blue" id="stLow">—</div></div>
+      <div class="titlewrap">
+        <h1>تحليل القياسات — <span id="childName">طفل</span> <span class="emoji">📈</span></h1>
+        <div id="childMeta" class="muted tiny">—</div>
+      </div>
+      <div class="right">
+        <button id="aiBtn" class="btn ai">🤖 مساعد التحليل</button>
       </div>
     </header>
 
+    <section class="controls card">
+      <div class="row">
+        <div class="field">
+          <label>الفترة</label>
+          <div class="chips">
+            <button class="chip ghost" data-range="14d">آخر 14 يوم</button>
+            <button class="chip ghost" data-range="30d">آخر 30 يوم</button>
+            <button class="chip ghost" data-range="90d">آخر 90 يوم</button>
+            <button class="chip ghost active" data-range="all">الكل</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>من</label>
+          <input id="dateFrom" type="date" />
+        </div>
+
+        <div class="field">
+          <label>إلى</label>
+          <input id="dateTo" type="date" />
+        </div>
+
+        <div class="field">
+          <label>الوحدة</label>
+          <select id="unitSel">
+            <option value="mmol">mmol/L</option>
+            <option value="mgdl">mg/dL</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="chips">
+          <button class="chip filter active" data-slot="ALL">الكل</button>
+          <button class="chip filter" data-slot="PRE">قبل الوجبات</button>
+          <button class="chip filter" data-slot="POST">بعد الوجبات</button>
+          <button class="chip filter" data-slot="SNACK">سناك</button>
+          <button class="chip filter" data-slot="SLEEP">النوم</button>
+        </div>
+        <div class="row-actions">
+          <button id="applyBtn" class="btn primary">تطبيق</button>
+          <button id="csvBtn" class="btn ghost">تنزيل CSV</button>
+          <button id="pdfBtn" class="btn ghost">طباعة / PDF</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPIs -->
+    <section class="kpis">
+      <div class="kpi card">
+        <div class="label">عدد القياسات</div><div id="kCount" class="val">—</div>
+      </div>
+      <div class="kpi card">
+        <div class="label">المتوسط</div><div id="kAvg" class="val">—</div>
+      </div>
+      <div class="kpi card">
+        <div class="label">الانحراف المعياري</div><div id="kStd" class="val">—</div>
+      </div>
+      <div class="kpi card">
+        <div class="label">(TIR) وقت داخل النطاق</div><div id="kTIR" class="val">—</div>
+      </div>
+      <div class="kpi card">
+        <div class="label">ارتفاعات</div><div id="kHigh" class="val red">—</div>
+      </div>
+      <div class="kpi card">
+        <div class="label">هبوطات</div><div id="kLow" class="val blue">—</div>
+      </div>
+    </section>
+
+    <!-- Line: glucose over time -->
     <section class="card">
       <h3>منحنى الجلوكوز مع الزمن</h3>
       <canvas id="lineChart" height="110"></canvas>
     </section>
 
+    <!-- Week vs previous week -->
     <section class="card">
-      <h3>توزيع القياسات حسب الوقت</h3>
-      <canvas id="pieChart" height="110"></canvas>
+      <h3>مقارنة أسبوع بالأسبوع السابق</h3>
+      <canvas id="cmpChart" height="110"></canvas>
+      <div class="muted tiny" id="cmpRange">—</div>
     </section>
 
   </div>
 
-  <!-- نافذة مساعد Gemini (اختياري) -->
-  <div id="aiWidget" class="ai hidden" aria-live="polite">
-    <div class="ai-head">
-      <b>🤖 مساعد التحليل</b>
-      <div>
-        <button id="aiMin" class="icon">—</button>
-        <button id="aiClose" class="icon">✕</button>
-      </div>
-    </div>
-    <div class="ai-body">
-      <div class="ai-context tiny muted" id="aiContext">بدون سياق إضافي</div>
-      <div id="aiMessages" class="ai-messages"></div>
-    </div>
-    <div class="ai-input">
-      <textarea id="aiInput" rows="2" placeholder="اسأل عن النتائج.."></textarea>
-      <button id="aiSend" class="btn">إرسال</button>
-    </div>
-  </div>
+  <!-- 🔧 Librairies -->
+  <script src="https://cdn.jsdelivr.net/npm/date-fns@2.30.0/dist/date-fns.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
-  <!-- سكربت الصفحة (نظام Firebase الحالي لديك) -->
-  <script type="module" src="js/analytics.js?v=7"></script>
+  <!-- Gemini helper (no UI—used by the button) -->
+  <script>
+    // حفظ/استرجاع مفتاح Gemini في localStorage
+    window.askGemini = async function (prompt) {
+      let key = localStorage.getItem('GEMINI_API_KEY');
+      if (!key) {
+        key = prompt ? null : ''; // منع تغطية المعامل
+      }
+      if (!key) {
+        key = window.prompt('ادخلي مفتاح Gemini (سيُحفظ محليًا):');
+        if (!key) return 'لم يتم إدخال مفتاح.';
+        localStorage.setItem('GEMINI_API_KEY', key);
+      }
+      try {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': key
+          },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }]}] })
+        });
+        if (!res.ok) {
+          const t = await res.text();
+          return 'خطأ في استدعاء Gemini: ' + t;
+        }
+        const data = await res.json();
+        return data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لا يوجد رد.';
+      } catch (e) {
+        return 'تعذّر الاتصال بـ Gemini.';
+      }
+    };
+  </script>
+
+  <!-- Firebase (لدينا ملف إعدادك المشترك) -->
+  <script type="module" src="js/analytics.js?v=8"></script>
 </body>
 </html>
