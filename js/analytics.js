@@ -65,7 +65,7 @@ goBackBtn.addEventListener('click', ()=> history.back());
 
 /* جلسة + تحميل بيانات الطفل ثم القياسات */
 firebase.auth().onAuthStateChanged(async user=>{
-  if(!user){ location.href='index.html'; return; }
+  if(!user){ location.href='child.html'; return; }
   if(!childId){ alert('لا يوجد معرف طفل في الرابط'); return; }
   currentUser = user;
 
