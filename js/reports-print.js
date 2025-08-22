@@ -1,298 +1,284 @@
-// reports-print.js — Pivot print: Date | WAKE | PRE/POST meals | PRE_SLEEP | DURING_SLEEP
+// js/reports-print.js
 import { auth, db } from './firebase-config.js';
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, query, where, orderBy, getDocs, doc, getDoc
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+  onAuthStateChanged
+} from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
+import {
+  collection, query, where, orderBy, getDocs
+} from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 
-/* ==== DOM & Params ==== */
-const qs        = new URLSearchParams(location.search);
-const childId   = qs.get('child') || localStorage.getItem('lastChildId');
-const paramFrom = qs.get('from') || '';
-const paramTo   = qs.get('to')   || '';
-const paramUnit = (qs.get('unit') || 'mmol').toLowerCase();
-// يدعم الطريقتين: ?blank=1 أو ?mode=blank
-const paramBlank= qs.get('blank') === '1' || qs.get('mode') === 'blank';
+/* عناصر */
+const params     = new URLSearchParams(location.search);
+const childId    = params.get('child');
 
 const childNameEl = document.getElementById('childName');
-const childMetaEl = document.getElementById('childMeta');
-const chipRangeEl = document.getElementById('chipRange');
-const chipCREl    = document.getElementById('chipCR');
-const chipCFEl    = document.getElementById('chipCF');
+const childAgeEl  = document.getElementById('childAge');
+const childRangeEl= document.getElementById('childRange');
+const childCREl   = document.getElementById('childCR');
+const childCFEl   = document.getElementById('childCF');
 
-const unitSel   = document.getElementById('unitSel');
-const notesMode = document.getElementById('notesMode');
-const btnPrint  = document.getElementById('btnPrint');
-const blankMode = document.getElementById('blankMode');
+const unitSelect = document.getElementById('unitSelect');
+const fromDateEl = document.getElementById('fromDate');
+const toDateEl   = document.getElementById('toDate');
+const notesEl    = document.getElementById('notes');
 
-const fromEl  = document.getElementById('fromDate');
-const toEl    = document.getElementById('toDate');
-const applyEl = document.getElementById('apply');
+const periodFrom = document.getElementById('periodFrom');
+const periodTo   = document.getElementById('periodTo');
+const periodUnit = document.getElementById('periodUnit');
 
-const thead = document.getElementById('thead');
-const tbody = document.getElementById('tbody');
+const tbody      = document.getElementById('tbody');
+const emptyEl    = document.getElementById('empty');
 
-const loaderEl = document.getElementById('loader');
-const showLoader = v => loaderEl.classList.toggle('hidden', !v);
+const maskTreat  = document.getElementById('maskTreat');
+const colorize   = document.getElementById('colorize');
+const weeklyMode = document.getElementById('weeklyMode');
 
-/* ==== helpers ==== */
+const applyBtn   = document.getElementById('applyBtn');
+const printBtn   = document.getElementById('printBtn');
+const backBtn    = document.getElementById('backBtn');
+
+/* أدوات صغيرة */
 const pad = n => String(n).padStart(2,'0');
-const todayStr = (d=new Date()) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const addDays = (ds,delta)=>{const d=new Date(ds);d.setDate(d.getDate()+delta);return todayStr(d);};
-const toMgdl = mmol => Math.round(Number(mmol)*18);
-const esc = s => (s??'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
-
-function stateOf(mmol, min, max){ if(mmol<min) return 'low'; if(mmol>max) return 'high'; return 'ok'; }
-function valueText(mmol, mgdl, unit){ return unit==='mgdl' ? `${Math.round(mgdl)} mg/dL` : `${Number(mmol).toFixed(1)} mmol/L`; }
-function arrowOf(st){ return st==='low'?'↓':(st==='high'?'↑':'↔'); }
-
-/* توحيد الأوقات (عربي → مفاتيح) */
-const AR2KEY = {
-  'الاستيقاظ':'wake',
-  'ق.الفطار':'pre_bf','ب.الفطار':'post_bf',
-  'ق.الغدا':'pre_ln','ب.الغدا':'post_ln',
-  'ق.العشا':'pre_dn','ب.العشا':'post_dn',
-  'سناك':'snack',
-  'ق.النوم':'pre_sleep','أثناء النوم':'during_sleep',
-  'ق.الرياضة':'pre_sport','ب.الرياضة':'post_sport'
-};
-
-/* ترتيب الأعمدة المطبوعة (بدون سناك/رياضة للحفاظ على الشكل) */
-const SLOT_ORDER = [
-  ['wake','الاستيقاظ'],
-  ['pre_bf','ق.الفطار'],  ['post_bf','ب.الفطار'],
-  ['pre_ln','ق.الغدا'],   ['post_ln','ب.الغدا'],
-  ['pre_dn','ق.العشا'],   ['post_dn','ب.العشا'],
-  ['pre_sleep','قبل النوم'], ['during_sleep','أثناء النوم'],
-];
-
-let USER=null, CHILD=null;
-let limits={min:4,max:7}, CR=null, CF=null;
-let pivotDates=[];  // sorted dates
-let pivotRows={};   // date -> { slotKey: {mmol,mgdl,corr,notes,state} }
-
-/* عتبات تحذير إضافية (لا تغيّر الشكل، بس تضيف ⚠︎ لو شديد) */
-const CRIT_LOW = 3.5;   // mmol/L  ≈ 63 mg/dL
-const CRIT_HIGH= 13.9;  // mmol/L  ≈ 250 mg/dL
-
-/* ==== boot ==== */
-onAuthStateChanged(auth, async (u)=>{
-  if(!u){ location.href='index.html'; return; }
-  if(!childId){ alert('لا يوجد معرف طفل'); history.back(); return; }
-  USER=u;
-
-  try{
-    showLoader(true);
-    await loadChild();
-    initControls();
-    await loadAndRender();
-  }finally{
-    showLoader(false);
-  }
-});
-
-/* ==== child ==== */
-async function loadChild(){
-  const ref = doc(db, `parents/${USER.uid}/children/${childId}`);
-  const snap = await getDoc(ref);
-  if(!snap.exists()){ alert('لم يتم العثور على الطفل'); history.back(); throw 0; }
-  const c = snap.data();
-  CHILD=c;
-
-  childNameEl.textContent = c.name || 'طفل';
-  childMetaEl.textContent = `${c.gender || '—'} • العمر: ${calcAge(c.birthDate)} سنة`;
-
-  limits = {
-    min: Number(c.normalRange?.min ?? 4),
-    max: Number(c.normalRange?.max ?? 7),
-  };
-  CR = c.carbRatio!=null?Number(c.carbRatio):null;
-  CF = c.correctionFactor!=null?Number(c.correctionFactor):null;
-
-  chipRangeEl.textContent = `النطاق: ${limits.min}–${limits.max} mmol/L`;
-  chipCREl.textContent = `CR: ${CR ?? '—'} g/U`;
-  chipCFEl.textContent = `CF: ${CF ?? '—'} mmol/L/U`;
-
-  // تهيئة تفضيلات العرض من التخزين المحلي
-  const prefUnit = localStorage.getItem('rp_unit');
-  const prefNotes= localStorage.getItem('rp_notes');
-  if(prefUnit) unitSel.value = prefUnit;
-  if(prefNotes) notesMode.value = prefNotes;
-}
+const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const addDays = (d,delta)=> { const x=new Date(d); x.setDate(x.getDate()+delta); return x; };
+const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 function calcAge(bd){
   if(!bd) return '—';
   const b=new Date(bd), t=new Date();
   let a=t.getFullYear()-b.getFullYear();
   const m=t.getMonth()-b.getMonth();
   if(m<0||(m===0&&t.getDate()<b.getDate())) a--;
-  return a;
+  return `${a} سنة`;
 }
 
-/* ==== controls ==== */
-function initControls(){
-  const today=todayStr();
-  fromEl.value = paramFrom || addDays(today,-7);
-  toEl.value   = paramTo   || today;
+/* خريطة slots الإنجليزية ⇢ الأعمدة العربية */
+const SLOT_MAP = {
+  'WAKE':'الاستيقاظ',
+  'WAKEUP':'الاستيقاظ',
+  'PRE_BREAKFAST':'ق.الفطار',
+  'POST_BREAKFAST':'ب.الفطار',
+  'PRE_LUNCH':'ق.الغدا',
+  'POST_LUNCH':'ب.الغدا',
+  'PRE_DINNER':'ق.العشا',
+  'POST_DINNER':'ب.العشا',
+  'SNACKS':'سناك',
+  'SLEEP':'أثناء النوم',
+  'NIGHT':'أثناء النوم'
+};
+const TABLE_COLS = ['الاستيقاظ','ق.الفطار','ب.الفطار','ق.الغدا','ب.الغدا','ق.العشا','ب.العشا','سناك','أثناء النوم'];
 
-  // paramUnit أو المخزن محليًا
-  if(paramUnit==='mgdl') unitSel.value = 'mgdl';
+/* حالة */
+let currentUser, childData;
+let cachedRows = []; // [{date:'YYYY-MM-DD', cols:{'الاستيقاظ':[], ...}}]
 
-  // blank param
-  blankMode.checked = !!paramBlank;
+/* تهيئة أولية */
+(function initUI(){
+  const t = new Date();
+  toDateEl.value   = fmtDate(t);
+  fromDateEl.value = fmtDate(addDays(t,-7));
+  periodUnit.textContent = unitSelect.value === 'mmol' ? 'mmol/L' : 'mg/dL';
+})();
 
-  applyEl.addEventListener('click', loadAndRender);
-  unitSel.addEventListener('change', ()=>{
-    localStorage.setItem('rp_unit', unitSel.value);
-    renderTable();
-  });
-  notesMode.addEventListener('change', ()=>{
-    localStorage.setItem('rp_notes', notesMode.value);
-    renderTable();
-  });
-  blankMode.addEventListener('change', loadAndRender);
-  btnPrint.addEventListener('click', ()=>window.print());
+/* جلسة */
+onAuthStateChanged(auth, async (user)=>{
+  if(!user) return location.href = 'index.html';
+  if(!childId){ alert('لا يوجد معرف طفل في الرابط'); history.back(); return; }
+  currentUser = user;
+
+  await loadChild();
+  await loadMeasurements();
+  renderTable();
+  renderQR();
+});
+
+/* تحميل بيانات الطفل */
+async function loadChild(){
+  // نقرأ من Firestore: parents/{uid}/children/{childId}
+  const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js');
+  const dref = doc(db, `parents/${currentUser.uid}/children/${childId}`);
+  const snap = await getDoc(dref);
+  if(!snap.exists()){ alert('لم يتم العثور على الطفل'); return; }
+  childData = snap.data();
+
+  childNameEl.textContent = childData.name || 'طفل';
+  childAgeEl.textContent  = calcAge(childData.birthDate);
+  childRangeEl.textContent= `${childData?.normalRange?.min ?? '—'}–${childData?.normalRange?.max ?? '—'} mmol/L`;
+  childCREl.textContent   = `${childData?.carbRatio ?? '—'} g/U`;
+  childCFEl.textContent   = `${childData?.correctionFactor ?? '—'} mmol/L/U`;
 }
 
-/* ==== data ==== */
-async function loadAndRender(){
-  const from=fromEl.value, to=toEl.value;
-  if(!from||!to){ return; }
+/* تحميل القياسات */
+async function loadMeasurements(){
+  const from = fromDateEl.value || todayStr();
+  const to   = toDateEl.value   || todayStr();
 
-  showLoader(true);
-  try{
-    pivotDates=[]; pivotRows={};
+  periodFrom.textContent = from;
+  periodTo.textContent   = to;
+  periodUnit.textContent = unitSelect.value === 'mmol' ? 'mmol/L' : 'mg/dL';
 
-    if(blankMode.checked){
-      // أسبوع فارغ للكتابة اليدوية يبدأ من "من"
-      for(let i=0;i<7;i++){
-        const d = addDays(from, i);
-        pivotDates.push(d);
-        pivotRows[d] = {};
-      }
-    }else{
-      // ✅ فلترة على السيرفر + ترتيب
-      const base = collection(db, `parents/${USER.uid}/children/${childId}/measurements`);
-      const qy = query(base, where('date','>=',from), where('date','<=',to), orderBy('date','asc'));
-      const snap = await getDocs(qy);
+  // نجلب كل قياس تاريخُه == أي يوم بين from..to (شامل)
+  const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
+  const qy  = query(ref, where('date','>=', from), where('date','<=', to), orderBy('date','asc'));
+  const snap= await getDocs(qy);
 
-      snap.forEach(docSnap=>{
-        const r = docSnap.data();
-        const date = r.date;
-        // slot قد يأتي عربي/قديم أو مفتاح حديث
-        let rawSlot = r.slotKey || r.slot || r.input?.slot || '';
-        let slot = AR2KEY[rawSlot] || rawSlot;
-        if(!date || !slot) return;
+  // نبني صفوف حسب اليوم
+  const byDate = new Map();
+  snap.forEach(d=>{
+    const m = d.data();
+    // مصدر القيمة
+    let mmol = null, mgdl = null;
+    if (typeof m.value_mmol === 'number') mmol = m.value_mmol;
+    if (typeof m.value_mgdl === 'number') mgdl = m.value_mgdl;
+    if (mmol==null && mgdl!=null) mmol = mgdl/18;
+    if (mgdl==null && mmol!=null) mgdl = Math.round(mmol*18);
 
-        // استبعاد السناك من الطباعة
-        if(slot==='snack') return;
+    const slotKey = String(m.slotKey||'').toUpperCase();
+    const colName = SLOT_MAP[slotKey] || null;
+    if(!colName) return; // تجاهل الغير معروف
 
-        const mmol = (r.value_mmol!=null) ? Number(r.value_mmol)
-                    : (r.unit==='mmol/L' ? Number(r.value)
-                    :  (r.value_mgdl!=null ? Number(r.value_mgdl)/18 : null));
-        if(mmol==null || !isFinite(mmol)) return;
-        const mgdl = (r.value_mgdl!=null) ? Number(r.value_mgdl) : toMgdl(mmol);
-        const corr = r.correctionDose ?? r.input?.correctionDose ?? null;
-        const notes= r.notes || r.input?.notes || '';
+    const date = m.date || (m.when?.toDate ? fmtDate(m.when.toDate()) : null);
+    if(!date) return;
 
-        (pivotRows[date]??=( {} ))[slot] = {
-          mmol, mgdl, corr, notes,
-          state: stateOf(mmol, limits.min, limits.max)
-        };
-      });
-
-      pivotDates = Object.keys(pivotRows).sort();
+    // إنشاء صف اليوم
+    if(!byDate.has(date)){
+      const cols = {};
+      TABLE_COLS.forEach(c=> cols[c]=[]);
+      byDate.set(date, { date, cols });
     }
 
-    renderHeader();
-    renderTable();
-    renderQR();
+    const showUnit = unitSelect.value; // mmol | mgdl
+    const value = showUnit==='mmol' ? +(+mmol).toFixed(1) : Math.round(mgdl);
 
-  }catch(e){
-    console.error(e);
-    tbody.innerHTML = `<tr><td class="muted" style="text-align:center;padding:12px" colspan="10">خطأ في تحميل البيانات.</td></tr>`;
-  }finally{
-    showLoader(false);
+    const row = byDate.get(date);
+    row.cols[colName].push({
+      value,
+      unit: showUnit==='mmol'?'mmol/L':'mg/dL',
+      state: m.state || 'normal',
+      bolus: m.bolusDose ?? null,
+      corr:  m.correctionDose ?? null,
+      notes: m.notes || ''
+    });
+  });
+
+  // تحويل إلى مصفوفة مرتبة
+  cachedRows = Array.from(byDate.values()).sort((a,b)=> a.date.localeCompare(b.date));
+
+  // خاصية “أسبوعي” (اختياري): تُظهر آخر 7 أيام
+  if (weeklyMode.checked) {
+    const last7 = cachedRows.slice(-7);
+    cachedRows = last7;
   }
 }
 
-/* ==== header row ==== */
-function renderHeader(){
-  const cells = ['<th class="datecol">التاريخ</th>']
-    .concat(SLOT_ORDER.map(([k,lab])=>`<th class="slot ${k}">${lab}</th>`))
-    .join('');
-  thead.innerHTML = `<tr>${cells}</tr>`;
-}
-
-/* ==== table body ==== */
+/* رسم الجدول */
 function renderTable(){
-  const unit = unitSel.value;
-  const showNotes = (notesMode.value!=='hide');
+  tbody.innerHTML = '';
+  emptyEl.classList.toggle('hidden', cachedRows.length>0);
 
-  if(!pivotDates.length){
-    tbody.innerHTML = `<tr><td class="muted" style="text-align:center;padding:12px" colspan="10">لا يوجد قياسات للفترة المحددة.</td></tr>`;
-    return;
-  }
+  const colorizeOn = colorize.checked;
+  const hideScent  = maskTreat.checked; // (اسمها عندك “سكنت”)
 
-  tbody.innerHTML = pivotDates.map(d=>{
-    const row = pivotRows[d] || {};
-    const tds = SLOT_ORDER.map(([slotKey])=>{
-      const cell = row[slotKey];
-      if(!cell){
-        return `<td class="cell ${slotKey}">
-          <span class="line dash">ـــ</span>
-          <span class="line dash">جرعة التصحيح: ـــ</span>
-          ${showNotes?`<span class="line dash">ملاحظات: ـــ</span>`:''}
-        </td>`;
+  for(const r of cachedRows){
+    const tr = document.createElement('tr');
+    // التاريخ
+    const tdDate = document.createElement('td');
+    tdDate.textContent = r.date;
+    tr.appendChild(tdDate);
+
+    // الأعمدة بالترتيب
+    for(const cName of TABLE_COLS){
+      const td = document.createElement('td');
+      const items = r.cols[cName] || [];
+
+      if(items.length===0){
+        td.textContent = '—';
+      }else{
+        // نعرض كل القياسات داخل نفس الخلية
+        items.forEach((it, idx)=>{
+          const span = document.createElement('div');
+          span.textContent = it.value;
+
+          // تلوين حسب state
+          if(colorizeOn){
+            if(String(it.state).toLowerCase().startsWith('low'))   span.classList.add('low');
+            else if(String(it.state).toLowerCase().startsWith('high'))  span.classList.add('high');
+            else span.classList.add('okv');
+          }
+
+          td.appendChild(span);
+
+          // الجرعات
+          if (it.corr!=null || it.bolus!=null){
+            const d = document.createElement('span');
+            d.className='dose';
+            const parts=[];
+            if (it.corr!=null)  parts.push(`تصحيح: ${it.corr}U`);
+            if (it.bolus!=null) parts.push(`وجبة: ${it.bolus}U`);
+            d.textContent = parts.join(' • ');
+            td.appendChild(d);
+          }
+
+          // ملاحظات
+          if (it.notes && !hideScent){
+            const n = document.createElement('span');
+            n.className='note';
+            n.textContent = it.notes;
+            td.appendChild(n);
+          }
+
+          if (idx < items.length-1){
+            const hr = document.createElement('hr');
+            hr.style.border='none'; hr.style.borderTop='1px dashed #eee'; hr.style.margin='6px 0';
+            td.appendChild(hr);
+          }
+        });
       }
-      const st = cell.state;
-      const clsBg = st==='low'?'bg-low':(st==='high'?'bg-high':'bg-ok');
 
-      // ⚠︎ تنبيه لو قيمة حرجة
-      const warn = (cell.mmol<CRIT_LOW || cell.mmol>CRIT_HIGH) ? ' ⚠︎' : '';
+      tr.appendChild(td);
+    }
 
-      const valTxt = valueText(cell.mmol, cell.mgdl, unit) + warn;
-      const corrLine = (cell.corr!=null && cell.corr!=='') ? `${cell.corr} U` : 'ـــ';
-      const notesLine = showNotes ? (cell.notes && String(cell.notes).trim()? esc(cell.notes) : 'ـــ') : '';
-
-      return `<td class="cell ${slotKey} ${clsBg}">
-        <span class="line"><span class="val ${st}">${valTxt}</span><span class="arrow">${arrowOf(st)}</span></span>
-        <span class="line">جرعة التصحيح: ${corrLine}</span>
-        ${showNotes?`<span class="line">ملاحظات: ${notesLine}</span>`:''}
-      </td>`;
-    }).join('');
-
-    return `<tr>
-      <th class="datecol">${d}</th>
-      ${tds}
-    </tr>`;
-  }).join('');
+    tbody.appendChild(tr);
+  }
 }
 
-/* ==== QR ==== */
+/* QR */
 function renderQR(){
-  const img = document.getElementById('qrImg');
-  if(!img) return;
-
-  const from = fromEl.value, to = toEl.value;
-  const unit = unitSel.value;
-  const deep = new URL(location.origin + location.pathname, location.href);
-  deep.searchParams.set('child', childId);
-  deep.searchParams.set('from', from);
-  deep.searchParams.set('to', to);
-  deep.searchParams.set('unit', unit);
-  if(blankMode.checked) deep.searchParams.set('blank','1');
-
-  const payload = [
-    `Child: ${CHILD?.name || ''}`,
-    `ID: ${childId}`,
-    `Range: ${from} -> ${to}`,
-    `Unit: ${unit==='mgdl'?'mg/dL':'mmol/L'}`,
-    deep.toString()
-  ].join('\n');
-
-  const url1 = 'https://chart.googleapis.com/chart?cht=qr&chs=130x130&chl='+encodeURIComponent(payload);
-  const url2 = 'https://api.qrserver.com/v1/create-qr-code/?size=130x130&data='+encodeURIComponent(payload);
-
-  img.onerror = ()=>{ img.onerror=null; img.src=url2; };
-  img.src = url1;
+  try{
+    const canvas = document.getElementById('qr');
+    const url = location.href;
+    QRCode.toCanvas(canvas, url, { width:128, margin:1 }, ()=>{});
+  }catch{}
 }
+
+/* أحداث */
+applyBtn.addEventListener('click', async ()=>{
+  // احفظ الخيارات في الرابط
+  const u = new URL(location.href);
+  u.searchParams.set('child', childId);
+  u.searchParams.set('from', fromDateEl.value);
+  u.searchParams.set('to',   toDateEl.value);
+  u.searchParams.set('unit', unitSelect.value);
+  history.replaceState(null,'',u);
+
+  await loadMeasurements();
+  renderTable();
+});
+
+printBtn.addEventListener('click', ()=> window.print());
+backBtn.addEventListener('click', ()=> history.back());
+unitSelect.addEventListener('change', async ()=>{
+  periodUnit.textContent = unitSelect.value==='mmol'?'mmol/L':'mg/dL';
+  await loadMeasurements();
+  renderTable();
+});
+
+/* قراءة باراميترز (لو متاحة) */
+(function applyParamsFromURL(){
+  const from = params.get('from');
+  const to   = params.get('to');
+  const unit = params.get('unit');
+  if (from) fromDateEl.value = from;
+  if (to)   toDateEl.value   = to;
+  if (unit) unitSelect.value = unit;
+  periodUnit.textContent = unitSelect.value==='mmol'?'mmol/L':'mg/dL';
+})();
