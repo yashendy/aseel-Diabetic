@@ -379,16 +379,7 @@ function exportCsv(){
 
 // --------- مساعد الذكاء (Gemini) بسيط جداً ---------
 async function openAIHelper() {
-  // الحصول على مفتاح Gemini API وتخزينه
-  let key = localStorage.getItem('gemini_api_key');
-  if (!key) {
-    key = prompt('أدخل مفتاح Gemini (لن يُحفظ إلا محليًا):');
-    if (!key) {
-      alert('لم يتم إدخال مفتاح API.');
-      return;
-    }
-    localStorage.setItem('gemini_api_key', key);
-  }
+  const key = 'AIzaSyBJOzP2znhOTBeVDdLn7XwMs_KtYn_tMV4'; // المفتاح الخاص بك تم وضعه هنا مباشرة.
 
   // جمع الإحصائيات من العناصر
   const unit = unitSel.value;
