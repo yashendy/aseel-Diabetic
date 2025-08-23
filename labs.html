@@ -100,6 +100,27 @@
       <textarea id="generalNote" rows="3" placeholder="توصيات الطبيب / أي ملاحظات أخرى"></textarea>
     </div>
 
+    <!-- السجلات السابقة -->
+    <div class="card">
+      <div class="row space">
+        <h3>السجلات السابقة</h3>
+        <small class="muted">آخر 20 تقرير</small>
+      </div>
+      <table id="historyTable">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>HbA1c</th>
+            <th>ملاحظات</th>
+            <th>عمليات</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr><td colspan="4" class="muted">لا توجد سجلات</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- canvases المخفيّة لتوليد الباركود/QR -->
     <div class="hidden">
       <svg id="barcode"></svg>
