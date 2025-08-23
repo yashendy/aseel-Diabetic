@@ -25,6 +25,7 @@ input[type="date"],select{padding:9px;border:1px solid var(--border);border-radi
 .btn.secondary{background:#e9eef8;color:#222}
 .hidden{display:none}
 
+/* KPIs */
 .kpi{min-width:170px;flex:1}
 .kpi .label{color:var(--muted);font-size:13px}
 .kpi .value{font-size:22px;font-weight:700;margin-top:6px}
@@ -35,10 +36,14 @@ input[type="date"],select{padding:9px;border:1px solid var(--border);border-radi
 
 .empty{padding:16px;text-align:center;color:var(--muted)}
 
-/* canvas smaller */
+/* canvases أصغر */
 section.card canvas{margin-top:8px;max-height:260px}
 #dayChart{max-height:220px}
-#pieChart{max-height:200px}
+
+/* شبكتان دائريتان جنب بعض */
+.charts-2{gap:16px;flex-wrap:wrap}
+.chartBox{flex:1;min-width:280px}
+.small-title{margin:0;font-size:13px;color:var(--muted)}
 
 /* AI summary */
 .ai{line-height:1.9;color:#1e293b}
