@@ -35,7 +35,6 @@ const ren_creat = document.getElementById('ren_creat');
 const ren_note = document.getElementById('ren_note');
 
 const generalNote = document.getElementById('generalNote');
-
 const historyBody = document.getElementById('historyBody');
 
 const params = new URLSearchParams(location.search);
@@ -57,11 +56,28 @@ function addMonths(date, m=4){
 // حالة تعديل/إنشاء
 let _currentLabId = null;
 
-// تحميل خط عربي للـPDF (مرة واحدة)
-async function ensureArabicFont(doc){
-  if (window._arabicFontLoaded){
-    doc.setFont('NotoNaskh'); return;
+/* -------------------- دعم العربية في jsPDF -------------------- */
+/** دالة تشكيل + RTL: تستخدم المكتبتين، مع fallback بسيط لو مش متاحين */
+function shape(text){
+  if (!text) return '';
+  try{
+    const reshaped = window.arabicPersianReshaper
+      ? window.arabicPersianReshaper.reshape(text)
+      : text;
+    if (window.Bidi){
+      const bidi = new window.Bidi(reshaped);
+      return bidi.toString(); // تمثيل بصري RTL
+    }
+    // fallback بسيط: قلب ترتيب الكلمات فقط
+    return reshaped.split(/\s+/).reverse().join(' ');
+  }catch(e){
+    return text;
   }
+}
+
+/** تحميل خط عربي (Noto Naskh) مرة واحدة */
+async function ensureArabicFont(doc){
+  if (window._arabicFontLoaded){ doc.setFont('NotoNaskh'); return; }
   const url = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts/phaseIII_only/unhinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf';
   const res = await fetch(url);
   const buf = await res.arrayBuffer();
@@ -71,6 +87,7 @@ async function ensureArabicFont(doc){
   window._arabicFontLoaded = true;
   doc.setFont('NotoNaskh');
 }
+/* -------------------------------------------------------------- */
 
 onAuthStateChanged(auth, async user=>{
   if(!user){ location.href='index.html'; return; }
@@ -93,8 +110,7 @@ onAuthStateChanged(auth, async user=>{
     _currentLabId = labSnap.id; // وضع تعديل
     fillFormFromDoc(labData);
     showDueBadge(labData.nextDue?.toDate ? labData.nextDue.toDate() : addMonths(labData.when?.toDate ? labData.when.toDate() : new Date(labData.date)));
-    // افتح PDF تلقائياً
-    openPdf(_currentLabId, childName, labData);
+    openPdf(_currentLabId, childName, labData); // فتح تلقائي
   } else {
     // عرض الشارة من آخر تقرير
     const lref = collection(db, `parents/${user.uid}/children/${childId}/labs`);
@@ -202,7 +218,7 @@ async function saveLab(uid, childId, childName, andPdf=false){
   }
 }
 
-// بناء لينك التقرير
+// بناء لينك التقرير (رابط مطلق ليفتح من QR)
 function buildReportUrl(labId){
   const url = new URL('labs.html', location.href);
   url.searchParams.set('child', childId);
@@ -210,20 +226,22 @@ function buildReportUrl(labId){
   return url.toString();
 }
 
-// 🖨️ توليد PDF مع دعم العربية + QR/Barcode كرابط
+// 🖨️ توليد PDF مع دعم العربية + QR/Barcode كرابط مباشر
 async function openPdf(labId, childName, data){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({orientation:'p', unit:'pt', format:'a4'});
 
-  await ensureArabicFont(doc);
+  await ensureArabicFont(doc);         // تأكد تحميل الخط العربي
   doc.setFont('NotoNaskh');
+  // لو الإصدار يدعم RTL:
+  if (doc.setR2L) try { doc.setR2L(true); } catch(e){}
 
   // عناوين
   doc.setFontSize(16);
-  doc.text(`تقرير التحاليل — ${childName}`, 555, 40, {align:'right'});
+  doc.text(shape(`تقرير التحاليل — ${childName}`), 555, 40, {align:'right'});
   doc.setFontSize(11);
-  doc.text(`رقم التقرير: ${labId}`, 555, 62, {align:'right'});
-  doc.text(`تاريخ العينة: ${data.date}`, 555, 78, {align:'right'});
+  doc.text(shape(`رقم التقرير: ${labId}`), 555, 62, {align:'right'});
+  doc.text(shape(`تاريخ العينة: ${data.date}`), 555, 78, {align:'right'});
 
   // QR + Barcode برابط مباشر
   const reportUrl = labId==='preview' ? location.href : buildReportUrl(labId);
@@ -243,28 +261,33 @@ async function openPdf(labId, childName, data){
     if (qrDataUrl) doc.addImage(qrDataUrl, 'PNG', 40, 96, 90, 90);
     doc.addImage(svgBase64, 'SVG', 140, 120, 220, 40);
 
-    // اجعل مربع الـQR نفسه قابل للنقر
+    // منطقة قابلة للنقر فوق الـQR
     doc.link(40, 96, 90, 90, { url: reportUrl });
-    // نص رابط مباشر
-    doc.textWithLink('فتح التقرير', 370, 135, { url: reportUrl, align: 'right' });
+    doc.textWithLink(shape('فتح التقرير'), 370, 135, { url: reportUrl, align: 'right' });
   }catch(e){ console.warn('Barcode/QR warning', e); }
 
   let y = 210;
 
-  // جداول بالعربية + الخط
+  // إعدادات عامة للجداول بالعربية
   const baseTable = {
     styles:{halign:'right', font: 'NotoNaskh'},
-    headStyles:{fillColor:[244,247,255]},
+    headStyles:{fillColor:[244,247,255], font:'NotoNaskh'},
     theme:'grid',
-    margin:{left:40,right:40}
+    margin:{left:40,right:40},
+    didParseCell: (hookData)=>{
+      // شكّل النص العربي للخلايا والرؤوس
+      if (hookData.cell && Array.isArray(hookData.cell.text)) {
+        hookData.cell.text = hookData.cell.text.map(t => shape(String(t)));
+      }
+    }
   };
 
   const hbaRows = [[ data?.hba1c?.value ?? '-', '%', data?.hba1c?.note ?? '-' ]];
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [['HbA1c','الوحدة','ملاحظات']],
-    body: hbaRows
+    head: [[ shape('HbA1c'), shape('الوحدة'), shape('ملاحظات') ]],
+    body: [ hbaRows[0].map(v => (v===null?'-':v)) ]
   });
   y = doc.lastAutoTable.finalY + 14;
 
@@ -277,7 +300,7 @@ async function openPdf(labId, childName, data){
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [['Lipid','القيمة','الوحدة','ملاحظات']],
+    head: [[ shape('Lipid'), shape('القيمة'), shape('الوحدة'), shape('ملاحظات') ]],
     body: lipRows
   });
   y = doc.lastAutoTable.finalY + 14;
@@ -289,7 +312,7 @@ async function openPdf(labId, childName, data){
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [['الغدة الدرقية','القيمة','الوحدة','ملاحظات']],
+    head: [[ shape('الغدة الدرقية'), shape('القيمة'), shape('الوحدة'), shape('ملاحظات') ]],
     body: thRows
   });
   y = doc.lastAutoTable.finalY + 14;
@@ -301,18 +324,18 @@ async function openPdf(labId, childName, data){
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [['الكُلى','القيمة','الوحدة','ملاحظات']],
+    head: [[ shape('الكُلى'), shape('القيمة'), shape('الوحدة'), shape('ملاحظات') ]],
     body: rnRows
   });
   y = doc.lastAutoTable.finalY + 14;
 
   const nextDue = data.nextDue ? (data.nextDue instanceof Date ? data.nextDue : new Date(data.nextDue)) : addMonths(new Date(data.date),4);
   doc.setFontSize(11);
-  doc.text(`موعد التحليل القادم (HbA1c كل 4 أشهر): ${fmt(nextDue)}`, 555, y, {align:'right'});
+  doc.text(shape(`موعد التحليل القادم (HbA1c كل 4 أشهر): ${fmt(nextDue)}`), 555, y, {align:'right'});
   y += 18;
   if (data?.generalNote){
-    doc.setFont('NotoNaskh','bold'); doc.text('ملاحظات عامة:', 555, y, {align:'right'}); y+=14;
-    doc.setFont('NotoNaskh','normal'); doc.text(String(data.generalNote), 555, y, {align:'right', maxWidth:515});
+    doc.setFont('NotoNaskh','bold'); doc.text(shape('ملاحظات عامة:'), 555, y, {align:'right'}); y+=14;
+    doc.setFont('NotoNaskh','normal'); doc.text(shape(String(data.generalNote)), 555, y, {align:'right', maxWidth:515});
   }
 
   const blob = doc.output('blob');
@@ -320,7 +343,7 @@ async function openPdf(labId, childName, data){
   window.open(url, '_blank');
 }
 
-// ======= السجلات السابقة =======
+/* =================== السجلات السابقة =================== */
 async function loadHistory(uid, childId, childName){
   const lref = collection(db, `parents/${uid}/children/${childId}/labs`);
   const qy = query(lref, orderBy('when','desc'), limit(20));
@@ -348,7 +371,6 @@ async function loadHistory(uid, childId, childName){
         </div>
       </td>
     `;
-    // أزرار
     tr.querySelector('.act-open').addEventListener('click', ()=> openPdf(d.id, childName, v));
     tr.querySelector('.act-edit').addEventListener('click', ()=>{
       _currentLabId = d.id;
