@@ -8,6 +8,7 @@
   <link rel="icon" href="favicon.ico" />
   <link rel="stylesheet" href="css/analytics.css" />
   <style>
+    /* طباعة نظيفة */
     @media print {
       .no-print { display: none !important; }
       body { background: #fff; }
@@ -126,9 +127,18 @@
 
     <section class="card">
       <div class="row space">
-        <h3>توزيع القياسات حسب النطاق</h3>
+        <h3>توزيع القياسات — الحالي / السابق</h3>
       </div>
-      <canvas id="pieChart" height="90"></canvas>
+      <div class="row charts-2">
+        <div class="chartBox">
+          <h4 class="small-title">الحالي</h4>
+          <canvas id="pieNow" height="90"></canvas>
+        </div>
+        <div class="chartBox" id="piePrevBox">
+          <h4 class="small-title">السابق</h4>
+          <canvas id="piePrev" height="90"></canvas>
+        </div>
+      </div>
     </section>
 
     <section class="card">
