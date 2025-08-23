@@ -17,7 +17,6 @@ const childMetaEl = document.getElementById('childMeta');
 const rangeSel = document.getElementById('rangeSel');
 const fromEl = document.getElementById('fromDate');
 const toEl   = document.getElementById('toDate');
-const customBox = document.getElementById('customBox');
 
 const unitSel = document.getElementById('unitSel');
 const compareChk = document.getElementById('compareChk');
@@ -43,11 +42,10 @@ const aiBox    = document.getElementById('aiBox');
 const piePrevBox = document.getElementById('piePrevBox');
 
 let currentUser, childData;
-let chart;        // Line chart
-let pieNow, piePrev; // Doughnuts
-
-let allMeas = [];   // الفترة الرئيسية
-let prevMeas = [];  // فترة المقارنة
+let chart;            // Line chart
+let pieNow, piePrev;  // Doughnuts
+let allMeas = [];     // الفترة الرئيسية
+let prevMeas = [];    // فترة المقارنة
 
 /* ترجمة الفترات */
 const SLOT_AR = {
@@ -80,19 +78,15 @@ function toUnit(mmol, unit){ return unit==='mgdl' ? Math.round((mmol||0)*18) : N
   const from  = addDays(today, -13);
   fromEl.value = fmtDate(from);
   toEl.value   = fmtDate(today);
-  toggleCustom(rangeSel.value==='custom');
 })();
 rangeSel.addEventListener('change', ()=>{
-  toggleCustom(rangeSel.value==='custom');
   if (rangeSel.value!=='custom'){
     const {from, to} = computeRange(rangeSel.value);
     fromEl.value = fmtDate(from);
     toEl.value   = fmtDate(to);
   }
+  document.querySelectorAll('.custom-range').forEach(el=> el.classList.toggle('hidden', rangeSel.value!=='custom'));
 });
-function toggleCustom(show){
-  document.querySelectorAll('.custom-range').forEach(el=> el.classList.toggle('hidden', !show));
-}
 
 /* أزرار */
 goBackBtn.addEventListener('click', ()=> history.back());
@@ -201,6 +195,26 @@ function computeKPIs(meas){
   return {count, mean, sd, inRange, highs, lows, min, max};
 }
 
+/* خيارات Legend تعرض النِّسَب */
+function legendWithPercents(){
+  return {
+    position: 'bottom',
+    labels: {
+      generateLabels(chart){
+        // استخدم التوليد الافتراضي ثم عدّل النص
+        const def = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+        const ds  = chart.data.datasets[0];
+        const data = (ds?.data || []).map(Number);
+        // البيانات بالفعل نسب مئوية، لكن نضمن التقريب
+        return def.map((item, i)=>({
+          ...item,
+          text: `${chart.data.labels[i]} — ${Math.round(data[i] ?? 0)}%`
+        }));
+      }
+    }
+  };
+}
+
 /* رسم + ملخص */
 function renderKPIsAndCharts(){
   const unit = unitSel.value;
@@ -288,7 +302,7 @@ function renderKPIsAndCharts(){
     }
   });
 
-  // Doughnut الحالي
+  // Doughnut الحالي (Legend بالنِّسَب)
   const pNow = document.getElementById('pieNow').getContext('2d');
   pieNow = new Chart(pNow, {
     type: 'doughnut',
@@ -300,10 +314,10 @@ function renderKPIsAndCharts(){
         borderColor: ['#22c55e','#ef4444','#3b82f6']
       }]
     },
-    options:{ plugins:{ legend:{ position:'bottom' } }, cutout: '65%' }
+    options:{ plugins:{ legend: legendWithPercents() }, cutout: '65%' }
   });
 
-  // Doughnut السابق (إن وُجدت مقارنة)
+  // Doughnut السابق (إن وُجدت مقارنة) بنفس أسلوب النِّسَب
   if (P){
     piePrevBox.classList.remove('hidden');
     const pPrev = document.getElementById('piePrev').getContext('2d');
@@ -317,7 +331,7 @@ function renderKPIsAndCharts(){
           borderColor: ['#16a34a','#dc2626','#2563eb']
         }]
       },
-      options:{ plugins:{ legend:{ position:'bottom' } }, cutout: '65%' }
+      options:{ plugins:{ legend: legendWithPercents() }, cutout: '65%' }
     });
   } else {
     piePrevBox.classList.add('hidden');
