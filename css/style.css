@@ -1,68 +1,130 @@
+/* ===== خلفية لطيفة عامة ===== */
+html, body { height: 100%; }
 body {
-  font-family: 'Segoe UI', sans-serif;
-  background: linear-gradient(to right, #FFDEE9, #B5FFFC);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
+  font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+  background: linear-gradient(135deg, #f8e6ef, #e6f6fb);
   margin: 0;
 }
 
+/* ===== أنماط قديمة (للتوافق) — تُترك كما هي ===== */
 .container {
-  background: white;
+  background: #fff;
   padding: 30px;
   border-radius: 15px;
   box-shadow: 0 5px 15px rgba(0,0,0,0.2);
   width: 100%;
   max-width: 400px;
   text-align: center;
+  margin: 24px auto;
 }
-
-h1 {
-  margin-bottom: 20px;
-  color: #333;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-}
-
-input {
-  margin: 10px 0;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-}
-
+.form { display: flex; flex-direction: column; }
+input { margin: 10px 0; padding: 10px; border-radius: 8px; border: 1px solid #ccc; }
 button {
-  background: #4CAF50;
-  color: white;
+  background: #4CAF50; color: #fff; border: none; padding: 12px;
+  border-radius: 8px; cursor: pointer; margin-top: 10px; font-size: 16px;
+}
+button:hover { background-color: #45a049; }
+.toggle { color: #007BFF; cursor: pointer; font-weight: bold; }
+.hidden { display: none; }
+
+/* =========================
+   صفحة المصادقة (معزولة)
+   ========================= */
+:root{
+  --aseel-primary: #41a65a;
+  --aseel-shadow: 0 10px 30px rgba(0,0,0,.08);
+  --aseel-radius: 18px;
+  --aseel-card-max: 520px;
+}
+
+.auth-page-wrap{
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card{
+  width: min(100%, var(--aseel-card-max));
+  background: #fff;
+  border-radius: var(--aseel-radius);
+  box-shadow: var(--aseel-shadow);
+  padding: 26px 22px 22px;
+}
+
+.auth-card__header{
+  text-align: center;
+  margin-bottom: 10px;
+}
+.auth-card__logo{
+  width: 64px; height: 64px; object-fit: contain;
+  display: inline-block;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.08));
+}
+.auth-card__title{
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.auth-card__subtitle{
+  margin: 4px 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+  opacity: .9;
+}
+
+/* النماذج داخل البطاقة */
+.auth-form{ display: grid; gap: 12px; margin-top: 10px; }
+.auth-form__title{ margin: 2px 0 4px; font-size: 18px; font-weight: 700; }
+
+.auth-field input{
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #e3e6ea;
+  border-radius: 10px;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+.auth-field input:focus{
+  border-color: #b9d9c3;
+  box-shadow: 0 0 0 3px rgba(65,166,90,.12);
+}
+
+.auth-btn{
+  padding: 12px 14px;
+  border-radius: 10px;
   border: none;
-  padding: 12px;
-  border-radius: 8px;
   cursor: pointer;
-  margin-top: 10px;
-  font-size: 16px;
+  font-weight: 700;
+  width: 100%;
 }
+.auth-btn--primary{ background: var(--aseel-primary); color: #fff; }
 
-button:hover {
-  background-color: #45a049;
+.auth-form__hint{
+  text-align: center;
+  margin: 2px 0 0;
+  color: #444;
+  font-size: 14px;
 }
-
-.toggle {
-  color: #007BFF;
+.auth-linklike{
+  background: transparent;
+  border: none;
+  color: #1d7dd8;
   cursor: pointer;
-  font-weight: bold;
+  padding: 0 2px;
+  font-size: 14px;
 }
 
-.hidden {
-  display: none;
-}
-/* حجم أصغر للشعار */
-.auth-card__logo.small {
-  width: 60px;
-  height: 60px;
-  margin-bottom: 6px;
-}
+.is-hidden { display: none !important; }
 
+/* موبايل */
+@media (max-width: 420px){
+  .auth-card{ padding: 20px 16px 18px; border-radius: 16px; }
+  .auth-card__logo{ width: 56px; height: 56px; }
+  .auth-card__title{ font-size: 21px; }
+  .auth-card__subtitle{ font-size: 13px; }
+}
