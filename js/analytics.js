@@ -54,7 +54,7 @@ const SLOT_AR = {
 /* أدوات بسيطة */
 const pad = n => String(n).padStart(2,'0');
 function fmtDate(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
-function addDays(base, n){ const d = new Date(base); d.setDate(d.getDate()+n); return d; }
+function addDays(base, n){ const dd = new Date(base); dd.setDate(dd.getDate()+n); return dd; }
 function daysAgo(n){ const today=new Date(); return addDays(today, -n); }
 
 function toUnit(mmol, unit){
@@ -233,14 +233,16 @@ function renderKPIsAndCharts(){
       labels: ['داخل النطاق', 'ارتفاعات', 'هبوطات'],
       datasets: [{
         data: [inRange.toFixed(1), highs.toFixed(1), lows.toFixed(1)],
-        backgroundColor: ['rgba(34,197,94,0.25)','rgba(239,68,68,0.25)','rgba(59,130,246,0.25)'],
+        backgroundColor: [
+          'rgba(34,197,94,0.25)',
+          'rgba(239,68,68,0.25)',
+          'rgba(59,130,246,0.25)'
+        ],
         borderColor: ['#22c55e','#ef4444','#3b82f6']
       }]
     },
     options:{
-      plugins:{
-        legend:{ position:'bottom' }
-      },
+      plugins:{ legend:{ position:'bottom' } },
       cutout: '60%'
     }
   });
@@ -257,7 +259,7 @@ function renderAISummary({unit, avgM, sdM, inRange, highs, lows, points, min, ma
   const lastN = points.slice(-7).map(p=> p.y);
   const trend = lastN.length>=2 ? (lastN[lastN.length-1] - lastN[0]) : 0;
 
-  // تجميع حسب slotKey لمعرفة الأكثر تكرارًا أو المشاكل
+  // تجميع حسب slotKey لمعرفة الأكثر لفتًا
   const bySlot = {};
   allMeas.forEach(m=>{
     const key = m.slotKey || 'غير محدد';
@@ -265,4 +267,59 @@ function renderAISummary({unit, avgM, sdM, inRange, highs, lows, points, min, ma
     bySlot[key].count++;
     if (m.mmol>max) bySlot[key].highs++;
     if (m.mmol<min) bySlot[key].lows++;
-  }
+  });
+  let hotSlot = null, hotScore=-1;
+  Object.entries(bySlot).forEach(([k,v])=>{
+    const score = v.count? (v.highs / v.count) : 0;
+    if (score>hotScore){ hotScore=score; hotSlot=k; }
+  });
+
+  // CV% ووسم الاتجاه
+  const mean = avgM;
+  const sd   = sdM;
+  const cv   = mean ? (sd/mean*100) : 0;
+
+  const unitLabel = unit==='mgdl' ? 'mg/dL' : 'mmol/L';
+  const avgOut = unit==='mgdl' ? (avgM*18).toFixed(1) : avgM.toFixed(1);
+  const sdOut  = unit==='mgdl' ? (sdM*18).toFixed(1) : sdM.toFixed(1);
+  const trendTxt = trend>0 ? 'اتجاه صعود بسيط' : (trend<0 ? 'اتجاه هبوط بسيط' : 'مستقر تقريبًا');
+  const hotSlotAr = hotSlot ? (SLOT_AR[hotSlot] || (hotSlot==='غير محدد'?'غير محدد':hotSlot)) : '—';
+
+  aiBox.innerHTML = `
+    <div>تم تحليل <strong>${points.length}</strong> قراءة خلال الفترة المحددة.</div>
+    <div>متوسط القراءات: <strong>${avgOut} ${unitLabel}</strong> — التذبذب (SD): <strong>${sdOut}</strong> — CV%: <strong>${cv.toFixed(0)}%</strong>.</div>
+    <div>داخل النطاق: <strong>${Math.round(inRange)}%</strong> • ارتفاعات: <strong>${Math.round(highs)}%</strong> • هبوطات: <strong>${Math.round(lows)}%</strong>.</div>
+    <div>الاتجاه العام لآخر القراءات: <strong>${trendTxt}</strong>.</div>
+    <div>أكثر فترة يظهر فيها ارتفاع نسبيًا: <span class="tag">${hotSlotAr}</span></div>
+    ${ Number(lows) >= 5 ? '<div><strong>تنبيه:</strong> تكرار الهبوط ملحوظ، يُفضّل مراجعة جرعات التصحيح/وجبات السناك.</div>' : '' }
+    ${ Number(highs) >= 30 ? '<div><strong>ملاحظة:</strong> الارتفاعات كثيرة؛ راجعي توقيت الجرعات قبل/بعد الوجبات والترطيب.</div>' : '' }
+  `;
+}
+
+/* تفعيل الفلاتر */
+applyBtn.addEventListener('click', async ()=>{
+  await loadMeasurements();
+  renderKPIsAndCharts();
+});
+unitSel.addEventListener('change', ()=> renderKPIsAndCharts());
+quicks.forEach(btn=>{
+  btn.addEventListener('click', async ()=>{
+    const r = btn.dataset.range;
+    if (r==='all'){
+      // ابحث لأبعد تاريخ موجود وسجله كنطاق كامل
+      if (allMeas.length){
+        const first = allMeas.reduce((a,b)=> a.when<b.when?a:b).when;
+        fromEl.value = fmtDate(first);
+        toEl.value   = fmtDate(new Date());
+      }
+    }else{
+      const days = Number(r);
+      const to   = new Date();
+      const from = addDays(to, -(days-1));
+      fromEl.value = fmtDate(from);
+      toEl.value   = fmtDate(to);
+    }
+    await loadMeasurements();
+    renderKPIsAndCharts();
+  });
+});
