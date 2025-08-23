@@ -19,24 +19,36 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chip{background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;padding:4px 8px;border-radius:999px;font-size:12px}
 
-.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-.range{display:flex;gap:8px;align-items:center}
-.actions{display:flex;gap:8px}
-.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer;text-decoration:none;color:inherit}
-.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
-.btn.back{margin-inline-end:auto}
+.controls{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.range{display:flex;align-items:center;gap:8px}
+.range input,.range select{width:auto;height:38px}
 
-/* جدول */
-.table h2{margin:6px 0 10px}
-.table-wrap{max-width:100%;overflow:auto;border-radius:10px;border:1px solid var(--line)}
-table{width:100%;border-collapse:collapse;font-size:14px}
-th,td{border:1px solid var(--line);padding:8px 10px;vertical-align:top}
-thead th{background:#fafafa;position:sticky;top:0;z-index:1}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.actions .btn{padding:8px 12px;height:38px}
+.actions .primary{background:var(--brand);color:#fff}
 
-td.reading{white-space:nowrap}
-.arrow{font-weight:700;margin-inline-start:6px}
-.arrow.up{color:var(--warn)}
-.arrow.down{color:var(--blue)}
+.btn{border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:6px 10px}
+
+.table-wrap{overflow-x:auto}
+.table-wrap table{width:100%;min-width:700px;border-collapse:collapse;table-layout:fixed;margin-top:10px}
+.table-wrap th,.table-wrap td{padding:10px;text-align:right;font-size:14px;border:1px solid var(--line);word-wrap:break-word}
+.table-wrap th{background:#f1f5f9;font-weight:600}
+
+.col-slot{width:110px}
+.reading{white-space:nowrap}
+.state-icon{display:inline-block;width:12px;height:12px;background:#ddd;border-radius:999px;margin-inline-start:6px;transform:translateY(1px)}
+.arrow.up{background:var(--warn);position:relative;transform:translateY(1px)}
+.arrow.up::after{content:'▲';position:absolute;inset:0;text-align:center;font-size:8px;color:var(--warn);transform:translateY(-1px)}
+.arrow.down{background:var(--blue);position:relative;transform:translateY(1px)}
+.arrow.down::after{content:'▼';position:absolute;inset:0;text-align:center;font-size:8px;color:var(--blue);transform:translateY(1px)}
+.arrow.flat{background:var(--ok)}
+
+.status-chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px}
+.status-chip.ok{background:rgba(16,185,129,.1);color:var(--ok)}
+.status-chip.high{background:rgba(239,68,68,.1);color:var(--warn)}
+.status-chip.low{background:rgba(37,99,235,.1);color:var(--blue)}
+.state-icon.up{color:var(--warn)}
+.state-icon.down{color:var(--blue)}
 
 tr.state-high{border-inline-start:6px solid var(--warn);background:rgba(239,68,68,.05)}
 tr.state-low{ border-inline-start:6px solid var(--blue);background:rgba(37,99,235,.05)}
@@ -63,17 +75,11 @@ body.notes-hidden td.col-notes{display:none}
 @media print{
   .back,.controls,.actions,.range,.btn,#densityHint{display:none !important}
   .container{max-width:none;margin:0;padding:0}
-  .card{box-shadow:none;border:none;margin:0 0 8mm}
-  table{font-size:12px}
-  body.dense table{font-size:11px}
-  body.very-dense table{font-size:10px}
-
-  /* وضع الطباعة الفارغ/الممتلئ (لو استخدمتي reports-print.html) */
-  body.print-blank #tableSection{display:none !important}
-  body.print-blank #printFilledSection{display:block !important}
-  body.print-blank #blankWeekSection{display:block !important}
-
-  body.print-filled #tableSection{display:none !important}
-  body.print-filled #printFilledSection{display:block !important}
-  body.print-filled #blankWeekSection{display:none !important}
+  .card{box-shadow:none;border:none !important;padding:0;margin:0}
+  body{background:none}
+  h1{font-size:1.5rem}
+  h2{font-size:1.2rem;margin-top:20px}
+  .table-wrap{overflow:visible}
+  .table-wrap table{table-layout:auto;min-width:auto}
+  .table-wrap th,.table-wrap td{border:1px solid #aaa}
 }
