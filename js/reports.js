@@ -1,4 +1,4 @@
-// js/reports.js — v3 (Arabic slots + pagination + filters/sort + AI insights + assistant + heatmap/hist)
+// js/reports.js — v3.1 (fix syntax + stable load)
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { collection, query, where, orderBy, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
@@ -65,7 +65,7 @@ const KEY2AR_SHORT = {
   pre_sleep:'ق. النوم', during_sleep:'أثناء النوم',
   pre_sport:'ق. الرياضة', post_sport:'ب. الرياضة'
 };
-/* Accept input in Arabic or English in many forms */
+/* Arabic input → canonical */
 const AR2KEY = {
   'الاستيقاظ':'wake',
   'ق.الفطار':'pre_bf','ق الفطار':'pre_bf','قبل الافطار':'pre_bf','قبل الإفطار':'pre_bf',
@@ -80,7 +80,7 @@ const AR2KEY = {
   'ق.الرياضة':'pre_sport','ق الرياضة':'pre_sport','قبل الرياضة':'pre_sport',
   'ب.الرياضة':'post_sport','ب الرياضة':'post_sport','بعد الرياضة':'post_sport'
 };
-/* English aliases → canonical key */
+/* English aliases → canonical */
 const EN2KEY = {
   'prebreakfast':'pre_bf', 'postbreakfast':'post_bf',
   'pre_lunch':'pre_ln',    'prelunch':'pre_ln',  'post_lunch':'post_ln', 'postlunch':'post_ln',
@@ -95,21 +95,25 @@ const EN2KEY = {
 function normalizeSlot(raw){
   if(!raw) return '';
   let s = String(raw).trim();
-  // Arabic direct
+
+  // Arabic direct (tolerant of dots/spaces/elongation)
   const sAR = s.replaceAll('.','').replaceAll('ـ','').replace(/\s+/g,' ').trim();
   if(AR2KEY[sAR]) return AR2KEY[sAR];
-  // English various shapes
-  const en = s.toLowerCase().replaceAll(' ','').replaceAll('-','_');
-  if(EN2KEY[en]) return EN2KEY[en];
-  // Upper-case like PRE_DINNER
-  const up = s.toLowerCase();
-  if(EN2KEY[up]) return EN2KEY[up];
-  if(EN2KEY[up.replaceAll('-','').replaceAll('_','')]) return EN2KEY[up.replaceAll('-','').replaceAll('_','')];
-  // Fallback
-  return s;
+
+  // English shapes
+  const en1 = s.toLowerCase().replaceAll(' ','').replaceAll('-','_');
+  if(EN2KEY[en1]) return EN2KEY[en1];
+
+  const en2 = s.toLowerCase();
+  if(EN2KEY[en2]) return EN2KEY[en2];
+
+  const en3 = en2.replaceAll('-','').replaceAll('_','');
+  if(EN2KEY[en3]) return EN2KEY[en3];
+
+  return s; // fallback: show as-is
 }
 
-/* Date/age */
+/* Dates / age */
 function normalizeDateStr(any){
   if(!any) return '';
   if(typeof any==='string'){
@@ -130,15 +134,14 @@ function calcAge(bd){
   if(m<0 || (m===0 && t.getDate()<b.getDate())) a--;
   return `${a} سنة`;
 }
-
 const toMgdl = mmol => Math.round(Number(mmol)*18);
 
 /* ===== State ===== */
 const params = new URLSearchParams(location.search);
 let childId = params.get('child') || localStorage.getItem('lastChildId');
 let normalMin = 4, normalMax = 7;
-let rowsCache = [];           // جميع الصفوف للفترة
-let viewRowsCache = [];       // بعد الفلاتر/الترتيب
+let rowsCache = [];           // raw rows for period
+let viewRowsCache = [];       // filtered/sorted view
 let notesVisible = true;
 let visibleCount = 10;
 const pageSize = 10;
@@ -172,7 +175,9 @@ onAuthStateChanged(auth, async (user)=>{
       const cached = localStorage.getItem('lastChildName');
       if (cached) childNameEl.textContent = cached;
     }
-  }catch(e){ console.error('child load error', e); }
+  }catch(e){
+    console.error('child load error', e);
+  }
 
   // default dates (last 7 days)
   const today = todayStr();
@@ -263,7 +268,7 @@ async function loadRange(){
       if(!date) return;
 
       let slot = String(r.slotKey || r.slot || r.timeLabel || '').trim();
-      slot = normalizeSlot(slot); // NEW: normalize any form to canonical key
+      slot = normalizeSlot(slot); // normalize English/Arabic forms
 
       let mmol = null;
       if(typeof r.value_mmol === 'number') mmol = Number(r.value_mmol);
@@ -289,10 +294,7 @@ async function loadRange(){
     visibleCount = pageSize;
     autoDensity(rows.length);
 
-    // build slot filter options once
     buildSlotFilterOptions();
-
-    // derive view with filters/sort then render
     applyFiltersSort();
     renderAll();
   }catch(e){
@@ -334,7 +336,6 @@ function applyFiltersSort(){
 
   let arr = rowsCache.slice();
 
-  // filters
   if(stateF!=='all') arr = arr.filter(r => r.state===stateF);
   if(slotF!=='all')  arr = arr.filter(r => r.slot===slotF);
   if(corrF==='with') arr = arr.filter(r => r.corr!=='' && r.corr!=null);
@@ -344,7 +345,6 @@ function applyFiltersSort(){
   if(notesF==='with') arr = arr.filter(r => r.notes && String(r.notes).trim());
   if(notesF==='without') arr = arr.filter(r => !(r.notes && String(r.notes).trim()));
 
-  // sort
   if(sortBy==='date_desc') arr.sort((a,b)=> (a.date===b.date ? 0 : (a.date>b.date?-1:1)));
   if(sortBy==='date_asc')  arr.sort((a,b)=> (a.date===b.date ? 0 : (a.date<b.date?-1:1)));
   if(sortBy==='read_asc')  arr.sort((a,b)=> a.mmol-b.mmol);
@@ -362,8 +362,6 @@ function renderAll(){
   renderHeatmap(viewRowsCache);
   renderHistogram(viewRowsCache);
 }
-
-/* Render table with pagination */
 function renderTable(rows){
   if(!rows.length){
     tbody.innerHTML = `<tr><td colspan="7" class="muted center">لا يوجد قياسات للفترة المحددة.</td></tr>`;
@@ -371,7 +369,7 @@ function renderTable(rows){
     showMoreBtn?.classList.add('hidden');
     return;
   }
-  const unit = outUnitEl.value; // 'mmol' | 'mgdl'
+  const unit = outUnitEl.value;
   const toTxt = r => unit==='mgdl' ? `${Math.round(r.mgdl)} mg/dL` : `${r.mmol.toFixed(1)} mmol/L`;
 
   const slice = rows.slice(0, visibleCount);
@@ -390,16 +388,12 @@ function renderTable(rows){
   }).join('');
   tbody.innerHTML = html;
 
-  // Visible info + show more
   visibleInfoEl.textContent = `تم عرض ${slice.length} من ${rows.length}`;
-  if(slice.length < rows.length) {
-    showMoreBtn?.classList.remove('hidden');
-  }else{
-    showMoreBtn?.classList.add('hidden');
-  }
+  if(slice.length < rows.length) showMoreBtn?.classList.remove('hidden');
+  else showMoreBtn?.classList.add('hidden');
 }
 
-/* ===== CSV Export (all rows of current period) ===== */
+/* ===== CSV (all rows of period) ===== */
 async function downloadCSV(){
   const start = normalizeDateStr(fromEl.value);
   const end   = normalizeDateStr(toEl.value);
@@ -444,16 +438,15 @@ function computeStats(rows){
   return {n, avg, med, sd, tir, nLow, nHigh};
 }
 function detectPatterns(rows){
-  // counts by slot/state
-  const map = new Map(); // key: slot -> {total, low, ok, high}
+  const map = new Map(); // slot -> counts
   rows.forEach(r=>{
     const m = map.get(r.slot) || {total:0,low:0,ok:0,high:0};
     m.total++; m[r.state]++; map.set(r.slot,m);
   });
 
   const findings = [];
-  // thresholds
-  const minCount = 3; // at least 3 occurrences to consider pattern
+  const minCount = 3;
+
   map.forEach((m,slot)=>{
     if(m.total >= minCount){
       if(m.high/m.total >= 0.6) findings.push(`ارتفاعات متكررة في ${KEY2AR_SHORT[slot]||slot}`);
@@ -461,11 +454,9 @@ function detectPatterns(rows){
     }
   });
 
-  // dawn-like high (wake)
   const w = map.get('wake');
   if(w && w.total>=minCount && w.high/w.total>=0.5) findings.push('ارتفاعات صباحية بعد الاستيقاظ');
 
-  // post-meal spikes
   ['post_bf','post_ln','post_dn'].forEach(k=>{
     const m = map.get(k);
     if(m && m.total>=minCount && m.high/m.total>=0.5)
@@ -488,25 +479,22 @@ function renderInsights(stats, patterns){
     kpi('هبوط / ارتفاع', `${stats.nLow} / ${stats.nHigh}`)
   ].join('');
 
-  const list = patterns.findings?.length
+  const list = (patterns.findings && patterns.findings.length)
     ? `<ul>${patterns.findings.map(f=>`<li>${escapeHTML(f)}</li>`).join('')}</ul>`
     : `<p class="muted">لا توجد أنماط غير اعتيادية بارزة في هذه الفترة.</p>`;
   insightsFindings.innerHTML = list;
 }
 
-/* ===== Mini Analytics: Heatmap & Histogram ===== */
+/* ===== Mini Analytics ===== */
 function renderHeatmap(rows){
   if(!heatmapEl) return;
-  // grid: header row (empty + days) + slots rows
   const grid = [];
-  // header
   grid.push(`<div class="hm-head">—</div>`);
   for(let d=0; d<7; d++) grid.push(`<div class="hm-head">${DAYS_AR[d].slice(0,3)}</div>`);
 
-  // aggregate by (weekday, slot)
-  const agg = {}; // key: slot|day -> {total, low, ok, high}
+  const agg = {}; // slot|day -> counts
   rows.forEach(r=>{
-    const day = (new Date(r.date)).getDay(); // 0=Sun
+    const day = (new Date(r.date)).getDay();
     const key = `${r.slot}|${day}`;
     const obj = agg[key] || {total:0,low:0,ok:0,high:0};
     obj.total++; obj[r.state]++; agg[key]=obj;
@@ -518,19 +506,16 @@ function renderHeatmap(rows){
       const key = `${slot}|${d}`;
       const m = agg[key];
       if(!m) { grid.push(`<div class="hm-cell hm-empty" title="لا قياسات"></div>`); continue; }
-      // choose dominant state
-      let cls='hm-ok'; let title='طبيعي';
-      if(m.high>=m.low && m.high>=m.ok){ cls='hm-high'; title='ارتفاع غالب'; }
-      else if(m.low>=m.high && m.low>=m.ok){ cls='hm-low'; title='هبوط غالب'; }
-      // intensity by total count (opacity via inline style)
+      let cls='hm-ok';
+      if(m.high>=m.low && m.high>=m.ok) cls='hm-high';
+      else if(m.low>=m.high && m.low>=m.ok) cls='hm-low';
       const intensity = clamp(m.total/8, 0.18, 0.95);
-      grid.push(`<div class="hm-cell ${cls}" style="opacity:${intensity.toFixed(2)}" title="${DAYS_AR[d]} • ${KEY2AR_SHORT[slot]} • ${m.total} قراءات • ${title}"></div>`);
+      grid.push(`<div class="hm-cell ${cls}" style="opacity:${intensity.toFixed(2)}" title="${DAYS_AR[d]} • ${KEY2AR_SHORT[slot]} • ${m.total} قراءات"></div>`);
     }
   });
 
   heatmapEl.innerHTML = grid.join('');
 }
-
 function renderHistogram(rows){
   if(!histogramEl) return;
   if(!rows.length){ histogramEl.innerHTML=''; return; }
@@ -564,7 +549,7 @@ function renderHistogram(rows){
   histogramEl.innerHTML = bars;
 }
 
-/* ===== Assistant (local, no external calls) ===== */
+/* ===== Assistant (local) ===== */
 function toggleChat(v){
   chatPanel?.classList.toggle('hidden', !v);
   chatPanel?.setAttribute('aria-hidden', String(!v));
@@ -587,42 +572,36 @@ function addMsg(text, me=false){
 }
 function askAssistant(q){
   const lower = q.toLowerCase();
-  // Unit change
   if(/بدل|غيّر|غير/.test(q) && /وحدة|unit/.test(q)){
     outUnitEl.value = (outUnitEl.value==='mmol'?'mgdl':'mmol');
     renderAll();
     return 'تم تغيير الوحدة.';
   }
-  // Notes toggle
   if(/اخف|إخف|اظه|إظه/.test(q) && /ملاحظ/.test(q)){
     toggleNotesBtn.click();
     return notesVisible ? 'تم إظهار الملاحظات.' : 'تم إخفاء الملاحظات.';
   }
-  // Summary
   if(/لخص|خلاصة|ملخص|summary/.test(lower)){
     const s = computeStats(viewRowsCache);
     return `عدد القياسات ${s.n}، متوسط ${fmtUnit(s.avg)}, وسيط ${fmtUnit(s.med)}, TIR ${s.tir}%. هبوط ${s.nLow} وارتفاع ${s.nHigh}.`;
   }
-  // Explain a reading: extract number
   const num = Number(q.match(/(\d+(\.\d+)?)/)?.[1]);
   if(!isNaN(num)){
-    // If user provided mg/dL assume mg/dL when > 30, otherwise mmol
     let mmol = num;
     if(num>30 || /mg|دل|mg\/dl/i.test(q)) mmol = num/18;
     const state = getState(mmol);
     const stateAr = state==='low'?'هبوط':state==='high'?'ارتفاع':'طبيعي';
     return `القراءة تعادل ${fmtUnit(mmol)} وهي حالة ${stateAr} بالنسبة لنطاقك ${normalMin}–${normalMax} mmol/L.`;
   }
-  // Why high/low?
   if(/ليه|لماذا|سبب|why/.test(lower)){
     const p = detectPatterns(viewRowsCache);
     if(p.findings.length){
-      return `الأنماط الملحوظة: • ${p.findings.join(' • ')}. فضّلي مراجعة أوقات/كميات الكربوهيدرات والتصحيح. (ليست نصيحة طبية)`;
+      return `الأنماط الملحوظة: • ${p.findings.join(' • ')}. (تنبيه عام — ليست نصيحة طبية)`;
     }else{
       return 'لا توجد أنماط بارزة في هذه الفترة. جرّبي توسيع المدة أو إزالة بعض الفلاتر.';
     }
   }
-  return 'أقدّر سؤالك! جرّبي: "لخّص الأسبوع"، "ماذا تعني 250؟"، أو "بدّل الوحدة".';
+  return 'جرّبي: "لخّص الأسبوع"، "ماذا تعني 250؟"، أو "بدّل الوحدة".';
 }
 function fmtUnit(mmol){ return (outUnitEl.value==='mgdl') ? `${Math.round(mmol*18)} mg/dL` : `${mmol.toFixed(1)} mmol/L`; }
 
