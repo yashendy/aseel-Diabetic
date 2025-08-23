@@ -3,6 +3,9 @@ import { auth, db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import {
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* عناصر */
 const params = new URLSearchParams(location.search);
@@ -27,10 +30,26 @@ const kpiHigh  = document.getElementById('kpiHigh');
 const kpiLow   = document.getElementById('kpiLow');
 
 const emptyMsg = document.getElementById('emptyMsg');
+const aiBox    = document.getElementById('aiBox');
 
 let currentUser, childData;
-let chart; // Chart.js instance
+let chart;    // Line chart
+let pieChart; // Doughnut chart
 let allMeas = []; // القياسات المحملة
+
+/* ترجمة الفترات */
+const SLOT_AR = {
+  PRE_BREAKFAST:  'ق. الفطار',
+  POST_BREAKFAST: 'ب. الفطار',
+  PRE_LUNCH:      'ق. الغدا',
+  POST_LUNCH:     'ب. الغدا',
+  PRE_DINNER:     'ق. العشا',
+  POST_DINNER:    'ب. العشا',
+  BEDTIME:        'ق.النوم',
+  OVERNIGHT:      'أثناء النوم',
+  FASTING:        'الاستيقاظ',
+  RANDOM:         'عشوائي'
+};
 
 /* أدوات بسيطة */
 const pad = n => String(n).padStart(2,'0');
@@ -64,14 +83,14 @@ function fromUnit(val, unit){
 goBackBtn.addEventListener('click', ()=> history.back());
 
 /* جلسة + تحميل بيانات الطفل ثم القياسات */
-firebase.auth().onAuthStateChanged(async user=>{
+onAuthStateChanged(auth, async user=>{
   if(!user){ location.href='child.html'; return; }
   if(!childId){ alert('لا يوجد معرف طفل في الرابط'); return; }
   currentUser = user;
 
   await loadChild();
   await loadMeasurements();
-  renderKPIsAndChart();
+  renderKPIsAndCharts();
 });
 
 /* تحميل بيانات الطفل */
@@ -90,34 +109,39 @@ async function loadChild(){
     `النطاق: ${min}–${max} mmol/L • CR: ${cr} g/U • CF: ${cf} mmol/L/U`;
 }
 
-/* تحميل القياسات حسب الفترة */
+/* تحميل القياسات حسب الفترة — باستخدام when (Timestamp) */
 async function loadMeasurements(){
-  const from = fromEl.value;
-  const to   = toEl.value;
+  const fromStr = fromEl.value;
+  const toStr   = toEl.value;
   const ref  = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
 
-  // where(date >= from && date <= to) + orderBy('date','asc')
-  const qy   = query(ref, where('date','>=', from), where('date','<=', to), orderBy('date','asc'));
+  // نطاق زمني شامل ليوم النهاية
+  const from = new Date(`${fromStr}T00:00:00.000`);
+  const to   = new Date(`${toStr}T23:59:59.999`);
+
+  // where(when between) + orderBy('when')
+  const qy   = query(ref, where('when','>=', from), where('when','<=', to), orderBy('when','asc'));
   const snap = await getDocs(qy);
 
   allMeas = [];
   snap.forEach(d=>{
     const m = d.data();
     const ts = m.when?.toDate ? m.when.toDate() : new Date(`${m.date}T00:00:00`);
-    const mmol = m.value_mmol ?? (m.value_mgdl ? (m.value_mgdl/18) : null);
+    const mmol = m.value_mmol ?? (m.value_mgdl ? (m.value_mgdl/18) : (m.value? m.value/18 : null));
     if (mmol!=null) {
       allMeas.push({
         when: ts,
-        date: m.date,
+        date: m.date || fmtDate(ts),
         mmol: Number(mmol),
-        state: m.state || null
+        state: m.state || null,
+        slotKey: m.slotKey || null
       });
     }
   });
 }
 
-/* حساب الإحصائيات + رسم المنحنى بالأيام */
-function renderKPIsAndChart(){
+/* حساب الإحصائيات + رسم المنحنى + الرسم الدائري + الملخص الذكي */
+function renderKPIsAndCharts(){
   const unit = unitSel.value; // mmol | mgdl
   const min = childData?.normalRange?.min ?? 4.5;
   const max = childData?.normalRange?.max ?? 11;
@@ -142,15 +166,17 @@ function renderKPIsAndChart(){
   kpiHigh.textContent  = `${Math.round(highs)}%`;
   kpiLow.textContent   = `${Math.round(lows)}%`;
 
-  // تجهيز بيانات الرسم — كل نقطة = تاريخ كامل (محور X days)
-  const points = allMeas.map(m=> ({ x: m.when, y: toUnit(m.mmol, unit) })).sort((a,b)=> a.x - b.x);
+  // بيانات الرسم الخطي — كل نقطة = تاريخ كامل
+  const points = allMeas.map(m=> ({ x: m.when, y: toUnit(m.mmol, unit), slotKey: m.slotKey })).sort((a,b)=> a.x - b.x);
 
   // إظهار رسالة عدم وجود بيانات
   emptyMsg.classList.toggle('hidden', points.length>0);
 
-  // تدمير رسم قديم
+  // تدمير رسومات قديمة
   if (chart){ chart.destroy(); chart=null; }
+  if (pieChart){ pieChart.destroy(); pieChart=null; }
 
+  // Line Chart
   const ctx = document.getElementById('dayChart').getContext('2d');
   chart = new Chart(ctx, {
     type: 'line',
@@ -159,7 +185,7 @@ function renderKPIsAndChart(){
         label: unit==='mgdl' ? 'الجلوكوز (mg/dL)' : 'الجلوكوز (mmol/L)',
         data: points,
         borderColor: '#4F46E5',
-        backgroundColor: 'rgba(79,70,229,.08)',
+        backgroundColor: 'rgba(79,70,229,0.08)',
         pointRadius: 3,
         tension: .25,
         fill: false,
@@ -175,7 +201,12 @@ function renderKPIsAndChart(){
           label:(ctx)=>{
             const v = ctx.parsed.y;
             const d = new Date(ctx.parsed.x);
-            return `${v} @ ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+            const slotKey = ctx.raw?.slotKey;
+            const slotAr  = slotKey ? (SLOT_AR[slotKey] || slotKey) : '';
+            const timeStr = d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+            const dateStr = d.toLocaleDateString();
+            const value   = unit==='mgdl' ? `${Math.round(v)}` : `${Number(v).toFixed(1)}`;
+            return `${value} @ ${dateStr} ${timeStr}${slotAr?` — ${slotAr}`:''}`;
           }
         }}
       },
@@ -193,30 +224,45 @@ function renderKPIsAndChart(){
       }
     }
   });
-}
 
-/* تفعيل الفلاتر */
-applyBtn.addEventListener('click', async ()=>{
-  await loadMeasurements();
-  renderKPIsAndChart();
-});
-unitSel.addEventListener('change', ()=> renderKPIsAndChart());
-quicks.forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    const r = btn.dataset.range;
-    if (r==='all'){
-      // ابحث لأبعد تاريخ موجود وسجله كنطاق كامل
-      if (allMeas.length){
-        const first = allMeas.reduce((a,b)=> a.when<b.when?a:b).when;
-        fromEl.value = fmtDate(first);
-        toEl.value   = fmtDate(new Date());
-      }
-    }else{
-      const days = Number(r);
-      const to   = new Date();
-      const from = addDays(to, -(days-1));
-      fromEl.value = fmtDate(from);
-      toEl.value   = fmtDate(to);
+  // Doughnut (TIR/High/Low)
+  const pctx = document.getElementById('pieChart').getContext('2d');
+  pieChart = new Chart(pctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['داخل النطاق', 'ارتفاعات', 'هبوطات'],
+      datasets: [{
+        data: [inRange.toFixed(1), highs.toFixed(1), lows.toFixed(1)],
+        backgroundColor: ['rgba(34,197,94,0.25)','rgba(239,68,68,0.25)','rgba(59,130,246,0.25)'],
+        borderColor: ['#22c55e','#ef4444','#3b82f6']
+      }]
+    },
+    options:{
+      plugins:{
+        legend:{ position:'bottom' }
+      },
+      cutout: '60%'
     }
   });
-});
+
+  // ملخص ذكي
+  renderAISummary({unit, avgM, sdM, inRange, highs, lows, points, min, max});
+}
+
+/* ذكاء اصطناعي مبسّط — يُولّد خلاصة بالعربي */
+function renderAISummary({unit, avgM, sdM, inRange, highs, lows, points, min, max}){
+  if (!points.length){ aiBox.textContent = 'لا توجد بيانات كافية لعرض الملخص.'; return; }
+
+  // اتجاه آخر 7 قراءات
+  const lastN = points.slice(-7).map(p=> p.y);
+  const trend = lastN.length>=2 ? (lastN[lastN.length-1] - lastN[0]) : 0;
+
+  // تجميع حسب slotKey لمعرفة الأكثر تكرارًا أو المشاكل
+  const bySlot = {};
+  allMeas.forEach(m=>{
+    const key = m.slotKey || 'غير محدد';
+    bySlot[key] = bySlot[key] || {count:0, highs:0, lows:0};
+    bySlot[key].count++;
+    if (m.mmol>max) bySlot[key].highs++;
+    if (m.mmol<min) bySlot[key].lows++;
+  }
