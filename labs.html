@@ -5,31 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>تقارير التحاليل الطبية</title>
   <link rel="icon" href="favicon.ico">
-  <style>
-    :root{--border:#e6eef7;--card:#fff;--bg:#f7f9fc;--text:#111;--muted:#667;--pri:#4F46E5}
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,Arial}
-    .container{max-width:1000px;margin:auto;padding:16px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-top:14px}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .space{justify-content:space-between}
-    .btn{background:var(--pri);color:#fff;border:none;border-radius:10px;padding:10px 14px;cursor:pointer}
-    .btn.secondary{background:#e9eef8;color:#111}
-    .btn.ghost{background:#fff;border:1px solid var(--border);color:#111}
-    input,select,textarea{width:100%;padding:9px;border:1px solid var(--border);border-radius:10px;background:#fff}
-    table{width:100%;border-collapse:collapse;margin-top:10px}
-    th,td{border:1px solid var(--border);padding:8px;text-align:right}
-    th{background:#f4f7ff}
-    .tiny{font-size:12px;color:var(--muted)}
-    .pill{padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:#fff}
-    .warn{color:#b45309;background:#fff7ed;border-color:#fde68a}
-    .ok{color:#065f46;background:#ecfdf5;border-color:#a7f3d0}
-    .danger{color:#991b1b;background:#fef2f2;border-color:#fecaca}
-    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .hidden{display:none}
-    @media (max-width:720px){.grid2{grid-template-columns:1fr}}
-    @media print {.no-print{display:none} body{background:#fff} .card{border:none}}
-  </style>
+  <link rel="stylesheet" href="css/labs.css">
 
   <!-- مكتبات PDF وباركود -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
@@ -50,6 +26,7 @@
       </div>
     </div>
 
+    <!-- بيانات عامة -->
     <div class="card">
       <div class="row space">
         <div class="row">
@@ -80,6 +57,7 @@
       <div class="tiny" id="fileLinkBox"></div>
     </div>
 
+    <!-- HbA1c -->
     <div class="card">
       <h3>HbA1c</h3>
       <table>
@@ -92,6 +70,7 @@
       </table>
     </div>
 
+    <!-- Lipid -->
     <div class="card">
       <h3>دهون الدم (Lipid Profile)</h3>
       <table>
@@ -103,6 +82,7 @@
       </table>
     </div>
 
+    <!-- الغدة والكلى -->
     <div class="card">
       <h3>الغدة الدرقية والكُلى</h3>
       <table>
@@ -114,6 +94,7 @@
       </table>
     </div>
 
+    <!-- ملاحظات عامة -->
     <div class="card">
       <h3>ملاحظات عامة</h3>
       <textarea id="generalNote" rows="3" placeholder="توصيات الطبيب / أي ملاحظات أخرى"></textarea>
@@ -126,299 +107,7 @@
     </div>
   </div>
 
-  <!-- Firebase config & Firestore/Auth (v12 modules) -->
-  <script type="module">
-    import { auth, db } from './firebase-config.js';
-    import {
-      collection, doc, setDoc, addDoc, getDoc, getDocs, query, where, orderBy, serverTimestamp
-    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-
-    // عناصر DOM
-    const childNameEl = document.getElementById('childName');
-    const hdrChild    = document.getElementById('hdrChild');
-    const labDateEl   = document.getElementById('labDate');
-    const labTypeEl   = document.getElementById('labType');
-    const dueBadge    = document.getElementById('dueBadge');
-    const saveBtn     = document.getElementById('saveBtn');
-    const savePdfBtn  = document.getElementById('savePdfBtn');
-    const pdfBtn      = document.getElementById('pdfBtn');
-    const fileLinkBox = document.getElementById('fileLinkBox');
-    const printBtn    = document.getElementById('printBtn');
-
-    // حقول
-    const hba1cVal  = document.getElementById('hba1cVal');
-    const hba1cNote = document.getElementById('hba1cNote');
-
-    const lip_tc = document.getElementById('lip_tc');
-    const lip_ldl= document.getElementById('lip_ldl');
-    const lip_hdl= document.getElementById('lip_hdl');
-    const lip_tg = document.getElementById('lip_tg');
-    const lip_note = document.getElementById('lip_note');
-
-    const thy_tsh = document.getElementById('thy_tsh');
-    const thy_ft4 = document.getElementById('thy_ft4');
-    const thy_note= document.getElementById('thy_note');
-
-    const ren_mac = document.getElementById('ren_mac');
-    const ren_creat = document.getElementById('ren_creat');
-    const ren_note = document.getElementById('ren_note');
-
-    const generalNote = document.getElementById('generalNote');
-
-    // Helpers
-    const params = new URLSearchParams(location.search);
-    const childId = params.get('child');
-    const labIdParam = params.get('lab');
-
-    const pad = n=>String(n).padStart(2,'0');
-    const fmt = d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-    const today = new Date();
-    labDateEl.value = fmt(today);
-
-    function addMonths(date, m=4){
-      const d = new Date(date);
-      const day = d.getDate();
-      d.setMonth(d.getMonth()+m);
-      // معالجة نهاية الشهر
-      if (d.getDate() < day) d.setDate(0);
-      return d;
-    }
-
-    onAuthStateChanged(auth, async user=>{
-      if(!user){ location.href='index.html'; return; }
-      if(!childId){ alert('لا يوجد child في الرابط'); return; }
-
-      // بيانات الطفل
-      const cref = doc(db, `parents/${user.uid}/children/${childId}`);
-      const csnp = await getDoc(cref);
-      const childName = csnp.exists() ? (csnp.data().name || 'طفل') : 'طفل';
-      childNameEl.textContent = childName;
-      hdrChild.textContent = `— ${childName}`;
-
-      // لو labId موجود → اقرأ واطبع PDF تلقائيًا
-      if (labIdParam){
-        const labRef = doc(db, `parents/${user.uid}/children/${childId}/labs/${labIdParam}`);
-        const labSnap= await getDoc(labRef);
-        if (!labSnap.exists()){ alert('لم يتم العثور على التقرير'); return; }
-        const labData = labSnap.data();
-        // املأ الحقول للعرض/التعديل
-        fillFormFromDoc(labData);
-        // افتح PDF تلقائيًا
-        openPdf(labSnap.id, childName, labData);
-        // أظهر حالة الاستحقاق
-        showDueBadge(labData.nextDue?.toDate ? labData.nextDue.toDate() : addMonths(labData.when?.toDate ? labData.when.toDate() : new Date(labData.date)));
-        return;
-      }
-
-      // بدون labId: حمّلي آخر تقرير لعرض التنبيه
-      const lref = collection(db, `parents/${user.uid}/children/${childId}/labs`);
-      const qy = query(lref, orderBy('when','desc'));
-      const sn = await getDocs(qy);
-      if (!sn.empty){
-        const last = sn.docs[0].data();
-        const due = last.nextDue?.toDate ? last.nextDue.toDate()
-                  : addMonths(last.when?.toDate ? last.when.toDate() : new Date(last.date));
-        showDueBadge(due);
-      }
-
-      // أحداث أزرار
-      saveBtn.addEventListener('click', ()=> saveLab(user.uid, childId, childName, false));
-      savePdfBtn.addEventListener('click', ()=> saveLab(user.uid, childId, childName, true));
-      pdfBtn.addEventListener('click', async ()=>{
-        const fake = buildDocFromForm();
-        openPdf('preview', childName, fake);
-      });
-      printBtn.addEventListener('click', ()=> window.print());
-    });
-
-    function showDueBadge(dueDate){
-      if (!dueDate){ dueBadge.textContent=''; return; }
-      const today = new Date();
-      const days = Math.ceil((dueDate - today)/86400000);
-      const txt = `التحليل القادم: ${fmt(dueDate)} (${days} يوم)`;
-      dueBadge.textContent = txt;
-      dueBadge.className = 'pill tiny ' + (days<0 ? 'danger' : (days<=14 ? 'warn' : 'ok'));
-    }
-
-    function fillFormFromDoc(d){
-      labDateEl.value = d.date || (d.when?.toDate ? fmt(d.when.toDate()) : fmt(new Date()));
-      labTypeEl.value = d.type || 'full';
-
-      hba1cVal.value  = d?.hba1c?.value ?? '';
-      hba1cNote.value = d?.hba1c?.note  ?? '';
-
-      lip_tc.value = d?.lipid?.tc ?? '';
-      lip_ldl.value= d?.lipid?.ldl?? '';
-      lip_hdl.value= d?.lipid?.hdl?? '';
-      lip_tg.value = d?.lipid?.tg ?? '';
-      lip_note.value= d?.lipid?.note ?? '';
-
-      thy_tsh.value= d?.thyroid?.tsh ?? '';
-      thy_ft4.value= d?.thyroid?.ft4 ?? '';
-      thy_note.value= d?.thyroid?.note ?? '';
-
-      ren_mac.value= d?.renal?.microalb_creat ?? '';
-      ren_creat.value= d?.renal?.creatinine ?? '';
-      ren_note.value= d?.renal?.note ?? '';
-
-      generalNote.value = d?.generalNote ?? '';
-
-      if (d?.fileUrl){
-        fileLinkBox.innerHTML = `📎 مرفق: <a href="${d.fileUrl}" target="_blank">فتح الملف</a>`;
-      } else {
-        fileLinkBox.textContent = '';
-      }
-    }
-
-    function buildDocFromForm(){
-      const when = new Date(labDateEl.value+'T00:00:00');
-      const nextDue = addMonths(when, 4); // 4 شهور
-      return {
-        when,
-        date: fmt(when),
-        nextDue,
-        type: labTypeEl.value,
-        hba1c: { value: numOrNull(hba1cVal.value), note: strOrNull(hba1cNote.value) },
-        lipid: { tc:numOrNull(lip_tc.value), ldl:numOrNull(lip_ldl.value), hdl:numOrNull(lip_hdl.value), tg:numOrNull(lip_tg.value), note: strOrNull(lip_note.value) },
-        thyroid: { tsh:numOrNull(thy_tsh.value), ft4:numOrNull(thy_ft4.value), note: strOrNull(thy_note.value) },
-        renal: { microalb_creat:numOrNull(ren_mac.value), creatinine:numOrNull(ren_creat.value), note: strOrNull(ren_note.value) },
-        generalNote: strOrNull(generalNote.value),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-    }
-
-    function numOrNull(v){ return v==='' || v==null ? null : Number(v); }
-    function strOrNull(v){ return v && String(v).trim()!=='' ? String(v).trim() : null; }
-
-    async function saveLab(uid, childId, childName, andPdf=false){
-      try{
-        const data = buildDocFromForm();
-        // Firestore: addDoc داخل مجموعة labs
-        const col = collection(db, `parents/${uid}/children/${childId}/labs`);
-        const added = await addDoc(col, {
-          ...data,
-          when: data.when, // Timestamp يتحول تلقائيًا
-          nextDue: data.nextDue
-        });
-        // بعد الحفظ: PDF؟
-        if (andPdf) openPdf(added.id, childName, data);
-        alert('تم الحفظ بنجاح');
-      }catch(e){
-        console.error(e);
-        alert('حدث خطأ أثناء الحفظ');
-      }
-    }
-
-    // توليد وفتح PDF
-    function openPdf(labId, childName, data){
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({orientation:'p', unit:'pt', format:'a4'});
-
-      // رأس
-      doc.setFont('helvetica','bold'); doc.setFontSize(16);
-      doc.text(`تقرير التحاليل — ${childName}`, 40, 40, {align:'right'});
-      doc.setFont('helvetica','normal'); doc.setFontSize(11);
-      doc.text(`رقم التقرير: ${labId}`, 40, 62, {align:'right'});
-      doc.text(`تاريخ العينة: ${data.date}`, 40, 78, {align:'right'});
-
-      // توليد باركود و QR (مخفيًا ثم يُحشر في PDF)
-      const payload = `lab:${labId}|child:${childId}|date:${data.date}`;
-      try{
-        // QR
-        const qrDiv = document.getElementById('qr');
-        qrDiv.innerHTML = '';
-        const qr = new QRCode(qrDiv, {text: payload, width: 90, height: 90, correctLevel: QRCode.CorrectLevel.M});
-        const qrCanvas = qrDiv.querySelector('canvas');
-        const qrDataUrl = qrCanvas ? qrCanvas.toDataURL('image/png') : null;
-        // Barcode
-        const svg = document.getElementById('barcode');
-        JsBarcode(svg, payload, {format:'CODE128', displayValue:false, height:45, margin:0});
-        // svg → dataURL
-        const svgData = new XMLSerializer().serializeToString(svg);
-        const svgBase64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-
-        // إدراج الصور
-        if (qrDataUrl) doc.addImage(qrDataUrl, 'PNG', 40, 96, 90, 90);
-        doc.addImage(svgBase64, 'SVG', 140, 120, 220, 40);
-      }catch(e){ console.warn('Barcode/QR warning', e); }
-
-      let y = 210;
-
-      // HbA1c
-      const hbaRows = [[ data?.hba1c?.value ?? '-', '%', data?.hba1c?.note ?? '-' ]];
-      doc.autoTable({
-        startY: y,
-        head: [['HbA1c','الوحدة','ملاحظات']],
-        body: hbaRows,
-        styles:{halign:'right'},
-        headStyles:{fillColor:[244,247,255]},
-        theme:'grid',
-        margin:{left:40,right:40}
-      });
-      y = doc.lastAutoTable.finalY + 14;
-
-      // Lipid
-      const lipRows = [
-        ['TC', data?.lipid?.tc ?? '-', 'mg/dL', data?.lipid?.note ?? '-'],
-        ['LDL', data?.lipid?.ldl ?? '-', 'mg/dL', '-'],
-        ['HDL', data?.lipid?.hdl ?? '-', 'mg/dL', '-'],
-        ['TG', data?.lipid?.tg  ?? '-', 'mg/dL', '-'],
-      ];
-      doc.autoTable({
-        startY: y,
-        head: [['Lipid','القيمة','الوحدة','ملاحظات']],
-        body: lipRows,
-        styles:{halign:'right'},
-        headStyles:{fillColor:[244,247,255]},
-        theme:'grid',
-        margin:{left:40,right:40}
-      });
-      y = doc.lastAutoTable.finalY + 14;
-
-      // Thyroid & Renal
-      const thRows = [
-        ['TSH', data?.thyroid?.tsh ?? '-', 'mIU/L', data?.thyroid?.note ?? '-'],
-        ['FT4', data?.thyroid?.ft4 ?? '-', 'ng/dL', '-'],
-      ];
-      doc.autoTable({
-        startY: y,
-        head: [['الغدة الدرقية','القيمة','الوحدة','ملاحظات']],
-        body: thRows,
-        styles:{halign:'right'}, headStyles:{fillColor:[244,247,255]},
-        theme:'grid', margin:{left:40,right:40}
-      });
-      y = doc.lastAutoTable.finalY + 14;
-
-      const rnRows = [
-        ['Microalbumin/Creatinine', data?.renal?.microalb_creat ?? '-', 'mg/g', data?.renal?.note ?? '-'],
-        ['Creatinine', data?.renal?.creatinine ?? '-', 'mg/dL', '-'],
-      ];
-      doc.autoTable({
-        startY: y,
-        head: [['الكُلى','القيمة','الوحدة','ملاحظات']],
-        body: rnRows,
-        styles:{halign:'right'}, headStyles:{fillColor:[244,247,255]},
-        theme:'grid', margin:{left:40,right:40}
-      });
-      y = doc.lastAutoTable.finalY + 14;
-
-      // Note + Next Due
-      const nextDue = data.nextDue ? (data.nextDue instanceof Date ? data.nextDue : new Date(data.nextDue)) : addMonths(new Date(data.date),4);
-      doc.setFontSize(11);
-      doc.text(`موعد التحليل القادم (HbA1c كل 4 أشهر): ${fmt(nextDue)}`, 40, y, {align:'right'});
-      y += 18;
-      if (data?.generalNote){
-        doc.setFont('helvetica','bold'); doc.text('ملاحظات عامة:', 40, y, {align:'right'}); y+=14;
-        doc.setFont('helvetica','normal'); doc.text(String(data.generalNote), 40, y, {align:'right', maxWidth:515});
-      }
-
-      // فتح في تبويب جديد
-      const blob = doc.output('blob');
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-    }
-  </script>
+  <!-- سكربت -->
+  <script type="module" src="js/labs.js"></script>
 </body>
 </html>
