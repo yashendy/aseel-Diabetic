@@ -23,3 +23,9 @@ th{background:#f4f7ff}
 .hidden{display:none}
 @media (max-width:720px){.grid2{grid-template-columns:1fr}}
 @media print {.no-print{display:none} body{background:#fff} .card{border:none}}
+
+.muted{color:#667}
+#historyTable td .actions{display:flex;gap:6px}
+.btn.small{padding:6px 10px;border-radius:8px}
+.btn.danger{background:#E53935}
+.btn.gray{background:#eef2f7;color:#222;border:1px solid #e7edf5}
