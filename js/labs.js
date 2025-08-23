@@ -56,63 +56,30 @@ function addMonths(date, m=4){
 // حالة تعديل/إنشاء
 let _currentLabId = null;
 
-/* -------------------- دعم العربية في jsPDF -------------------- */
-/** دالة تشكيل + RTL: تستخدم المكتبتين، مع fallback بسيط لو مش متاحين */
-function shape(text){
-  if (!text) return '';
-  // تحقق من وجود المكتبة أولًا
-  if (typeof window.arabicPersianReshaper === 'undefined' || typeof window.Bidi === 'undefined') {
-    return text; // لا تقم بالتشكيل إذا كانت المكتبة غير موجودة
-  }
-  try{
-    const reshaped = window.arabicPersianReshaper.reshape(text);
-    const bidi = new window.Bidi();
-    bidi.setRTL(true);
-    return bidi.doBidi(reshaped);
-  }catch(e){
-    console.error('Error reshaping text:', e);
-    return text;
-  }
-}
-
-/** تحميل خط عربي (Noto Naskh) مرة واحدة */
-async function ensureArabicFont(doc){
-  if (window._arabicFontLoaded){ doc.setFont('NotoNaskh'); return; }
-  const url = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts/phaseIII_only/unhinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf';
-  const res = await fetch(url);
-  const buf = await res.arrayBuffer();
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-  doc.addFileToVFS('NotoNaskhArabic-Regular.ttf', b64);
-  doc.addFont('NotoNaskhArabic-Regular.ttf', 'NotoNaskh', 'normal');
-  window._arabicFontLoaded = true;
-  doc.setFont('NotoNaskh');
-}
-/* -------------------------------------------------------------- */
-
 onAuthStateChanged(auth, async user=>{
   if(!user){ location.href='index.html'; return; }
-  if(!childId){ alert('لا يوجد child في الرابط'); return; }
+  if(!childId){ alert('No child ID found in URL.'); return; }
 
   const cref = doc(db, `parents/${user.uid}/children/${childId}`);
   const csnp = await getDoc(cref);
-  const childName = csnp.exists() ? (csnp.data().name || 'طفل') : 'طفل';
+  const childName = csnp.exists() ? (csnp.data().name || 'Child') : 'Child';
   childNameEl.textContent = childName;
   hdrChild.textContent = `— ${childName}`;
 
-  // حمّل السجلّات
+  // Load history records
   await loadHistory(user.uid, childId, childName);
 
   if (labIdParam){
     const labRef = doc(db, `parents/${user.uid}/children/${childId}/labs/${labIdParam}`);
     const labSnap= await getDoc(labRef);
-    if (!labSnap.exists()){ alert('لم يتم العثور على التقرير'); return; }
+    if (!labSnap.exists()){ alert('Lab report not found.'); return; }
     const labData = labSnap.data();
-    _currentLabId = labSnap.id; // وضع تعديل
+    _currentLabId = labSnap.id;
     fillFormFromDoc(labData);
     showDueBadge(labData.nextDue?.toDate ? labData.nextDue.toDate() : addMonths(labData.when?.toDate ? labData.when.toDate() : new Date(labData.date)));
-    openPdf(_currentLabId, childName, labData); // فتح تلقائي
+    openPdf(_currentLabId, childName, labData);
   } else {
-    // عرض الشارة من آخر تقرير
+    // Show badge from last report
     const lref = collection(db, `parents/${user.uid}/children/${childId}/labs`);
     const qy = query(lref, orderBy('when','desc'), limit(1));
     const sn = await getDocs(qy);
@@ -137,7 +104,7 @@ function showDueBadge(dueDate){
   if (!dueDate){ dueBadge.textContent=''; return; }
   const today = new Date();
   const days = Math.ceil((dueDate - today)/86400000);
-  const txt = `التحليل القادم: ${fmt(dueDate)} (${days} يوم)`;
+  const txt = `Next Lab: ${fmt(dueDate)} (${days} days)`;
   dueBadge.textContent = txt;
   dueBadge.className = 'pill tiny ' + (days<0 ? 'danger' : (days<=14 ? 'warn' : 'ok'));
 }
@@ -193,13 +160,13 @@ async function saveLab(uid, childId, childName, andPdf=false){
     const col = collection(db, `parents/${uid}/children/${childId}/labs`);
 
     if (_currentLabId){
-      // تعديل مستند موجود
+      // Edit existing doc
       const ref = doc(db, `parents/${uid}/children/${childId}/labs/${_currentLabId}`);
       await setDoc(ref, { ...data }, { merge: true });
       if (andPdf) openPdf(_currentLabId, childName, data);
-      alert('تم التحديث بنجاح');
+      alert('Report updated successfully.');
     } else {
-      // إنشاء جديد
+      // Create new
       const added = await addDoc(col, {
         ...data,
         when: data.when,
@@ -207,18 +174,18 @@ async function saveLab(uid, childId, childName, andPdf=false){
       });
       _currentLabId = added.id;
       if (andPdf) openPdf(added.id, childName, data);
-      alert('تم الحفظ بنجاح');
+      alert('Report saved successfully.');
     }
 
-    // حدّث جدول السجلات
+    // Update history table
     await loadHistory(uid, childId, childName);
   }catch(e){
     console.error(e);
-    alert('حدث خطأ أثناء الحفظ/التحديث');
+    alert('An error occurred while saving/updating the report.');
   }
 }
 
-// بناء لينك التقرير (رابط مطلق ليفتح من QR)
+// Build report URL (absolute link to open from QR)
 function buildReportUrl(labId){
   const url = new URL('labs.html', location.href);
   url.searchParams.set('child', childId);
@@ -226,24 +193,22 @@ function buildReportUrl(labId){
   return url.toString();
 }
 
-// 🖨️ توليد PDF مع دعم العربية + QR/Barcode كرابط مباشر
+// 🖨️ Generate PDF
 async function openPdf(labId, childName, data){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({orientation:'p', unit:'pt', format:'a4'});
+  
+  // Use a standard font for English
+  doc.setFont('Helvetica');
 
-  await ensureArabicFont(doc);         // تأكد تحميل الخط العربي
-  doc.setFont('NotoNaskh');
-  // لو الإصدار يدعم RTL:
-  if (doc.setR2L) try { doc.setR2L(true); } catch(e){}
-
-  // عناوين
+  // Titles
   doc.setFontSize(16);
-  doc.text(shape(`تقرير التحاليل — ${childName}`), 555, 40, {align:'right'});
+  doc.text(`Lab Report — ${childName}`, 40, 40);
   doc.setFontSize(11);
-  doc.text(shape(`رقم التقرير: ${labId}`), 555, 62, {align:'right'});
-  doc.text(shape(`تاريخ العينة: ${data.date}`), 555, 78, {align:'right'});
+  doc.text(`Report ID: ${labId}`, 40, 62);
+  doc.text(`Sample Date: ${data.date}`, 40, 78);
 
-  // QR + Barcode برابط مباشر
+  // QR + Barcode with a direct link
   const reportUrl = labId==='preview' ? location.href : buildReportUrl(labId);
 
   try{
@@ -261,96 +226,75 @@ async function openPdf(labId, childName, data){
     if (qrDataUrl) doc.addImage(qrDataUrl, 'PNG', 40, 96, 90, 90);
     doc.addImage(svgBase64, 'SVG', 140, 120, 220, 40);
 
-    // منطقة قابلة للنقر فوق الـQR
+    // Clickable area over QR
     doc.link(40, 96, 90, 90, { url: reportUrl });
-    doc.textWithLink(shape('فتح التقرير'), 370, 135, { url: reportUrl, align: 'right' });
+    doc.textWithLink('Open Report', 370, 135, { url: reportUrl, align: 'right' });
   }catch(e){ console.warn('Barcode/QR warning', e); }
 
   let y = 210;
 
-  // إعدادات عامة للجداول بالعربية
+  // General table settings for English
   const baseTable = {
-    styles:{halign:'right', font: 'NotoNaskh', fontSize: 10},
-    headStyles:{fillColor:[244,247,255], font:'NotoNaskh'},
+    styles:{halign:'left', font: 'Helvetica'},
+    headStyles:{fillColor:[244,247,255], font:'Helvetica'},
     theme:'grid',
-    margin:{left:40,right:40},
-    didParseCell: (hookData)=>{
-      // شكّل النص العربي للخلايا والرؤوس
-      if (hookData.cell && Array.isArray(hookData.cell.text)) {
-        hookData.cell.text = hookData.cell.text.map(t => shape(String(t)));
-      }
-    }
+    margin:{left:40,right:40}
   };
 
   const hbaRows = [[ data?.hba1c?.value ?? '-', '%', data?.hba1c?.note ?? '-' ]];
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [[ shape('HbA1c'), shape('الوحدة'), shape('ملاحظات') ]],
+    head: [['HbA1c', 'Unit', 'Notes']],
     body: [ hbaRows[0].map(v => (v===null?'-':v)) ]
   });
   y = doc.lastAutoTable.finalY + 14;
 
   const lipRows = [
-    [shape('TC'), data?.lipid?.tc ?? '-', shape('mg/dL'), shape(data?.lipid?.note ?? '-')],
-    [shape('LDL'), data?.lipid?.ldl ?? '-', shape('mg/dL'), shape('-')],
-    [shape('HDL'), data?.lipid?.hdl ?? '-', shape('mg/dL'), shape('-')],
-    [shape('TG'), data?.lipid?.tg  ?? '-', shape('mg/dL'), shape('-')],
+    ['TC', data?.lipid?.tc ?? '-', 'mg/dL', data?.lipid?.note ?? '-'],
+    ['LDL', data?.lipid?.ldl ?? '-', 'mg/dL', '-'],
+    ['HDL', data?.lipid?.hdl ?? '-', 'mg/dL', '-'],
+    ['TG', data?.lipid?.tg  ?? '-', 'mg/dL', '-'],
   ];
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [[ shape('دهون الدم'), shape('القيمة'), shape('الوحدة'), shape('ملاحظات') ]],
-    body: lipRows,
-    didParseCell: (hookData) => {
-        if (hookData.cell.raw.text) {
-          hookData.cell.text = [shape(hookData.cell.raw.text)];
-        }
-    }
+    head: [['Lipid Profile', 'Value', 'Unit', 'Notes']],
+    body: lipRows
   });
   y = doc.lastAutoTable.finalY + 14;
 
   const thRows = [
-    [shape('TSH'), data?.thyroid?.tsh ?? '-', shape('mIU/L'), shape(data?.thyroid?.note ?? '-')],
-    [shape('FT4'), data?.thyroid?.ft4 ?? '-', shape('ng/dL'), shape('-')],
+    ['TSH', data?.thyroid?.tsh ?? '-', 'mIU/L', data?.thyroid?.note ?? '-'],
+    ['FT4', data?.thyroid?.ft4 ?? '-', 'ng/dL', '-'],
   ];
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [[ shape('الغدة الدرقية'), shape('القيمة'), shape('الوحدة'), shape('ملاحظات') ]],
-    body: thRows,
-    didParseCell: (hookData) => {
-        if (hookData.cell.raw.text) {
-          hookData.cell.text = [shape(hookData.cell.raw.text)];
-        }
-    }
+    head: [['Thyroid', 'Value', 'Unit', 'Notes']],
+    body: thRows
   });
   y = doc.lastAutoTable.finalY + 14;
 
   const rnRows = [
-    [shape('Microalbumin/Creatinine'), data?.renal?.microalb_creat ?? '-', shape('mg/g'), shape(data?.renal?.note ?? '-')],
-    [shape('Creatinine'), data?.renal?.creatinine ?? '-', shape('mg/dL'), shape('-')],
+    ['Microalbumin/Creatinine', data?.renal?.microalb_creat ?? '-', 'mg/g', data?.renal?.note ?? '-'],
+    ['Creatinine', data?.renal?.creatinine ?? '-', 'mg/dL', '-'],
   ];
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [[ shape('الكُلى'), shape('القيمة'), shape('الوحدة'), shape('ملاحظات') ]],
-    body: rnRows,
-    didParseCell: (hookData) => {
-        if (hookData.cell.raw.text) {
-          hookData.cell.text = [shape(hookData.cell.raw.text)];
-        }
-    }
+    head: [['Renal', 'Value', 'Unit', 'Notes']],
+    body: rnRows
   });
   y = doc.lastAutoTable.finalY + 14;
 
   const nextDue = data.nextDue ? (data.nextDue instanceof Date ? data.nextDue : new Date(data.nextDue)) : addMonths(new Date(data.date),4);
   doc.setFontSize(11);
-  doc.text(shape(`موعد التحليل القادم (HbA1c كل 4 أشهر): ${fmt(nextDue)}`), 555, y, {align:'right'});
+  doc.text(`Next Lab Due (HbA1c every 4 months): ${fmt(nextDue)}`, 40, y);
   y += 18;
   if (data?.generalNote){
-    doc.setFont('NotoNaskh','bold'); doc.text(shape('ملاحظات عامة:'), 555, y, {align:'right'}); y+=14;
-    doc.setFont('NotoNaskh','normal'); doc.text(shape(String(data.generalNote)), 555, y, {align:'right', maxWidth:515});
+    doc.setFont('Helvetica','bold'); doc.text('General Notes:', 40, y); y+=14;
+    doc.setFont('Helvetica','normal'); doc.text(String(data.generalNote), 40, y, {maxWidth:515});
   }
 
   const blob = doc.output('blob');
@@ -366,7 +310,7 @@ async function loadHistory(uid, childId, childName){
 
   historyBody.innerHTML = '';
   if (sn.empty){
-    historyBody.innerHTML = `<tr><td colspan="4" class="muted">لا توجد سجلات</td></tr>`;
+    historyBody.innerHTML = `<tr><td colspan="4" class="muted">No records found.</td></tr>`;
     return;
   }
 
@@ -380,9 +324,9 @@ async function loadHistory(uid, childId, childName){
       <td>${v?.hba1c?.note ?? '—'}</td>
       <td>
         <div class="actions">
-          <button class="btn small gray act-open">فتح PDF</button>
-          <button class="btn small act-edit">تعديل</button>
-          <button class="btn small danger act-del">حذف</button>
+          <button class="btn small gray act-open">Open PDF</button>
+          <button class="btn small act-edit">Edit</button>
+          <button class="btn small danger act-del">Delete</button>
         </div>
       </td>
     `;
@@ -393,11 +337,11 @@ async function loadHistory(uid, childId, childName){
       window.scrollTo({top:0, behavior:'smooth'});
     });
     tr.querySelector('.act-del').addEventListener('click', async ()=>{
-      if (confirm('هل تريد حذف هذا التقرير؟')){
+      if (confirm('Are you sure you want to delete this report?')){
         await deleteDoc(doc(db, `parents/${uid}/children/${childId}/labs/${d.id}`));
         if (_currentLabId === d.id) _currentLabId = null;
         await loadHistory(uid, childId, childName);
-        alert('تم الحذف');
+        alert('Report deleted successfully.');
       }
     });
     historyBody.appendChild(tr);
