@@ -60,17 +60,17 @@ let _currentLabId = null;
 /** دالة تشكيل + RTL: تستخدم المكتبتين، مع fallback بسيط لو مش متاحين */
 function shape(text){
   if (!text) return '';
+  // تحقق من وجود المكتبة أولًا
+  if (typeof window.arabicPersianReshaper === 'undefined' || typeof window.Bidi === 'undefined') {
+    return text; // لا تقم بالتشكيل إذا كانت المكتبة غير موجودة
+  }
   try{
-    const reshaped = window.arabicPersianReshaper
-      ? window.arabicPersianReshaper.reshape(text)
-      : text;
-    if (window.Bidi){
-      const bidi = new window.Bidi(reshaped);
-      return bidi.toString(); // تمثيل بصري RTL
-    }
-    // fallback بسيط: قلب ترتيب الكلمات فقط
-    return reshaped.split(/\s+/).reverse().join(' ');
+    const reshaped = window.arabicPersianReshaper.reshape(text);
+    const bidi = new window.Bidi();
+    bidi.setRTL(true); // تأكد من إعداد RTL
+    return bidi.doBidi(reshaped);
   }catch(e){
+    console.error('Error reshaping text:', e);
     return text;
   }
 }
@@ -292,40 +292,55 @@ async function openPdf(labId, childName, data){
   y = doc.lastAutoTable.finalY + 14;
 
   const lipRows = [
-    ['TC', data?.lipid?.tc ?? '-', 'mg/dL', data?.lipid?.note ?? '-'],
-    ['LDL', data?.lipid?.ldl ?? '-', 'mg/dL', '-'],
-    ['HDL', data?.lipid?.hdl ?? '-', 'mg/dL', '-'],
-    ['TG', data?.lipid?.tg  ?? '-', 'mg/dL', '-'],
+    [shape('TC'), data?.lipid?.tc ?? '-', shape('mg/dL'), shape(data?.lipid?.note ?? '-')],
+    [shape('LDL'), data?.lipid?.ldl ?? '-', shape('mg/dL'), shape('-')],
+    [shape('HDL'), data?.lipid?.hdl ?? '-', shape('mg/dL'), shape('-')],
+    [shape('TG'), data?.lipid?.tg  ?? '-', shape('mg/dL'), shape('-')],
   ];
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [[ shape('Lipid'), shape('القيمة'), shape('الوحدة'), shape('ملاحظات') ]],
-    body: lipRows
+    head: [[ shape('دهون الدم'), shape('القيمة'), shape('الوحدة'), shape('ملاحظات') ]],
+    body: lipRows,
+    didParseCell: (hookData) => {
+        if (hookData.cell.raw.text) {
+          hookData.cell.text = [shape(hookData.cell.raw.text)];
+        }
+    }
   });
   y = doc.lastAutoTable.finalY + 14;
 
   const thRows = [
-    ['TSH', data?.thyroid?.tsh ?? '-', 'mIU/L', data?.thyroid?.note ?? '-'],
-    ['FT4', data?.thyroid?.ft4 ?? '-', 'ng/dL', '-'],
+    [shape('TSH'), data?.thyroid?.tsh ?? '-', shape('mIU/L'), shape(data?.thyroid?.note ?? '-')],
+    [shape('FT4'), data?.thyroid?.ft4 ?? '-', shape('ng/dL'), shape('-')],
   ];
   doc.autoTable({
     ...baseTable,
     startY: y,
     head: [[ shape('الغدة الدرقية'), shape('القيمة'), shape('الوحدة'), shape('ملاحظات') ]],
-    body: thRows
+    body: thRows,
+    didParseCell: (hookData) => {
+        if (hookData.cell.raw.text) {
+          hookData.cell.text = [shape(hookData.cell.raw.text)];
+        }
+    }
   });
   y = doc.lastAutoTable.finalY + 14;
 
   const rnRows = [
-    ['Microalbumin/Creatinine', data?.renal?.microalb_creat ?? '-', 'mg/g', data?.renal?.note ?? '-'],
-    ['Creatinine', data?.renal?.creatinine ?? '-', 'mg/dL', '-'],
+    [shape('Microalbumin/Creatinine'), data?.renal?.microalb_creat ?? '-', shape('mg/g'), shape(data?.renal?.note ?? '-')],
+    [shape('Creatinine'), data?.renal?.creatinine ?? '-', shape('mg/dL'), shape('-')],
   ];
   doc.autoTable({
     ...baseTable,
     startY: y,
     head: [[ shape('الكُلى'), shape('القيمة'), shape('الوحدة'), shape('ملاحظات') ]],
-    body: rnRows
+    body: rnRows,
+    didParseCell: (hookData) => {
+        if (hookData.cell.raw.text) {
+          hookData.cell.text = [shape(hookData.cell.raw.text)];
+        }
+    }
   });
   y = doc.lastAutoTable.finalY + 14;
 
