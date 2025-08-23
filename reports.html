@@ -2,36 +2,21 @@
 <html lang="ar" dir="rtl">
 <head>
   <!--
-    =========================  توثيق الفكرة (لا يظهر للمستخدم)  =========================
-    تحليل البيانات التلقائي:
-      - نموذج ذكاء اصطناعي يحلل القياسات ويستخرج أنماط غير طبيعية:
-        (ارتفاع متكرر صباحًا، انخفاض بعد الغداء، تذبذب أيام محددة، تأثير الرياضة/النوم)
-      - تلخيص ذكي للفترة (متوسط/وسيط/SD، عدد الهبوط/الارتفاع، أسوأ/أفضل فترات).
-      - تفسير مفهوم + درجة ثقة + تخصيص حساسية التنبيه.
-
-    التنبؤ بالنتائج:
-      - تنبؤات قصيرة المدى (4–8 ساعات) مع نطاقات ثقة.
-      - إنذار مبكر واحتمالات الهبوط/الارتفاع.
-      - محاكاة "ماذا لو" (تعديل كربوهيدرات/توقيت رياضة/تصحيح).
-
-    المساعد الافتراضي (Chatbot):
-      - أسئلة طبيعية حول القراءات («ماذا تعني 250؟»، «سبب الهبوط بعد الظهر؟»).
-      - أوامر سريعة («صدّر تقرير PDF»، «أخفِ الملاحظات»، «بدّل الوحدة»).
-      - إجابات مخصصة آمنة (ليست نصيحة طبية).
-
-    ملاحظات تنفيذية:
-      - لا تغييرات على الواجهة/الستايل الحالية.
-      - دعم عرض وقت القياس بالعربي قائم (wake → الاستيقاظ، قبل/بعد الوجبات...).
-      - التطويرات المستقبلية يمكن إضافتها تدريجيًا دون كسر الصفحة.
-    ======================================================================================
+    =========================  ملاحظات توثيقية مختصرة  =========================
+    هذه الصفحة تضيف:
+    - تسميات عربية مختصرة لوقت القياس (ق. الفطار / ب. الغداء / الاستيقاظ / ق. النوم…)
+    - عرض أول 10 صفوف + زر "عرض المزيد (10)"
+    - فلترة (الحالة/الوقت/وجود تصحيح/علاج هبوط/ملاحظات) + ترتيب (تاريخ/قراءة)
+    - ملخص ذكي أعلى الجدول (متوسط، وسيط، SD، TIR، عدد هبوط/ارتفاع، أنماط بارزة)
+    - Heatmap (أيام × فترات) + Histogram للتوزيع
+    - مساعد افتراضي (Chatbot) خفيف يعمل على البيانات المحلية (بدون إرسال خارجي)
+    ============================================================================
   -->
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>التقارير</title>
 
-  <!-- ✅ أيقونة الموقع (كرري هذا السطر في باقي الصفحات) -->
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
-
   <link rel="stylesheet" href="css/reports.css" />
 </head>
 <body>
@@ -73,6 +58,68 @@
       <p id="densityHint" class="muted small">سيتم تفعيل عرض كثيف تلقائيًا عند تعدّي 150 صف.</p>
     </header>
 
+    <!-- ملخص ذكي -->
+    <section class="card insights" id="insightsCard">
+      <h2>ملخص الفترة (AI)</h2>
+      <div id="insightsKPIs" class="kpis"></div>
+      <div id="insightsFindings" class="findings"></div>
+    </section>
+
+    <!-- شريط فلاتر وترتيب -->
+    <section class="card filters" id="filtersBar">
+      <div class="filters-row">
+        <div class="filter">
+          <label for="filterState">الحالة</label>
+          <select id="filterState">
+            <option value="all">الكل</option>
+            <option value="low">هبوط</option>
+            <option value="ok">طبيعي</option>
+            <option value="high">ارتفاع</option>
+          </select>
+        </div>
+        <div class="filter">
+          <label for="filterSlot">وقت القياس</label>
+          <select id="filterSlot">
+            <option value="all">الكل</option>
+            <!-- يُملأ تلقائيًا من JS لضمان نفس الترتيب -->
+          </select>
+        </div>
+        <div class="filter">
+          <label for="filterCorr">التصحيح</label>
+          <select id="filterCorr">
+            <option value="any">الكل</option>
+            <option value="with">بوجود تصحيح</option>
+            <option value="without">بدون تصحيح</option>
+          </select>
+        </div>
+        <div class="filter">
+          <label for="filterHypo">علاج الهبوط</label>
+          <select id="filterHypo">
+            <option value="any">الكل</option>
+            <option value="with">بوجود علاج</option>
+            <option value="without">بدون علاج</option>
+          </select>
+        </div>
+        <div class="filter">
+          <label for="filterNotes">ملاحظات</label>
+          <select id="filterNotes">
+            <option value="any">الكل</option>
+            <option value="with">بوجود ملاحظات</option>
+            <option value="without">بدون ملاحظات</option>
+          </select>
+        </div>
+        <div class="filter">
+          <label for="sortBy">ترتيب</label>
+          <select id="sortBy">
+            <option value="date_desc">الأحدث أولاً</option>
+            <option value="date_asc">الأقدم أولاً</option>
+            <option value="read_asc">القراءة تصاعدي</option>
+            <option value="read_desc">القراءة تنازلي</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
     <section class="card table" id="tableSection">
       <h2>قياسات الفترة</h2>
       <div class="table-wrap">
@@ -93,15 +140,47 @@
           </tbody>
         </table>
       </div>
+
+      <!-- عرض المزيد -->
+      <div class="table-more">
+        <span id="visibleInfo" class="muted small">—</span>
+        <button id="showMore" class="btn">عرض المزيد (10)</button>
+      </div>
     </section>
 
-    <!-- وضع الطباعة الممتلئ/الفارغ (يُستخدم من reports-print.html لو أردتي) -->
-    <section id="printFilledSection" class="card print-filled hidden"></section>
-    <section id="blankWeekSection"   class="card blank-week hidden"></section>
+    <!-- تحليلات مصغرة -->
+    <section class="card analytics" id="analyticsMini">
+      <h2>تحليلات مصغّرة</h2>
+      <div class="analytics-grid">
+        <div>
+          <h3 class="muted">Heatmap (أيام × فترات)</h3>
+          <div id="heatmap" class="heatmap"></div>
+          <p class="small muted">اللون الأزرق = هبوط غالب، الأخضر = طبيعي، الأحمر = ارتفاع.</p>
+        </div>
+        <div>
+          <h3 class="muted">Histogram (توزيع القراءات)</h3>
+          <div id="histogram" class="hist"></div>
+        </div>
+      </div>
+    </section>
   </div>
+
+  <!-- زر المساعد ولوحته -->
+  <button id="chatToggle" class="fab" title="المساعد">💬</button>
+  <aside id="chatPanel" class="chat hidden" aria-hidden="true">
+    <header class="chat-head">
+      <strong>المساعد</strong>
+      <button id="chatClose" class="btn">✖</button>
+    </header>
+    <div id="chatBody" class="chat-body"></div>
+    <div class="chat-input">
+      <input id="chatQ" type="text" placeholder="اسألي: ماذا تعني 250؟ أو لخّص الأسبوع…">
+      <button id="chatSend" class="btn primary">إرسال</button>
+    </div>
+  </aside>
 
   <div id="loader" class="loader hidden">جارِ التحميل…</div>
 
-  <script type="module" src="js/reports.js?v=2"></script>
+  <script type="module" src="js/reports.js?v=3"></script>
 </body>
 </html>
