@@ -5,53 +5,72 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>منصة أسيل – تسجيل الدخول / إنشاء حساب</title>
 
-  <!-- الأيقونة -->
+  <!-- أيقونة التبويب -->
   <link rel="icon" type="image/png" href="images/favicon-32.png" />
 
   <!-- التنسيقات -->
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <!-- الهيدر: الشعار + العناوين -->
-  <header class="site-header">
-    <img src="images/logo.png" alt="شعار منصة أسيل" class="site-logo" />
-    <h1 class="site-title">منصة أسيل</h1>
-    <h2 class="site-subtitle">لمتابعة سكر الأطفال</h2>
-  </header>
+  <!-- حاوية الصفحة -->
+  <div class="page-wrap">
+    <!-- بطاقة المصادقة -->
+    <section class="auth-card">
 
-  <main class="container">
-    <!-- فورم تسجيل الدخول -->
-    <form id="login-form" class="form">
-      <h2>تسجيل الدخول</h2>
-      <input type="email" id="login-email" placeholder="البريد الإلكتروني" required />
-      <input type="password" id="login-password" placeholder="كلمة المرور" required />
-      <button type="submit">دخول</button>
-      <p class="muted">ما عندكش حساب؟ <button class="linklike" type="button" onclick="toggleForms()">سجل الآن</button></p>
-    </form>
+      <!-- الهيدر داخل البطاقة -->
+      <div class="auth-card__header">
+        <img src="images/logo.png" alt="شعار منصة أسيل" class="auth-card__logo" />
+        <h1 class="auth-card__title">منصة أسيل</h1>
+        <h2 class="auth-card__subtitle">لمتابعة سكر الأطفال</h2>
+      </div>
 
-    <!-- فورم إنشاء الحساب -->
-    <form id="register-form" class="form hidden">
-      <h2>إنشاء حساب جديد</h2>
-      <input type="text" id="register-name" placeholder="الاسم الكامل" required />
-      <input type="email" id="register-email" placeholder="البريد الإلكتروني" required />
-      <input type="password" id="register-password" placeholder="كلمة المرور" required />
-      <input type="password" id="register-confirm" placeholder="تأكيد كلمة المرور" required />
-      <button type="submit">تسجيل</button>
-      <p class="muted">عندك حساب؟ <button class="linklike" type="button" onclick="toggleForms()">سجّل الدخول</button></p>
-    </form>
-  </main>
+      <!-- فورم تسجيل الدخول -->
+      <form id="login-form" class="form">
+        <h3 class="form__title">تسجيل الدخول</h3>
+        <input type="email" id="login-email" placeholder="البريد الإلكتروني" required />
+        <input type="password" id="login-password" placeholder="كلمة المرور" required />
+        <button type="submit" class="btn btn--primary">دخول</button>
 
-  <!-- استدعاء سكربتات الموديول -->
-  <!-- مسار Firebase داخل login.js هو: ./firebase-config.js (صحيح لأنه داخل نفس مجلد js) -->
+        <p class="form__hint">
+          ما عندكش حساب؟
+          <button type="button" class="linklike" onclick="toggleForms()">سجل الآن</button>
+        </p>
+      </form>
+
+      <!-- فورم إنشاء الحساب -->
+      <form id="register-form" class="form hidden">
+        <h3 class="form__title">إنشاء حساب جديد</h3>
+        <input type="text" id="register-name" placeholder="الاسم الكامل" required />
+        <input type="email" id="register-email" placeholder="البريد الإلكتروني" required />
+        <input type="password" id="register-password" placeholder="كلمة المرور" required />
+        <input type="password" id="register-confirm" placeholder="تأكيد كلمة المرور" required />
+        <button type="submit" class="btn btn--primary">تسجيل</button>
+
+        <p class="form__hint">
+          عندك حساب؟
+          <button type="button" class="linklike" onclick="toggleForms()">سجّل الدخول</button>
+        </p>
+      </form>
+    </section>
+  </div>
+
+  <!-- سكربتات (المسارات صحيحة) -->
   <script type="module" src="js/login.js"></script>
 
-  <!-- دالة تبديل النماذج -->
+  <!-- تبديل النماذج -->
   <script>
     function toggleForms() {
       const loginForm = document.getElementById("login-form");
       const registerForm = document.getElementById("register-form");
       loginForm.classList.toggle("hidden");
       registerForm.classList.toggle("hidden");
+      // تمرير التركيز أول ما يتبدل
+      setTimeout(() => {
+        const target = loginForm.classList.contains("hidden")
+          ? document.getElementById("register-name")
+          : document.getElementById("login-email");
+        target?.focus();
+      }, 0);
     }
   </script>
 </body>
