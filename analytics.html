@@ -89,16 +89,27 @@
       <div id="emptyMsg" class="empty hidden">لا توجد قياسات ضمن الفترة المختارة.</div>
     </section>
 
+    <section class="card">
+      <div class="row space">
+        <h3>توزيع القياسات حسب النطاق</h3>
+      </div>
+      <canvas id="pieChart" height="120"></canvas>
+    </section>
+
+    <section class="card">
+      <div class="row space">
+        <h3>ملخص ذكي للحالة (AI)</h3>
+      </div>
+      <div id="aiBox" class="ai"></div>
+    </section>
+
   </div>
 
   <!-- Chart.js + محول التاريخ -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 
-  <!-- Firebase config (v12 modules عبر CDN) -->
-  <script type="module" src="js/firebase-config.js"></script>
-
-  <!-- منطق الصفحة -->
+  <!-- منطق الصفحة (يستورد firebase-config.js داخليًا كموديول) -->
   <script type="module" src="js/analytics.js"></script>
 </body>
 </html>
