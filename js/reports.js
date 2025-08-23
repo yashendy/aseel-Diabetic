@@ -1,4 +1,4 @@
-// js/reports.js — v3.1 (fix syntax + stable load)
+// js/reports.js — v3.2 (fix extra paren + stable load)
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { collection, query, where, orderBy, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
@@ -52,7 +52,7 @@ const chatSend      = document.getElementById('chatSend');
 const pad = n => String(n).padStart(2,'0');
 const todayStr = (d=new Date()) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const addDays = (ds,delta)=>{ const d=new Date(ds); d.setDate(d.getDate()+delta); return todayStr(d); };
-const loader = (v)=> loaderEl?.classList.toggle('hidden', !v);
+const loader = (v)=> loaderEl && loaderEl.classList.toggle('hidden', !v);
 const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
 
 /* Arabic Slots Mapping (Short) */
@@ -96,21 +96,21 @@ function normalizeSlot(raw){
   if(!raw) return '';
   let s = String(raw).trim();
 
-  // Arabic direct (tolerant of dots/spaces/elongation)
-  const sAR = s.replaceAll('.','').replaceAll('ـ','').replace(/\s+/g,' ').trim();
+  // Arabic tolerant
+  const sAR = s.replace(/\./g,'').replace(/ـ/g,'').replace(/\s+/g,' ').trim();
   if(AR2KEY[sAR]) return AR2KEY[sAR];
 
   // English shapes
-  const en1 = s.toLowerCase().replaceAll(' ','').replaceAll('-','_');
+  const en1 = s.toLowerCase().replace(/ /g,'').replace(/-/g,'_');
   if(EN2KEY[en1]) return EN2KEY[en1];
 
   const en2 = s.toLowerCase();
   if(EN2KEY[en2]) return EN2KEY[en2];
 
-  const en3 = en2.replaceAll('-','').replaceAll('_','');
+  const en3 = en2.replace(/[-_]/g,'');
   if(EN2KEY[en3]) return EN2KEY[en3];
 
-  return s; // fallback: show as-is
+  return s; // fallback
 }
 
 /* Dates / age */
@@ -122,7 +122,7 @@ function normalizeDateStr(any){
     if(!isNaN(d)) return todayStr(d);
     return any;
   }
-  const d=(any?.toDate && typeof any.toDate==='function')? any.toDate(): new Date(any);
+  const d=(any && any.toDate && typeof any.toDate==='function')? any.toDate(): new Date(any);
   if(!isNaN(d)) return todayStr(d);
   return '';
 }
@@ -149,7 +149,7 @@ const pageSize = 10;
 /* Slots order */
 const SLOT_ORDER = ['wake','pre_bf','post_bf','pre_ln','post_ln','pre_dn','post_dn','snack','pre_sleep','during_sleep','pre_sport','post_sport'];
 const SLOT_ORDER_MAP = new Map(SLOT_ORDER.map((k,i)=>[k,i]));
-const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت']);
+const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 
 /* ===== Boot ===== */
 onAuthStateChanged(auth, async (user)=>{
@@ -165,11 +165,11 @@ onAuthStateChanged(auth, async (user)=>{
       const c = csnap.data();
       childNameEl.textContent = c.name || 'طفل';
       childMetaEl.textContent = `${c.gender || '—'} • العمر: ${calcAge(c.birthDate)}`;
-      normalMin = Number(c.normalRange?.min ?? 4);
-      normalMax = Number(c.normalRange?.max ?? 7);
+      normalMin = Number(c.normalRange && c.normalRange.min != null ? c.normalRange.min : 4);
+      normalMax = Number(c.normalRange && c.normalRange.max != null ? c.normalRange.max : 7);
       chipRangeEl.textContent = `النطاق: ${normalMin}–${normalMax} mmol/L`;
-      chipCREl.textContent    = `CR: ${c.carbRatio ?? '—'} g/U`;
-      chipCFEl.textContent    = `CF: ${c.correctionFactor ?? '—'} mmol/L/U`;
+      chipCREl.textContent    = `CR: ${c.carbRatio != null ? c.carbRatio : '—'} g/U`;
+      chipCFEl.textContent    = `CF: ${c.correctionFactor != null ? c.correctionFactor : '—'} mmol/L/U`;
       localStorage.setItem('lastChildName', c.name || 'طفل');
     }else{
       const cached = localStorage.getItem('lastChildName');
@@ -197,14 +197,14 @@ onAuthStateChanged(auth, async (user)=>{
 
   csvBtn.addEventListener('click', downloadCSV);
 
-  openAnalytics?.addEventListener('click', ()=>{
+  openAnalytics && openAnalytics.addEventListener('click', ()=>{
     const href = new URL('analytics.html', location.href);
     href.searchParams.set('child', childId);
     href.searchParams.set('range', '14d');
     location.href = href.toString();
   });
 
-  openPrint?.addEventListener('click', ()=>{
+  openPrint && openPrint.addEventListener('click', ()=>{
     const href = new URL('reports-print.html', location.href);
     href.searchParams.set('child', childId);
     if(fromEl.value) href.searchParams.set('from', fromEl.value);
@@ -213,7 +213,7 @@ onAuthStateChanged(auth, async (user)=>{
     location.href = href.toString();
   });
 
-  openBlank?.addEventListener('click', ()=>{
+  openBlank && openBlank.addEventListener('click', ()=>{
     const blankUrl = new URL('reports-print.html', location.href);
     blankUrl.searchParams.set('child', childId);
     blankUrl.searchParams.set('mode', 'blank');
@@ -222,19 +222,19 @@ onAuthStateChanged(auth, async (user)=>{
 
   // Filters/sort events
   [filterStateEl, filterSlotEl, filterCorrEl, filterHypoEl, filterNotesEl, sortByEl].forEach(el=>{
-    el?.addEventListener('change', ()=> { visibleCount = pageSize; applyFiltersSort(); renderAll(); });
+    if(el) el.addEventListener('change', ()=> { visibleCount = pageSize; applyFiltersSort(); renderAll(); });
   });
 
-  showMoreBtn?.addEventListener('click', ()=>{
+  showMoreBtn && showMoreBtn.addEventListener('click', ()=>{
     visibleCount += pageSize;
     renderTable(viewRowsCache);
   });
 
   // Chat assistant events
-  chatToggleBtn?.addEventListener('click', ()=> toggleChat(true));
-  chatCloseBtn?.addEventListener('click', ()=> toggleChat(false));
-  chatSend?.addEventListener('click', sendChat);
-  chatQ?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); sendChat(); } });
+  chatToggleBtn && chatToggleBtn.addEventListener('click', ()=> toggleChat(true));
+  chatCloseBtn  && chatCloseBtn.addEventListener('click', ()=> toggleChat(false));
+  chatSend      && chatSend.addEventListener('click', sendChat);
+  chatQ         && chatQ.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); sendChat(); } });
 
   // Load first time
   await loadRange();
@@ -279,9 +279,9 @@ async function loadRange(){
 
       const mgdl = (typeof r.value_mgdl === 'number') ? Number(r.value_mgdl) : toMgdl(mmol);
 
-      const notes = r.notes || r.input?.notes || '';
-      const corr  = r.correctionDose ?? r.input?.correctionDose ?? '';
-      const hypo  = r.hypoTreatment  ?? r.input?.raisedWith     ?? '';
+      const notes = r.notes || (r.input && r.input.notes) || '';
+      const corr  = (r.correctionDose != null ? r.correctionDose : (r.input && r.input.correctionDose)) ?? '';
+      const hypo  = (r.hypoTreatment  != null ? r.hypoTreatment  : (r.input && r.input.raisedWith))    ?? '';
 
       const state = getState(mmol);
       rows.push({date, slot, mmol, mgdl, state, corr, hypo, notes});
@@ -327,12 +327,12 @@ function buildSlotFilterOptions(){
   filterSlotEl.__filled = true;
 }
 function applyFiltersSort(){
-  const stateF = filterStateEl?.value || 'all';
-  const slotF  = filterSlotEl?.value || 'all';
-  const corrF  = filterCorrEl?.value || 'any';
-  const hypoF  = filterHypoEl?.value || 'any';
-  const notesF = filterNotesEl?.value || 'any';
-  const sortBy = sortByEl?.value   || 'date_desc';
+  const stateF = (filterStateEl && filterStateEl.value) || 'all';
+  const slotF  = (filterSlotEl  && filterSlotEl.value)  || 'all';
+  const corrF  = (filterCorrEl  && filterCorrEl.value)  || 'any';
+  const hypoF  = (filterHypoEl  && filterHypoEl.value)  || 'any';
+  const notesF = (filterNotesEl && filterNotesEl.value) || 'any';
+  const sortBy = (sortByEl     && sortByEl.value)      || 'date_desc';
 
   let arr = rowsCache.slice();
 
@@ -365,8 +365,8 @@ function renderAll(){
 function renderTable(rows){
   if(!rows.length){
     tbody.innerHTML = `<tr><td colspan="7" class="muted center">لا يوجد قياسات للفترة المحددة.</td></tr>`;
-    visibleInfoEl.textContent = '—';
-    showMoreBtn?.classList.add('hidden');
+    if(visibleInfoEl) visibleInfoEl.textContent = '—';
+    if(showMoreBtn) showMoreBtn.classList.add('hidden');
     return;
   }
   const unit = outUnitEl.value;
@@ -388,9 +388,11 @@ function renderTable(rows){
   }).join('');
   tbody.innerHTML = html;
 
-  visibleInfoEl.textContent = `تم عرض ${slice.length} من ${rows.length}`;
-  if(slice.length < rows.length) showMoreBtn?.classList.remove('hidden');
-  else showMoreBtn?.classList.add('hidden');
+  if(visibleInfoEl) visibleInfoEl.textContent = `تم عرض ${slice.length} من ${rows.length}`;
+  if(showMoreBtn){
+    if(slice.length < rows.length) showMoreBtn.classList.remove('hidden');
+    else showMoreBtn.classList.add('hidden');
+  }
 }
 
 /* ===== CSV (all rows of period) ===== */
@@ -438,7 +440,7 @@ function computeStats(rows){
   return {n, avg, med, sd, tir, nLow, nHigh};
 }
 function detectPatterns(rows){
-  const map = new Map(); // slot -> counts
+  const map = new Map();
   rows.forEach(r=>{
     const m = map.get(r.slot) || {total:0,low:0,ok:0,high:0};
     m.total++; m[r.state]++; map.set(r.slot,m);
@@ -551,20 +553,23 @@ function renderHistogram(rows){
 
 /* ===== Assistant (local) ===== */
 function toggleChat(v){
-  chatPanel?.classList.toggle('hidden', !v);
-  chatPanel?.setAttribute('aria-hidden', String(!v));
-  if(v) chatQ?.focus();
+  if(!chatPanel) return;
+  chatPanel.classList.toggle('hidden', !v);
+  chatPanel.setAttribute('aria-hidden', String(!v));
+  if(v && chatQ) chatQ.focus();
 }
 function sendChat(){
+  if(!chatQ) return;
   const q = (chatQ.value||'').trim();
   if(!q) return;
   addMsg(q, true);
   chatQ.value='';
   const a = askAssistant(q);
   addMsg(a, false);
-  chatBody.scrollTop = chatBody.scrollHeight;
+  if(chatBody) chatBody.scrollTop = chatBody.scrollHeight;
 }
 function addMsg(text, me=false){
+  if(!chatBody) return;
   const div = document.createElement('div');
   div.className = 'msg'+(me?' me':'');
   div.innerHTML = escapeHTML(text);
@@ -585,13 +590,16 @@ function askAssistant(q){
     const s = computeStats(viewRowsCache);
     return `عدد القياسات ${s.n}، متوسط ${fmtUnit(s.avg)}, وسيط ${fmtUnit(s.med)}, TIR ${s.tir}%. هبوط ${s.nLow} وارتفاع ${s.nHigh}.`;
   }
-  const num = Number(q.match(/(\d+(\.\d+)?)/)?.[1]);
-  if(!isNaN(num)){
-    let mmol = num;
-    if(num>30 || /mg|دل|mg\/dl/i.test(q)) mmol = num/18;
-    const state = getState(mmol);
-    const stateAr = state==='low'?'هبوط':state==='high'?'ارتفاع':'طبيعي';
-    return `القراءة تعادل ${fmtUnit(mmol)} وهي حالة ${stateAr} بالنسبة لنطاقك ${normalMin}–${normalMax} mmol/L.`;
+  const numMatch = q.match(/(\d+(\.\d+)?)/);
+  if(numMatch){
+    const num = Number(numMatch[1]);
+    if(!isNaN(num)){
+      let mmol = num;
+      if(num>30 || /mg|دل|mg\/dl/i.test(q)) mmol = num/18;
+      const state = getState(mmol);
+      const stateAr = state==='low'?'هبوط':state==='high'?'ارتفاع':'طبيعي';
+      return `القراءة تعادل ${fmtUnit(mmol)} وهي حالة ${stateAr} بالنسبة لنطاقك ${normalMin}–${normalMax} mmol/L.`;
+    }
   }
   if(/ليه|لماذا|سبب|why/.test(lower)){
     const p = detectPatterns(viewRowsCache);
@@ -607,7 +615,7 @@ function fmtUnit(mmol){ return (outUnitEl.value==='mgdl') ? `${Math.round(mmol*1
 
 /* ===== Helpers ===== */
 function escapeHTML(s){ return String(s)
-  .replaceAll('&','&amp;').replaceAll('<','&lt;')
-  .replaceAll('>','&gt;').replaceAll('"','&quot;')
-  .replaceAll("'",'&#039;'); }
-function csvCell(s){ return `"${String(s??'').replace(/"/g,'""')}"`; }
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  .replace(/'/g,'&#039;'); }
+function csvCell(s){ return `"${String(s==null?'':s).replace(/"/g,'""')}"`; }
