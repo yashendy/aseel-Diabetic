@@ -67,7 +67,7 @@ function shape(text){
   try{
     const reshaped = window.arabicPersianReshaper.reshape(text);
     const bidi = new window.Bidi();
-    bidi.setRTL(true); // تأكد من إعداد RTL
+    bidi.setRTL(true);
     return bidi.doBidi(reshaped);
   }catch(e){
     console.error('Error reshaping text:', e);
@@ -270,7 +270,7 @@ async function openPdf(labId, childName, data){
 
   // إعدادات عامة للجداول بالعربية
   const baseTable = {
-    styles:{halign:'right', font: 'NotoNaskh'},
+    styles:{halign:'right', font: 'NotoNaskh', fontSize: 10},
     headStyles:{fillColor:[244,247,255], font:'NotoNaskh'},
     theme:'grid',
     margin:{left:40,right:40},
