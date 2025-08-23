@@ -4,8 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>لوحة وليّ الأمر</title>
-  <!-- أيقونة بدون 404 (Data URL) -->
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%234f46e5'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-size='14' fill='white' font-family='Arial'%3E%F0%9F%A4%96%3C/text%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" href="images/favicon-32.png" />
   <link rel="stylesheet" href="css/parent.css" />
 </head>
 <body>
@@ -13,7 +12,7 @@
     <header class="top card">
       <div class="head">
         <h1>👨‍👩‍👧‍👦 أطفالك</h1>
-        <p class="muted">اختَر طفلًا لفتح لوحة التحكم الخاصة به.</p>
+        <p class="muted">اختَر طفلًا لعرض بياناته أو استخدام المساعد الذكي.</p>
       </div>
       <div class="tools">
         <div class="field">
@@ -28,8 +27,10 @@
     <div id="empty" class="empty hidden">لا يوجد أطفال بعد… ابدئي بإضافة طفل جديد.</div>
   </div>
 
+  <!-- زر المساعد العائم -->
   <button class="ai-fab" id="aiFab" title="مساعد ذكي">🤖</button>
 
+  <!-- ويدجت المساعد -->
   <div class="ai-widget hidden" id="aiWidget">
     <div class="ai-header">
       <div class="ai-title">
@@ -57,16 +58,13 @@
 
   <div id="loader" class="loader hidden">جارٍ تحميل البيانات…</div>
 
-  <!-- مفتاحك -->
-  <script> window.GEMINI_API_KEY = "AIzaSyBJOzP2znhOTBeVDdLn7XwMs_KtYn_tMV4"; </script>
+  <!-- مفتاح API -->
+  <script> window.GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"; </script>
 
   <!-- سكربت الصفحة -->
   <script type="module">
-    // استيراد Gemini من esm.run (مستقر عندك)
     import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
-    // بقية الكود في ملف خارجي:
     import "./js/parent.js";
-    // نمرر الكلاس عبر window ليستخدمه parent.js بدون إعادة الاستيراد
     window.GoogleGenerativeAI = GoogleGenerativeAI;
   </script>
 </body>
