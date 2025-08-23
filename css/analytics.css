@@ -35,3 +35,8 @@ input[type="date"],select{padding:9px;border:1px solid var(--border);border-radi
 
 /* canvas section spacing */
 section.card canvas{margin-top:8px}
+
+/* AI summary */
+.ai{line-height:1.9;color:#1e293b}
+.ai strong{color:#111}
+.ai .tag{display:inline-block;padding:.15rem .5rem;border:1px solid var(--border);border-radius:999px;margin:.1rem .15rem}
