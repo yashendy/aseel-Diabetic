@@ -3,22 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>تسجيل الدخول / إنشاء حساب</title>
+  <title>منصة أسيل – تسجيل الدخول / إنشاء حساب</title>
+
+  <!-- الأيقونة -->
+  <link rel="icon" type="image/png" href="images/favicon-32.png" />
+
+  <!-- التنسيقات -->
   <link rel="stylesheet" href="css/style.css" />
-  <link rel="icon" href="data:,">
 </head>
 <body>
-  <div class="container">
-    <h1>منصة أسيل 🍭</h1>
-    <h2>لمتابعة سكر الأطفال</h2>
+  <!-- الهيدر: الشعار + العناوين -->
+  <header class="site-header">
+    <img src="images/logo.png" alt="شعار منصة أسيل" class="site-logo" />
+    <h1 class="site-title">منصة أسيل</h1>
+    <h2 class="site-subtitle">لمتابعة سكر الأطفال</h2>
+  </header>
 
+  <main class="container">
     <!-- فورم تسجيل الدخول -->
     <form id="login-form" class="form">
       <h2>تسجيل الدخول</h2>
       <input type="email" id="login-email" placeholder="البريد الإلكتروني" required />
       <input type="password" id="login-password" placeholder="كلمة المرور" required />
       <button type="submit">دخول</button>
-      <p>ما عندكش حساب؟ <span class="toggle" onclick="toggleForms()">سجل الآن</span></p>
+      <p class="muted">ما عندكش حساب؟ <button class="linklike" type="button" onclick="toggleForms()">سجل الآن</button></p>
     </form>
 
     <!-- فورم إنشاء الحساب -->
@@ -29,14 +37,15 @@
       <input type="password" id="register-password" placeholder="كلمة المرور" required />
       <input type="password" id="register-confirm" placeholder="تأكيد كلمة المرور" required />
       <button type="submit">تسجيل</button>
-      <p>عندك حساب؟ <span class="toggle" onclick="toggleForms()">سجّل الدخول</span></p>
+      <p class="muted">عندك حساب؟ <button class="linklike" type="button" onclick="toggleForms()">سجّل الدخول</button></p>
     </form>
-  </div>
+  </main>
 
-  <!-- كود Firebase -->
+  <!-- استدعاء سكربتات الموديول -->
+  <!-- مسار Firebase داخل login.js هو: ./firebase-config.js (صحيح لأنه داخل نفس مجلد js) -->
   <script type="module" src="js/login.js"></script>
 
-  <!-- دالة toggleForms -->
+  <!-- دالة تبديل النماذج -->
   <script>
     function toggleForms() {
       const loginForm = document.getElementById("login-form");
