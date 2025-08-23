@@ -195,20 +195,20 @@ function computeKPIs(meas){
   return {count, mean, sd, inRange, highs, lows, min, max};
 }
 
-/* خيارات Legend تعرض النِّسَب */
-function legendWithPercents(){
+/* Legend مخصصة تعرض كل العناصر بالنِّسَب */
+function legendWithPercents(labels, colors, data){
   return {
     position: 'bottom',
     labels: {
-      generateLabels(chart){
-        // استخدم التوليد الافتراضي ثم عدّل النص
-        const def = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-        const ds  = chart.data.datasets[0];
-        const data = (ds?.data || []).map(Number);
-        // البيانات بالفعل نسب مئوية، لكن نضمن التقريب
-        return def.map((item, i)=>({
-          ...item,
-          text: `${chart.data.labels[i]} — ${Math.round(data[i] ?? 0)}%`
+      // لا تعتمد على المولّد الافتراضي
+      generateLabels(){
+        return labels.map((lab, i)=>({
+          text: `${lab} — ${Math.round(Number(data[i]||0))}%`,
+          fillStyle: colors[i],
+          strokeStyle: colors[i].replace('0.25','1').replace('0.18','1'), // تخشين الحد
+          lineWidth: 2,
+          hidden: false,
+          index: i
         }));
       }
     }
@@ -250,7 +250,7 @@ function renderKPIsAndCharts(){
   if (pieNow){ pieNow.destroy(); pieNow=null; }
   if (piePrev){ piePrev.destroy(); piePrev=null; }
 
-  // Line Chart (مع مقارنة اختيارية)
+  // Line Chart
   const ctx = document.getElementById('dayChart').getContext('2d');
   const datasets = [{
     label: unit==='mgdl' ? 'الجلوكوز (الحالي) mg/dL' : 'الجلوكوز (الحالي) mmol/L',
@@ -302,36 +302,29 @@ function renderKPIsAndCharts(){
     }
   });
 
-  // Doughnut الحالي (Legend بالنِّسَب)
+  // إعدادات بيانات الدوائر
+  const labels = ['داخل النطاق', 'ارتفاعات', 'هبوطات'];
+  const colorsNow = ['rgba(34,197,94,0.25)','rgba(239,68,68,0.25)','rgba(59,130,246,0.25)'];
+  const colorsPrev= ['rgba(34,197,94,0.18)','rgba(239,68,68,0.18)','rgba(59,130,246,0.18)'];
+  const dataNow  = [K.inRange.toFixed(1), K.highs.toFixed(1), K.lows.toFixed(1)];
+  const dataPrev = P ? [P.inRange.toFixed(1), P.highs.toFixed(1), P.lows.toFixed(1)] : [0,0,0];
+
+  // Doughnut الحالي
   const pNow = document.getElementById('pieNow').getContext('2d');
   pieNow = new Chart(pNow, {
     type: 'doughnut',
-    data: {
-      labels: ['داخل النطاق', 'ارتفاعات', 'هبوطات'],
-      datasets: [{
-        data: [K.inRange.toFixed(1), K.highs.toFixed(1), K.lows.toFixed(1)],
-        backgroundColor: ['rgba(34,197,94,0.25)','rgba(239,68,68,0.25)','rgba(59,130,246,0.25)'],
-        borderColor: ['#22c55e','#ef4444','#3b82f6']
-      }]
-    },
-    options:{ plugins:{ legend: legendWithPercents() }, cutout: '65%' }
+    data: { labels, datasets: [{ data: dataNow, backgroundColor: colorsNow, borderColor: ['#22c55e','#ef4444','#3b82f6'] }] },
+    options:{ plugins:{ legend: legendWithPercents(labels, colorsNow, dataNow) }, cutout: '65%' }
   });
 
-  // Doughnut السابق (إن وُجدت مقارنة) بنفس أسلوب النِّسَب
+  // Doughnut السابق
   if (P){
     piePrevBox.classList.remove('hidden');
     const pPrev = document.getElementById('piePrev').getContext('2d');
     piePrev = new Chart(pPrev, {
       type: 'doughnut',
-      data: {
-        labels: ['داخل النطاق', 'ارتفاعات', 'هبوطات'],
-        datasets: [{
-          data: [P.inRange.toFixed(1), P.highs.toFixed(1), P.lows.toFixed(1)],
-          backgroundColor: ['rgba(34,197,94,0.18)','rgba(239,68,68,0.18)','rgba(59,130,246,0.18)'],
-          borderColor: ['#16a34a','#dc2626','#2563eb']
-        }]
-      },
-      options:{ plugins:{ legend: legendWithPercents() }, cutout: '65%' }
+      data: { labels, datasets: [{ data: dataPrev, backgroundColor: colorsPrev, borderColor: ['#16a34a','#dc2626','#2563eb'] }] },
+      options:{ plugins:{ legend: legendWithPercents(labels, colorsPrev, dataPrev) }, cutout: '65%' }
     });
   } else {
     piePrevBox.classList.add('hidden');
