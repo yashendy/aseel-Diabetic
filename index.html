@@ -5,85 +5,101 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>منصة أسيل – تسجيل الدخول / إنشاء حساب</title>
 
-  <!-- الأيقونة -->
+  <!-- أيقونة التبويب -->
   <link rel="icon" type="image/png" href="images/favicon-32.png" />
 
   <!-- التنسيقات -->
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <div class="auth-page-wrap">
-    <!-- البطاقة الموحدة -->
-    <section class="auth-card">
+  <div class="auth-page">
 
-      <!-- الشعار + العناوين داخل البطاقة -->
-      <div class="auth-card__header">
-        <img src="images/logo.png" alt="شعار منصة أسيل" class="auth-card__logo" />
-        <h1 class="auth-card__title">منصة أسيل</h1>
-        <h2 class="auth-card__subtitle">لمتابعة سكر الأطفال</h2>
+    <!-- بطاقة تسجيل الدخول (الافتراضية) -->
+    <section class="card card-login" id="card-login">
+      <div class="card__header">
+        <img src="images/logo.png" alt="شعار منصة أسيل" class="card__logo" />
+        <h1 class="card__title">منصة أسيل</h1>
+        <h2 class="card__subtitle">لمتابعة سكر الأطفال</h2>
       </div>
 
-      <!-- نموذج تسجيل الدخول -->
-      <form id="login-form" class="auth-form">
-        <h3 class="auth-form__title">تسجيل الدخول</h3>
-        <label class="auth-field">
+      <form id="login-form" class="card__form">
+        <h3 class="card__formTitle">تسجيل الدخول</h3>
+        <label class="field">
           <input type="email" id="login-email" placeholder="البريد الإلكتروني" required />
         </label>
-        <label class="auth-field">
+        <label class="field">
           <input type="password" id="login-password" placeholder="كلمة المرور" required />
         </label>
-        <button type="submit" class="auth-btn auth-btn--primary">دخول</button>
 
-        <p class="auth-form__hint">
+        <button type="submit" class="btn btn--primary">دخول</button>
+
+        <p class="card__hint">
           ما عندكش حساب؟
-          <button type="button" class="auth-linklike" onclick="toggleForms()">سجل الآن</button>
-        </p>
-      </form>
-
-      <!-- نموذج إنشاء الحساب -->
-      <form id="register-form" class="auth-form is-hidden">
-        <h3 class="auth-form__title">إنشاء حساب جديد</h3>
-        <label class="auth-field">
-          <input type="text" id="register-name" placeholder="الاسم الكامل" required />
-        </label>
-        <label class="auth-field">
-          <input type="email" id="register-email" placeholder="البريد الإلكتروني" required />
-        </label>
-        <label class="auth-field">
-          <input type="password" id="register-password" placeholder="كلمة المرور" required />
-        </label>
-        <label class="auth-field">
-          <input type="password" id="register-confirm" placeholder="تأكيد كلمة المرور" required />
-        </label>
-        <button type="submit" class="auth-btn auth-btn--primary">تسجيل</button>
-
-        <p class="auth-form__hint">
-          عندك حساب؟
-          <button type="button" class="auth-linklike" onclick="toggleForms()">سجّل الدخول</button>
+          <button type="button" class="linklike" id="to-register">سجل الآن</button>
         </p>
       </form>
     </section>
+
+    <!-- بطاقة إنشاء الحساب (مخفية أولاً) -->
+    <section class="card card-register is-hidden" id="card-register">
+      <div class="card__header">
+        <img src="images/logo.png" alt="شعار منصة أسيل" class="card__logo" />
+        <h1 class="card__title">منصة أسيل</h1>
+        <h2 class="card__subtitle">لمتابعة سكر الأطفال</h2>
+      </div>
+
+      <form id="register-form" class="card__form">
+        <h3 class="card__formTitle">إنشاء حساب جديد</h3>
+        <label class="field">
+          <input type="text" id="register-name" placeholder="الاسم الكامل" required />
+        </label>
+        <label class="field">
+          <input type="email" id="register-email" placeholder="البريد الإلكتروني" required />
+        </label>
+        <label class="field">
+          <input type="password" id="register-password" placeholder="كلمة المرور" required />
+        </label>
+        <label class="field">
+          <input type="password" id="register-confirm" placeholder="تأكيد كلمة المرور" required />
+        </label>
+
+        <button type="submit" class="btn btn--primary">تسجيل</button>
+
+        <p class="card__hint">
+          عندك حساب؟
+          <button type="button" class="linklike" id="to-login">سجّل الدخول</button>
+        </p>
+      </form>
+    </section>
+
   </div>
 
-  <!-- سكربتات -->
-  <!-- ملاحظة: داخل js/login.js المسار صحيح لأنه داخل نفس المجلد:
-       import { auth } from './firebase-config.js';
-  -->
+  <!-- سكربتات التطبيق -->
   <script type="module" src="js/login.js"></script>
+
+  <!-- تبديل البطاقات (صغير وخفيف) -->
   <script>
-    function toggleForms() {
-      const loginForm = document.getElementById('login-form');
-      const registerForm = document.getElementById('register-form');
-      loginForm.classList.toggle('is-hidden');
-      registerForm.classList.toggle('is-hidden');
-      // فوكس ذكي بعد التبديل
-      setTimeout(() => {
-        const target = loginForm.classList.contains('is-hidden')
-          ? document.getElementById('register-name')
-          : document.getElementById('login-email');
-        target && target.focus();
-      }, 0);
+    const loginCard = document.getElementById('card-login');
+    const registerCard = document.getElementById('card-register');
+    const toRegisterBtn = document.getElementById('to-register');
+    const toLoginBtn = document.getElementById('to-login');
+
+    function showLoginCard() {
+      loginCard.classList.remove('is-hidden');
+      registerCard.classList.add('is-hidden');
+      setTimeout(() => document.getElementById('login-email')?.focus(), 0);
     }
+    function showRegisterCard() {
+      registerCard.classList.remove('is-hidden');
+      loginCard.classList.add('is-hidden');
+      setTimeout(() => document.getElementById('register-name')?.focus(), 0);
+    }
+
+    toRegisterBtn.addEventListener('click', showRegisterCard);
+    toLoginBtn.addEventListener('click', showLoginCard);
+
+    // ضمان أن بطاقة الدخول هي الافتراضية عند التحميل
+    showLoginCard();
   </script>
 </body>
 </html>
