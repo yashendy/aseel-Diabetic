@@ -59,3 +59,10 @@ button:hover {
 .hidden {
   display: none;
 }
+/* حجم أصغر للشعار */
+.auth-card__logo.small {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 6px;
+}
+
