@@ -7,24 +7,52 @@
   <title>تحليل القياسات</title>
   <link rel="icon" href="favicon.ico" />
   <link rel="stylesheet" href="css/analytics.css" />
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #fff; }
+      .container { max-width: 100%; padding: 0; }
+      .card { border: none; box-shadow: none; }
+    }
+  </style>
 </head>
 <body>
   <div class="container">
 
     <header class="top card">
       <div class="row space">
-        <button id="goBack" class="btn secondary">↩︎ رجوع</button>
+        <div class="row gap no-print">
+          <button id="goBack" class="btn secondary">↩︎ رجوع</button>
+          <button id="printBtn" class="btn secondary">🖨️ طباعة</button>
+        </div>
         <h1>تحليل القياسات — <span id="childName">…</span> <span class="logo">📈</span></h1>
       </div>
       <div id="childMeta" class="muted tiny">—</div>
 
-      <div class="filters">
+      <div class="filters no-print">
         <div class="row wrap gap">
           <div class="field">
+            <label>النطاق الزمني</label>
+            <select id="rangeSel">
+              <option value="7d">آخر 7 أيام</option>
+              <option value="14d" selected>آخر 14 يوم</option>
+              <option value="30d">آخر 30 يوم</option>
+              <option value="90d">آخر 90 يوم</option>
+              <option value="this_w">هذا الأسبوع</option>
+              <option value="prev_w">الأسبوع الماضي</option>
+              <option value="this_m">هذا الشهر</option>
+              <option value="prev_m">الشهر الماضي</option>
+              <option value="2w">آخر أسبوعين</option>
+              <option value="2m">آخر شهرين</option>
+              <option value="custom">مخصص</option>
+            </select>
+          </div>
+
+          <div class="field custom-range hidden" id="customBox">
             <label>من</label>
             <input type="date" id="fromDate" />
           </div>
-          <div class="field">
+          <div class="field custom-range hidden">
             <label>إلى</label>
             <input type="date" id="toDate" />
           </div>
@@ -37,11 +65,12 @@
             </select>
           </div>
 
-          <div class="row gap quicks">
-            <button class="chip" data-range="14">آخر 14 يوم</button>
-            <button class="chip" data-range="30">آخر 30 يوم</button>
-            <button class="chip" data-range="90">آخر 90 يوم</button>
-            <button class="chip" data-range="all">الكل</button>
+          <div class="field">
+            <label>المقارنة</label>
+            <div class="row gap">
+              <input type="checkbox" id="compareChk" />
+              <label for="compareChk">مقارنة بالفترة السابقة</label>
+            </div>
           </div>
 
           <button id="applyBtn" class="btn">تطبيق</button>
@@ -53,31 +82,37 @@
       <div class="kpi card">
         <div class="label">عدد القياسات</div>
         <div id="kpiCount" class="value">—</div>
+        <div id="kpiCountDelta" class="delta"></div>
       </div>
 
       <div class="kpi card">
         <div class="label">المتوسط</div>
         <div id="kpiAvg" class="value">—</div>
+        <div id="kpiAvgDelta" class="delta"></div>
       </div>
 
       <div class="kpi card">
         <div class="label">الانحراف المعياري</div>
         <div id="kpiStd" class="value">—</div>
+        <div id="kpiStdDelta" class="delta"></div>
       </div>
 
       <div class="kpi card">
-        <div class="label">(TIR) وقت داخل النطاق</div>
+        <div class="label">(TIR) داخل النطاق</div>
         <div id="kpiTir" class="value">—</div>
+        <div id="kpiTirDelta" class="delta"></div>
       </div>
 
       <div class="kpi card">
         <div class="label">ارتفاعات</div>
         <div id="kpiHigh" class="value">—</div>
+        <div id="kpiHighDelta" class="delta"></div>
       </div>
 
       <div class="kpi card">
         <div class="label">هبوطات</div>
         <div id="kpiLow" class="value">—</div>
+        <div id="kpiLowDelta" class="delta"></div>
       </div>
     </section>
 
@@ -85,7 +120,7 @@
       <div class="row space">
         <h3>منحنى الجلوكوز حسب الأيام</h3>
       </div>
-      <canvas id="dayChart" height="100"></canvas>
+      <canvas id="dayChart" height="70"></canvas>
       <div id="emptyMsg" class="empty hidden">لا توجد قياسات ضمن الفترة المختارة.</div>
     </section>
 
@@ -93,7 +128,7 @@
       <div class="row space">
         <h3>توزيع القياسات حسب النطاق</h3>
       </div>
-      <canvas id="pieChart" height="120"></canvas>
+      <canvas id="pieChart" height="90"></canvas>
     </section>
 
     <section class="card">
@@ -109,7 +144,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 
-  <!-- منطق الصفحة (يستورد firebase-config.js داخليًا) -->
+  <!-- منطق الصفحة (يستورد firebase-config.js داخليًا كموديول) -->
   <script type="module" src="js/analytics.js"></script>
 </body>
 </html>
