@@ -2,7 +2,7 @@
 
 import { auth, db } from './firebase-config.js';
 import {
-  collection, doc, setDoc, addDoc, getDoc, getDocs, query, orderBy, serverTimestamp
+  collection, doc, setDoc, addDoc, getDoc, getDocs, query, orderBy, serverTimestamp, deleteDoc, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
@@ -17,7 +17,6 @@ const pdfBtn      = document.getElementById('pdfBtn');
 const fileLinkBox = document.getElementById('fileLinkBox');
 const printBtn    = document.getElementById('printBtn');
 
-// حقول
 const hba1cVal  = document.getElementById('hba1cVal');
 const hba1cNote = document.getElementById('hba1cNote');
 
@@ -37,6 +36,8 @@ const ren_note = document.getElementById('ren_note');
 
 const generalNote = document.getElementById('generalNote');
 
+const historyBody = document.getElementById('historyBody');
+
 const params = new URLSearchParams(location.search);
 const childId = params.get('child');
 const labIdParam = params.get('lab');
@@ -53,6 +54,24 @@ function addMonths(date, m=4){
   return d;
 }
 
+// حالة تعديل/إنشاء
+let _currentLabId = null;
+
+// تحميل خط عربي للـPDF (مرة واحدة)
+async function ensureArabicFont(doc){
+  if (window._arabicFontLoaded){
+    doc.setFont('NotoNaskh'); return;
+  }
+  const url = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts/phaseIII_only/unhinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf';
+  const res = await fetch(url);
+  const buf = await res.arrayBuffer();
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  doc.addFileToVFS('NotoNaskhArabic-Regular.ttf', b64);
+  doc.addFont('NotoNaskhArabic-Regular.ttf', 'NotoNaskh', 'normal');
+  window._arabicFontLoaded = true;
+  doc.setFont('NotoNaskh');
+}
+
 onAuthStateChanged(auth, async user=>{
   if(!user){ location.href='index.html'; return; }
   if(!childId){ alert('لا يوجد child في الرابط'); return; }
@@ -63,32 +82,37 @@ onAuthStateChanged(auth, async user=>{
   childNameEl.textContent = childName;
   hdrChild.textContent = `— ${childName}`;
 
+  // حمّل السجلّات
+  await loadHistory(user.uid, childId, childName);
+
   if (labIdParam){
     const labRef = doc(db, `parents/${user.uid}/children/${childId}/labs/${labIdParam}`);
     const labSnap= await getDoc(labRef);
     if (!labSnap.exists()){ alert('لم يتم العثور على التقرير'); return; }
     const labData = labSnap.data();
+    _currentLabId = labSnap.id; // وضع تعديل
     fillFormFromDoc(labData);
-    openPdf(labSnap.id, childName, labData);
     showDueBadge(labData.nextDue?.toDate ? labData.nextDue.toDate() : addMonths(labData.when?.toDate ? labData.when.toDate() : new Date(labData.date)));
-    return;
-  }
-
-  const lref = collection(db, `parents/${user.uid}/children/${childId}/labs`);
-  const qy = query(lref, orderBy('when','desc'));
-  const sn = await getDocs(qy);
-  if (!sn.empty){
-    const last = sn.docs[0].data();
-    const due = last.nextDue?.toDate ? last.nextDue.toDate()
-              : addMonths(last.when?.toDate ? last.when.toDate() : new Date(last.date));
-    showDueBadge(due);
+    // افتح PDF تلقائياً
+    openPdf(_currentLabId, childName, labData);
+  } else {
+    // عرض الشارة من آخر تقرير
+    const lref = collection(db, `parents/${user.uid}/children/${childId}/labs`);
+    const qy = query(lref, orderBy('when','desc'), limit(1));
+    const sn = await getDocs(qy);
+    if (!sn.empty){
+      const last = sn.docs[0].data();
+      const due = last.nextDue?.toDate ? last.nextDue.toDate()
+                : addMonths(last.when?.toDate ? last.when.toDate() : new Date(last.date));
+      showDueBadge(due);
+    }
   }
 
   saveBtn.addEventListener('click', ()=> saveLab(user.uid, childId, childName, false));
   savePdfBtn.addEventListener('click', ()=> saveLab(user.uid, childId, childName, true));
   pdfBtn.addEventListener('click', ()=>{
     const fake = buildDocFromForm();
-    openPdf('preview', childName, fake);
+    openPdf(_currentLabId || 'preview', childName, fake);
   });
   printBtn.addEventListener('click', ()=> window.print());
 });
@@ -124,12 +148,6 @@ function fillFormFromDoc(d){
   ren_note.value= d?.renal?.note ?? '';
 
   generalNote.value = d?.generalNote ?? '';
-
-  if (d?.fileUrl){
-    fileLinkBox.innerHTML = `📎 مرفق: <a href="${d.fileUrl}" target="_blank">فتح الملف</a>`;
-  } else {
-    fileLinkBox.textContent = '';
-  }
 }
 
 function buildDocFromForm(){
@@ -145,8 +163,8 @@ function buildDocFromForm(){
     thyroid: { tsh:numOrNull(thy_tsh.value), ft4:numOrNull(thy_ft4.value), note: strOrNull(thy_note.value) },
     renal: { microalb_creat:numOrNull(ren_mac.value), creatinine:numOrNull(ren_creat.value), note: strOrNull(ren_note.value) },
     generalNote: strOrNull(generalNote.value),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
+    createdAt: serverTimestamp()
   };
 }
 
@@ -157,52 +175,97 @@ async function saveLab(uid, childId, childName, andPdf=false){
   try{
     const data = buildDocFromForm();
     const col = collection(db, `parents/${uid}/children/${childId}/labs`);
-    const added = await addDoc(col, {
-      ...data,
-      when: data.when,
-      nextDue: data.nextDue
-    });
-    if (andPdf) openPdf(added.id, childName, data);
-    alert('تم الحفظ بنجاح');
+
+    if (_currentLabId){
+      // تعديل مستند موجود
+      const ref = doc(db, `parents/${uid}/children/${childId}/labs/${_currentLabId}`);
+      await setDoc(ref, { ...data }, { merge: true });
+      if (andPdf) openPdf(_currentLabId, childName, data);
+      alert('تم التحديث بنجاح');
+    } else {
+      // إنشاء جديد
+      const added = await addDoc(col, {
+        ...data,
+        when: data.when,
+        nextDue: data.nextDue
+      });
+      _currentLabId = added.id;
+      if (andPdf) openPdf(added.id, childName, data);
+      alert('تم الحفظ بنجاح');
+    }
+
+    // حدّث جدول السجلات
+    await loadHistory(uid, childId, childName);
   }catch(e){
     console.error(e);
-    alert('حدث خطأ أثناء الحفظ');
+    alert('حدث خطأ أثناء الحفظ/التحديث');
   }
 }
 
-// 🖨️ توليد PDF
-function openPdf(labId, childName, data){
+// بناء لينك التقرير
+function buildReportUrl(labId){
+  const url = new URL('labs.html', location.href);
+  url.searchParams.set('child', childId);
+  url.searchParams.set('lab', labId);
+  return url.toString();
+}
+
+// 🖨️ توليد PDF مع دعم العربية + QR/Barcode كرابط
+async function openPdf(labId, childName, data){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({orientation:'p', unit:'pt', format:'a4'});
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(16);
-  doc.text(`تقرير التحاليل — ${childName}`, 40, 40, {align:'right'});
-  doc.setFont('helvetica','normal'); doc.setFontSize(11);
-  doc.text(`رقم التقرير: ${labId}`, 40, 62, {align:'right'});
-  doc.text(`تاريخ العينة: ${data.date}`, 40, 78, {align:'right'});
+  await ensureArabicFont(doc);
+  doc.setFont('NotoNaskh');
 
-  const payload = `lab:${labId}|child:${childId}|date:${data.date}`;
+  // عناوين
+  doc.setFontSize(16);
+  doc.text(`تقرير التحاليل — ${childName}`, 555, 40, {align:'right'});
+  doc.setFontSize(11);
+  doc.text(`رقم التقرير: ${labId}`, 555, 62, {align:'right'});
+  doc.text(`تاريخ العينة: ${data.date}`, 555, 78, {align:'right'});
+
+  // QR + Barcode برابط مباشر
+  const reportUrl = labId==='preview' ? location.href : buildReportUrl(labId);
+
   try{
     const qrDiv = document.getElementById('qr');
     qrDiv.innerHTML = '';
-    const qr = new QRCode(qrDiv, {text: payload, width: 90, height: 90, correctLevel: QRCode.CorrectLevel.M});
+    const qr = new QRCode(qrDiv, {text: reportUrl, width: 90, height: 90, correctLevel: QRCode.CorrectLevel.M});
     const qrCanvas = qrDiv.querySelector('canvas');
     const qrDataUrl = qrCanvas ? qrCanvas.toDataURL('image/png') : null;
 
     const svg = document.getElementById('barcode');
-    JsBarcode(svg, payload, {format:'CODE128', displayValue:false, height:45, margin:0});
+    JsBarcode(svg, reportUrl, {format:'CODE128', displayValue:false, height:45, margin:0});
     const svgData = new XMLSerializer().serializeToString(svg);
     const svgBase64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
 
     if (qrDataUrl) doc.addImage(qrDataUrl, 'PNG', 40, 96, 90, 90);
     doc.addImage(svgBase64, 'SVG', 140, 120, 220, 40);
+
+    // اجعل مربع الـQR نفسه قابل للنقر
+    doc.link(40, 96, 90, 90, { url: reportUrl });
+    // نص رابط مباشر
+    doc.textWithLink('فتح التقرير', 370, 135, { url: reportUrl, align: 'right' });
   }catch(e){ console.warn('Barcode/QR warning', e); }
 
   let y = 210;
+
+  // جداول بالعربية + الخط
+  const baseTable = {
+    styles:{halign:'right', font: 'NotoNaskh'},
+    headStyles:{fillColor:[244,247,255]},
+    theme:'grid',
+    margin:{left:40,right:40}
+  };
+
   const hbaRows = [[ data?.hba1c?.value ?? '-', '%', data?.hba1c?.note ?? '-' ]];
-  doc.autoTable({ startY: y, head: [['HbA1c','الوحدة','ملاحظات']], body: hbaRows,
-    styles:{halign:'right'}, headStyles:{fillColor:[244,247,255]}, theme:'grid',
-    margin:{left:40,right:40} });
+  doc.autoTable({
+    ...baseTable,
+    startY: y,
+    head: [['HbA1c','الوحدة','ملاحظات']],
+    body: hbaRows
+  });
   y = doc.lastAutoTable.finalY + 14;
 
   const lipRows = [
@@ -211,39 +274,95 @@ function openPdf(labId, childName, data){
     ['HDL', data?.lipid?.hdl ?? '-', 'mg/dL', '-'],
     ['TG', data?.lipid?.tg  ?? '-', 'mg/dL', '-'],
   ];
-  doc.autoTable({ startY:y, head:[['Lipid','القيمة','الوحدة','ملاحظات']], body:lipRows,
-    styles:{halign:'right'}, headStyles:{fillColor:[244,247,255]}, theme:'grid',
-    margin:{left:40,right:40} });
+  doc.autoTable({
+    ...baseTable,
+    startY: y,
+    head: [['Lipid','القيمة','الوحدة','ملاحظات']],
+    body: lipRows
+  });
   y = doc.lastAutoTable.finalY + 14;
 
   const thRows = [
     ['TSH', data?.thyroid?.tsh ?? '-', 'mIU/L', data?.thyroid?.note ?? '-'],
     ['FT4', data?.thyroid?.ft4 ?? '-', 'ng/dL', '-'],
   ];
-  doc.autoTable({ startY:y, head:[['الغدة الدرقية','القيمة','الوحدة','ملاحظات']], body:thRows,
-    styles:{halign:'right'}, headStyles:{fillColor:[244,247,255]}, theme:'grid',
-    margin:{left:40,right:40} });
+  doc.autoTable({
+    ...baseTable,
+    startY: y,
+    head: [['الغدة الدرقية','القيمة','الوحدة','ملاحظات']],
+    body: thRows
+  });
   y = doc.lastAutoTable.finalY + 14;
 
   const rnRows = [
     ['Microalbumin/Creatinine', data?.renal?.microalb_creat ?? '-', 'mg/g', data?.renal?.note ?? '-'],
     ['Creatinine', data?.renal?.creatinine ?? '-', 'mg/dL', '-'],
   ];
-  doc.autoTable({ startY:y, head:[['الكُلى','القيمة','الوحدة','ملاحظات']], body:rnRows,
-    styles:{halign:'right'}, headStyles:{fillColor:[244,247,255]}, theme:'grid',
-    margin:{left:40,right:40} });
+  doc.autoTable({
+    ...baseTable,
+    startY: y,
+    head: [['الكُلى','القيمة','الوحدة','ملاحظات']],
+    body: rnRows
+  });
   y = doc.lastAutoTable.finalY + 14;
 
   const nextDue = data.nextDue ? (data.nextDue instanceof Date ? data.nextDue : new Date(data.nextDue)) : addMonths(new Date(data.date),4);
   doc.setFontSize(11);
-  doc.text(`موعد التحليل القادم (HbA1c كل 4 أشهر): ${fmt(nextDue)}`, 40, y, {align:'right'});
+  doc.text(`موعد التحليل القادم (HbA1c كل 4 أشهر): ${fmt(nextDue)}`, 555, y, {align:'right'});
   y += 18;
   if (data?.generalNote){
-    doc.setFont('helvetica','bold'); doc.text('ملاحظات عامة:', 40, y, {align:'right'}); y+=14;
-    doc.setFont('helvetica','normal'); doc.text(String(data.generalNote), 40, y, {align:'right', maxWidth:515});
+    doc.setFont('NotoNaskh','bold'); doc.text('ملاحظات عامة:', 555, y, {align:'right'}); y+=14;
+    doc.setFont('NotoNaskh','normal'); doc.text(String(data.generalNote), 555, y, {align:'right', maxWidth:515});
   }
 
   const blob = doc.output('blob');
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
+}
+
+// ======= السجلات السابقة =======
+async function loadHistory(uid, childId, childName){
+  const lref = collection(db, `parents/${uid}/children/${childId}/labs`);
+  const qy = query(lref, orderBy('when','desc'), limit(20));
+  const sn = await getDocs(qy);
+
+  historyBody.innerHTML = '';
+  if (sn.empty){
+    historyBody.innerHTML = `<tr><td colspan="4" class="muted">لا توجد سجلات</td></tr>`;
+    return;
+  }
+
+  sn.forEach(d=>{
+    const v = d.data();
+    const when = v.when?.toDate ? v.when.toDate() : (v.date ? new Date(v.date) : new Date());
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${fmt(when)}</td>
+      <td>${v?.hba1c?.value!=null ? Number(v.hba1c.value).toFixed(1)+'%' : '—'}</td>
+      <td>${v?.hba1c?.note ?? '—'}</td>
+      <td>
+        <div class="actions">
+          <button class="btn small gray act-open">فتح PDF</button>
+          <button class="btn small act-edit">تعديل</button>
+          <button class="btn small danger act-del">حذف</button>
+        </div>
+      </td>
+    `;
+    // أزرار
+    tr.querySelector('.act-open').addEventListener('click', ()=> openPdf(d.id, childName, v));
+    tr.querySelector('.act-edit').addEventListener('click', ()=>{
+      _currentLabId = d.id;
+      fillFormFromDoc(v);
+      window.scrollTo({top:0, behavior:'smooth'});
+    });
+    tr.querySelector('.act-del').addEventListener('click', async ()=>{
+      if (confirm('هل تريد حذف هذا التقرير؟')){
+        await deleteDoc(doc(db, `parents/${uid}/children/${childId}/labs/${d.id}`));
+        if (_currentLabId === d.id) _currentLabId = null;
+        await loadHistory(uid, childId, childName);
+        alert('تم الحذف');
+      }
+    });
+    historyBody.appendChild(tr);
+  });
 }
