@@ -191,3 +191,5 @@ function openPdf(labId, childName, data){
 
     const svg = document.getElementById('barcode');
     JsBarcode(svg, payload,
+       }
+    }            
