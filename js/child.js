@@ -1,6 +1,7 @@
 // js/child.js
 // -----------------------------------------------------------
 // - يحافظ على كل البطاقات القديمة كما هي
+// - يملأ بطاقة "بيانات الطفل" بالبيانات الحقيقية
 // - يضيف بطاقة "التحاليل الطبية" مع Sparkline/Progress
 // -----------------------------------------------------------
 
@@ -45,6 +46,18 @@ const goReports       = $('goReports');
 const goVisits        = $('goVisits');
 const goChildEdit     = $('goChildEdit');
 
+// ✅ عناصر ملخص بيانات الطفل داخل البطاقة
+const infoName    = $('infoName');
+const infoAge     = $('infoAge');
+const infoGender  = $('infoGender');
+const infoWeight  = $('infoWeight');
+const infoHeight  = $('infoHeight');
+const infoDevice  = $('infoDevice');
+const infoInsulin = $('infoInsulin');
+const infoRange   = $('infoRange');
+const infoCR      = $('infoCR');
+const infoCF      = $('infoCF');
+
 // بطاقة التحاليل
 const labCard       = $('labCard');
 const labHba1cVal   = $('labHba1cVal');
@@ -84,8 +97,7 @@ function addMonths(date, m=4){
   return d;
 }
 
-// تنقل علوي
-// (لو عندك زر خروج في هيدر آخر، استخدميه)
+// زر خروج (اختياري لو عندك بالهيدر)
 document.getElementById('logoutBtn')?.addEventListener('click', ()=> signOut(auth).catch(()=>{}));
 
 // ---- تشغيل ----
@@ -120,6 +132,18 @@ onAuthStateChanged(auth, async (user)=>{
     setText(chipCREl,    `CarbRatio: ${cr} g/U`);
     setText(chipCFEl,    `CF: ${cf ?? '—'} mmol/L per U`);
 
+    // ✅ تعبئة بطاقة "بيانات الطفل"
+    setText(infoName,    c.name ?? '—');
+    setText(infoAge,     calcAge(c.birthDate));
+    setText(infoGender,  c.gender ?? '—');
+    setText(infoWeight,  (c.weight ? `${c.weight} كجم` : '—'));
+    setText(infoHeight,  (c.height ? `${c.height} سم` : '—'));
+    setText(infoDevice,  c.device ?? '—');
+    setText(infoInsulin, c.insulinType ?? '—');
+    setText(infoRange,   `${min}–${max} mmol/L`);
+    setText(infoCR,      `${cr} g/U`);
+    setText(infoCF,      (cf==null ? '—' : `${cf} mmol/L/U`));
+
     // الروابط للصفحات الأخرى (نضمن childId)
     setHref(goMeasurements, `measurements.html?child=${encodeURIComponent(childId)}`);
     setHref(goMeals,        `meals.html?child=${encodeURIComponent(childId)}`);
@@ -152,7 +176,7 @@ onAuthStateChanged(auth, async (user)=>{
     const snapVisit  = await getDocs(qVisits);
     const nextFollow = !snapVisit.empty ? (snapVisit.docs[0].data().followUpDate || '—') : '—';
 
-    // عرض الأرقام في الكروت (كبير + مصغّر)
+    // عرض الأرقام في الكروت
     setText(todayMeasuresEl, measCount);
     setText(miniMeasuresEl,  measCount);
 
@@ -163,9 +187,9 @@ onAuthStateChanged(auth, async (user)=>{
     setText(miniFollowUpEl,  nextFollow);
 
     // ----- بطاقة التحاليل الطبية -----
-    await renderLabCard(user.uid, c.name || 'طفل');
+    await renderLabCard(user.uid);
 
-    // أزرار البطاقة (نمنع فقّاعة الكليك عن المقال ككل)
+    // أزرار البطاقة
     addLabBtn?.addEventListener('click', (e)=>{
       e.stopPropagation();
       location.href = `labs.html?child=${encodeURIComponent(childId)}`;
@@ -209,7 +233,7 @@ async function getLastLabId(uid){
   return sn.empty ? null : sn.docs[0].id;
 }
 
-async function renderLabCard(uid, childName){
+async function renderLabCard(uid){
   if (!labCard) return;
 
   const labsRef = collection(db, `parents/${uid}/children/${childId}/labs`);
