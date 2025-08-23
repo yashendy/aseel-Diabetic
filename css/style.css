@@ -1,74 +1,48 @@
-/* ===== خلفية لطيفة عامة ===== */
+/* ===== الأساسيات والعامة ===== */
+* { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
+  margin: 0;
   font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
   background: linear-gradient(135deg, #f8e6ef, #e6f6fb);
-  margin: 0;
 }
 
-/* ===== أنماط قديمة (للتوافق) — تُترك كما هي ===== */
-.container {
-  background: #fff;
-  padding: 30px;
-  border-radius: 15px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-  width: 100%;
-  max-width: 400px;
-  text-align: center;
-  margin: 24px auto;
-}
-.form { display: flex; flex-direction: column; }
-input { margin: 10px 0; padding: 10px; border-radius: 8px; border: 1px solid #ccc; }
-button {
-  background: #4CAF50; color: #fff; border: none; padding: 12px;
-  border-radius: 8px; cursor: pointer; margin-top: 10px; font-size: 16px;
-}
-button:hover { background-color: #45a049; }
-.toggle { color: #007BFF; cursor: pointer; font-weight: bold; }
-.hidden { display: none; }
-
-/* =========================
-   صفحة المصادقة (معزولة)
-   ========================= */
-:root{
-  --aseel-primary: #41a65a;
-  --aseel-shadow: 0 10px 30px rgba(0,0,0,.08);
-  --aseel-radius: 18px;
-  --aseel-card-max: 520px;
-}
-
-.auth-page-wrap{
+/* ===== حاوية صفحة المصادقة ===== */
+.auth-page{
   min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 24px;
 }
 
-.auth-card{
-  width: min(100%, var(--aseel-card-max));
+/* ===== البطاقات العامة ===== */
+.card{
+  width: min(100%, 520px);
   background: #fff;
-  border-radius: var(--aseel-radius);
-  box-shadow: var(--aseel-shadow);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.08);
   padding: 26px 22px 22px;
 }
 
-.auth-card__header{
+/* هيدر كل بطاقة (شعار + عنوانين) */
+.card__header{
   text-align: center;
   margin-bottom: 10px;
 }
-.auth-card__logo{
-  width: 64px; height: 64px; object-fit: contain;
-  display: inline-block;
+.card__logo{
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
   margin-bottom: 8px;
   filter: drop-shadow(0 2px 6px rgba(0,0,0,.08));
 }
-.auth-card__title{
+.card__title{
   margin: 0;
   font-size: 24px;
   font-weight: 800;
   line-height: 1.2;
 }
-.auth-card__subtitle{
+.card__subtitle{
   margin: 4px 0 12px;
   font-size: 15px;
   font-weight: 600;
@@ -76,41 +50,51 @@ button:hover { background-color: #45a049; }
   opacity: .9;
 }
 
-/* النماذج داخل البطاقة */
-.auth-form{ display: grid; gap: 12px; margin-top: 10px; }
-.auth-form__title{ margin: 2px 0 4px; font-size: 18px; font-weight: 700; }
+/* نموذج داخل البطاقة */
+.card__form{
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+.card__formTitle{
+  margin: 2px 0 4px;
+  font-size: 18px;
+  font-weight: 700;
+}
 
-.auth-field input{
+/* الحقول */
+.field input{
   width: 100%;
   padding: 12px 14px;
   border: 1px solid #e3e6ea;
   border-radius: 10px;
   font-size: 14px;
   outline: none;
-  box-sizing: border-box;
 }
-.auth-field input:focus{
+.field input:focus{
   border-color: #b9d9c3;
   box-shadow: 0 0 0 3px rgba(65,166,90,.12);
 }
 
-.auth-btn{
+/* الأزرار */
+.btn{
+  width: 100%;
   padding: 12px 14px;
   border-radius: 10px;
   border: none;
   cursor: pointer;
   font-weight: 700;
-  width: 100%;
 }
-.auth-btn--primary{ background: var(--aseel-primary); color: #fff; }
+.btn--primary { background: #41a65a; color: #fff; }
 
-.auth-form__hint{
+/* روابط التبديل */
+.card__hint{
   text-align: center;
   margin: 2px 0 0;
   color: #444;
   font-size: 14px;
 }
-.auth-linklike{
+.linklike{
   background: transparent;
   border: none;
   color: #1d7dd8;
@@ -119,12 +103,13 @@ button:hover { background-color: #45a049; }
   font-size: 14px;
 }
 
+/* إخفاء البطاقة الثانية */
 .is-hidden { display: none !important; }
 
-/* موبايل */
+/* تجاوب للموبايل */
 @media (max-width: 420px){
-  .auth-card{ padding: 20px 16px 18px; border-radius: 16px; }
-  .auth-card__logo{ width: 56px; height: 56px; }
-  .auth-card__title{ font-size: 21px; }
-  .auth-card__subtitle{ font-size: 13px; }
+  .card{ padding: 20px 16px 18px; border-radius: 16px; }
+  .card__logo{ width: 56px; height: 56px; }
+  .card__title{ font-size: 21px; }
+  .card__subtitle{ font-size: 13px; }
 }
