@@ -1,203 +1,221 @@
 // js/child.js
-// -----------------------------------------------------------
-// - نقرأ childId من رابط الصفحة أو من localStorage كـ fallback
-// - لو مش موجود نحول تلقائيًا إلى parent.html?pickChild=1
-// - نحفظ آخر طفل تم فتحه في localStorage
-// - نملأ معلومات الهيدر والكروت + نفعِّل الروابط للصفحات الأخرى
-// -----------------------------------------------------------
-
 import { auth, db } from './firebase-config.js';
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, getDocs, query, where, orderBy, limit, doc, getDoc
+  collection, doc, getDoc, getDocs, query, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-// ---- childId مع fallback ----
-const params   = new URLSearchParams(location.search);
-let   childId  = params.get('child') || localStorage.getItem('lastChildId');
-if (!childId) {
-  // لا يوجد طفل محدد: ارجعي لاختيار طفل
-  location.replace('parent.html?pickChild=1');
-  throw new Error('Missing child id → redirecting to parent.html');
+/* عناصر */
+const goBackBtn = document.getElementById('goBack');
+const logoutBtn = document.getElementById('logoutBtn');
+const childNameEl = document.getElementById('childName');
+
+/* بطاقة التحاليل */
+const labCard = document.getElementById('labCard');
+const labHba1cVal = document.getElementById('labHba1cVal');
+const labHba1cDelta = document.getElementById('labHba1cDelta');
+const labLastSince = document.getElementById('labLastSince');
+const labLastDate = document.getElementById('labLastDate');
+const labDueBadge = document.getElementById('labDueBadge');
+const openLabsBtn = document.getElementById('openLabsBtn');
+const openLastPdfBtn = document.getElementById('openLastPdfBtn');
+const addLabBtn = document.getElementById('addLabBtn');
+
+const progressFill = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+
+const params = new URLSearchParams(location.search);
+const childId = params.get('child');
+
+/* Utils */
+const dayDiff = (a,b)=> Math.ceil((a-b)/86400000);
+const pad = n => String(n).padStart(2,'0');
+const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+function addMonths(date, m=4){
+  const d = new Date(date);
+  const day = d.getDate();
+  d.setMonth(d.getMonth()+m);
+  if (d.getDate() < day) d.setDate(0);
+  return d;
 }
-// خزِّني آخر طفل كـ fallback لاحقًا
-localStorage.setItem('lastChildId', childId);
 
-// ---- عناصر DOM (مع حراسة) ----
-const $ = (id) => document.getElementById(id);
+/* تنقل علوي */
+goBackBtn?.addEventListener('click', ()=> history.back());
+logoutBtn?.addEventListener('click', ()=> signOut(auth).catch(()=>{}));
 
-const loaderEl      = $('loader');
-
-const childNameEl   = $('childName');
-const childMetaEl   = $('childMeta');
-const chipRangeEl   = $('chipRange');
-const chipCREl      = $('chipCR');
-const chipCFEl      = $('chipCF');
-
-const todayMeasuresEl = $('todayMeasures');
-const todayMealsEl    = $('todayMeals');
-const nextVisitEl     = $('nextVisit');
-
-const miniMeasuresEl  = $('miniMeasures');
-const miniMealsEl     = $('miniMeals');
-const miniFollowUpEl  = $('miniFollowUp');
-
-const goMeasurements  = $('goMeasurements');
-const goMeals         = $('goMeals');
-const goFoodItems     = $('goFoodItems');
-const goReports       = $('goReports');
-const goVisits        = $('goVisits');
-const goChildEdit     = $('goChildEdit');
-
-const infoNameEl    = $('infoName');
-const infoAgeEl     = $('infoAge');
-const infoGenderEl  = $('infoGender');
-const infoWeightEl  = $('infoWeight');
-const infoHeightEl  = $('infoHeight');
-const infoDeviceEl  = $('infoDevice');
-const infoInsulinEl = $('infoInsulin');
-const infoRangeEl   = $('infoRange');
-const infoCREl      = $('infoCR');
-const infoCFEl      = $('infoCF');
-
-// ---- أدوات ----
-function pad(n){ return String(n).padStart(2,'0'); }
-function todayStr(){
-  const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-}
-function calcAge(bd){
-  if(!bd) return '-';
-  const b=new Date(bd), t=new Date();
-  let a=t.getFullYear()-b.getFullYear();
-  const m=t.getMonth()-b.getMonth();
-  if(m<0 || (m===0 && t.getDate()<b.getDate())) a--;
-  return a;
-}
-function loader(show){ loaderEl && loaderEl.classList.toggle('hidden', !show); }
-
-// ---- تشغيل ----
-onAuthStateChanged(auth, async (user)=>{
+/* جلسة */
+onAuthStateChanged(auth, async user=>{
   if(!user){ location.href='index.html'; return; }
+  if(!childId){ alert('لا يوجد child في الرابط'); return; }
 
-  try{
-    loader(true);
+  // تحميل بيانات الطفل (الاسم)
+  const cref = doc(db, `parents/${user.uid}/children/${childId}`);
+  const csnp = await getDoc(cref);
+  const childName = csnp.exists() ? (csnp.data().name || 'طفل') : 'طفل';
+  childNameEl.textContent = childName;
 
-    // قراءة بيانات الطفل
-    const childRef = doc(db, `parents/${user.uid}/children/${childId}`);
-    const snap = await getDoc(childRef);
-    if(!snap.exists()){
-      alert('لم يتم العثور على الطفل');
-      // امسح lastChildId لأنه غير صالح ثم رجِّع لاختيار طفل
-      localStorage.removeItem('lastChildId');
-      location.replace('parent.html?pickChild=1');
-      return;
-    }
-    const c = snap.data();
-    // تأكيد حفظ آخر طفل صالح
-    localStorage.setItem('lastChildId', childId);
+  // تحميل آخر 4 تقارير
+  const labsRef = collection(db, `parents/${user.uid}/children/${childId}/labs`);
+  const qy = query(labsRef, orderBy('when','desc'), limit(4));
+  const sn = await getDocs(qy);
 
-    // ---- الهيدر والشرائط ----
-    if (childNameEl) childNameEl.textContent = c.name || 'طفل';
-    if (childMetaEl) childMetaEl.textContent = `${c.gender || '-'} • العمر: ${calcAge(c.birthDate)} سنة`;
+  const labs = sn.docs.map(d=>({ id:d.id, ...d.data() }));
+  const lastLab = labs[0] || null;
+  const prevLab = labs[1] || null;
 
-    const min = Number(c.normalRange?.min ?? 4.4);
-    const max = Number(c.normalRange?.max ?? 7.8);
-    const cr  = Number(c.carbRatio ?? 12);
-    const cf  = (c.correctionFactor != null) ? Number(c.correctionFactor) : null;
+  // عرض البطاقة
+  renderLabCard(childId, childName, lastLab, prevLab);
 
-    if (chipRangeEl) chipRangeEl.textContent = `النطاق الطبيعي: ${min}–${max} mmol/L`;
-    if (chipCREl)    chipCREl.textContent    = `CarbRatio: ${cr} g/U`;
-    if (chipCFEl)    chipCFEl.textContent    = `CF: ${cf ?? '—'} mmol/L per U`;
-
-    // ---- الروابط للصفحات الأخرى (نضمن childId) ----
-    setHref(goMeasurements, `measurements.html?child=${encodeURIComponent(childId)}`);
-    setHref(goMeals,        `meals.html?child=${encodeURIComponent(childId)}`);
-    setHref(goFoodItems,    `food-items.html?child=${encodeURIComponent(childId)}`);
-    setHref(goReports,      `reports.html?child=${encodeURIComponent(childId)}`);
-    setHref(goVisits,       `visits.html?child=${encodeURIComponent(childId)}`);
-    setHref(goChildEdit,    `child-edit.html?child=${encodeURIComponent(childId)}`);
-
-    // ---- إحصائيات اليوم ----
-    const today = todayStr();
-
-    // قياسات اليوم
-    const measRef   = collection(db, `parents/${user.uid}/children/${childId}/measurements`);
-    const snapMeas  = await getDocs(query(measRef, where('date','==',today)));
-    const measCount = snapMeas.size || 0;
-
-    // وجبات اليوم
-    const mealsRef   = collection(db, `parents/${user.uid}/children/${childId}/meals`);
-    const snapMeals  = await getDocs(query(mealsRef, where('date','==',today)));
-    const mealsCount = snapMeals.size || 0;
-
-    // أقرب متابعة
-    const visitsRef  = collection(db, `parents/${user.uid}/children/${childId}/visits`);
-    const qVisits    = query(
-      visitsRef,
-      where('followUpDate','>=', today),
-      orderBy('followUpDate','asc'),
-      limit(1)
-    );
-    const snapVisit  = await getDocs(qVisits);
-    const nextFollow = !snapVisit.empty ? (snapVisit.docs[0].data().followUpDate || '—') : '—';
-
-    // عرض الأرقام في الكروت (كبير + مصغّر)
-    setText(todayMeasuresEl, measCount);
-    setText(miniMeasuresEl,  measCount);
-
-    setText(todayMealsEl,    mealsCount);
-    setText(miniMealsEl,     mealsCount);
-
-    setText(nextVisitEl,     nextFollow);
-    setText(miniFollowUpEl,  nextFollow);
-
-    // ---- بطاقة "بيانات الطفل" ----
-    setText(infoNameEl,   c.name || 'طفل');
-    setText(infoAgeEl,    `${calcAge(c.birthDate)} سنة`);
-    setText(infoGenderEl, c.gender || '—');
-    setText(infoWeightEl, c.weightKg ? `${c.weightKg} كجم` : '—');
-    setText(infoHeightEl, c.heightCm ? `${c.heightCm} سم` : '—');
-
-    // الجهاز
-    const deviceName = c.deviceName || c.device?.name || '—';
-    setText(infoDeviceEl, deviceName);
-
-    // الأنسولين
-    const basal = c.insulin?.basalType || c.insulinBasalType || null;
-    const bolus = c.insulin?.bolusType || c.insulinBolusType || null;
-    const insulinType = c.insulinType || null;
-
-    if (basal || bolus) {
-      const text = (basal ? `قاعدي: ${basal}` : '') +
-                   (basal && bolus ? ' • ' : '') +
-                   (bolus ? `للوجبات: ${bolus}` : '');
-      setText(infoInsulinEl, text);
+  // أزرار
+  openLabsBtn.addEventListener('click', (e)=> {
+    e.stopPropagation();
+    location.href = `labs.html?child=${encodeURIComponent(childId)}`;
+  });
+  addLabBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    location.href = `labs.html?child=${encodeURIComponent(childId)}`;
+  });
+  openLastPdfBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if (lastLab?.id){
+      window.open(`labs.html?child=${encodeURIComponent(childId)}&lab=${encodeURIComponent(lastLab.id)}`, '_blank');
     } else {
-      setText(infoInsulinEl, insulinType || '—');
+      location.href = `labs.html?child=${encodeURIComponent(childId)}`;
     }
+  });
 
-    // الحدود والمعاملات
-    setText(infoRangeEl, `${min}–${max} mmol/L`);
-    setText(infoCREl,    `${cr} g/U`);
-    setText(infoCFEl,    (cf != null) ? `${cf} mmol/L/U` : '—');
+  // جعل البطاقة نفسها تفتح صفحة التحاليل
+  labCard.addEventListener('click', ()=>{
+    location.href = `labs.html?child=${encodeURIComponent(childId)}`;
+  });
+  labCard.addEventListener('keydown', (e)=>{
+    if (e.key==='Enter' || e.key===' ') {
+      e.preventDefault();
+      location.href = `labs.html?child=${encodeURIComponent(childId)}`;
+    }
+  });
 
-  }catch(e){
-    console.error(e);
-    alert('تعذر تحميل البيانات');
-  }finally{
-    loader(false);
-  }
+  // Sparkline
+  buildSparkline(labs);
 });
 
-// ---- مساعدين صغارين ----
-function setHref(el, href){
-  if (!el) return;
-  el.setAttribute('href', href);
-  // احتياط: لو المتصفح منع تنقل رابط فارغ لأي سبب
-  el.addEventListener('click', (ev)=>{
-    if (!href) { ev.preventDefault(); }
-  });
+/* عرض بطاقة التحاليل */
+function renderLabCard(childId, childName, lastLab, prevLab){
+  if (!lastLab){
+    labHba1cVal.textContent = '—';
+    labHba1cVal.className = 'value tone';
+    labHba1cDelta.textContent = 'لا توجد بيانات';
+    labLastSince.textContent = '—';
+    labLastDate.textContent = '—';
+    labDueBadge.textContent = 'لا توجد تقارير بعد';
+    labDueBadge.className = 'pill tiny';
+    progressFill.style.width = '0%';
+    progressLabel.textContent = '—';
+    return;
+  }
+
+  // تواريخ
+  const when = lastLab.when?.toDate ? lastLab.when.toDate() : (lastLab.date ? new Date(lastLab.date) : new Date());
+  labLastDate.textContent = fmt(when);
+  labLastSince.textContent = `${dayDiff(new Date(), when)} يوم`;
+
+  // HbA1c + تلوين
+  const hba = lastLab?.hba1c?.value;
+  let toneClass = 'good';
+  let lastTxt = '—';
+  if (hba==null || Number.isNaN(Number(hba))){
+    labHba1cVal.textContent = '—';
+    labHba1cVal.className = 'value tone';
+  } else {
+    const v = Number(hba);
+    lastTxt = `${v.toFixed(1)}%`;
+    labHba1cVal.textContent = lastTxt;
+    if (v >= 7.5 && v <= 9) toneClass = 'mid';
+    if (v > 9) toneClass = 'bad';
+    labHba1cVal.className = `value tone ${toneClass}`;
+  }
+
+  // دلتا عن السابق + Tooltip
+  if (prevLab?.hba1c?.value!=null){
+    const pv = Number(prevLab.hba1c.value);
+    if (!Number.isNaN(pv) && hba!=null){
+      const diff = Number(hba) - pv;
+      const sign = diff>0 ? '+' : (diff<0 ? '−' : '±');
+      labHba1cDelta.textContent = `مقارنة بالسابق: ${sign}${Math.abs(diff).toFixed(1)}%`;
+      labHba1cVal.title = `السابق: ${pv.toFixed(1)}% • الفرق: ${sign}${Math.abs(diff).toFixed(1)}%`;
+    } else {
+      labHba1cDelta.textContent = '—';
+    }
+  } else {
+    labHba1cDelta.textContent = '—';
+  }
+
+  // nextDue (كل 4 شهور) + شارة
+  const nextDue = lastLab.nextDue?.toDate ? lastLab.nextDue.toDate() : addMonths(when, 4);
+  const daysToDue = dayDiff(nextDue, new Date());
+  if (daysToDue < 0){
+    labDueBadge.textContent = `متأخر — ${fmt(nextDue)}`;
+    labDueBadge.className = 'pill tiny bad';
+  } else if (daysToDue <= 14){
+    labDueBadge.textContent = `قرب الموعد — ${fmt(nextDue)}`;
+    labDueBadge.className = 'pill tiny warn';
+  } else {
+    labDueBadge.textContent = `التحليل القادم: ${fmt(nextDue)}`;
+    labDueBadge.className = 'pill tiny ok';
+  }
+
+  // تقدّم نحو الاستحقاق
+  const totalDays = Math.max(1, dayDiff(nextDue, when)); // إجمالي أيام الدورة
+  const passedDays = Math.max(0, Math.min(totalDays, dayDiff(new Date(), when)));
+  const pct = Math.round((passedDays / totalDays) * 100);
+  progressFill.style.width = `${pct}%`;
+  progressLabel.textContent = `${passedDays} / ${totalDays} يوم (${pct}%)`;
 }
-function setText(el, value){
-  if (el) el.textContent = (value ?? '—');
+
+/* Sparkline HbA1c لآخر 4 تقارير */
+function buildSparkline(labs){
+  const ctx = document.getElementById('hbaSpark').getContext('2d');
+  // رتب تصاعديًا بالزمن لعرض الترند الصحيح
+  const sorted = [...labs].reverse();
+  const labels = sorted.map(l=>{
+    const d = l.when?.toDate ? l.when.toDate() : (l.date ? new Date(l.date) : new Date());
+    return fmt(d);
+  });
+  const data = sorted.map(l=>{
+    const v = l?.hba1c?.value;
+    return (v==null || Number.isNaN(Number(v))) ? null : Number(v);
+  });
+
+  // إن لم توجد قيم كافية، لا ترسم
+  const haveData = data.some(v=> v!=null);
+  if (!haveData){
+    if (window._spark){ window._spark.destroy(); }
+    return;
+  }
+
+  if (window._spark){ window._spark.destroy(); }
+  window._spark = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: '#8E24AA',
+        backgroundColor: 'rgba(142,36,170,0.08)',
+        pointRadius: 1.5,
+        tension: .25,
+        fill: false,
+        spanGaps: true
+      }]
+    },
+    options:{
+      responsive:true,
+      plugins:{ legend:{display:false}, tooltip:{enabled:true} },
+      elements:{ point:{ hitRadius:6 } },
+      scales:{
+        x:{ display:false },
+        y:{ display:false, suggestedMin:5, suggestedMax:12 }
+      }
+    }
+  });
 }
