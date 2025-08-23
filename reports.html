@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>التقارير</title>
 
-  <!-- ✅ أيقونة الموقع (كرري هذا السطر في باقي الصفحات) -->
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
 
   <link rel="stylesheet" href="css/reports.css" />
@@ -36,6 +35,7 @@
             <option value="mmol">mmol/L</option>
             <option value="mgdl">mg/dL</option>
           </select>
+          <button class="btn primary" id="loadBtn">تحميل</button>
         </div>
 
         <div class="actions">
@@ -71,13 +71,14 @@
       </div>
     </section>
 
-    <!-- وضع الطباعة الممتلئ/الفارغ (يُستخدم من reports-print.html لو أردتي) -->
     <section id="printFilledSection" class="card print-filled hidden"></section>
     <section id="blankWeekSection"   class="card blank-week hidden"></section>
+
+    <div class="loader hidden" id="loader">
+      <p class="muted small">جاري تحميل البيانات...</p>
+    </div>
   </div>
 
-  <div id="loader" class="loader hidden">جارِ التحميل…</div>
-
-  <script type="module" src="js/reports.js?v=2"></script>
+  <script type="module" src="js/reports.js"></script>
 </body>
 </html>
