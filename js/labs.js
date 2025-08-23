@@ -190,6 +190,60 @@ function openPdf(labId, childName, data){
     const qrDataUrl = qrCanvas ? qrCanvas.toDataURL('image/png') : null;
 
     const svg = document.getElementById('barcode');
-    JsBarcode(svg, payload,
-       }
-    }            
+    JsBarcode(svg, payload, {format:'CODE128', displayValue:false, height:45, margin:0});
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const svgBase64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+
+    if (qrDataUrl) doc.addImage(qrDataUrl, 'PNG', 40, 96, 90, 90);
+    doc.addImage(svgBase64, 'SVG', 140, 120, 220, 40);
+  }catch(e){ console.warn('Barcode/QR warning', e); }
+
+  let y = 210;
+  const hbaRows = [[ data?.hba1c?.value ?? '-', '%', data?.hba1c?.note ?? '-' ]];
+  doc.autoTable({ startY: y, head: [['HbA1c','الوحدة','ملاحظات']], body: hbaRows,
+    styles:{halign:'right'}, headStyles:{fillColor:[244,247,255]}, theme:'grid',
+    margin:{left:40,right:40} });
+  y = doc.lastAutoTable.finalY + 14;
+
+  const lipRows = [
+    ['TC', data?.lipid?.tc ?? '-', 'mg/dL', data?.lipid?.note ?? '-'],
+    ['LDL', data?.lipid?.ldl ?? '-', 'mg/dL', '-'],
+    ['HDL', data?.lipid?.hdl ?? '-', 'mg/dL', '-'],
+    ['TG', data?.lipid?.tg  ?? '-', 'mg/dL', '-'],
+  ];
+  doc.autoTable({ startY:y, head:[['Lipid','القيمة','الوحدة','ملاحظات']], body:lipRows,
+    styles:{halign:'right'}, headStyles:{fillColor:[244,247,255]}, theme:'grid',
+    margin:{left:40,right:40} });
+  y = doc.lastAutoTable.finalY + 14;
+
+  const thRows = [
+    ['TSH', data?.thyroid?.tsh ?? '-', 'mIU/L', data?.thyroid?.note ?? '-'],
+    ['FT4', data?.thyroid?.ft4 ?? '-', 'ng/dL', '-'],
+  ];
+  doc.autoTable({ startY:y, head:[['الغدة الدرقية','القيمة','الوحدة','ملاحظات']], body:thRows,
+    styles:{halign:'right'}, headStyles:{fillColor:[244,247,255]}, theme:'grid',
+    margin:{left:40,right:40} });
+  y = doc.lastAutoTable.finalY + 14;
+
+  const rnRows = [
+    ['Microalbumin/Creatinine', data?.renal?.microalb_creat ?? '-', 'mg/g', data?.renal?.note ?? '-'],
+    ['Creatinine', data?.renal?.creatinine ?? '-', 'mg/dL', '-'],
+  ];
+  doc.autoTable({ startY:y, head:[['الكُلى','القيمة','الوحدة','ملاحظات']], body:rnRows,
+    styles:{halign:'right'}, headStyles:{fillColor:[244,247,255]}, theme:'grid',
+    margin:{left:40,right:40} });
+  y = doc.lastAutoTable.finalY + 14;
+
+  const nextDue = data.nextDue ? (data.nextDue instanceof Date ? data.nextDue : new Date(data.nextDue)) : addMonths(new Date(data.date),4);
+  doc.setFontSize(11);
+  doc.text(`موعد التحليل القادم (HbA1c كل 4 أشهر): ${fmt(nextDue)}`, 40, y, {align:'right'});
+  y += 18;
+  if (data?.generalNote){
+    doc.setFont('helvetica','bold'); doc.text('ملاحظات عامة:', 40, y, {align:'right'}); y+=14;
+    doc.setFont('helvetica','normal'); doc.text(String(data.generalNote), 40, y, {align:'right', maxWidth:515});
+  }
+
+  const blob = doc.output('blob');
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+}
