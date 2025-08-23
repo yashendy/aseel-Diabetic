@@ -5,17 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>منصة أسيل – تسجيل الدخول / إنشاء حساب</title>
 
-  <!-- أيقونة التبويب -->
+  <!-- الأيقونة -->
   <link rel="icon" type="image/png" href="images/favicon-32.png" />
 
-  <!-- ملف التنسيقات العام -->
+  <!-- التنسيقات -->
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <div class="auth-page-wrap">
     <!-- البطاقة الموحدة -->
     <section class="auth-card">
-      <!-- هيدر البطاقة: الشعار + العناوين -->
+
+      <!-- الشعار + العناوين داخل البطاقة -->
       <div class="auth-card__header">
         <img src="images/logo.png" alt="شعار منصة أسيل" class="auth-card__logo" />
         <h1 class="auth-card__title">منصة أسيل</h1>
@@ -64,7 +65,10 @@
     </section>
   </div>
 
-  <!-- سكربتات (المسارات صحيحة) -->
+  <!-- سكربتات -->
+  <!-- ملاحظة: داخل js/login.js المسار صحيح لأنه داخل نفس المجلد:
+       import { auth } from './firebase-config.js';
+  -->
   <script type="module" src="js/login.js"></script>
   <script>
     function toggleForms() {
@@ -72,7 +76,6 @@
       const registerForm = document.getElementById('register-form');
       loginForm.classList.toggle('is-hidden');
       registerForm.classList.toggle('is-hidden');
-
       // فوكس ذكي بعد التبديل
       setTimeout(() => {
         const target = loginForm.classList.contains('is-hidden')
