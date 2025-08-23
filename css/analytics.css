@@ -1,11 +1,11 @@
 /* css/analytics.css */
 :root{
   --bg:#f7f9fc; --card:#fff; --border:#e6eef7; --text:#223; --muted:#667; --pri:#4F46E5;
+  --up:#16a34a; --down:#dc2626;
 }
-
 *{box-sizing:border-box}
 body{margin:0;font-family:"Segoe UI",system-ui; background:var(--bg); color:var(--text)}
-.container{max-width:1200px;margin:auto;padding:16px}
+.container{max-width:1100px;margin:auto;padding:16px}
 
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:16px}
 .row{display:flex;align-items:center}
@@ -23,18 +23,22 @@ input[type="date"],select{padding:9px;border:1px solid var(--border);border-radi
 
 .btn{background:var(--pri);color:#fff;border:none;border-radius:10px;padding:10px 14px;cursor:pointer}
 .btn.secondary{background:#e9eef8;color:#222}
-
-.chip{padding:8px 10px;border:1px solid var(--border);border-radius:999px;background:#fff;cursor:pointer}
-
-.kpi{min-width:180px;flex:1}
-.kpi .label{color:var(--muted);font-size:13px}
-.kpi .value{font-size:24px;font-weight:700;margin-top:6px}
-
-.empty{padding:20px;text-align:center;color:var(--muted)}
 .hidden{display:none}
 
-/* canvas section spacing */
-section.card canvas{margin-top:8px}
+.kpi{min-width:170px;flex:1}
+.kpi .label{color:var(--muted);font-size:13px}
+.kpi .value{font-size:22px;font-weight:700;margin-top:6px}
+.kpi .delta{font-size:12px;margin-top:4px}
+.kpi .delta.up{color:var(--up)}
+.kpi .delta.down{color:var(--down)}
+.kpi .delta.neutral{color:var(--muted)}
+
+.empty{padding:16px;text-align:center;color:var(--muted)}
+
+/* canvas smaller */
+section.card canvas{margin-top:8px;max-height:260px}
+#dayChart{max-height:220px}
+#pieChart{max-height:200px}
 
 /* AI summary */
 .ai{line-height:1.9;color:#1e293b}
