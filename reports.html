@@ -1,10 +1,35 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+  <!--
+    =========================  توثيق الفكرة (لا يظهر للمستخدم)  =========================
+    تحليل البيانات التلقائي:
+      - نموذج ذكاء اصطناعي يحلل القياسات ويستخرج أنماط غير طبيعية:
+        (ارتفاع متكرر صباحًا، انخفاض بعد الغداء، تذبذب أيام محددة، تأثير الرياضة/النوم)
+      - تلخيص ذكي للفترة (متوسط/وسيط/SD، عدد الهبوط/الارتفاع، أسوأ/أفضل فترات).
+      - تفسير مفهوم + درجة ثقة + تخصيص حساسية التنبيه.
+
+    التنبؤ بالنتائج:
+      - تنبؤات قصيرة المدى (4–8 ساعات) مع نطاقات ثقة.
+      - إنذار مبكر واحتمالات الهبوط/الارتفاع.
+      - محاكاة "ماذا لو" (تعديل كربوهيدرات/توقيت رياضة/تصحيح).
+
+    المساعد الافتراضي (Chatbot):
+      - أسئلة طبيعية حول القراءات («ماذا تعني 250؟»، «سبب الهبوط بعد الظهر؟»).
+      - أوامر سريعة («صدّر تقرير PDF»، «أخفِ الملاحظات»، «بدّل الوحدة»).
+      - إجابات مخصصة آمنة (ليست نصيحة طبية).
+
+    ملاحظات تنفيذية:
+      - لا تغييرات على الواجهة/الستايل الحالية.
+      - دعم عرض وقت القياس بالعربي قائم (wake → الاستيقاظ، قبل/بعد الوجبات...).
+      - التطويرات المستقبلية يمكن إضافتها تدريجيًا دون كسر الصفحة.
+    ======================================================================================
+  -->
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>التقارير</title>
 
+  <!-- ✅ أيقونة الموقع (كرري هذا السطر في باقي الصفحات) -->
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
 
   <link rel="stylesheet" href="css/reports.css" />
@@ -35,7 +60,6 @@
             <option value="mmol">mmol/L</option>
             <option value="mgdl">mg/dL</option>
           </select>
-          <button class="btn primary" id="loadBtn">تحميل</button>
         </div>
 
         <div class="actions">
@@ -71,14 +95,13 @@
       </div>
     </section>
 
+    <!-- وضع الطباعة الممتلئ/الفارغ (يُستخدم من reports-print.html لو أردتي) -->
     <section id="printFilledSection" class="card print-filled hidden"></section>
     <section id="blankWeekSection"   class="card blank-week hidden"></section>
-
-    <div class="loader hidden" id="loader">
-      <p class="muted small">جاري تحميل البيانات...</p>
-    </div>
   </div>
 
-  <script type="module" src="js/reports.js"></script>
+  <div id="loader" class="loader hidden">جارِ التحميل…</div>
+
+  <script type="module" src="js/reports.js?v=2"></script>
 </body>
 </html>
