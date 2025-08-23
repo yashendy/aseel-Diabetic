@@ -32,6 +32,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{border:1px solid var(--line);padding:8px 10px;vertical-align:top}
 thead th{background:#fafafa;position:sticky;top:0;z-index:1}
+.table-more{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
 
 td.reading{white-space:nowrap}
 .arrow{font-weight:700;margin-inline-start:6px}
@@ -53,6 +54,50 @@ body.very-dense table{font-size:12px}
 body.notes-hidden .col-notes,
 body.notes-hidden td.col-notes{display:none}
 
+/* ملخص */
+.insights h2{margin:6px 0 10px}
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.kpis .k{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fafafa}
+.k .v{font-size:18px;font-weight:700}
+.findings{margin-top:8px}
+.findings ul{margin:6px 0 0 0;padding-inline-start:18px}
+
+/* فلاتر */
+.filters-row{display:flex;gap:12px;flex-wrap:wrap}
+.filter label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.filter select{min-width:140px;padding:6px;border:1px solid var(--line);border-radius:8px;background:#fff}
+
+/* تحليلات مصغرة */
+.analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.heatmap{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-top:6px}
+.hm-head{font-size:12px;color:var(--muted);text-align:center}
+.hm-cell{height:26px;border-radius:6px;border:1px solid var(--line)}
+.hm-low{background:rgba(37,99,235,.18)}
+.hm-ok{ background:rgba(16,185,129,.22)}
+.hm-high{background:rgba(239,68,68,.18)}
+.hm-empty{background:#fff}
+.hist{display:flex;align-items:flex-end;height:160px;border:1px solid var(--line);border-radius:10px;padding:8px;gap:6px;margin-top:6px}
+.hist .bar{flex:1;border-radius:6px;background:linear-gradient(to top, rgba(79,70,229,.25), rgba(79,70,229,.5))}
+.hist .bar:hover{filter:brightness(1.05)}
+.hist .tick{font-size:10px;text-align:center;margin-top:4px}
+
+/* المساعد */
+.fab{
+  position:fixed;inset-inline-end:16px;bottom:16px;z-index:10000;
+  width:52px;height:52px;border-radius:999px;border:1px solid var(--line);
+  box-shadow:0 8px 22px rgba(0,0,0,.15);
+}
+.chat{
+  position:fixed;inset-inline-end:16px;bottom:80px;width:340px;max-height:70vh;display:flex;flex-direction:column;gap:8px;
+  background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;z-index:10000;box-shadow:0 8px 22px rgba(0,0,0,.15)
+}
+.chat-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:6px}
+.chat-body{overflow:auto;max-height:48vh;display:flex;flex-direction:column;gap:8px}
+.msg{background:#f3f4f6;border:1px solid var(--line);border-radius:10px;padding:8px}
+.msg.me{background:#eef2ff;border-color:#c7d2fe;align-self:flex-end}
+.chat-input{display:flex;gap:8px}
+.chat-input input{flex:1;padding:8px;border:1px solid var(--line);border-radius:10px}
+
 /* لودر سفلي */
 .loader{
   position:fixed;inset-inline:0;bottom:14px;margin:auto;width:230px;text-align:center;
@@ -61,14 +106,13 @@ body.notes-hidden td.col-notes{display:none}
 
 /* طباعة */
 @media print{
-  .back,.controls,.actions,.range,.btn,#densityHint{display:none !important}
+  .back,.controls,.actions,.range,.btn,#densityHint,.filters,#analyticsMini,.fab,.chat{display:none !important}
   .container{max-width:none;margin:0;padding:0}
   .card{box-shadow:none;border:none;margin:0 0 8mm}
   table{font-size:12px}
   body.dense table{font-size:11px}
   body.very-dense table{font-size:10px}
 
-  /* وضع الطباعة الفارغ/الممتلئ (لو استخدمتي reports-print.html) */
   body.print-blank #tableSection{display:none !important}
   body.print-blank #printFilledSection{display:block !important}
   body.print-blank #blankWeekSection{display:block !important}
