@@ -1,4 +1,4 @@
-// js/meals.js (modular, v5) — GL badge لكل صنف + مساعد AI نصّي محلي
+// js/meals.js (modular, v5) — GL badge لكل صنف + مساعد AI نصّي محلي + Draft محلي
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -141,7 +141,7 @@ onAuthStateChanged(auth, async (user)=>{
   lastUsedMap = loadLastUsed();
   await loadMeasurements();
   await loadMealsOfDay();
-  loadDraft();
+  loadDraft();        // ← استرجاع الدرافـت
   recalcAll();
 });
 
@@ -568,6 +568,7 @@ function editMeal(r){
     measures: []
   }));
 
+  // جلب المقاييس البيتية من مكتبة الأصناف
   Promise.all(currentItems.map(async (row)=>{
     if (!row.itemId) return;
     const d = await getDoc(doc(db, `parents/${currentUser.uid}/foodItems/${row.itemId}`));
@@ -728,7 +729,7 @@ function saveLastUsed(map){
 aiBtn?.addEventListener('click', async ()=>{
   aiModal.classList.remove('hidden');
   aiText.focus();
-  if (!cachedFood.length) await loadFoodItems(); // للتطابق
+  if (!cachedFood.length) await loadFoodItems();
 });
 aiClose?.addEventListener('click', ()=> aiModal.classList.add('hidden'));
 
@@ -751,11 +752,8 @@ aiApply?.addEventListener('click', ()=>{
       measures: Array.isArray(s.item.measures)? s.item.measures : [],
       gi: s.item.gi ?? null
     });
-    // عدّل الكمية/الوحدة بعد الإضافة
     const row = currentItems[currentItems.length-1];
-    row.unit = s.unit;
-    row.qty = s.qty;
-    row.measure = s.measure;
+    row.unit = s.unit; row.qty = s.qty; row.measure = s.measure;
   });
   renderItems(); recalcAll(); saveDraft();
   aiModal.classList.add('hidden');
@@ -774,7 +772,9 @@ function normalizeArabic(s){
     .trim();
 }
 const FRACTIONS = { 'نصف':0.5, 'نص':0.5, 'ربع':0.25, 'ثلث':1/3 };
-const COMMON_UNITS = ['جرام','جم','غ','g','مل','ml','ملي','ملليلتر','كوب','نصف كوب','ربع كوب','ملعقه','ملعقة','م.ك','ملعقه كبيره','ملعقه صغيره','شريحه','شريحتين','حبه','حبة'];
+function toFloatInText(s){
+  const m = s.match(/(\d+([.,]\d+)?)/); return m? Number(m[0].replace(',','.')) : 0;
+}
 
 function parseMealText(text){
   if(!text) return [];
@@ -789,26 +789,23 @@ function parseMealText(text){
 
   parts.forEach(p=>{
     const pN = normalizeArabic(p);
-    // رقم
-    let qty = toNumber((p.match(/(\d+([.,]\d+)?)/)||[])[0]);
-    // كسور لفظية
-    Object.entries(FRACTIONS).forEach(([k,v])=>{
-      if (pN.includes(k)) qty = qty? qty+v : v;
-    });
+    // كمية رقمية
+    let qty = toFloatInText(pN);
+    Object.entries(FRACTIONS).forEach(([k,v])=>{ if (pN.includes(k)) qty = qty? qty+v : v; });
     if (!qty) qty = 1;
 
     // وحدة
     let unit = 'grams';
     let measureName = null;
     if (/(جرام|جم|غ|g)\b/.test(pN)) unit='grams';
-    if (/((كوب|نصف كوب|ربع كوب)|ملعقه كبيره|ملعقه صغيره|ملعقه|ملعقة|شريحه|حبه)/.test(pN)) unit='household';
+    if (/(كوب|نصف كوب|ربع كوب|ملعقه كبيره|ملعقه صغيره|ملعقه|ملعقة|شريحه|حبه)/.test(pN)) unit='household';
 
     // اسم تقريبي
     const nameGuess = pN.replace(/(\d+([.,]\d+)?)/g,'')
-      .replace(/(جرام|جم|غ|g|مل|ml|ملي|ملليلتر|كوب|نصف كوب|ربع كوب|ملعقه كبيره|ملعقه صغيره|ملعقه|ملعقة|شريحه|حبه)/g,'')
-      .replace(/\b(من|ارز|الابيض|الابيضه|صغيره|كبيره)\b/g,' ').trim();
+      .replace(/(جرام|جم|غ|g|كوب|نصف كوب|ربع كوب|ملعقه كبيره|ملعقه صغيره|ملعقه|ملعقة|شريحه|حبه)/g,'')
+      .replace(/\b(من|ال)\b/g,' ').trim();
 
-    // أفضل تطابق من المكتبة
+    // أفضل تطابق
     let best = null, bestScore = 0;
     food.forEach(it=>{
       let s=0;
@@ -820,7 +817,7 @@ function parseMealText(text){
     });
     if (!best || bestScore===0) return;
 
-    // اختيار مقياس منزلي لو ذكر في النص
+    // مقياس منزلي
     if (unit==='household' && Array.isArray(best.measures)){
       const m = best.measures.find(m=> normalizeArabic(m.name) && pN.includes(normalizeArabic(m.name)));
       measureName = m ? m.name : (best.measures[0]?.name || null);
@@ -854,6 +851,47 @@ function renderAISuggestions(){
     `;
     aiResultsEl.appendChild(div);
   });
+}
+
+/* ========= Draft محلي في LocalStorage ========= */
+function loadDraft(){
+  try{
+    const key = `mealDraft:${currentUser?.uid||'u'}:${childId||'c'}`;
+    const raw = localStorage.getItem(key);
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    if (!d) return;
+
+    mealTypeEl.value = d.type || 'فطور';
+    preReadingEl.value  = d.preReading || '';
+    postReadingEl.value = d.postReading || '';
+    appliedDoseEl.value = d.appliedDose || '';
+    mealNotesEl.value   = d.notes || '';
+    currentItems = Array.isArray(d.items)? d.items : [];
+    renderItems(); recalcAll();
+  }catch(e){ console.warn('loadDraft failed',e); }
+}
+
+function saveDraft(){
+  try{
+    const key = `mealDraft:${currentUser?.uid||'u'}:${childId||'c'}`;
+    const d = {
+      type: mealTypeEl.value,
+      preReading: preReadingEl.value,
+      postReading: postReadingEl.value,
+      appliedDose: appliedDoseEl.value,
+      notes: mealNotesEl.value,
+      items: currentItems
+    };
+    localStorage.setItem(key, JSON.stringify(d));
+  }catch(e){ console.warn('saveDraft failed',e); }
+}
+
+function clearDraft(){
+  try{
+    const key = `mealDraft:${currentUser?.uid||'u'}:${childId||'c'}`;
+    localStorage.removeItem(key);
+  }catch(e){}
 }
 
 /* ========= أدوات عامة ========= */
