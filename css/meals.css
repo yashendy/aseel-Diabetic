@@ -1,4 +1,4 @@
-/* css/meals.css (v2) */
+/* css/meals.css (v3) */
 :root{
   --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#333; --muted:#555;
   --primary:#4CAF50; --accent:#2196F3; --danger:#E53935; --warn:#FB8C00;
@@ -81,15 +81,4 @@ button[disabled]{opacity:.6;cursor:not-allowed}
 
 @media print{
   body{background:#fff}
-  .top .controls, .actions, .save-actions, .modal, #toast, .table-tools{display:none !important}
-  .summary{position:static;background:#fff}
-}
-@media (max-width:1000px){
-  .row{grid-template-columns:2fr 110px 100px 130px 100px 100px 100px 100px 100px 70px}
-  .dose{grid-template-columns:1fr}
-  .meal-card{grid-template-columns:100px 1fr 1fr 140px 140px}
-}
-@media (max-width:600px){
-  .controls{min-width:auto}
-  .sum-grid{grid-template-columns:repeat(2,1fr)}
 }
