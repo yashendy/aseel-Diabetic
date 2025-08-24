@@ -6,10 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>تقرير قياسات — الطباعة</title>
 
-  <!-- أيقونة الموقع (تظهر في كل الصفحات) -->
   <link rel="icon" href="favicon.ico" />
-
-  <link rel="stylesheet" href="css/reports-print.css?v=3" />
+  <link rel="stylesheet" href="css/reports-print.css?v=4" />
 </head>
 <body>
   <div class="container">
@@ -75,6 +73,12 @@
             <input id="weeklyMode" type="checkbox" />
             <span></span> تقرير خاص (أسبوعي)
           </label>
+
+          <!-- جديد: النموذج الفارغ -->
+          <label class="switch">
+            <input id="manualMode" type="checkbox" />
+            <span></span> وضع يدوي (نموذج فارغ قابل للتحرير)
+          </label>
         </div>
       </div>
     </header>
@@ -121,13 +125,11 @@
     </footer>
   </div>
 
-  <!-- Firebase config (المودول الخاص بمشروعك) -->
+  <!-- Firebase -->
   <script type="module" src="js/firebase-config.js"></script>
-
-  <!-- QRCode (صغير الحجم، محليًا عبر CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
   <!-- كود الصفحة -->
-  <script type="module" src="js/reports-print.js?v=3"></script>
+  <script type="module" src="js/reports-print.js?v=4"></script>
 </body>
 </html>
