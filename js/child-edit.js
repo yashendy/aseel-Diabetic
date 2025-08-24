@@ -2,7 +2,6 @@ import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-// عناصر
 const $ = (id) => document.getElementById(id);
 const form = $('form');
 const loader = $('loader');
@@ -24,6 +23,10 @@ const severeHighEl = $('severeHigh');
 const deviceNameEl = $('deviceName');
 const basalTypeEl = $('basalType');
 const bolusTypeEl = $('bolusType');
+
+// الحقول الجديدة
+const useNetCarbsEl = $('useNetCarbs');
+const netCarbRuleEl = $('netCarbRule');
 
 const params = new URLSearchParams(location.search);
 const childId = params.get('child');
@@ -60,6 +63,10 @@ onAuthStateChanged(auth, async (user)=>{
     basalTypeEl.value = c.insulin?.basalType || c.insulinBasalType || '';
     bolusTypeEl.value = c.insulin?.bolusType || c.insulinBolusType || '';
 
+    // الإعدادات الجديدة
+    useNetCarbsEl.checked = (c.useNetCarbs !== false);
+    netCarbRuleEl.value = c.netCarbRule || 'fullFiber';
+
     // حفظ
     form.addEventListener('submit', async (e)=>{
       e.preventDefault();
@@ -85,10 +92,12 @@ onAuthStateChanged(auth, async (user)=>{
             basalType: basalTypeEl.value.trim() || null,
             bolusType: bolusTypeEl.value.trim() || null,
           },
+          // الحقول الجديدة
+          useNetCarbs: useNetCarbsEl.checked,
+          netCarbRule: netCarbRuleEl.value || 'fullFiber',
           updatedAt: new Date().toISOString()
         };
 
-        const ref = doc(db, `parents/${user.uid}/children/${childId}`);
         await updateDoc(ref, payload);
         alert('✅ تم حفظ التعديلات بنجاح');
         history.back();
@@ -102,10 +111,9 @@ onAuthStateChanged(auth, async (user)=>{
 
     // حذف الطفل
     $('deleteBtn').addEventListener('click', async ()=>{
-      if(!confirm('هل أنتِ متأكدة من حذف الطفل؟ هذا الإجراء لا يمكن التراجع عنه.')) return;
+      if(!confirm('هل أنتِ متأكدة من حذف الطفل؟')) return;
       try{
         showLoader(true);
-        const ref = doc(db, `parents/${user.uid}/children/${childId}`);
         await deleteDoc(ref);
         alert('تم حذف الطفل.');
         location.href = 'parent.html';
