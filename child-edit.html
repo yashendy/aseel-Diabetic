@@ -4,34 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>تعديل بيانات الطفل</title>
-  <link rel="icon" href="data:,">
-  <style>
-    :root{
-      --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#222; --muted:#666;
-      --primary:#4CAF50; --accent:#42A5F5; --danger:#E53935;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Tahoma,Arial,sans-serif}
-    .container{max-width:920px;margin:auto;padding:16px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 6px 16px rgba(0,0,0,.06)}
-    .top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-    .top h1{margin:0}
-    .btn{border:none;border-radius:10px;padding:10px 12px;cursor:pointer}
-    .btn.back{background:#E3F2FD;color:#0D47A1;border:1px solid #cfe1ff}
-    .btn.save{background:var(--primary);color:#fff}
-    .btn.delete{background:#fff;color:var(--danger);border:1px solid #ffd1d1}
-    form{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-    fieldset{border:1px solid var(--border);border-radius:12px;padding:12px}
-    legend{padding:0 6px;color:#333;font-weight:700}
-    label{display:block;font-size:12px;color:#555;margin-bottom:6px}
-    input,select{width:100%;padding:10px;border:1px solid #cfd8e3;border-radius:10px;background:#fff;font-size:14px}
-    .row-1{grid-column:1/-1}
-    .muted{color:#666}
-    .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
-    .hint{font-size:12px;color:#666}
-    .loader{position:fixed;inset:0;background:rgba(255,255,255,.6);display:none;align-items:center;justify-content:center;font-weight:700;z-index:9999}
-    .loader.show{display:flex}
-  </style>
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <link rel="stylesheet" href="css/child-edit.css?v=1" />
 </head>
 <body>
   <div class="container">
@@ -115,18 +89,35 @@
           </div>
         </fieldset>
 
-        <div class="row-1 hint">💡 كل القيم تُحفظ للطفل الحالي.</div>
+        <fieldset class="row-1">
+          <legend>إعدادات الكارب الصافي</legend>
+          <div class="row-switch">
+            <label for="useNetCarbs">استخدم الكارب الصافي في حساب الجرعة</label>
+            <label class="switch">
+              <input id="useNetCarbs" type="checkbox" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div>
+            <label for="netCarbRule">طريقة حساب الصافي</label>
+            <select id="netCarbRule">
+              <option value="fullFiber">اطرح كامل الألياف (موصى به)</option>
+              <option value="halfFiber">اطرح نصف الألياف</option>
+            </select>
+          </div>
+        </fieldset>
 
-        <div class="actions row-1">
-          <button type="button" class="btn delete" id="deleteBtn">🗑️ حذف الطفل</button>
-          <button type="submit" class="btn save" id="saveBtn">💾 حفظ التعديلات</button>
+        <div class="form-actions">
+          <button type="submit" class="btn">💾 حفظ</button>
+          <button type="button" class="btn danger" id="deleteBtn">🗑️ حذف الطفل</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div id="loader" class="loader">جارِ الحفظ…</div>
+  <div id="loader" class="loader"></div>
 
-  <script type="module" src="js/child-edit.js"></script>
+  <script type="module" src="js/firebase-config.js"></script>
+  <script type="module" src="js/child-edit.js?v=2"></script>
 </body>
 </html>
