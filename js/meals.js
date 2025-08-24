@@ -1,4 +1,11 @@
-// js/meals.js (compat, v3) — مسارات foodItems على مستوى الـ parent + زر رجوع + كل التحسينات
+// js/meals.js (modular, v3) — foodItems على مستوى الـ parent + حساب GL + نفس الواجهة
+
+import { auth, db } from './firebase-config.js';
+import {
+  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
+  query, where, orderBy, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 // ===== عناصر عامة =====
 const params = new URLSearchParams(location.search);
@@ -23,6 +30,7 @@ const tCarbsEl = document.getElementById('tCarbs');
 const tCalEl   = document.getElementById('tCal');
 const tProtEl  = document.getElementById('tProt');
 const tFatEl   = document.getElementById('tFat');
+const tGLEl    = document.getElementById('tGL'); // جديد
 
 const suggestedDoseEl = document.getElementById('suggestedDose');
 const doseExplainEl   = document.getElementById('doseExplain');
@@ -80,9 +88,7 @@ const SLOT_MAP = {
   'عشاء': { pre:'ق.العشا',  post:'ب.العشا',  window:[{s:'17:00',e:'21:30'}] },
   'سناك': { pre:'سناك',     post:'سناك',     window:[{s:'00:00',e:'23:59'}] }
 };
-const SLOTS_ORDER = [
-  "الاستيقاظ","ق.الفطار","ب.الفطار","ق.الغدا","ب.الغدا","ق.العشا","ب.العشا","سناك","ق.النوم","أثناء النوم","ق.الرياضة","ب.الرياضة"
-];
+const SLOTS_ORDER = ["الاستيقاظ","ق.الفطار","ب.الفطار","ق.الغدا","ب.الغدا","ق.العشا","ب.العشا","سناك","ق.النوم","أثناء النوم","ق.الرياضة","ب.الرياضة"];
 
 function inWindow(dateObj, win){
   if(!dateObj || !win) return true;
@@ -128,14 +134,14 @@ function clearDraft(){ localStorage.removeItem(draftKey()); }
 })();
 
 // ===== جلسة + طفل =====
-firebase.auth().onAuthStateChanged(async (user)=>{
+onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href = 'index.html'; return; }
   if(!childId){ alert('لا يوجد معرف طفل في الرابط'); return; }
   currentUser = user;
 
-  const childRef = firebase.firestore().doc(`parents/${user.uid}/children/${childId}`);
-  const snap = await childRef.get();
-  if(!snap.exists){ alert('لم يتم العثور على الطفل'); history.back(); return; }
+  const childRef = doc(db, `parents/${user.uid}/children/${childId}`);
+  const snap = await getDoc(childRef);
+  if(!snap.exists()){ alert('لم يتم العثور على الطفل'); history.back(); return; }
   childData = snap.data();
 
   childNameEl.textContent = childData.name || 'طفل';
@@ -160,13 +166,13 @@ function calcAge(bd){
 // ===== القياسات =====
 async function loadMeasurements(){
   const d = mealDateEl.value;
-  const ref = firebase.firestore().collection(`parents/${currentUser.uid}/children/${childId}/measurements`);
-  const qy  = ref.where('date','==', d).orderBy('when','asc');
-  const snap= await qy.get();
+  const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
+  const qy  = query(ref, where('date','==', d), orderBy('when','asc'));
+  const snap= await getDocs(qy);
   cachedMeasurements = [];
   snap.forEach(s=>{
     const m = s.data();
-    const when = m.when?.toDate? m.when.toDate() : (m.when ? new Date(m.when) : null);
+    const when = m.when?.toDate ? m.when.toDate() : (m.when ? new Date(m.when) : null);
     const mmol = m.value_mmol ?? ((m.value_mgdl||0)/18);
     cachedMeasurements.push({
       id: s.id, slot: m.slot || '-', when,
@@ -215,8 +221,8 @@ function populateReadingSelects(){
 // ===== وجبات اليوم =====
 async function loadMealsOfDay(){
   const d = mealDateEl.value;
-  const ref = firebase.firestore().collection(`parents/${currentUser.uid}/children/${childId}/meals`);
-  const snap = await ref.where('date','==', d).orderBy('createdAt','asc').get();
+  const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/meals`);
+  const snap = await getDocs(query(ref, where('date','==', d), orderBy('createdAt','asc')));
   const rows = []; snap.forEach(s=> rows.push({ id:s.id, ...s.data() }));
   renderMealsList(rows);
 }
@@ -252,6 +258,7 @@ function renderMealsList(rows){
 // ===== عناصر الوجبة =====
 function addItemRow(itemDoc){
   const lastQty = lastUsedMap[itemDoc.id]?.qty ?? 100;
+  const gi = toNumber(itemDoc?.gi) || null;
   const row = {
     itemId: itemDoc.id,
     name: itemDoc.name,
@@ -266,7 +273,8 @@ function addItemRow(itemDoc){
       prot:  toNumber(itemDoc?.nutrPer100g?.protein_g),
       fat:   toNumber(itemDoc?.nutrPer100g?.fat_g)
     },
-    calc:{carbs:0,cal:0,prot:0,fat:0},
+    gi,
+    calc:{carbs:0,cal:0,prot:0,fat:0,gl:0},
     measures: Array.isArray(itemDoc.measures) ? itemDoc.measures.filter(m=>m.name && m.grams>0) : []
   };
   currentItems.push(row);
@@ -279,7 +287,7 @@ function renderItems(){
     const div = document.createElement('div');
     div.className = 'row';
     div.innerHTML = `
-      <div class="name"><div><strong>${esc(r.name)}</strong>${r.brand?` <span class="sub">(${esc(r.brand)})</span>`:''}</div></div>
+      <div class="name"><div><strong>${esc(r.name)}</strong>${r.brand?` <span class="sub">(${esc(r.brand)})</span>`:''}${r.gi!=null?` <span class="sub">• GI: ${r.gi}</span>`:''}</div></div>
       <div>
         <select class="unit">
           <option value="grams" ${r.unit==='grams'?'selected':''}>جرام</option>
@@ -347,6 +355,7 @@ function recomputeRow(r, div){
   r.calc.cal   = (r.per100.cal   * grams)/100;
   r.calc.prot  = (r.per100.prot  * grams)/100;
   r.calc.fat   = (r.per100.fat   * grams)/100;
+  r.calc.gl    = r.gi ? (r.gi * (r.calc.carbs/100)) : 0; // GL = GI * carbs/100
 
   if (div){
     div.querySelector('.grams').textContent = round1(r.grams);
@@ -367,14 +376,16 @@ function recalcAll(){
     a.cal   += r.calc.cal||0;
     a.prot  += r.calc.prot||0;
     a.fat   += r.calc.fat||0;
+    a.gl    += r.calc.gl||0;
     return a;
-  }, {grams:0,carbs:0,cal:0,prot:0,fat:0});
+  }, {grams:0,carbs:0,cal:0,prot:0,fat:0,gl:0});
 
   tGramsEl.textContent = round1(totals.grams);
   tCarbsEl.textContent = round1(totals.carbs);
   tCalEl.textContent   = Math.round(totals.cal);
   tProtEl.textContent  = round1(totals.prot);
   tFatEl.textContent   = round1(totals.fat);
+  if (tGLEl) tGLEl.textContent = round1(totals.gl); // إجمالي GL
 
   const carbRatio = Number(childData?.carbRatio || 12);
   const mealDose = totals.carbs>0 ? (totals.carbs / carbRatio) : 0;
@@ -448,7 +459,9 @@ async function saveMeal(){
     carbs_g: round1(r.calc.carbs || 0),
     cal_kcal: Math.round(r.calc.cal || 0),
     protein_g: round1(r.calc.prot || 0),
-    fat_g: round1(r.calc.fat || 0)
+    fat_g: round1(r.calc.fat || 0),
+    gi: r.gi || null,
+    gl: round1(r.calc.gl || 0)
   }));
 
   const totals = {
@@ -456,7 +469,8 @@ async function saveMeal(){
     carbs_g: round1(items.reduce((a,i)=>a+i.carbs_g,0)),
     cal_kcal: Math.round(items.reduce((a,i)=>a+i.cal_kcal,0)),
     protein_g: round1(items.reduce((a,i)=>a+i.protein_g,0)),
-    fat_g: round1(items.reduce((a,i)=>a+i.fat_g,0))
+    fat_g: round1(items.reduce((a,i)=>a+i.fat_g,0)),
+    gl: round1(items.reduce((a,i)=>a+i.gl,0))
   };
 
   items.forEach(i=> { lastUsedMap[i.itemId]={ qty:i.qty, ts:Date.now() }; });
@@ -472,17 +486,17 @@ async function saveMeal(){
     suggestedMealDose: Number(suggestedDoseEl.textContent) || 0,
     appliedMealDose: appliedDoseEl.value ? Number(appliedDoseEl.value) : null,
     notes: mealNotesEl.value?.trim() || null,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    updatedAt: serverTimestamp()
   };
 
   try{
-    const ref = firebase.firestore().collection(`parents/${currentUser.uid}/children/${childId}/meals`);
+    const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/meals`);
     if (editingMealId){
-      await ref.doc(editingMealId).update(payload);
+      await updateDoc(doc(ref, editingMealId), payload);
       showToast('✅ تم تحديث الوجبة');
     } else {
-      payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-      await ref.add(payload);
+      payload.createdAt = serverTimestamp();
+      await addDoc(ref, payload);
       showToast('✅ تم حفظ الوجبة');
       saveLastMealTemplate(mealTypeEl.value, payload);
     }
@@ -531,15 +545,16 @@ function editMeal(r){
       prot:  i.grams>0 ? (i.protein_g*100/i.grams) : 0,
       fat:   i.grams>0 ? (i.fat_g*100/i.grams) : 0
     },
-    calc:{carbs: i.carbs_g, cal: i.cal_kcal, prot: i.protein_g, fat: i.fat_g},
+    gi: i.gi ?? null,
+    calc:{carbs: i.carbs_g, cal: i.cal_kcal, prot: i.protein_g, fat: i.fat_g, gl: i.gl||0},
     measures: []
   }));
 
-  // جلب المقاييس البيتية من مكتبة الأصناف (عند مستوى الـ parent)
+  // جلب المقاييس البيتية من مكتبة الأصناف (على مستوى الـ parent)
   Promise.all(currentItems.map(async (row)=>{
     if (!row.itemId) return;
-    const d = await firebase.firestore().doc(`parents/${currentUser.uid}/foodItems/${row.itemId}`).get();
-    if (d.exists){
+    const d = await getDoc(doc(db, `parents/${currentUser.uid}/foodItems/${row.itemId}`));
+    if (d.exists()){
       const item = d.data();
       row.measures = Array.isArray(item.measures)? item.measures.filter(m=>m.name && m.grams>0) : [];
     }
@@ -552,7 +567,7 @@ function editMeal(r){
 async function deleteMeal(r){
   if(!confirm('هل تريد حذف هذه الوجبة؟')) return;
   try{
-    await firebase.firestore().doc(`parents/${currentUser.uid}/children/${childId}/meals/${r.id}`).delete();
+    await deleteDoc(doc(db, `parents/${currentUser.uid}/children/${childId}/meals/${r.id}`));
     showToast('🗑️ تم حذف الوجبة');
     await loadMealsOfDay();
   }catch(e){
@@ -580,138 +595,122 @@ function openPicker(){
 }
 
 async function loadFoodItems(){
-  const ref = firebase.firestore().collection(`parents/${currentUser.uid}/foodItems`);
-  const snap = await ref.orderBy('nameLower','asc').get();
+  const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
+  const snap = await getDocs(query(ref, orderBy('nameLower','asc')));
   cachedFood = [];
   snap.forEach(d=> cachedFood.push({ id:d.id, ...d.data() }));
   applyPickerFilters();
 }
 
-async function applyPickerFilters(){
+function applyPickerFilters(){
   const q = (pickSearchEl.value||'').trim();
   const cat = pickCategoryEl.value;
 
+  let list = [...cachedFood];
+  if (cat!=='الكل'){ list = list.filter(x=> (x.category||'')===cat); }
+
   if (q.startsWith('#') && q.length>1){
-    const tag = q.slice(1).trim().toLowerCase();
-    const ref = firebase.firestore().collection(`parents/${currentUser.uid}/foodItems`);
-    const snap= await ref.where('tags','array-contains', tag).get();
-    const arr = []; snap.forEach(d=> arr.push({ id:d.id, ...d.data() }));
-    renderPicker(cat==='الكل'?arr:arr.filter(x=>x.category===cat));
-    return;
-  }
-
-  if (q.length>=2){
+    const tag = q.slice(1).toLowerCase();
+    list = list.filter(x=> Array.isArray(x.tags) && x.tags.some(t=> String(t).toLowerCase()===tag));
+  } else if (q){
     const token = q.toLowerCase();
-    const ref = firebase.firestore().collection(`parents/${currentUser.uid}/foodItems`);
-    const snap= await ref.where('keywords','array-contains', token).get();
-    const arr = []; snap.forEach(d=> arr.push({ id:d.id, ...d.data() }));
-    renderPicker(cat==='الكل'?arr:arr.filter(x=>x.category===cat));
-    return;
+    list = list.filter(x=>{
+      return (x.name||'').toLowerCase().includes(token)
+          || (x.brand||'').toLowerCase().includes(token)
+          || (x.category||'').toLowerCase().includes(token)
+          || (Array.isArray(x.tags)&&x.tags.some(t=> String(t).toLowerCase().includes(token)))
+          || (Array.isArray(x.keywords)&&x.keywords.includes(token));
+    });
   }
 
-  const base = (cat==='الكل')? [...cachedFood] : cachedFood.filter(x=> x.category===cat);
-  base.sort((a,b)=>{
-    const la = lastUsedMap[a.id]?.ts || 0;
-    const lb = lastUsedMap[b.id]?.ts || 0;
-    return lb - la;
-  });
-  renderPicker(base);
+  renderPicker(list);
 }
 
-function renderPicker(items){
+function renderPicker(list){
   pickerGrid.innerHTML = '';
-  if(!items.length){ pickerEmpty.classList.remove('hidden'); return; }
+  if(!list.length){ pickerEmpty.classList.remove('hidden'); return; }
   pickerEmpty.classList.add('hidden');
 
-  items.forEach(it=>{
-    const card = document.createElement('div');
-    card.className = 'pick-card';
-    const thumbHTML = it.imageUrl && String(it.autoImage)!=='true'
-      ? `<img src="${esc(it.imageUrl)}" alt="">`
-      : `<span>${categoryIcon(it.category)}</span>`;
-
-    card.innerHTML = `
-      <div class="pick-thumb">${thumbHTML}</div>
+  list.forEach(x=>{
+    const div = document.createElement('div');
+    div.className = 'pick-card';
+    const thumb = x.imageUrl ? `<img src="${esc(x.imageUrl)}" alt="">` : `<span class="pick-thumb">🍽️</span>`;
+    const giTag = (x.gi!=null) ? `<span class="badge">GI: ${x.gi}</span>` : '';
+    div.innerHTML = `
+      <div class="pick-thumb">${thumb}</div>
       <div class="pick-meta">
-        <div><strong>${esc(it.name)}</strong> ${it.brand?`<small>(${esc(it.brand)})</small>`:''}</div>
+        <div><strong>${esc(x.name)}</strong> ${x.brand?`<small>(${esc(x.brand)})</small>`:''}</div>
         <div class="badges">
-          <span class="badge">${esc(it.category||'-')}</span>
-          <span class="badge">كارب/100g: ${it?.nutrPer100g?.carbs_g ?? '-'}</span>
-          <span class="badge">سعرات/100g: ${it?.nutrPer100g?.cal_kcal ?? '-'}</span>
+          <span class="badge">${esc(x.category||'-')}</span>
+          <span class="badge">ك/100g: ${x?.nutrPer100g?.carbs_g||0}</span>
+          ${giTag}
+          ${(x.tags||[]).slice(0,3).map(t=>`<span class="badge">#${esc(t)}</span>`).join('')}
         </div>
         <div class="pick-actions">
-          <button class="chooseBtn">اختيار</button>
+          <button class="secondary addBtn">إضافة</button>
         </div>
       </div>
     `;
-    card.querySelector('.chooseBtn').addEventListener('click', ()=>{
-      lastUsedMap[it.id] = { qty: lastUsedMap[it.id]?.qty ?? 100, ts: Date.now() };
-      saveLastUsed(lastUsedMap);
-      addItemRow(it);
+    div.querySelector('.addBtn').addEventListener('click', ()=>{
+      addItemRow({
+        id:x.id,
+        name:x.name, brand:x.brand||null,
+        nutrPer100g: x.nutrPer100g||{carbs_g:0,cal_kcal:0,protein_g:0,fat_g:0},
+        measures: Array.isArray(x.measures)? x.measures : [],
+        gi: x.gi ?? null
+      });
       pickerModal.classList.add('hidden');
     });
-
-    pickerGrid.appendChild(card);
+    pickerGrid.appendChild(div);
   });
 }
 
-function categoryIcon(cat){
-  switch(cat){
-    case 'نشويات': return '🍞';
-    case 'حليب': return '🥛';
-    case 'فاكهة': return '🍎';
-    case 'خضروات': return '🥕';
-    case 'لحوم': return '🍗';
-    case 'دهون': return '🥑';
-    default: return '🍽️';
+// ===== تكرار آخر وجبة من نفس النوع =====
+function saveLastMealTemplate(type, payload){
+  const key = `lastMealTemplate:${currentUser?.uid||'u'}:${childId||'c'}:${type}`;
+  localStorage.setItem(key, JSON.stringify({
+    items: payload.items || [],
+    type
+  }));
+}
+function repeatLastMealTemplate(){
+  const key = `lastMealTemplate:${currentUser?.uid||'u'}:${childId||'c'}:${mealTypeEl.value||'فطور'}`;
+  const raw = localStorage.getItem(key);
+  if(!raw){ showToast('لا توجد وجبة محفوظة لهذا النوع'); return; }
+  try{
+    const d = JSON.parse(raw);
+    currentItems = (d.items||[]).map(i=>({
+      itemId: i.itemId, name: i.name, brand: i.brand || null,
+      unit: i.unit || 'grams', qty: Number(i.qty)||0, measure: i.measure || null,
+      grams: Number(i.grams)||0,
+      per100: {
+        carbs: i.grams>0 ? (i.carbs_g*100/i.grams) : 0,
+        cal:   i.grams>0 ? (i.cal_kcal*100/i.grams) : 0,
+        prot:  i.grams>0 ? (i.protein_g*100/i.grams) : 0,
+        fat:   i.grams>0 ? (i.fat_g*100/i.grams) : 0
+      },
+      gi: i.gi ?? null,
+      calc:{carbs: i.carbs_g, cal: i.cal_kcal, prot: i.protein_g, fat: i.fat_g, gl: i.gl||0},
+      measures: []
+    }));
+    renderItems(); recalcAll(); saveDraft();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }catch(_){
+    showToast('تعذر استرجاع القالب');
   }
 }
-function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 
-// ===== تكرار آخر وجبة =====
-function repeatLastMealTemplate(){
-  const tpl = loadLastMealTemplate(mealTypeEl.value);
-  if(!tpl){ showToast('لا توجد وجبة محفوظة لهذا النوع بعد'); return; }
-  currentItems = (tpl.items||[]).map(i=>({
-    itemId: i.itemId, name: i.name, brand: i.brand || null,
-    unit: i.unit || 'grams', qty: Number(i.qty)||0, measure: i.measure || null,
-    grams: Number(i.grams)||0,
-    per100: {
-      carbs: i.grams>0 ? (i.carbs_g*100/i.grams) : 0,
-      cal:   i.grams>0 ? (i.cal_kcal*100/i.grams) : 0,
-      prot:  i.grams>0 ? (i.protein_g*100/i.grams) : 0,
-      fat:   i.grams>0 ? (i.fat_g*100/i.grams) : 0
-    },
-    calc:{carbs: i.carbs_g, cal: i.cal_kcal, prot: i.protein_g, fat: i.fat_g},
-    measures: []
-  }));
-  renderItems(); recalcAll(); saveDraft();
-}
-
-// ===== LocalStorage Helpers =====
-function saveLastMealTemplate(type, payload){
-  try{
-    const k = `tpl:lastMeal:${currentUser.uid}:${childId}:${type}`;
-    localStorage.setItem(k, JSON.stringify({ items: payload.items }));
-  }catch(_){}
-}
-function loadLastMealTemplate(type){
-  try{
-    const k = `tpl:lastMeal:${currentUser?.uid||'u'}:${childId||'c'}:${type}`;
-    const raw = localStorage.getItem(k);
-    return raw? JSON.parse(raw) : null;
-  }catch(_){ return null; }
+// ===== Last Used Cache =====
+function loadLastUsed(){
+  const key = `lastUsedQty:${currentUser?.uid||'u'}:${childId||'c'}`;
+  try{ return JSON.parse(localStorage.getItem(key)||'{}'); }catch(_){ return {}; }
 }
 function saveLastUsed(map){
-  try{
-    const k = `lastUsed:${currentUser.uid}:${childId}`;
-    localStorage.setItem(k, JSON.stringify(map));
-  }catch(_){}
+  const key = `lastUsedQty:${currentUser?.uid||'u'}:${childId||'c'}`;
+  localStorage.setItem(key, JSON.stringify(map||{}));
 }
-function loadLastUsed(){
-  try{
-    const k = `lastUsed:${currentUser?.uid||'u'}:${childId||'c'}`;
-    const raw = localStorage.getItem(k);
-    return raw? JSON.parse(raw) : {};
-  }catch(_){ return {}; }
+
+// ===== أدوات مساعدة =====
+function debounce(fn, ms=250){
+  let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); };
 }
