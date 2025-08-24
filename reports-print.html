@@ -7,7 +7,7 @@
   <title>تقرير قياسات — الطباعة</title>
 
   <link rel="icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/reports-print.css?v=4" />
+  <link rel="stylesheet" href="css/reports-print.css?v=5" />
 </head>
 <body>
   <div class="container">
@@ -47,13 +47,14 @@
             <input id="toDate" type="date" />
           </div>
 
-          <div class="field">
+          <div class="field grow">
             <label>ملاحظات</label>
             <input id="notes" type="text" placeholder="ملاحظات تظهر أعلى التقرير" />
           </div>
 
           <div class="actions">
             <button id="applyBtn" class="btn">تطبيق</button>
+            <button id="blankBtn" class="btn outline" title="تفعيل النموذج الفارغ بسرعة">نموذج فارغ الآن</button>
             <button id="printBtn" class="btn secondary">🖨️ PDF / طباعة</button>
           </div>
         </div>
@@ -61,7 +62,7 @@
         <div class="row wrap gap8">
           <label class="switch">
             <input id="maskTreat" type="checkbox" />
-            <span></span> “إخفاء الملاحظات في الطباعة *
+            <span></span> إخفاء الملاحظات في الطباعة
           </label>
 
           <label class="switch">
@@ -74,7 +75,6 @@
             <span></span> تقرير خاص (أسبوعي)
           </label>
 
-          <!-- جديد: النموذج الفارغ -->
           <label class="switch">
             <input id="manualMode" type="checkbox" />
             <span></span> وضع يدوي (نموذج فارغ قابل للتحرير)
@@ -82,6 +82,12 @@
         </div>
       </div>
     </header>
+
+    <!-- يظهر أعلى الجدول إذا خانة الملاحظات ليست فارغة -->
+    <section id="notesBar" class="card notes-bar hidden">
+      <strong>ملاحظات:</strong>
+      <span id="notesText">—</span>
+    </section>
 
     <section class="card">
       <div class="table-head">
@@ -97,7 +103,6 @@
         </div>
       </div>
 
-      <!-- الجدول -->
       <div class="table-wrap">
         <table id="reportTable" class="table">
           <thead>
@@ -121,7 +126,8 @@
     </section>
 
     <footer class="muted tiny">
-      * إخفاء الملاحظات لا يحذف البيانات، فقط لا يطبعها.
+      ملاحظة: خيار “إخفاء الملاحظات في الطباعة” يؤثر فقط على الملاحظات داخل خلايا الجدول؛
+      أما الملاحظات أعلى التقرير فتظهر دائمًا إن وُجدت.
     </footer>
   </div>
 
@@ -130,6 +136,6 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
   <!-- كود الصفحة -->
-  <script type="module" src="js/reports-print.js?v=4"></script>
+  <script type="module" src="js/reports-print.js?v=5"></script>
 </body>
 </html>
