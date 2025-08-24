@@ -1,5 +1,4 @@
-// js/food-items.js (modular) — حفظ تحت parents/{uid}/foodItems + دعم GI + ضغط صورة صغير
-
+// js/food-items.js — دعم fiber_g + احتفاظ كامل بالقديم
 import { auth, db } from './firebase-config.js';
 import {
   collection, addDoc, doc, updateDoc, deleteDoc, getDocs, getDoc,
@@ -8,43 +7,48 @@ import {
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* ===== عناصر واجهة ===== */
-const userEmailEl = document.getElementById('userEmail');
-const formTitleEl = document.getElementById('formTitle');
-const foodForm    = document.getElementById('foodForm');
-const nameEl      = document.getElementById('name');
-const brandEl     = document.getElementById('brand');
-const categoryEl  = document.getElementById('category');
-const tagsEl      = document.getElementById('tags');
+const userEmailEl   = document.getElementById('userEmail');
+const formTitleEl   = document.getElementById('formTitle');
+const foodForm      = document.getElementById('foodForm');
+const nameEl        = document.getElementById('name');
+const brandEl       = document.getElementById('brand');
+const categoryEl    = document.getElementById('category');
+const tagsEl        = document.getElementById('tags');
 
-const carbs100El  = document.getElementById('carbs100');
-const protein100El= document.getElementById('protein100');
-const fat100El    = document.getElementById('fat100');
-const cal100El    = document.getElementById('cal100');
+const carbs100El    = document.getElementById('carbs100');
+const fiber100El    = document.getElementById('fiber100');
+const protein100El  = document.getElementById('protein100');
+const fat100El      = document.getElementById('fat100');
+const cal100El      = document.getElementById('cal100');
 
-const giEl        = document.getElementById('gi');
-const giSrcEl     = document.getElementById('giSource');
+const giEl          = document.getElementById('gi');
+const giSrcEl       = document.getElementById('giSource');
 
-const measuresWrap= document.getElementById('measuresWrap');
+const measuresWrap  = document.getElementById('measuresWrap');
 const addMeasureBtn = document.getElementById('addMeasureBtn');
 
-const imageInput  = document.getElementById('imageInput');
-const previewImg  = document.getElementById('preview');
-const clearImgBtn = document.getElementById('clearImgBtn');
+const imageInput    = document.getElementById('imageInput');
+const previewImg    = document.getElementById('preview');
+const clearImgBtn   = document.getElementById('clearImgBtn');
 
-const saveBtn     = document.getElementById('saveBtn');
-const resetBtn    = document.getElementById('resetBtn');
+const saveBtn       = document.getElementById('saveBtn');
+const resetBtn      = document.getElementById('resetBtn');
 
-const searchEl    = document.getElementById('search');
-const filterCatEl = document.getElementById('filterCat');
-const foodGrid    = document.getElementById('foodGrid');
-const emptyEl     = document.getElementById('empty');
+const searchEl      = document.getElementById('search');
+const filterCatEl   = document.getElementById('filterCat');
+const foodGrid      = document.getElementById('foodGrid');
+const emptyEl       = document.getElementById('empty');
 
-const toastEl     = document.getElementById('toast').querySelector('.msg');
+const toastEl       = document.getElementById('toast');
+const toastMsgEl    = toastEl.querySelector('.msg');
+
+document.getElementById('goMeals').addEventListener('click', ()=> location.href='meals.html');
+document.getElementById('goHome').addEventListener('click', ()=> location.href='index.html');
 
 /* ===== حالة ===== */
 let currentUser = null;
-let editingId   = null;   // عند التعديل
-let cachedItems = [];     // كاش لعرض الشبكة
+let editingId   = null;
+let cachedItems = [];
 let currentImageDataUrl = ''; // Base64 للصورة الصغيرة
 
 /* ===== أدوات ===== */
@@ -53,7 +57,7 @@ const esc = (s)=> (s||'').toString()
   .replaceAll('>','&gt;').replaceAll('"','&quot;')
   .replaceAll("'",'&#039;');
 const toNumber = (x)=> { const n=Number(String(x??'').replace(',','.')); return isNaN(n)?0:n; };
-const showToast = (m)=>{ const t=document.getElementById('toast'); toastEl.textContent=m; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),1800); };
+const showToast = (m)=>{ toastMsgEl.textContent=m; toastEl.classList.remove('hidden'); setTimeout(()=>toastEl.classList.add('hidden'),1800); };
 
 function tokenize(ar){
   const s = (ar||'').toLowerCase().trim();
@@ -68,17 +72,6 @@ function genKeywords(name, brand, category, tags){
   const base = [name, brand, category, ...(tags||[])].join(' ');
   const toks = tokenize(base);
   return Array.from(new Set(toks)).slice(0, 50);
-}
-function catIcon(c){
-  switch(c){
-    case 'نشويات': return '🍞';
-    case 'حليب': return '🥛';
-    case 'فاكهة': return '🍎';
-    case 'خضروات': return '🥕';
-    case 'لحوم': return '🍗';
-    case 'دهون': return '🥑';
-    default: return '🍽️';
-  }
 }
 
 /* ===== ضغط صورة إلى 200px ===== */
@@ -155,10 +148,11 @@ async function loadItems(){
 
 /* ===== تطبيع وثيقة الصنف ===== */
 function normalizeFoodDoc(it){
-  const carbs_g  = toNumber(it?.nutrPer100g?.carbs_g ?? it?.carbs_100g);
-  const cal_kcal = toNumber(it?.nutrPer100g?.cal_kcal ?? it?.calories_100g);
-  const protein_g= toNumber(it?.nutrPer100g?.protein_g ?? it?.protein_100g);
-  const fat_g    = toNumber(it?.nutrPer100g?.fat_g ?? it?.fat_100g);
+  const carbs_g   = toNumber(it?.nutrPer100g?.carbs_g   ?? it?.carbs_100g);
+  const fiber_g   = toNumber(it?.nutrPer100g?.fiber_g   ?? it?.fiber_100g); // جديد
+  const cal_kcal  = toNumber(it?.nutrPer100g?.cal_kcal  ?? it?.calories_100g);
+  const protein_g = toNumber(it?.nutrPer100g?.protein_g ?? it?.protein_100g);
+  const fat_g     = toNumber(it?.nutrPer100g?.fat_g     ?? it?.fat_100g);
 
   let measures = [];
   if (Array.isArray(it?.measures)){
@@ -178,11 +172,8 @@ function normalizeFoodDoc(it){
 
   return {
     id: it.id, name, brand, category, tags,
-    nutrPer100g: { carbs_g, cal_kcal, protein_g, fat_g },
-    measures,
-    nameLower, keywords,
-    imageUrl,
-    gi, giSource
+    nutrPer100g: { carbs_g, fiber_g, cal_kcal, protein_g, fat_g },
+    measures, nameLower, keywords, imageUrl, gi, giSource
   };
 }
 
@@ -227,6 +218,7 @@ function renderGrid(){
         <div class="badges">
           <span class="badge">${esc(x.category||'-')}</span>
           <span class="badge">ك/100g: ${x.nutrPer100g.carbs_g||0}</span>
+          <span class="badge">أل/100g: ${x.nutrPer100g.fiber_g||0}</span>
           <span class="badge">س/100g: ${x.nutrPer100g.cal_kcal||0}</span>
           ${x.nutrPer100g.protein_g?`<span class="badge">ب/100g: ${x.nutrPer100g.protein_g}</span>`:''}
           ${x.nutrPer100g.fat_g?`<span class="badge">د/100g: ${x.nutrPer100g.fat_g}</span>`:''}
@@ -244,6 +236,18 @@ function renderGrid(){
   });
 }
 
+function catIcon(c){
+  switch(c){
+    case 'نشويات': return '🍞';
+    case 'حليب': return '🥛';
+    case 'فاكهة': return '🍎';
+    case 'خضروات': return '🥕';
+    case 'لحوم': return '🍗';
+    case 'دهون': return '🥑';
+    default: return '🍽️';
+  }
+}
+
 /* ===== تعبئة النموذج للتعديل ===== */
 async function fillFormForEdit(id){
   const ref = doc(db, `parents/${currentUser.uid}/foodItems/${id}`);
@@ -258,10 +262,11 @@ async function fillFormForEdit(id){
   categoryEl.value = it.category || 'نشويات';
   tagsEl.value = Array.isArray(it.tags) ? it.tags.join(', ') : '';
 
-  carbs100El.value = it.nutrPer100g.carbs_g ?? '';
-  protein100El.value = it.nutrPer100g.protein_g ?? '';
-  fat100El.value = it.nutrPer100g.fat_g ?? '';
-  cal100El.value = it.nutrPer100g.cal_kcal ?? '';
+  carbs100El.value   = it.nutrPer100g.carbs_g || '';
+  fiber100El.value   = it.nutrPer100g.fiber_g || '';
+  protein100El.value = it.nutrPer100g.protein_g || '';
+  fat100El.value     = it.nutrPer100g.fat_g || '';
+  cal100El.value     = it.nutrPer100g.cal_kcal || '';
 
   giEl.value = it.gi ?? '';
   giSrcEl.value = it.giSource ?? '';
@@ -269,108 +274,115 @@ async function fillFormForEdit(id){
   measuresWrap.innerHTML = '';
   (it.measures||[]).forEach(m=> addMeasureRow(m.name, m.grams));
 
-  currentImageDataUrl = it.imageUrl || '';
-  previewImg.src = currentImageDataUrl || '';
-  previewImg.classList.toggle('hidden', !currentImageDataUrl);
+  if (it.imageUrl){
+    previewImg.src = it.imageUrl;
+    previewImg.classList.remove('hidden');
+    currentImageDataUrl = it.imageUrl;
+  } else {
+    previewImg.classList.add('hidden');
+    previewImg.removeAttribute('src');
+    currentImageDataUrl = '';
+  }
 
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({top:0, behavior:'smooth'});
 }
 
 /* ===== حذف صنف ===== */
 async function deleteItem(id, name){
-  if(!confirm(`حذف ${name||'الصنف'}؟`)) return;
-  await deleteDoc(doc(db, `parents/${currentUser.uid}/foodItems/${id}`));
-  showToast('🗑️ تم الحذف');
-  await loadItems();
+  if(!confirm(`هل تريد حذف "${name}"؟`)) return;
+  try{
+    await deleteDoc(doc(db, `parents/${currentUser.uid}/foodItems/${id}`));
+    showToast('🗑️ تم حذف الصنف');
+    await loadItems();
+    resetForm();
+  }catch(e){
+    console.error(e);
+    alert('تعذر حذف الصنف');
+  }
 }
 
-/* ===== حفظ (إضافة/تعديل) ===== */
-foodForm.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const name = nameEl.value.trim();
-  if(!name){ nameEl.focus(); return; }
+/* ===== حفظ/إعادة ضبط ===== */
+foodForm.addEventListener('submit', saveItem);
+resetBtn.addEventListener('click', ()=> resetForm());
+addMeasureBtn.addEventListener('click', ()=> addMeasureRow());
+imageInput.addEventListener('change', async ()=>{
+  const f = imageInput.files?.[0];
+  currentImageDataUrl = await fileToTinyDataUrl(f);
+  if (currentImageDataUrl){
+    previewImg.src = currentImageDataUrl;
+    previewImg.classList.remove('hidden');
+  }
+});
+clearImgBtn.addEventListener('click', ()=>{
+  currentImageDataUrl = '';
+  previewImg.classList.add('hidden'); previewImg.removeAttribute('src');
+  imageInput.value = '';
+});
 
-  const brand = brandEl.value.trim();
-  const category = categoryEl.value || 'نشويات';
-  const tags = parseTags(tagsEl.value);
+async function saveItem(ev){
+  ev.preventDefault();
+  saveBtn.disabled = true; saveBtn.textContent = 'جارٍ الحفظ…';
 
-  const carbs_g   = toNumber(carbs100El.value);
-  const protein_g = toNumber(protein100El.value);
-  const fat_g     = toNumber(fat100El.value);
-  const cal_kcal  = toNumber(cal100El.value);
+  const name       = nameEl.value.trim();
+  if (!name){ alert('أدخلي اسمًا'); saveBtn.disabled=false; saveBtn.textContent='حفظ الصنف'; return; }
 
-  const gi        = toNumber(giEl.value) || null;
-  const giSource  = (giSrcEl.value||'').trim() || null;
+  const brand      = brandEl.value.trim();
+  const category   = categoryEl.value || 'نشويات';
+  const tags       = parseTags(tagsEl.value);
 
-  const measures = readMeasures();
+  const carbs_g    = toNumber(carbs100El.value);
+  const fiber_g    = toNumber(fiber100El.value); // جديد
+  const protein_g  = toNumber(protein100El.value);
+  const fat_g      = toNumber(fat100El.value);
+  const cal_kcal   = toNumber(cal100El.value);
+
+  const gi         = giEl.value==='' ? null : Number(giEl.value);
+  const giSource   = giSrcEl.value?.trim() || null;
+
+  const measures   = readMeasures();
+  const nameLower  = name.toLowerCase();
+  const keywords   = genKeywords(name, brand, category, tags);
 
   const payload = {
-    name,
-    brand: brand || null,
-    category,
-    tags,
-    nameLower: name.toLowerCase(),
-    keywords: genKeywords(name, brand, category, tags),
-    nutrPer100g: {
-      carbs_g: carbs_g || 0,
-      protein_g: protein_g || 0,
-      fat_g: fat_g || 0,
-      cal_kcal: cal_kcal || 0,
-    },
-    measures, // array [{name, grams}]
+    name, brand, category, tags,
+    nutrPer100g: { carbs_g, fiber_g, protein_g, fat_g, cal_kcal },
+    measures,
     imageUrl: currentImageDataUrl || '',
+    nameLower, keywords,
     gi, giSource,
     updatedAt: serverTimestamp()
   };
 
-  saveBtn.disabled = true;
   try{
+    const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
     if (editingId){
-      await updateDoc(doc(db, `parents/${currentUser.uid}/foodItems/${editingId}`), payload);
-      showToast('✅ تم التحديث');
+      await updateDoc(doc(ref, editingId), payload);
+      showToast('✅ تم تحديث الصنف');
     } else {
       payload.createdAt = serverTimestamp();
-      await addDoc(collection(db, `parents/${currentUser.uid}/foodItems`), payload);
-      showToast('✅ تمت الإضافة');
+      const res = await addDoc(ref, payload);
+      editingId = res.id;
+      showToast('✅ تم حفظ الصنف');
     }
-    resetForm();
     await loadItems();
+    resetForm();
   }catch(e){
     console.error(e);
     alert('حدث خطأ أثناء الحفظ');
   }finally{
-    saveBtn.disabled = false;
+    saveBtn.disabled = false; saveBtn.textContent = 'حفظ الصنف';
   }
-});
+}
 
 function resetForm(){
   editingId = null;
   formTitleEl.textContent = '➕ إضافة صنف';
   foodForm.reset();
   measuresWrap.innerHTML = '';
+  previewImg.classList.add('hidden'); previewImg.removeAttribute('src');
   currentImageDataUrl = '';
-  previewImg.src = '';
-  previewImg.classList.add('hidden');
 }
 
-/* ===== صورة ===== */
-imageInput?.addEventListener('change', async ()=>{
-  const f = imageInput.files?.[0];
-  if(!f){ currentImageDataUrl=''; previewImg.classList.add('hidden'); return; }
-  currentImageDataUrl = await fileToTinyDataUrl(f);
-  previewImg.src = currentImageDataUrl; previewImg.classList.remove('hidden');
-});
-clearImgBtn?.addEventListener('click', ()=>{
-  currentImageDataUrl=''; previewImg.src=''; previewImg.classList.add('hidden'); imageInput.value='';
-});
-
-/* ===== فلترة الشبكة ===== */
-searchEl?.addEventListener('input', ()=> renderGrid());
-filterCatEl?.addEventListener('change', ()=> renderGrid());
-
-/* ===== أزرار أعلى الصفحة ===== */
-document.getElementById('goMeals')?.addEventListener('click', ()=> location.href='meals.html');
-document.getElementById('goHome')?.addEventListener('click', ()=> location.href='index.html');
-
-addMeasureBtn?.addEventListener('click', ()=> addMeasureRow());
-resetBtn?.addEventListener('click', resetForm);
+/* ===== بحث/فلترة ===== */
+searchEl.addEventListener('input', ()=> renderGrid());
+filterCatEl.addEventListener('change', ()=> renderGrid());
