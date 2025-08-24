@@ -1,4 +1,4 @@
-// js/meals.js (modular, v3) — foodItems على مستوى الـ parent + حساب GL + نفس الواجهة
+// js/meals.js (modular, v4) — GL badge (منخفض/متوسط/مرتفع) + كل الحسابات السابقة
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -30,7 +30,7 @@ const tCarbsEl = document.getElementById('tCarbs');
 const tCalEl   = document.getElementById('tCal');
 const tProtEl  = document.getElementById('tProt');
 const tFatEl   = document.getElementById('tFat');
-const tGLEl    = document.getElementById('tGL'); // جديد
+const tGLEl    = document.getElementById('tGL'); // عنصر القيمة الرقمية
 
 const suggestedDoseEl = document.getElementById('suggestedDose');
 const doseExplainEl   = document.getElementById('doseExplain');
@@ -71,10 +71,8 @@ setMaxToday(mealDateEl);
 
 function esc(s){
   return (s||'').toString()
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
+    .replaceAll('&','&amp;').replaceAll('<','&lt;')
+    .replaceAll('>','&gt;').replaceAll('"','&quot;')
     .replaceAll("'",'&#039;');
 }
 function toNumber(x){ const n = Number(String(x ?? '').replace(',','.')); return isNaN(n)?0:n; }
@@ -90,41 +88,32 @@ const SLOT_MAP = {
 };
 const SLOTS_ORDER = ["الاستيقاظ","ق.الفطار","ب.الفطار","ق.الغدا","ب.الغدا","ق.العشا","ب.العشا","سناك","ق.النوم","أثناء النوم","ق.الرياضة","ب.الرياضة"];
 
-function inWindow(dateObj, win){
-  if(!dateObj || !win) return true;
-  const [h,m] = [dateObj.getHours(), dateObj.getMinutes()];
-  const cur = h*60+m;
-  const [sh,sm] = win.s.split(':').map(Number);
-  const [eh,em] = win.e.split(':').map(Number);
-  const start = sh*60+sm, end = eh*60+em;
-  return cur>=start && cur<=end;
+// ===== GL Badge =====
+function glLevel(gl){
+  if (gl < 10) return {cls:'low',    text:'منخفض'};
+  if (gl < 20) return {cls:'medium', text:'متوسط'};
+  return {cls:'high',  text:'مرتفع'};
 }
-
-function draftKey(){ return `draft:meal:${currentUser?.uid||'u'}:${childId||'c'}:${mealDateEl.value||todayStr()}:${mealTypeEl.value||'فطور'}`; }
-function saveDraft(){
-  const payload = {
-    items: currentItems,
-    applied: appliedDoseEl.value || '',
-    notes: mealNotesEl.value || '',
-    preId: preReadingEl.value || '',
-    postId: postReadingEl.value || ''
-  };
-  localStorage.setItem(draftKey(), JSON.stringify(payload));
+function ensureGLBadge(){
+  // نضيف الـ badge بعد القيمة الرقمية لو مش موجود
+  if (!tGLEl) return null;
+  let badge = document.getElementById('tGLBadge');
+  if (!badge){
+    badge = document.createElement('span');
+    badge.id = 'tGLBadge';
+    badge.className = 'gl-badge';
+    const parent = tGLEl.parentElement || tGLEl;
+    parent.appendChild(badge);
+  }
+  return badge;
 }
-function loadDraft(){
-  const raw = localStorage.getItem(draftKey());
-  if(!raw) return;
-  try{
-    const d = JSON.parse(raw);
-    currentItems = Array.isArray(d.items)? d.items : [];
-    appliedDoseEl.value = d.applied || '';
-    mealNotesEl.value   = d.notes || '';
-    renderItems(); recalcAll();
-    setTimeout(()=>{ preReadingEl.value=d.preId||''; postReadingEl.value=d.postId||''; },100);
-    showToast('تم استرجاع المسوّدة');
-  }catch(_){}
+function updateGLBadge(totalGL){
+  const badge = ensureGLBadge();
+  if (!badge) return;
+  const {cls, text} = glLevel(totalGL || 0);
+  badge.className = `gl-badge ${cls}`;
+  badge.textContent = text;
 }
-function clearDraft(){ localStorage.removeItem(draftKey()); }
 
 // ===== تهيئة =====
 (function init(){
@@ -216,6 +205,16 @@ function populateReadingSelects(){
 
   preReadingEl.innerHTML  = build(pref);
   postReadingEl.innerHTML = build(postf);
+}
+
+function inWindow(dateObj, win){
+  if(!dateObj || !win) return true;
+  const [h,m] = [dateObj.getHours(), dateObj.getMinutes()];
+  const cur = h*60+m;
+  const [sh,sm] = win.s.split(':').map(Number);
+  const [eh,em] = win.e.split(':').map(Number);
+  const start = sh*60+sm, end = eh*60+em;
+  return cur>=start && cur<=end;
 }
 
 // ===== وجبات اليوم =====
@@ -368,7 +367,7 @@ function recomputeRow(r, div){
   }
 }
 
-// ===== الجرعة + النطاق =====
+// ===== الجرعة + النطاق + GL badge =====
 function recalcAll(){
   const totals = currentItems.reduce((a,r)=>{
     a.grams += r.grams||0;
@@ -385,7 +384,10 @@ function recalcAll(){
   tCalEl.textContent   = Math.round(totals.cal);
   tProtEl.textContent  = round1(totals.prot);
   tFatEl.textContent   = round1(totals.fat);
-  if (tGLEl) tGLEl.textContent = round1(totals.gl); // إجمالي GL
+  if (tGLEl) {
+    tGLEl.textContent = round1(totals.gl);
+    updateGLBadge(totals.gl); // ← يظهر الوسم واللون
+  }
 
   const carbRatio = Number(childData?.carbRatio || 12);
   const mealDose = totals.carbs>0 ? (totals.carbs / carbRatio) : 0;
@@ -581,7 +583,7 @@ function setBusy(btn, busy){
   btn.textContent = busy ? 'جارٍ الحفظ…' : 'حفظ الوجبة';
 }
 
-// ===== مودال الأصناف (على مستوى parent) =====
+// ===== مودال الأصناف =====
 addItemBtn.addEventListener('click', openPicker);
 closePicker.addEventListener('click', ()=> pickerModal.classList.add('hidden'));
 pickSearchEl.addEventListener('input', debounce(applyPickerFilters, 250));
@@ -710,7 +712,7 @@ function saveLastUsed(map){
   localStorage.setItem(key, JSON.stringify(map||{}));
 }
 
-// ===== أدوات مساعدة =====
+// ===== أدوات =====
 function debounce(fn, ms=250){
   let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); };
 }
