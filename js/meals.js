@@ -1,4 +1,4 @@
-// js/meals.js (modular, v4) — GL badge (منخفض/متوسط/مرتفع) + كل الحسابات السابقة
+// js/meals.js (modular, v5) — GL badge لكل صنف + مساعد AI نصّي محلي
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -7,7 +7,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-// ===== عناصر عامة =====
+/* ========= عناصر عامة ========= */
 const params = new URLSearchParams(location.search);
 const childId = params.get('child');
 
@@ -30,7 +30,7 @@ const tCarbsEl = document.getElementById('tCarbs');
 const tCalEl   = document.getElementById('tCal');
 const tProtEl  = document.getElementById('tProt');
 const tFatEl   = document.getElementById('tFat');
-const tGLEl    = document.getElementById('tGL'); // عنصر القيمة الرقمية
+const tGLEl    = document.getElementById('tGL');
 
 const suggestedDoseEl = document.getElementById('suggestedDose');
 const doseExplainEl   = document.getElementById('doseExplain');
@@ -47,7 +47,7 @@ const filterTypeEl    = document.getElementById('filterType');
 const mealsListEl     = document.getElementById('mealsList');
 const noMealsEl       = document.getElementById('noMeals');
 
-// مودال
+/* مودال الأصناف */
 const pickerModal     = document.getElementById('pickerModal');
 const closePicker     = document.getElementById('closePicker');
 const pickSearchEl    = document.getElementById('pickSearch');
@@ -55,26 +55,31 @@ const pickCategoryEl  = document.getElementById('pickCategory');
 const pickerGrid      = document.getElementById('pickerGrid');
 const pickerEmpty     = document.getElementById('pickerEmpty');
 
-// ===== حالة =====
+/* مودال AI نصّي */
+const aiBtn     = document.getElementById('aiBtn');
+const aiModal   = document.getElementById('aiModal');
+const aiClose   = document.getElementById('aiClose');
+const aiText    = document.getElementById('aiText');
+const aiAnalyze = document.getElementById('aiAnalyze');
+const aiApply   = document.getElementById('aiApply');
+const aiResultsEl = document.getElementById('aiResults');
+
+/* ========= حالة ========= */
 let currentUser, childData;
 let editingMealId = null;
 let currentItems = [];
 let cachedFood = [];
 let cachedMeasurements = [];
 let lastUsedMap = {};
+let aiSuggestions = [];
 
-// ===== أدوات =====
+/* ========= أدوات ========= */
 const pad = n => String(n).padStart(2,'0');
 function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function setMaxToday(inp){ inp && inp.setAttribute('max', todayStr()); }
 setMaxToday(mealDateEl);
 
-function esc(s){
-  return (s||'').toString()
-    .replaceAll('&','&amp;').replaceAll('<','&lt;')
-    .replaceAll('>','&gt;').replaceAll('"','&quot;')
-    .replaceAll("'",'&#039;');
-}
+function esc(s){ return (s||'').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
 function toNumber(x){ const n = Number(String(x ?? '').replace(',','.')); return isNaN(n)?0:n; }
 function round1(x){ return Math.round((x||0)*10)/10; }
 function roundHalf(x){ return Math.round((x||0)*2)/2; }
@@ -88,41 +93,38 @@ const SLOT_MAP = {
 };
 const SLOTS_ORDER = ["الاستيقاظ","ق.الفطار","ب.الفطار","ق.الغدا","ب.الغدا","ق.العشا","ب.العشا","سناك","ق.النوم","أثناء النوم","ق.الرياضة","ب.الرياضة"];
 
-// ===== GL Badge =====
+/* GL levels */
 function glLevel(gl){
   if (gl < 10) return {cls:'low',    text:'منخفض'};
   if (gl < 20) return {cls:'medium', text:'متوسط'};
   return {cls:'high',  text:'مرتفع'};
 }
 function ensureGLBadge(){
-  // نضيف الـ badge بعد القيمة الرقمية لو مش موجود
   if (!tGLEl) return null;
   let badge = document.getElementById('tGLBadge');
   if (!badge){
     badge = document.createElement('span');
     badge.id = 'tGLBadge';
     badge.className = 'gl-badge';
-    const parent = tGLEl.parentElement || tGLEl;
-    parent.appendChild(badge);
+    (tGLEl.parentElement||tGLEl).appendChild(badge);
   }
   return badge;
 }
 function updateGLBadge(totalGL){
-  const badge = ensureGLBadge();
-  if (!badge) return;
-  const {cls, text} = glLevel(totalGL || 0);
-  badge.className = `gl-badge ${cls}`;
-  badge.textContent = text;
+  const b = ensureGLBadge(); if(!b) return;
+  const {cls,text} = glLevel(totalGL||0);
+  b.className = `gl-badge ${cls}`;
+  b.textContent = text;
 }
 
-// ===== تهيئة =====
+/* ========= تهيئة ========= */
 (function init(){
   mealDateEl.value = todayStr();
   tableDateEl.textContent = mealDateEl.value;
   backBtn.addEventListener('click', ()=> history.back());
 })();
 
-// ===== جلسة + طفل =====
+/* ========= جلسة + طفل ========= */
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href = 'index.html'; return; }
   if(!childId){ alert('لا يوجد معرف طفل في الرابط'); return; }
@@ -152,7 +154,7 @@ function calcAge(bd){
   return a;
 }
 
-// ===== القياسات =====
+/* ========= القياسات ========= */
 async function loadMeasurements(){
   const d = mealDateEl.value;
   const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
@@ -217,7 +219,7 @@ function inWindow(dateObj, win){
   return cur>=start && cur<=end;
 }
 
-// ===== وجبات اليوم =====
+/* ========= وجبات اليوم ========= */
 async function loadMealsOfDay(){
   const d = mealDateEl.value;
   const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/meals`);
@@ -254,7 +256,7 @@ function renderMealsList(rows){
   });
 }
 
-// ===== عناصر الوجبة =====
+/* ========= عناصر الوجبة ========= */
 function addItemRow(itemDoc){
   const lastQty = lastUsedMap[itemDoc.id]?.qty ?? 100;
   const gi = toNumber(itemDoc?.gi) || null;
@@ -286,7 +288,15 @@ function renderItems(){
     const div = document.createElement('div');
     div.className = 'row';
     div.innerHTML = `
-      <div class="name"><div><strong>${esc(r.name)}</strong>${r.brand?` <span class="sub">(${esc(r.brand)})</span>`:''}${r.gi!=null?` <span class="sub">• GI: ${r.gi}</span>`:''}</div></div>
+      <div class="name">
+        <div>
+          <strong>${esc(r.name)}</strong>${r.brand?` <span class="sub">(${esc(r.brand)})</span>`:''}
+          ${r.gi!=null?` <span class="sub">• GI: ${r.gi}</span>`:''}
+        </div>
+        <div class="chips">
+          <span class="gl-chip" data-chip="gl">GL: —</span>
+        </div>
+      </div>
       <div>
         <select class="unit">
           <option value="grams" ${r.unit==='grams'?'selected':''}>جرام</option>
@@ -354,7 +364,7 @@ function recomputeRow(r, div){
   r.calc.cal   = (r.per100.cal   * grams)/100;
   r.calc.prot  = (r.per100.prot  * grams)/100;
   r.calc.fat   = (r.per100.fat   * grams)/100;
-  r.calc.gl    = r.gi ? (r.gi * (r.calc.carbs/100)) : 0; // GL = GI * carbs/100
+  r.calc.gl    = r.gi ? (r.gi * (r.calc.carbs/100)) : 0;
 
   if (div){
     div.querySelector('.grams').textContent = round1(r.grams);
@@ -362,12 +372,21 @@ function recomputeRow(r, div){
     div.querySelector('.cal').textContent   = Math.round(r.calc.cal);
     div.querySelector('.prot').textContent  = round1(r.calc.prot);
     div.querySelector('.fat').textContent   = round1(r.calc.fat);
+
+    // تحديث GL chip
+    const chip = div.querySelector('[data-chip="gl"]');
+    if (chip){
+      const {cls,text} = glLevel(r.calc.gl||0);
+      chip.className = `gl-chip ${cls}`;
+      chip.textContent = `GL: ${round1(r.calc.gl)} — ${text}`;
+    }
+
     const measSel = div.querySelector('.measure');
     if (measSel) measSel.disabled = (r.unit!=='household');
   }
 }
 
-// ===== الجرعة + النطاق + GL badge =====
+/* ========= الجرعة + GL الإجمالي ========= */
 function recalcAll(){
   const totals = currentItems.reduce((a,r)=>{
     a.grams += r.grams||0;
@@ -384,10 +403,7 @@ function recalcAll(){
   tCalEl.textContent   = Math.round(totals.cal);
   tProtEl.textContent  = round1(totals.prot);
   tFatEl.textContent   = round1(totals.fat);
-  if (tGLEl) {
-    tGLEl.textContent = round1(totals.gl);
-    updateGLBadge(totals.gl); // ← يظهر الوسم واللون
-  }
+  if (tGLEl){ tGLEl.textContent = round1(totals.gl); updateGLBadge(totals.gl); }
 
   const carbRatio = Number(childData?.carbRatio || 12);
   const mealDose = totals.carbs>0 ? (totals.carbs / carbRatio) : 0;
@@ -429,7 +445,7 @@ function computeDoseRange(carbs, CR, preId){
   return { min: Number(min.toFixed(1)), max: Number(max.toFixed(1)) };
 }
 
-// ===== حفظ/تعديل/حذف =====
+/* ========= حفظ/تعديل/حذف ========= */
 saveMealBtn.addEventListener('click', saveMeal);
 resetMealBtn.addEventListener('click', ()=> resetForm(false));
 printDayBtn.addEventListener('click', ()=> window.print());
@@ -552,7 +568,6 @@ function editMeal(r){
     measures: []
   }));
 
-  // جلب المقاييس البيتية من مكتبة الأصناف (على مستوى الـ parent)
   Promise.all(currentItems.map(async (row)=>{
     if (!row.itemId) return;
     const d = await getDoc(doc(db, `parents/${currentUser.uid}/foodItems/${row.itemId}`));
@@ -583,7 +598,7 @@ function setBusy(btn, busy){
   btn.textContent = busy ? 'جارٍ الحفظ…' : 'حفظ الوجبة';
 }
 
-// ===== مودال الأصناف =====
+/* ========= مودال الأصناف ========= */
 addItemBtn.addEventListener('click', openPicker);
 closePicker.addEventListener('click', ()=> pickerModal.classList.add('hidden'));
 pickSearchEl.addEventListener('input', debounce(applyPickerFilters, 250));
@@ -667,13 +682,10 @@ function renderPicker(list){
   });
 }
 
-// ===== تكرار آخر وجبة من نفس النوع =====
+/* ========= تكرار آخر وجبة ========= */
 function saveLastMealTemplate(type, payload){
   const key = `lastMealTemplate:${currentUser?.uid||'u'}:${childId||'c'}:${type}`;
-  localStorage.setItem(key, JSON.stringify({
-    items: payload.items || [],
-    type
-  }));
+  localStorage.setItem(key, JSON.stringify({ items: payload.items || [], type }));
 }
 function repeatLastMealTemplate(){
   const key = `lastMealTemplate:${currentUser?.uid||'u'}:${childId||'c'}:${mealTypeEl.value||'فطور'}`;
@@ -697,12 +709,10 @@ function repeatLastMealTemplate(){
     }));
     renderItems(); recalcAll(); saveDraft();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }catch(_){
-    showToast('تعذر استرجاع القالب');
-  }
+  }catch(_){ showToast('تعذر استرجاع القالب'); }
 }
 
-// ===== Last Used Cache =====
+/* ========= كاش آخر كميات ========= */
 function loadLastUsed(){
   const key = `lastUsedQty:${currentUser?.uid||'u'}:${childId||'c'}`;
   try{ return JSON.parse(localStorage.getItem(key)||'{}'); }catch(_){ return {}; }
@@ -712,7 +722,139 @@ function saveLastUsed(map){
   localStorage.setItem(key, JSON.stringify(map||{}));
 }
 
-// ===== أدوات =====
-function debounce(fn, ms=250){
-  let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); };
+/* ========= مساعد AI النصّي (محلي) ========= */
+
+// فتح/إغلاق
+aiBtn?.addEventListener('click', async ()=>{
+  aiModal.classList.remove('hidden');
+  aiText.focus();
+  if (!cachedFood.length) await loadFoodItems(); // للتطابق
+});
+aiClose?.addEventListener('click', ()=> aiModal.classList.add('hidden'));
+
+// تحليل النص
+aiAnalyze?.addEventListener('click', ()=>{
+  const text = aiText.value.trim();
+  aiSuggestions = parseMealText(text);
+  renderAISuggestions();
+  aiApply.disabled = aiSuggestions.length===0;
+});
+
+// تطبيق المقترحات
+aiApply?.addEventListener('click', ()=>{
+  aiSuggestions.forEach(s=>{
+    addItemRow({
+      id: s.item.id,
+      name: s.item.name,
+      brand: s.item.brand||null,
+      nutrPer100g: s.item.nutrPer100g||{carbs_g:0,cal_kcal:0,protein_g:0,fat_g:0},
+      measures: Array.isArray(s.item.measures)? s.item.measures : [],
+      gi: s.item.gi ?? null
+    });
+    // عدّل الكمية/الوحدة بعد الإضافة
+    const row = currentItems[currentItems.length-1];
+    row.unit = s.unit;
+    row.qty = s.qty;
+    row.measure = s.measure;
+  });
+  renderItems(); recalcAll(); saveDraft();
+  aiModal.classList.add('hidden');
+});
+
+// ---- دوال التحليل البسيطة (بدون إنترنت) ----
+function normalizeArabic(s){
+  return (s||'').toLowerCase()
+    .replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g,'') // إزالة الحركات
+    .replace(/[اأإآ]/g,'ا')
+    .replace(/ى/g,'ي')
+    .replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ة/g,'ه')
+    .replace(/[٠-٩]/g, d=> '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+    .replace(/[^\p{L}\p{N}\s]/gu,' ')
+    .replace(/\s+/g,' ')
+    .trim();
 }
+const FRACTIONS = { 'نصف':0.5, 'نص':0.5, 'ربع':0.25, 'ثلث':1/3 };
+const COMMON_UNITS = ['جرام','جم','غ','g','مل','ml','ملي','ملليلتر','كوب','نصف كوب','ربع كوب','ملعقه','ملعقة','م.ك','ملعقه كبيره','ملعقه صغيره','شريحه','شريحتين','حبه','حبة'];
+
+function parseMealText(text){
+  if(!text) return [];
+  const parts = text.split(/[,+؛]| و /).map(p=>p.trim()).filter(Boolean);
+  const suggestions = [];
+
+  const food = cachedFood.map(x=> ({
+    ...x, _nameN: normalizeArabic(x.name||''),
+    _tagsN: (x.tags||[]).map(t=> normalizeArabic(t||'')),
+    _brandN: normalizeArabic(x.brand||'')
+  }));
+
+  parts.forEach(p=>{
+    const pN = normalizeArabic(p);
+    // رقم
+    let qty = toNumber((p.match(/(\d+([.,]\d+)?)/)||[])[0]);
+    // كسور لفظية
+    Object.entries(FRACTIONS).forEach(([k,v])=>{
+      if (pN.includes(k)) qty = qty? qty+v : v;
+    });
+    if (!qty) qty = 1;
+
+    // وحدة
+    let unit = 'grams';
+    let measureName = null;
+    if (/(جرام|جم|غ|g)\b/.test(pN)) unit='grams';
+    if (/((كوب|نصف كوب|ربع كوب)|ملعقه كبيره|ملعقه صغيره|ملعقه|ملعقة|شريحه|حبه)/.test(pN)) unit='household';
+
+    // اسم تقريبي
+    const nameGuess = pN.replace(/(\d+([.,]\d+)?)/g,'')
+      .replace(/(جرام|جم|غ|g|مل|ml|ملي|ملليلتر|كوب|نصف كوب|ربع كوب|ملعقه كبيره|ملعقه صغيره|ملعقه|ملعقة|شريحه|حبه)/g,'')
+      .replace(/\b(من|ارز|الابيض|الابيضه|صغيره|كبيره)\b/g,' ').trim();
+
+    // أفضل تطابق من المكتبة
+    let best = null, bestScore = 0;
+    food.forEach(it=>{
+      let s=0;
+      if (it._nameN.includes(nameGuess)) s+=3;
+      if (nameGuess.includes(it._nameN)) s+=3;
+      if (it._brandN && nameGuess.includes(it._brandN)) s+=1;
+      if (Array.isArray(it._tagsN) && it._tagsN.some(t=> nameGuess.includes(t))) s+=1;
+      if (s>bestScore){ bestScore=s; best=it; }
+    });
+    if (!best || bestScore===0) return;
+
+    // اختيار مقياس منزلي لو ذكر في النص
+    if (unit==='household' && Array.isArray(best.measures)){
+      const m = best.measures.find(m=> normalizeArabic(m.name) && pN.includes(normalizeArabic(m.name)));
+      measureName = m ? m.name : (best.measures[0]?.name || null);
+    }
+
+    suggestions.push({
+      part:p, qty, unit,
+      measure: unit==='household'? measureName : null,
+      item: best,
+      note: bestScore>=3 ? 'ok' : 'weak'
+    });
+  });
+
+  return suggestions;
+}
+
+function renderAISuggestions(){
+  aiResultsEl.innerHTML = '';
+  if (!aiSuggestions.length){
+    aiResultsEl.innerHTML = `<div class="empty">لم أجد أصنافًا مطابقة. جرّبي أسماء أوضح أو اضيفي الأصناف للمكتبة أولًا.</div>`;
+    return;
+  }
+  aiSuggestions.forEach(s=>{
+    const div = document.createElement('div');
+    div.className = 'ai-card';
+    div.innerHTML = `
+      <div class="title">${esc(s.item.name)} ${s.item.brand?`<small>(${esc(s.item.brand)})</small>`:''}</div>
+      <div class="meta">من النص: <em>${esc(s.part)}</em></div>
+      <div class="meta">الوحدة: <strong>${s.unit==='grams'?'جرام':'تقدير بيتي'}</strong> • الكمية: <strong>${s.qty}</strong> ${s.unit==='household'&&s.measure?`• المقياس: <strong>${esc(s.measure)}</strong>`:''}</div>
+      <div class="${s.note==='ok'?'ok':'warn'}">${s.note==='ok'?'تطابق جيد':'تطابق تقريبي'}</div>
+    `;
+    aiResultsEl.appendChild(div);
+  });
+}
+
+/* ========= أدوات عامة ========= */
+function debounce(fn, ms=250){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); }; }
