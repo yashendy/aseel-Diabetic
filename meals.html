@@ -1,4 +1,3 @@
-<!-- meals.html (modular) -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -10,10 +9,8 @@
 </head>
 <body>
   <div class="container">
-    <!-- Toast -->
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-    <!-- أعلى الصفحة -->
     <header class="top card">
       <div class="head-grid">
         <div>
@@ -44,24 +41,21 @@
           </div>
         </div>
       </div>
-
-      <!-- زر الرجوع -->
       <div class="top-actions">
         <button id="backBtn" class="secondary">⬅️ رجوع</button>
       </div>
     </header>
 
-    <!-- مُنشئ الوجبة -->
     <section class="builder card">
       <div class="builder-head">
         <h3>مكوّنات الوجبة</h3>
         <div class="actions">
           <button id="addItemBtn">➕ إضافة صنف من المكتبة</button>
-          <button id="repeatLastBtn" class="secondary">🧲 تكرار آخر وجبة من نفس النوع</button>
+          <button id="repeatLastBtn" class="secondary">🧲 تكرار آخر وجبة</button>
+          <button id="aiBtn" class="secondary">🤖 مساعد AI (وصف نصّي)</button>
         </div>
       </div>
 
-      <!-- جدول العناصر -->
       <div id="itemsTable" class="items-table">
         <div class="row header">
           <div>الصنف</div>
@@ -78,7 +72,6 @@
         <div id="itemsBody"></div>
       </div>
 
-      <!-- ملخص (Sticky) -->
       <div class="summary sticky">
         <div class="sum-grid">
           <div class="sum-box"><div class="label">إجمالي الجرامات</div><div class="value"><span id="tGrams">0</span> g</div></div>
@@ -119,7 +112,6 @@
       </div>
     </section>
 
-    <!-- وجبات اليوم -->
     <section class="card">
       <div class="table-head">
         <h3>وجبات يوم <span id="tableDate">—</span></h3>
@@ -138,7 +130,7 @@
     </section>
   </div>
 
-  <!-- مودال الأصناف -->
+  <!-- مودال اختيار صنف -->
   <div id="pickerModal" class="modal hidden" aria-modal="true" role="dialog">
     <div class="modal-body" role="document">
       <div class="modal-header">
@@ -168,7 +160,28 @@
     </div>
   </div>
 
-  <!-- Firebase (modular) + سكربت الصفحة -->
-  <script type="module" src="js/meals.js?v=3"></script>
+  <!-- مودال مساعد AI النصّي -->
+  <div id="aiModal" class="modal hidden" aria-modal="true" role="dialog">
+    <div class="modal-body" role="document">
+      <div class="modal-header">
+        <h3>🤖 مساعد تكوين الوجبة من نص</h3>
+        <button id="aiClose" class="close" aria-label="إغلاق">✕</button>
+      </div>
+      <div class="form-grid">
+        <div class="field" style="grid-column:1/-1">
+          <label>اكتبي وصف الوجبة (مثال): <span class="muted tiny">"نصف كوب أرز + تفاحة صغيرة + ملعقة زبادي"</span></label>
+          <textarea id="aiText" rows="4" placeholder="مثال: كوب ونصف أرز أبيض + 2 شريحة توست بني + 10 جم جبنة + تفاحة صغيرة"></textarea>
+        </div>
+      </div>
+      <div class="actions" style="justify-content:flex-end;margin-top:8px">
+        <button id="aiAnalyze" class="secondary">تحليل</button>
+        <button id="aiApply" disabled>إضافة العناصر المقترحة</button>
+      </div>
+      <div id="aiResults" class="ai-results"></div>
+      <p class="muted tiny">يعمل محليًا بدون إنترنت. النتائج تقريبية وقابلة للتعديل قبل الحفظ.</p>
+    </div>
+  </div>
+
+  <script type="module" src="js/meals.js?v=5"></script>
 </body>
 </html>
