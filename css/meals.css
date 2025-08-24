@@ -1,4 +1,4 @@
-/* css/meals.css (v3) */
+/* css/meals.css (v4) */
 :root{
   --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#333; --muted:#555;
   --primary:#4CAF50; --accent:#2196F3; --danger:#E53935; --warn:#FB8C00;
@@ -48,12 +48,19 @@ button[disabled]{opacity:.6;cursor:not-allowed}
 .sum-box .label{font-size:12px;color:#555}
 .sum-box .value{font-weight:700; font-variant-numeric:tabular-nums}
 
+/* جرعة */
 .dose{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .dose .dose-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .dose input{max-width:160px}
 .save-actions{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
 .dose-badge{background:#E8F5E9;border:1px solid #C8E6C9;color:#2E7D32;border-radius:999px;padding:4px 8px;font-size:12px;display:inline-block}
 .dose-badge.danger{background:#FFEBEE;border-color:#FFCDD2;color:#C62828}
+
+/* GL Badge */
+.gl-badge{display:inline-block;border-radius:999px;border:1px solid var(--border);padding:2px 8px;font-size:12px;margin-inline-start:8px}
+.gl-badge.low{background:#E8F5E9;border-color:#C8E6C9;color:#2E7D32}       /* منخفض */
+.gl-badge.medium{background:#FFF8E1;border-color:#FFECB3;color:#E65100}   /* متوسط */
+.gl-badge.high{background:#FFEBEE;border-color:#FFCDD2;color:#C62828}     /* مرتفع */
 
 .table-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap}
 .meals-list{display:flex;flex-direction:column;gap:10px}
