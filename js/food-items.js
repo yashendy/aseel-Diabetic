@@ -1,9 +1,9 @@
-// js/food-items.js (modular) — متوافق مع meals.js + ضغط صورة صغير جداً + حفظ تحت parents/{uid}/foodItems
+// js/food-items.js (modular) — حفظ تحت parents/{uid}/foodItems + دعم GI + ضغط صورة صغير
 
 import { auth, db } from './firebase-config.js';
 import {
   collection, addDoc, doc, updateDoc, deleteDoc, getDocs, getDoc,
-  query, orderBy, where, serverTimestamp
+  query, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
@@ -15,10 +15,15 @@ const nameEl      = document.getElementById('name');
 const brandEl     = document.getElementById('brand');
 const categoryEl  = document.getElementById('category');
 const tagsEl      = document.getElementById('tags');
+
 const carbs100El  = document.getElementById('carbs100');
 const protein100El= document.getElementById('protein100');
 const fat100El    = document.getElementById('fat100');
 const cal100El    = document.getElementById('cal100');
+
+const giEl        = document.getElementById('gi');
+const giSrcEl     = document.getElementById('giSource');
+
 const measuresWrap= document.getElementById('measuresWrap');
 const addMeasureBtn = document.getElementById('addMeasureBtn');
 
@@ -40,10 +45,9 @@ const toastEl     = document.getElementById('toast').querySelector('.msg');
 let currentUser = null;
 let editingId   = null;   // عند التعديل
 let cachedItems = [];     // كاش لعرض الشبكة
-let currentImageDataUrl = ''; // Base64 صغيرة بعد الضغط
+let currentImageDataUrl = ''; // Base64 للصورة الصغيرة
 
 /* ===== أدوات ===== */
-const pad = (n)=> String(n).padStart(2,'0');
 const esc = (s)=> (s||'').toString()
   .replaceAll('&','&amp;').replaceAll('<','&lt;')
   .replaceAll('>','&gt;').replaceAll('"','&quot;')
@@ -53,17 +57,17 @@ const showToast = (m)=>{ const t=document.getElementById('toast'); toastEl.textC
 
 function tokenize(ar){
   const s = (ar||'').toLowerCase().trim();
-  return s
-    .replace(/[^\p{L}\p{N}\s#]+/gu, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
+  return s.replace(/[^\p{L}\p{N}\s#]+/gu, ' ')
+          .split(/\s+/).filter(Boolean);
+}
+function parseTags(v){
+  const arr = (v||'').split(/[,\s]+/).map(x=>x.trim()).filter(Boolean);
+  return Array.from(new Set(arr.map(x=> x.replace(/^#/, '').toLowerCase())));
 }
 function genKeywords(name, brand, category, tags){
   const base = [name, brand, category, ...(tags||[])].join(' ');
   const toks = tokenize(base);
-  // شظايا بحث مبسطة
-  const uniq = Array.from(new Set(toks));
-  return uniq.slice(0, 50); // نكتفي بعدد منطقي
+  return Array.from(new Set(toks)).slice(0, 50);
 }
 function catIcon(c){
   switch(c){
@@ -77,7 +81,7 @@ function catIcon(c){
   }
 }
 
-/* ===== ضغط صورة إلى 200px كحد أقصى ===== */
+/* ===== ضغط صورة إلى 200px ===== */
 async function fileToTinyDataUrl(file){
   if(!file) return '';
   const bmp = await createImageBitmap(file);
@@ -89,7 +93,6 @@ async function fileToTinyDataUrl(file){
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(bmp, 0, 0, w, h);
-  // جودة 0.6 تكفي لثَمب صغيرة
   return canvas.toDataURL('image/jpeg', 0.6);
 }
 
@@ -114,7 +117,6 @@ function addMeasureRow(name='', grams=''){
   row.querySelector('.delM').addEventListener('click', ()=> row.remove());
   measuresWrap.appendChild(row);
 }
-
 function readMeasures(){
   const rows = Array.from(measuresWrap.querySelectorAll('.grid'));
   const out = [];
@@ -137,12 +139,10 @@ onAuthStateChanged(auth, async (user)=>{
 /* ===== تحميل الأصناف ===== */
 async function loadItems(){
   const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
-  // لو nameLower موجود ممتاز، لو لأ هنجيب بدون orderBy ونرتب محليًا
   let snap;
   try{
     snap = await getDocs(query(ref, orderBy('nameLower','asc')));
   }catch(_){
-    // fallback بدون index
     snap = await getDocs(ref);
   }
   cachedItems = [];
@@ -153,62 +153,54 @@ async function loadItems(){
   renderGrid();
 }
 
-/* ===== تطبيع وثيقة الصنف لتوافق meals.js ===== */
+/* ===== تطبيع وثيقة الصنف ===== */
 function normalizeFoodDoc(it){
-  // nutrPer100g
-  const carbs_g = toNumber(it?.nutrPer100g?.carbs_g ?? it?.carbs_100g);
+  const carbs_g  = toNumber(it?.nutrPer100g?.carbs_g ?? it?.carbs_100g);
   const cal_kcal = toNumber(it?.nutrPer100g?.cal_kcal ?? it?.calories_100g);
   const protein_g= toNumber(it?.nutrPer100g?.protein_g ?? it?.protein_100g);
   const fat_g    = toNumber(it?.nutrPer100g?.fat_g ?? it?.fat_100g);
 
-  // measures: نقبل Array جاهزة أو Map `{اسم:جرامات}`
   let measures = [];
   if (Array.isArray(it?.measures)){
     measures = it.measures.filter(m=> m && m.name && Number(m.grams)>0)
       .map(m=> ({ name:String(m.name), grams: toNumber(m.grams) }));
-  } else if (it?.householdUnits && typeof it.householdUnits==='object'){
-    measures = Object.entries(it.householdUnits)
-      .filter(([n,g])=> n && toNumber(g)>0)
-      .map(([n,g])=> ({name:String(n), grams:toNumber(g)}));
   }
 
-  // tags/keywords/nameLower
   const name = it?.name || '';
   const brand= it?.brand || '';
   const category = it?.category || '';
-  const tags = Array.isArray(it?.tags) ? it.tags : tokenize(String(it?.tags||'').replace(/,/g,' '));
-  const nameLower = (it?.nameLower) ? it.nameLower : String(name).toLowerCase();
+  const tags = Array.isArray(it?.tags) ? it.tags : parseTags(String(it?.tags||''));
+  const nameLower = it?.nameLower ? it.nameLower : String(name).toLowerCase();
   const keywords  = Array.isArray(it?.keywords) ? it.keywords : genKeywords(name, brand, category, tags);
-
-  // الصورة: data url صغيرة (لو وُجدت)
-  const imageUrl = it?.imageUrl || '';
+  const imageUrl  = it?.imageUrl || '';
+  const gi        = it?.gi ?? null;
+  const giSource  = it?.giSource ?? null;
 
   return {
-    id: it.id,
-    name, brand, category, tags,
+    id: it.id, name, brand, category, tags,
     nutrPer100g: { carbs_g, cal_kcal, protein_g, fat_g },
     measures,
     nameLower, keywords,
     imageUrl,
+    gi, giSource
   };
 }
 
 /* ===== عرض الشبكة + فلترة ===== */
 function renderGrid(){
-  const q = (searchEl.value||'').trim();
+  const q = (searchEl.value||'').trim().toLowerCase();
   const cat = filterCatEl.value || 'الكل';
 
   let list = [...cachedItems];
-
   if (cat !== 'الكل'){ list = list.filter(x=> (x.category||'')===cat); }
 
   if (q){
     if (q.startsWith('#')){
-      const tag = q.slice(1).toLowerCase();
+      const tag = q.slice(1);
       list = list.filter(x=> Array.isArray(x.tags) && x.tags.some(t=> String(t).toLowerCase()===tag));
     }else{
-      const token = q.toLowerCase();
       list = list.filter(x=>{
+        const token = q;
         return (x.name||'').toLowerCase().includes(token)
             || (x.brand||'').toLowerCase().includes(token)
             || (x.category||'').toLowerCase().includes(token)
@@ -218,7 +210,6 @@ function renderGrid(){
     }
   }
 
-  // ترتيب بالاسم
   list.sort((a,b)=> (a.nameLower||'').localeCompare(b.nameLower||''));
 
   foodGrid.innerHTML = '';
@@ -228,9 +219,7 @@ function renderGrid(){
   list.forEach(x=>{
     const card = document.createElement('div');
     card.className = 'card-item';
-    const thumb = x.imageUrl
-      ? `<img src="${esc(x.imageUrl)}" alt="">`
-      : `<span>${catIcon(x.category)}</span>`;
+    const thumb = x.imageUrl ? `<img src="${esc(x.imageUrl)}" alt="">` : `<span>${catIcon(x.category)}</span>`;
     card.innerHTML = `
       <div class="card-thumb">${thumb}</div>
       <div class="card-body">
@@ -241,6 +230,7 @@ function renderGrid(){
           <span class="badge">س/100g: ${x.nutrPer100g.cal_kcal||0}</span>
           ${x.nutrPer100g.protein_g?`<span class="badge">ب/100g: ${x.nutrPer100g.protein_g}</span>`:''}
           ${x.nutrPer100g.fat_g?`<span class="badge">د/100g: ${x.nutrPer100g.fat_g}</span>`:''}
+          ${x.gi!=null?`<span class="badge">GI: ${x.gi}</span>`:''}
         </div>
         <div class="card-actions">
           <button class="btn secondary edit">تعديل</button>
@@ -273,6 +263,9 @@ async function fillFormForEdit(id){
   fat100El.value = it.nutrPer100g.fat_g ?? '';
   cal100El.value = it.nutrPer100g.cal_kcal ?? '';
 
+  giEl.value = it.gi ?? '';
+  giSrcEl.value = it.giSource ?? '';
+
   measuresWrap.innerHTML = '';
   (it.measures||[]).forEach(m=> addMeasureRow(m.name, m.grams));
 
@@ -301,10 +294,13 @@ foodForm.addEventListener('submit', async (e)=>{
   const category = categoryEl.value || 'نشويات';
   const tags = parseTags(tagsEl.value);
 
-  const carbs_g = toNumber(carbs100El.value);
+  const carbs_g   = toNumber(carbs100El.value);
   const protein_g = toNumber(protein100El.value);
   const fat_g     = toNumber(fat100El.value);
   const cal_kcal  = toNumber(cal100El.value);
+
+  const gi        = toNumber(giEl.value) || null;
+  const giSource  = (giSrcEl.value||'').trim() || null;
 
   const measures = readMeasures();
 
@@ -322,28 +318,28 @@ foodForm.addEventListener('submit', async (e)=>{
       cal_kcal: cal_kcal || 0,
     },
     measures, // array [{name, grams}]
-    imageUrl: currentImageDataUrl || '', // Data URL صغيرة
-    updatedAt: serverTimestamp(),
+    imageUrl: currentImageDataUrl || '',
+    gi, giSource,
+    updatedAt: serverTimestamp()
   };
 
-  saveBtn.disabled = true; saveBtn.textContent = editingId ? 'جارٍ التحديث…' : 'جارٍ الحفظ…';
+  saveBtn.disabled = true;
   try{
-    const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
     if (editingId){
-      await updateDoc(doc(ref, editingId), payload);
+      await updateDoc(doc(db, `parents/${currentUser.uid}/foodItems/${editingId}`), payload);
       showToast('✅ تم التحديث');
     } else {
       payload.createdAt = serverTimestamp();
-      await addDoc(ref, payload);
-      showToast('✅ تم الحفظ');
+      await addDoc(collection(db, `parents/${currentUser.uid}/foodItems`), payload);
+      showToast('✅ تمت الإضافة');
     }
-    await loadItems();
     resetForm();
-  }catch(err){
-    console.error(err);
-    alert('تعذر الحفظ');
+    await loadItems();
+  }catch(e){
+    console.error(e);
+    alert('حدث خطأ أثناء الحفظ');
   }finally{
-    saveBtn.disabled = false; saveBtn.textContent = 'حفظ الصنف';
+    saveBtn.disabled = false;
   }
 });
 
@@ -353,36 +349,28 @@ function resetForm(){
   foodForm.reset();
   measuresWrap.innerHTML = '';
   currentImageDataUrl = '';
-  previewImg.src = ''; previewImg.classList.add('hidden');
+  previewImg.src = '';
+  previewImg.classList.add('hidden');
 }
 
-/* ===== وسوم + بحث + فلترة ===== */
-function parseTags(s){
-  if(!s) return [];
-  const replaced = s.replace(/#/g,' ').replace(/,/g,' ');
-  return tokenize(replaced);
-}
-
-searchEl.addEventListener('input', debounce(renderGrid, 250));
-filterCatEl.addEventListener('change', renderGrid);
-resetBtn.addEventListener('click', resetForm);
-addMeasureBtn.addEventListener('click', ()=> addMeasureRow());
-
-/* ===== صورة مصغرة جداً ===== */
-imageInput.addEventListener('change', async ()=>{
+/* ===== صورة ===== */
+imageInput?.addEventListener('change', async ()=>{
   const f = imageInput.files?.[0];
-  if (!f){ currentImageDataUrl=''; previewImg.classList.add('hidden'); return; }
-  try{
-    currentImageDataUrl = await fileToTinyDataUrl(f);
-    previewImg.src = currentImageDataUrl;
-    previewImg.classList.remove('hidden');
-  }catch(e){
-    console.error(e); alert('تعذر معالجة الصورة'); currentImageDataUrl=''; previewImg.classList.add('hidden');
-  }
+  if(!f){ currentImageDataUrl=''; previewImg.classList.add('hidden'); return; }
+  currentImageDataUrl = await fileToTinyDataUrl(f);
+  previewImg.src = currentImageDataUrl; previewImg.classList.remove('hidden');
 });
-clearImgBtn.addEventListener('click', ()=>{
+clearImgBtn?.addEventListener('click', ()=>{
   currentImageDataUrl=''; previewImg.src=''; previewImg.classList.add('hidden'); imageInput.value='';
 });
 
-/* ===== أدوات مساعدة ===== */
-function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
+/* ===== فلترة الشبكة ===== */
+searchEl?.addEventListener('input', ()=> renderGrid());
+filterCatEl?.addEventListener('change', ()=> renderGrid());
+
+/* ===== أزرار أعلى الصفحة ===== */
+document.getElementById('goMeals')?.addEventListener('click', ()=> location.href='meals.html');
+document.getElementById('goHome')?.addEventListener('click', ()=> location.href='index.html');
+
+addMeasureBtn?.addEventListener('click', ()=> addMeasureRow());
+resetBtn?.addEventListener('click', resetForm);
