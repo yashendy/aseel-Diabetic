@@ -1,11 +1,11 @@
-<!-- meals.html (compat, مع زر رجوع + كل التحسينات) -->
+<!-- meals.html (modular) -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>الوجبات</title>
-  <link rel="stylesheet" href="css/meals.css?v=2" />
+  <link rel="stylesheet" href="css/meals.css?v=3" />
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
 </head>
 <body>
@@ -28,9 +28,9 @@
           <div class="field">
             <label>نوع الوجبة</label>
             <select id="mealType">
-              <option>ق.الفطار</option>
-              <option>ق.الغدا</option>
-              <option>ق.العشا</option>
+              <option>فطور</option>
+              <option>غداء</option>
+              <option>عشاء</option>
               <option>سناك</option>
             </select>
           </div>
@@ -86,6 +86,7 @@
           <div class="sum-box"><div class="label">السعرات</div><div class="value"><span id="tCal">0</span> kcal</div></div>
           <div class="sum-box"><div class="label">البروتين</div><div class="value"><span id="tProt">0</span> g</div></div>
           <div class="sum-box"><div class="label">الدهون</div><div class="value"><span id="tFat">0</span> g</div></div>
+          <div class="sum-box"><div class="label">GL الإجمالي (توعوي)</div><div class="value"><span id="tGL">0</span></div></div>
         </div>
 
         <div class="dose">
@@ -163,19 +164,11 @@
         </div>
       </div>
       <div id="pickerGrid" class="picker-grid"></div>
-      <div id="pickerEmpty" class="empty hidden">لا نتائج.</div>
+      <div id="pickerEmpty" class="empty hidden">لا توجد نتائج مطابقة.</div>
     </div>
   </div>
 
-  <!-- Firebase v8 compat -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-
-  <!-- ملف التهيئة المتوافق (يعرّف window.firebase / window.auth / window.db) -->
-  <script src="firebase-config.js?v=2"></script>
-
-  <!-- سكربت الصفحة -->
-  <script src="js/meals.js?v=3"></script>
+  <!-- Firebase (modular) + سكربت الصفحة -->
+  <script type="module" src="js/meals.js?v=3"></script>
 </body>
 </html>
