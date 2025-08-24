@@ -1,9 +1,9 @@
-// js/reports-print.js (v4)
+// js/reports-print.js  (نسخة مُعدَّلة لإخفاء/إظهار كل الملاحظات)
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 import { collection, query, where, orderBy, getDocs } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 
-/* عناصر */
+/* عناصر DOM */
 const params     = new URLSearchParams(location.search);
 const childId    = params.get('child');
 
@@ -25,10 +25,10 @@ const periodUnit = document.getElementById('periodUnit');
 const tbody      = document.getElementById('tbody');
 const emptyEl    = document.getElementById('empty');
 
-const maskTreat  = document.getElementById('maskTreat');
+/* المفاتيح (Checkboxes) */
+const maskTreat  = document.getElementById('maskTreat');   // ✅ الآن: يخفي/يظهر "كل" الملاحظات
 const colorize   = document.getElementById('colorize');
 const weeklyMode = document.getElementById('weeklyMode');
-const manualMode = document.getElementById('manualMode'); // جديد
 
 const applyBtn   = document.getElementById('applyBtn');
 const printBtn   = document.getElementById('printBtn');
@@ -37,8 +37,8 @@ const backBtn    = document.getElementById('backBtn');
 /* أدوات */
 const pad = n => String(n).padStart(2,'0');
 const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
-const addDays = (d,delta)=> { const x=new Date(d); x.setDate(x.getDate()+delta); return x; };
-const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const addDays  = (d,delta)=> { const x=new Date(d); x.setDate(x.getDate()+delta); return x; };
+const fmtDate  = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 function calcAge(bd){
   if(!bd) return '—';
   const b=new Date(bd), t=new Date();
@@ -48,7 +48,7 @@ function calcAge(bd){
   return `${a} سنة`;
 }
 
-/* خريطة الأعمدة كما هي */
+/* خريطة الأعمدة */
 const SLOT_MAP = {
   'WAKE':'الاستيقاظ','WAKEUP':'الاستيقاظ',
   'PRE_BREAKFAST':'ق.الفطار','POST_BREAKFAST':'ب.الفطار',
@@ -60,9 +60,9 @@ const TABLE_COLS = ['الاستيقاظ','ق.الفطار','ب.الفطار','ق
 
 /* حالة */
 let currentUser, childData;
-let cachedRows = [];
+let cachedRows = []; // [{date:'YYYY-MM-DD', cols:{'الاستيقاظ':[], ...}}]
 
-/* تهيئة أولية */
+/* تهيئة مبدئية للواجهة */
 (function initUI(){
   const t = new Date();
   toDateEl.value   = fmtDate(t);
@@ -70,18 +70,19 @@ let cachedRows = [];
   periodUnit.textContent = unitSelect.value === 'mmol' ? 'mmol/L' : 'mg/dL';
 })();
 
-/* جلسة */
+/* جلسة المستخدم */
 onAuthStateChanged(auth, async (user)=>{
   if(!user) return location.href = 'index.html';
   if(!childId){ alert('لا يوجد معرف طفل في الرابط'); history.back(); return; }
   currentUser = user;
 
-  await loadChild(); // يملأ بيانات الطفل أعلى الصفحة
-  await refreshData();
+  await loadChild();
+  await loadMeasurements();
+  renderTable();
   renderQR();
 });
 
-/* تحميل بيانات الطفل */
+/* تحميل بيانات الطفل (لرأس التقرير) */
 async function loadChild(){
   const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js');
   const dref = doc(db, `parents/${currentUser.uid}/children/${childId}`);
@@ -96,7 +97,7 @@ async function loadChild(){
   childCFEl.textContent   = `${childData?.correctionFactor ?? '—'} mmol/L/U`;
 }
 
-/* تحميل القياسات من فايرستور */
+/* تحميل القياسات (خلال الفترة) */
 async function loadMeasurements(){
   const from = fromDateEl.value || todayStr();
   const to   = toDateEl.value   || todayStr();
@@ -113,6 +114,7 @@ async function loadMeasurements(){
   snap.forEach(d=>{
     const m = d.data();
 
+    // توحيد القيم (mmol/mgdl)
     let mmol = null, mgdl = null;
     if (typeof m.value_mmol === 'number') mmol = m.value_mmol;
     if (typeof m.value_mgdl === 'number') mgdl = m.value_mgdl;
@@ -127,8 +129,7 @@ async function loadMeasurements(){
     if(!date) return;
 
     if(!byDate.has(date)){
-      const cols = {};
-      TABLE_COLS.forEach(c=> cols[c]=[]);
+      const cols = {}; TABLE_COLS.forEach(c=> cols[c]=[]);
       byDate.set(date, { date, cols });
     }
 
@@ -148,77 +149,50 @@ async function loadMeasurements(){
 
   cachedRows = Array.from(byDate.values()).sort((a,b)=> a.date.localeCompare(b.date));
 
+  // وضع أسبوعي: آخر 7 أيام فقط
   if (weeklyMode.checked) {
     cachedRows = cachedRows.slice(-7);
   }
 }
 
-/* توليد جدول فارغ قابل للتحرير للفترة المحددة */
-function buildBlankRows(){
-  const from = new Date(fromDateEl.value || todayStr());
-  const to   = new Date(toDateEl.value   || todayStr());
-
-  periodFrom.textContent = fmtDate(from);
-  periodTo.textContent   = fmtDate(to);
-  periodUnit.textContent = unitSelect.value === 'mmol' ? 'mmol/L' : 'mg/dL';
-
-  const rows = [];
-  for(let d=new Date(from); d<=to; d.setDate(d.getDate()+1)){
-    const cols = {}; TABLE_COLS.forEach(c=> cols[c]=[]);
-    rows.push({ date: fmtDate(d), cols });
-  }
-  cachedRows = rows;
-}
-
-/* إعادة التحميل حسب وضع الصفحة */
-async function refreshData(){
-  if (manualMode.checked){
-    buildBlankRows();
-    renderTable(true); // true = وضع يدوي
-  }else{
-    await loadMeasurements();
-    renderTable(false);
-  }
-}
-
 /* رسم الجدول */
-function renderTable(isManual=false){
+function renderTable(){
   tbody.innerHTML = '';
   emptyEl.classList.toggle('hidden', cachedRows.length>0);
 
-  const colorizeOn = isManual ? false : colorize.checked;
-  const hideScent  = isManual ? true  : maskTreat.checked;
+  const colorizeOn   = colorize.checked;
+  const hideAllNotes = maskTreat.checked; // ✅ جديد: إخفاء/إظهار كل الملاحظات
 
   for(const r of cachedRows){
     const tr = document.createElement('tr');
 
-    // التاريخ (قابل للتحرير في الوضع اليدوي)
+    // التاريخ
     const tdDate = document.createElement('td');
-    tdDate.textContent = isManual ? '' : r.date;
-    if(isManual) tdDate.contentEditable = 'true';
+    tdDate.textContent = r.date;
     tr.appendChild(tdDate);
 
-    // الأعمدة
+    // بقية الأعمدة
     for(const cName of TABLE_COLS){
       const td = document.createElement('td');
       const items = r.cols[cName] || [];
 
       if(items.length===0){
-        td.innerHTML = isManual ? '' : '—';
+        td.textContent = '—';
       }else{
         items.forEach((it, idx)=>{
           const span = document.createElement('div');
           span.textContent = it.value;
 
+          // تلوين الحالة
           if(colorizeOn){
             const st = String(it.state||'').toLowerCase();
-            if(st.startsWith('low')) span.classList.add('low');
-            else if(st.startsWith('high')) span.classList.add('high');
-            else span.classList.add('okv');
+            if(st.startsWith('low'))      span.classList.add('low');
+            else if(st.startsWith('high'))span.classList.add('high');
+            else                          span.classList.add('okv');
           }
-
           td.appendChild(span);
 
+          // الجرعات (لا تتأثر بخيار إخفاء الملاحظات)
           if (it.corr!=null || it.bolus!=null){
             const d = document.createElement('span');
             d.className='dose';
@@ -229,13 +203,15 @@ function renderTable(isManual=false){
             td.appendChild(d);
           }
 
-          if (it.notes && !hideScent){
+          // ✅ الملاحظات — تظهر/تختفي كلها حسب المربع
+          if (it.notes && !hideAllNotes){
             const n = document.createElement('span');
             n.className='note';
             n.textContent = it.notes;
             td.appendChild(n);
           }
 
+          // فاصل بسيط لو أكثر من قراءة في نفس الخلية
           if (idx < items.length-1){
             const hr = document.createElement('hr');
             hr.style.border='none';
@@ -246,14 +222,11 @@ function renderTable(isManual=false){
         });
       }
 
-      if(isManual) td.contentEditable = 'true'; // تحرير يدوي
       tr.appendChild(td);
     }
 
     tbody.appendChild(tr);
   }
-
-  // ملاحظة: نص الملاحظات أعلى الصفحة اختياري، يمكن طباعته يدويًا داخل الورقة أيضًا.
 }
 
 /* QR */
@@ -266,14 +239,36 @@ function renderQR(){
 }
 
 /* أحداث */
-applyBtn.addEventListener('click', refreshData);
+applyBtn.addEventListener('click', async ()=>{
+  // نحفظ الخيارات في رابط الصفحة
+  const u = new URL(location.href);
+  u.searchParams.set('child', childId);
+  u.searchParams.set('from', fromDateEl.value);
+  u.searchParams.set('to',   toDateEl.value);
+  u.searchParams.set('unit', unitSelect.value);
+  history.replaceState(null,'',u);
+
+  await loadMeasurements();
+  renderTable();
+});
+
 printBtn.addEventListener('click', ()=> window.print());
 backBtn.addEventListener('click', ()=> history.back());
-unitSelect.addEventListener('change', refreshData);
-weeklyMode.addEventListener('change', refreshData);
-manualMode.addEventListener('change', refreshData);
 
-/* قراءة باراميترز (لو متاحة) */
+unitSelect.addEventListener('change', async ()=>{
+  periodUnit.textContent = unitSelect.value==='mmol'?'mmol/L':'mg/dL';
+  await loadMeasurements();
+  renderTable();
+});
+
+/* ✅ إعادة الرسم فورًا عند تغيير حالة إخفاء الملاحظات/الوضع الأسبوعي */
+maskTreat.addEventListener('change', ()=> renderTable());
+weeklyMode.addEventListener('change', async ()=>{
+  await loadMeasurements();
+  renderTable();
+});
+
+/* قراءة قيم من الـURL إن وُجدت */
 (function applyParamsFromURL(){
   const from = params.get('from');
   const to   = params.get('to');
