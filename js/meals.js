@@ -1,9 +1,8 @@
-// js/meals.js v7 — نسخة كاملة
-// - دعم "مساعد الوجبة" (Gemini) بإصلاح الصيغة
-// - مودال المكتبة مع حماية العناصر
-// - بناء جدول الوجبة، الحسابات، الجرعة، الحفظ/التعديل/الحذف
-// - قائمة وجبات اليوم + تكرار آخر وجبة
-// -----------------------------------------------------------
+// js/meals.js v8 — نسخة كاملة منقّحة
+// • إصلاح عرض قيم الأصناف فور الإضافة (حساب قبل البناء)
+// • حماية ربط عناصر المودالات
+// • مساعد الوجبة (Gemini) بصيغة generateContent الصحيحة
+// • احتفاظ كامل بسلوك الصفحة السابق
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -12,7 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* ========== عناصر عامة من DOM ========== */
+/* عناصر DOM */
 const params = new URLSearchParams(location.search);
 const childId = params.get('child');
 
@@ -49,17 +48,13 @@ const doseRangeEl     = document.getElementById('doseRange');
 const appliedDoseEl   = document.getElementById('appliedDose');
 const mealNotesEl     = document.getElementById('mealNotes');
 
-const saveMealBtn     = document.getElementById('saveMealBtn');
-const resetMealBtn    = document.getElementById('resetMealBtn');
-const printDayBtn     = document.getElementById('printDayBtn');
-
 // قائمة اليوم
 const tableDateEl     = document.getElementById('tableDate');
 const filterTypeEl    = document.getElementById('filterType');
 const mealsListEl     = document.getElementById('mealsList');
 const noMealsEl       = document.getElementById('noMeals');
 
-// مودال مكتبة الأصناف
+// مودال المكتبة
 const pickerModal     = document.getElementById('pickerModal');
 const closePicker     = document.getElementById('closePicker');
 const pickSearchEl    = document.getElementById('pickSearch');
@@ -67,25 +62,25 @@ const pickCategoryEl  = document.getElementById('pickCategory');
 const pickerGrid      = document.getElementById('pickerGrid');
 const pickerEmpty     = document.getElementById('pickerEmpty');
 
-// مودال مساعد الوجبة (Gemini)
-const aiHelperBtn = document.getElementById('aiHelperBtn');
-const aiModal     = document.getElementById('aiModal');
-const closeAi     = document.getElementById('closeAi');
-const aiKeyEl     = document.getElementById('aiKey');
-const aiGoalEl    = document.getElementById('aiGoal');
-const aiNoteEl    = document.getElementById('aiNote');
-const aiRunBtn    = document.getElementById('aiRun');
-const aiClearBtn  = document.getElementById('aiClear');
-const aiOutEl     = document.getElementById('aiOut');
+// مودال المساعد
+const aiHelperBtn   = document.getElementById('aiHelperBtn');
+const aiModal       = document.getElementById('aiModal');
+const closeAi       = document.getElementById('closeAi');
+const aiKeyEl       = document.getElementById('aiKey');
+const aiGoalEl      = document.getElementById('aiGoal');
+const aiNoteEl      = document.getElementById('aiNote');
+const aiRunBtn      = document.getElementById('aiRun');
+const aiClearBtn    = document.getElementById('aiClear');
+const aiOutEl       = document.getElementById('aiOut');
 
-/* ========== حالة عامة ========== */
+/* حالة */
 let currentUser, childData;
 let editingMealId = null;
-let currentItems = [];     // صفوف الوجبة الحالية
-let cachedFood = [];       // كاش مكتبة الأصناف
+let currentItems = [];
+let cachedFood = [];
 let cachedMeasurements = [];
 
-/* ========== أدوات مساعدة ========== */
+/* أدوات */
 const pad = n => String(n).padStart(2,'0');
 function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function setMaxToday(inp){ inp && inp.setAttribute('max', todayStr()); } setMaxToday(mealDateEl);
@@ -108,17 +103,17 @@ const SLOTS_ORDER = ["الاستيقاظ","ق.الفطار","ب.الفطار","�
 function glLevel(gl){ if (gl < 10) return {cls:'low',text:'منخفض'}; if (gl < 20) return {cls:'medium',text:'متوسط'}; return {cls:'high',text:'مرتفع'}; }
 function updateGLBadge(totalGL){ const {cls,text} = glLevel(totalGL||0); if(!tGLBadge) return; tGLBadge.className = `gl-badge ${cls}`; tGLBadge.textContent = text; }
 
-/* ========== تهيئة أولية ========== */
+/* تهيئة */
 (function init(){
   if (mealDateEl){ mealDateEl.value = todayStr(); }
   if (tableDateEl){ tableDateEl.textContent = mealDateEl.value; }
   backBtn?.addEventListener('click', ()=> history.back());
 })();
 
-/* ========== جلسة + تحميل بيانات الطفل ========== */
+/* جلسة وتحميل الطفل */
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href = 'index.html'; return; }
-  if(!childId){ alert('لا يوجد معرف طفل في الرابط'); return; }
+  if(!childId){ alert('لا يوجد معرّف طفل في الرابط'); return; }
   currentUser = user;
 
   const childRef = doc(db, `parents/${user.uid}/children/${childId}`);
@@ -126,7 +121,6 @@ onAuthStateChanged(auth, async (user)=>{
   if(!snap.exists()){ alert('لم يتم العثور على الطفل'); history.back(); return; }
   childData = snap.data();
 
-  // إعدادات الكارب الصافي الافتراضية
   if (childData.useNetCarbs === undefined) childData.useNetCarbs = true;
   if (!childData.netCarbRule) childData.netCarbRule = 'fullFiber';
 
@@ -138,7 +132,7 @@ onAuthStateChanged(auth, async (user)=>{
   recalcAll();
 });
 
-/* ========== القياسات اليومية ========== */
+/* القياسات اليومية */
 async function loadMeasurements(){
   const d = mealDateEl.value;
   const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
@@ -201,7 +195,7 @@ function populateReadingSelects(){
   postReadingEl.innerHTML = build(postf);
 }
 
-/* ========== وجبات اليوم ========== */
+/* وجبات اليوم */
 async function loadMealsOfDay(){
   const d = mealDateEl.value;
   const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/meals`);
@@ -237,7 +231,7 @@ function renderMealsList(rows){
   });
 }
 
-/* ========== منطقة إنشاء الوجبة ========== */
+/* مُنشئ الوجبة */
 addItemBtn?.addEventListener('click', openPicker);
 repeatLastBtn?.addEventListener('click', repeatLastMealTemplate);
 
@@ -245,7 +239,7 @@ function addItemRow(item){
   const row = {
     id: crypto.randomUUID(),
     name: item.name,
-    unit: 'grams',           // grams | household
+    unit: 'grams',                 // grams | household
     qty: 100,
     measure: item.measures?.[0]?.name || '',
     measures: Array.isArray(item.measures) ? item.measures : [],
@@ -261,12 +255,15 @@ function addItemRow(item){
     calc: {}
   };
   currentItems.push(row);
-  renderItems(); recalcAll();
+  renderItems();          // سيُعاد الحساب قبل البناء
+  recalcAll();
 }
+
 function renderItems(){
   itemsBodyEl.innerHTML = '';
+
   currentItems.forEach((r)=>{
-    // ✅ احسبي قيم الصف قبل البناء
+    // ✅ احسبي القيم قبل البناء لضمان ظهورها فورًا
     recomputeRow(r);
 
     const el = document.createElement('div');
@@ -279,7 +276,7 @@ function renderItems(){
           <option value="household" ${r.unit==='household'?'selected':''}>تقدير بيتي</option>
         </select>
       </div>
-      <div><input type="number" step="0.1" value="${r.qty}" data-id="${r.id}" data-k="qty"/></div>
+      <div><input type="number" step="0.1" value="${r.qty}" data-id="${r.id}" data-k="qty" /></div>
       <div>
         <select data-id="${r.id}" data-k="measure" ${r.unit==='household'?'':'disabled'}>
           ${(r.measures||[]).map(m=>`<option ${m.name===r.measure?'selected':''}>${esc(m.name)}</option>`).join('')}
@@ -297,23 +294,6 @@ function renderItems(){
     itemsBodyEl.appendChild(el);
   });
 
-  // ربط الأحداث
-  itemsBodyEl.querySelectorAll('select, input').forEach(inp=>{
-    inp.addEventListener('change', onRowChange);
-  });
-  itemsBodyEl.querySelectorAll('.del').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const id = e.currentTarget.dataset.id;
-      const i = currentItems.findIndex(x=>x.id===id);
-      if (i>-1){ currentItems.splice(i,1); renderItems(); recalcAll(); }
-    });
-  });
-
-  // ✅ بعد ما رسمنا الصفوف والقيم مظبوطة، حدّثي الإجماليات
-  recalcAll();
-}
-
-
   // ربط الحقول
   itemsBodyEl.querySelectorAll('select, input').forEach(inp=>{
     inp.addEventListener('change', onRowChange);
@@ -326,8 +306,9 @@ function renderItems(){
     });
   });
 
-  // إعادة حساب
-  currentItems.forEach(recomputeRow);
+  // تحديث الإجماليات
+  recalcAll();
+}
 
 function onRowChange(e){
   const id = e.target.dataset.id;
@@ -337,11 +318,15 @@ function onRowChange(e){
   if (k==='unit'){ row.unit = e.target.value; }
   if (k==='qty'){ row.qty = toNumber(e.target.value); }
   if (k==='measure'){ row.measure = e.target.value; }
-  // تفعيل/تعطيل measure
+
+  // تفعيل أو تعطيل خانة "المقياس"
   const sel = e.target.parentElement?.parentElement?.querySelector('select[data-k="measure"]');
   if (k==='unit' && sel){ sel.disabled = (row.unit!=='household'); }
-  recomputeRow(row); recalcAll();
+
+  recomputeRow(row);
+  recalcAll();
 }
+
 function recomputeRow(r){
   let grams = 0;
   if (r.unit==='grams'){ grams = toNumber(r.qty); }
@@ -349,6 +334,7 @@ function recomputeRow(r){
     const m = (r.measures||[]).find(mm=> mm.name===r.measure) || (r.measures||[])[0];
     grams = m ? (toNumber(m.grams) * toNumber(r.qty)) : 0;
   }
+
   const factor = grams/100;
   const carbs = r.per100.carbs * factor;
   const fiber = r.per100.fiber * factor;
@@ -362,12 +348,14 @@ function recomputeRow(r){
 
   r.calc = { grams, carbs, fiber, netCarbs: Math.max(0,net), cal, prot, fat, gl };
 }
+
 function recalcAll(){
   let tg=0, tc=0, tf=0, tn=0, kcal=0, pr=0, ft=0, tgl=0;
   currentItems.forEach(r=>{
     tg += r.calc.grams||0; tc += r.calc.carbs||0; tf += r.calc.fiber||0; tn += r.calc.netCarbs||0;
     kcal += r.calc.cal||0; pr += r.calc.prot||0; ft += r.calc.fat||0; tgl += r.calc.gl||0;
   });
+
   tGramsEl.textContent = round1(tg);
   tCarbsEl.textContent = round1(tc);
   tFiberEl.textContent = round1(tf);
@@ -378,23 +366,24 @@ function recalcAll(){
   tGLEl.textContent    = round1(tgl);
   updateGLBadge(tgl);
 
-  // الجرعة (صافي/كلي)
+  // الجرعة (حسب استخدام الكارب الصافي أو الكلي)
   const cr = Number(childData.carbRatio || 12);  // g/U
   const useNet = childData.useNetCarbs!==false;
   const carbsForDose = useNet ? tn : tc;
   const dose = carbsForDose>0 && cr>0 ? (carbsForDose/cr) : 0;
+
   suggestedDoseEl.textContent = roundHalf(dose);
-  doseExplainEl.textContent = useNet ? ' (اعتمادًا على الكارب الصافي)' : ' (اعتمادًا على الكارب الكلي)';
-  doseRangeEl.textContent = dose ? `U ${roundHalf(Math.max(0,dose-0.5))}–${roundHalf(dose+0.5)}` : '—';
+  doseExplainEl.textContent   = useNet ? ' (اعتمادًا على الكارب الصافي)' : ' (اعتمادًا على الكارب الكلي)';
+  doseRangeEl.textContent     = dose ? `U ${roundHalf(Math.max(0,dose-0.5))}–${roundHalf(dose+0.5)}` : '—';
 }
 
-/* ========== حفظ/تعديل/حذف الوجبة ========== */
+/* حفظ/تعديل/حذف */
 saveMealBtn?.addEventListener('click', saveMeal);
 resetMealBtn?.addEventListener('click', ()=> resetForm(true));
 printDayBtn?.addEventListener('click', ()=> window.print());
 
 async function saveMeal(){
-  if (!currentItems.length){ showToast('أضيفي مكونات أولًا'); return; }
+  if (!currentItems.length){ showToast('أضيفي مكوّنات أولًا.'); return; }
   const d = mealDateEl.value;
   const type = mealTypeEl.value;
 
@@ -415,10 +404,10 @@ async function saveMeal(){
       fat_g: Number(tFatEl.textContent)||0,
       gl_total: Number(tGLEl.textContent)||0
     },
-    preReading: preReadingEl.value ? { id: preReadingEl.value } : null,
+    preReading:  preReadingEl.value ? { id: preReadingEl.value } : null,
     postReading: postReadingEl.value ? { id: postReadingEl.value } : null,
     suggestedMealDose: Number(suggestedDoseEl.textContent) || 0,
-    appliedMealDose: appliedDoseEl.value ? Number(appliedDoseEl.value) : null,
+    appliedMealDose:  appliedDoseEl.value ? Number(appliedDoseEl.value) : null,
     notes: mealNotesEl.value || null,
     createdAt: serverTimestamp()
   };
@@ -426,18 +415,20 @@ async function saveMeal(){
   const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/meals`);
   if (editingMealId){
     await updateDoc(doc(ref, editingMealId), payload);
-    showToast('تم تحديث الوجبة');
+    showToast('تم تحديث الوجبة.');
   }else{
     await addDoc(ref, payload);
-    showToast('تم حفظ الوجبة');
+    showToast('تم حفظ الوجبة.');
   }
   editingMealId = null;
-  await loadMealsOfDay(); resetForm(false);
+  await loadMealsOfDay();
+  resetForm(false);
 }
+
 async function editMeal(r){
   editingMealId = r.id;
   mealTypeEl.value = r.type || 'فطور';
-  preReadingEl.value = r.preReading?.id || '';
+  preReadingEl.value  = r.preReading?.id || '';
   postReadingEl.value = r.postReading?.id || '';
   appliedDoseEl.value = r.appliedMealDose ?? '';
   mealNotesEl.value   = r.notes || '';
@@ -446,36 +437,45 @@ async function editMeal(r){
   renderItems(); recalcAll();
   window.scrollTo({ top: 0, behavior:'smooth' });
 }
+
 async function deleteMeal(r){
-  if (!confirm('حذف الوجبة؟')) return;
+  if (!confirm('هل تريدين حذف الوجبة؟')) return;
   const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/meals/${r.id}`);
   await deleteDoc(ref);
-  showToast('تم الحذف'); await loadMealsOfDay();
-}
-function resetForm(clear=true){
-  if (clear){ currentItems = []; renderItems(); recalcAll(); }
-  editingMealId = null; appliedDoseEl.value=''; mealNotesEl.value='';
+  showToast('تم الحذف.');
+  await loadMealsOfDay();
 }
 
-/* ========== مودال مكتبة الأصناف ========== */
+function resetForm(clear=true){
+  if (clear){ currentItems = []; renderItems(); recalcAll(); }
+  editingMealId = null;
+  appliedDoseEl.value = '';
+  mealNotesEl.value   = '';
+}
+
+/* مكتبة الأصناف */
 function bindPickerOnce(){
-  // حماية: لو العناصر غير موجودة لا نربط (لعلاج addEventListener على null)
+  // حماية: لا تربطي إن كانت العناصر غير موجودة
   if (!pickerModal || !closePicker || !pickSearchEl || !pickCategoryEl) return;
   if (bindPickerOnce.__bound) return;
+
   closePicker.addEventListener('click', ()=> pickerModal.classList.add('hidden'));
   pickSearchEl.addEventListener('input', debounce(applyPickerFilters, 250));
   pickCategoryEl.addEventListener('change', applyPickerFilters);
+
   bindPickerOnce.__bound = true;
 }
+
 async function openPicker(){
   bindPickerOnce();
-  if (!pickerModal){ alert('كتلة مودال المكتبة غير موجودة في الصفحة'); return; }
+  if (!pickerModal){ alert('كتلة مودال المكتبة غير موجودة في الصفحة.'); return; }
   pickerModal.classList.remove('hidden');
-  pickSearchEl.value='';
-  pickCategoryEl.value='الكل';
+  pickSearchEl.value  = '';
+  pickCategoryEl.value= 'الكل';
   await loadFoodItems();
   applyPickerFilters();
 }
+
 async function loadFoodItems(){
   if (cachedFood.length) return;
   const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
@@ -500,10 +500,11 @@ async function loadFoodItems(){
     });
   });
 }
+
 function applyPickerFilters(){
   if (!pickerGrid || !pickerEmpty) return;
-  const q  = (pickSearchEl.value||'').trim().toLowerCase();
-  const cat= pickCategoryEl.value || 'الكل';
+  const q   = (pickSearchEl.value||'').trim().toLowerCase();
+  const cat = pickCategoryEl.value || 'الكل';
 
   let list = cachedFood;
   if (cat && cat!=='الكل'){ list = list.filter(x=> (x.category||'').includes(cat)); }
@@ -519,6 +520,7 @@ function applyPickerFilters(){
 
   renderPickerGrid(list);
 }
+
 function renderPickerGrid(list){
   if (!pickerGrid || !pickerEmpty) return;
   pickerGrid.innerHTML = '';
@@ -532,9 +534,9 @@ function renderPickerGrid(list){
       <div>
         <div><strong>${esc(it.name)}</strong></div>
         <div class="meta">كارب/100g: ${round1(it.nutrPer100.carbs_g)} • ألياف: ${round1(it.nutrPer100.fiber_g)}${it.gi?` • GI: ${it.gi}`:''}</div>
-      </div>
-    `;
-    const btn = document.createElement('button'); btn.className='add'; btn.textContent='إضافة';
+      </div>`;
+    const btn = document.createElement('button');
+    btn.className='add'; btn.textContent='إضافة';
     btn.addEventListener('click', ()=>{
       addItemRow(it);
       pickerModal.classList.add('hidden');
@@ -544,17 +546,17 @@ function renderPickerGrid(list){
   });
 }
 
-/* ========== تكرار آخر وجبة كقالب ========== */
+/* تكرار آخر وجبة كقالب */
 async function repeatLastMealTemplate(){
   const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/meals`);
   const sn = await getDocs(query(ref, orderBy('createdAt','desc'), limit(1)));
-  if (sn.empty){ showToast('لا توجد وجبة سابقة'); return; }
+  if (sn.empty){ showToast('لا توجد وجبة سابقة.'); return; }
   const last = sn.docs[0].data();
   currentItems = (last.items||[]).map(x=> ({...structuredClone(x), id: crypto.randomUUID()}));
-  renderItems(); recalcAll(); showToast('تم تكرار آخر وجبة');
+  renderItems(); recalcAll(); showToast('تم تكرار آخر وجبة.');
 }
 
-/* ========== مساعد الوجبة (Gemini) ========== */
+/* مساعد الوجبة (Gemini) */
 aiHelperBtn?.addEventListener('click', ()=>{
   aiModal.classList.remove('hidden');
   const k = localStorage.getItem('gemini_api_key') || '';
@@ -568,11 +570,11 @@ aiRunBtn?.addEventListener('click', runAiHelper);
 async function runAiHelper(){
   try{
     const key = (aiKeyEl.value||'').trim();
-    if (!key){ alert('ضعي مفتاح Gemini أولًا'); return; }
+    if (!key){ alert('ضعي مفتاح Gemini أولًا.'); return; }
     localStorage.setItem('gemini_api_key', key);
 
     if (!currentItems.length){
-      aiOutEl.innerHTML = 'لا توجد مكوّنات حالياً — أضيفي صنفًا ثم أعيدي المحاولة.';
+      aiOutEl.innerHTML = 'لا توجد مكوّنات حاليًا — أضيفي صنفًا ثم أعيدي المحاولة.';
       return;
     }
 
@@ -582,13 +584,12 @@ async function runAiHelper(){
 
     aiOutEl.innerHTML = '⏳ جارٍ توليد الاقتراحات…';
 
-    // تحميل الـ SDK (ESM) — الصيغة المتوافقة
     const { GoogleGenerativeAI } = await import('https://cdn.jsdelivr.net/npm/@google/generative-ai/dist/index.min.mjs');
     const genAI = new GoogleGenerativeAI(key);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const sys = `
-أنت مساعد تغذية للسكري من النوع الأول للأطفال. ارجع JSON **صالح فقط** بدون أي نص خارج JSON:
+أنت مساعد تغذية للسكري من النوع الأول للأطفال. ارجع JSON صالح فقط بدون أي نص خارج JSON:
 {
  "explain": "جملة مختصرة",
  "suggestions": [
@@ -607,32 +608,22 @@ async function runAiHelper(){
 ${JSON.stringify(payload, null, 2)}
     `.trim();
 
-    // ✅ نص مباشر — بدلاً من role/parts (اللي سبّبت 400)
+    // الصيغة المتوافقة: نص مباشر
     const res = await model.generateContent(sys + "\n\n" + prompt);
     const text = res?.response?.text?.() || '';
 
-    // استخراج JSON
+    // استخراج JSON من أي رد
     const jsonText = (() => {
       const t = text.trim();
       if (t.startsWith('{') && t.endsWith('}')) return t;
       const m = t.match(/\{[\s\S]*\}/);
       return m ? m[0] : '';
     })();
-
-    if (!jsonText) {
-      aiOutEl.innerHTML = 'تعذّر فهم استجابة الذكاء الاصطناعي.';
-      console.error('AI raw:', text);
-      return;
-    }
+    if (!jsonText){ aiOutEl.innerHTML = 'تعذّر فهم استجابة الذكاء الاصطناعي.'; console.error('AI raw:', text); return; }
 
     let data;
-    try{
-      data = JSON.parse(jsonText);
-    }catch(e){
-      aiOutEl.innerHTML = 'تعذّر تحليل JSON المُستلم.';
-      console.error('AI parse error:', jsonText);
-      return;
-    }
+    try{ data = JSON.parse(jsonText); }
+    catch(e){ aiOutEl.innerHTML = 'تعذّر تحليل JSON المُستلم.'; console.error('AI parse error:', jsonText); return; }
 
     renderAiSuggestions(data);
 
@@ -641,13 +632,14 @@ ${JSON.stringify(payload, null, 2)}
     aiOutEl.innerHTML = 'حدث خطأ أثناء طلب الذكاء الاصطناعي.';
   }
 }
+
 function buildMealSummary(){
   const items = currentItems.map(r=>({
     name: r.name,
-    grams: round1(Number(r.calc?.grams||0)),
-    carbs: round1(Number(r.calc?.carbs||0)),
-    fiber: round1(Number(r.calc?.fiber||0)),
-    netCarbs: round1(Number(r.calc?.netCarbs||0)),
+    grams:   round1(Number(r.calc?.grams||0)),
+    carbs:   round1(Number(r.calc?.carbs||0)),
+    fiber:   round1(Number(r.calc?.fiber||0)),
+    netCarbs:round1(Number(r.calc?.netCarbs||0)),
     gi: (r.gi==null || isNaN(Number(r.gi))) ? null : Number(r.gi),
     gl: round1(Number(r.calc?.gl||0))
   }));
@@ -665,22 +657,20 @@ function buildMealSummary(){
 
   const protToNet = totals.netCarbs>0 ? round1(totals.prot / totals.netCarbs) : 0;
 
-  return {
-    type: mealTypeEl.value,
-    totals,
-    items,
-    ratios: { proteinToNetCarb: protToNet }
-  };
+  return { type: mealTypeEl.value, totals, items, ratios: { proteinToNetCarb: protToNet } };
 }
+
 function renderAiSuggestions(data){
   const explain = data?.explain || '';
   const suggs = Array.isArray(data?.suggestions) ? data.suggestions : [];
 
   const wrap = document.createElement('div');
-  if (explain){ const p = document.createElement('div'); p.className = 'badge-soft'; p.textContent = explain; wrap.appendChild(p); }
+  if (explain){
+    const p = document.createElement('div'); p.className = 'badge-soft'; p.textContent = explain; wrap.appendChild(p);
+  }
 
   if (!suggs.length){
-    const d = document.createElement('div'); d.className='ai-card'; d.textContent='لا توجد اقتراحات حالياً.'; wrap.appendChild(d);
+    const d = document.createElement('div'); d.className='ai-card'; d.textContent='لا توجد اقتراحات حاليًا.'; wrap.appendChild(d);
   }else{
     suggs.forEach(s=>{
       const card = document.createElement('div'); card.className='ai-card';
@@ -703,7 +693,7 @@ function renderAiSuggestions(data){
       }
       else if (s.type==='addItem'){
         title.textContent = `إضافة صنف: ${s.name} (${s.grams} جم)`;
-        const btn = document.createElement('button'); btn.className='btn'; btn.textContent='ابحث في المكتبة';
+        const btn = document.createElement('button'); btn.className='btn'; btn.textContent='ابحثي في المكتبة';
         btn.onclick = ()=> openPickerWithSearch(s.name);
         if (s.reason){ const r=document.createElement('div'); r.className='tiny muted'; r.textContent=s.reason; card.appendChild(r); }
         const chips=document.createElement('div'); (s.tags||[]).forEach(t=>{ const c=document.createElement('span'); c.className='badge-soft'; c.textContent='#'+t; chips.appendChild(c); }); card.appendChild(chips);
@@ -721,18 +711,22 @@ function renderAiSuggestions(data){
   aiOutEl.innerHTML = '';
   aiOutEl.appendChild(wrap);
 }
+
 function applyAdjustQuantity(itemName, newGrams){
   if (!(newGrams>0)) return;
   const row = currentItems.find(r=> (r.name||'').trim() === (itemName||'').trim());
-  if (!row){ showToast('لم يتم العثور على الصنف المقترح'); return; }
+  if (!row){ showToast('لم يتم العثور على الصنف المقترَح.'); return; }
+
   if (row.unit==='household' && row.measures?.length){
     const m = row.measures.find(mm=> mm.name===row.measure) || row.measures[0];
     row.qty = m ? round1(newGrams / (toNumber(m.grams)||1)) : row.qty;
   }else{
-    row.unit = 'grams'; row.qty = newGrams;
+    row.unit = 'grams';
+    row.qty  = newGrams;
   }
-  renderItems(); recalcAll(); showToast('تم تطبيق الكمية المقترحة');
+  renderItems(); recalcAll(); showToast('تم تطبيق الكمية المقترحة.');
 }
+
 function openPickerWithTags(tags){
   openPicker();
   if (pickCategoryEl){ pickCategoryEl.value='الكل'; }
@@ -746,7 +740,7 @@ function openPickerWithSearch(q){
   applyPickerFilters();
 }
 
-/* ========== فلاتر/أحداث عامة للصفحة ========== */
+/* أحداث عامة */
 filterTypeEl?.addEventListener('change', async ()=>{ await loadMealsOfDay(); });
 mealTypeEl?.addEventListener('change', ()=>{ populateReadingSelects(); recalcAll(); });
 mealDateEl?.addEventListener('change', async ()=>{
@@ -757,4 +751,4 @@ mealDateEl?.addEventListener('change', async ()=>{
   recalcAll();
 });
 preReadingEl?.addEventListener('change', ()=> recalcAll());
-postReadingEl?.addEventListener('change', ()=> {/* للحفظ فقط */});
+postReadingEl?.addEventListener('change', ()=> {/* للاحتفاظ فقط */});
