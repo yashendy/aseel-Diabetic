@@ -6,9 +6,10 @@
 body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
 .container{max-width:1200px;margin:auto;padding:16px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 6px 16px rgba(0,0,0,.06)}
-.muted{color:var(--muted)}
-.tiny{font-size:12px}
+.muted{color:var(--muted)} .tiny{font-size:12px}
+.hidden{display:none}
 
+/* رأس الصفحة */
 .top .head-grid{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .controls{display:flex;gap:10px;flex-wrap:wrap}
 .controls .field{display:flex;flex-direction:column;gap:6px;min-width:160px}
@@ -16,14 +17,16 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',syst
 .top-actions{display:flex;gap:8px;margin-top:10px}
 .secondary{background:#f3f4f6;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}
 
+/* منشئ الوجبة */
 .builder-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .actions button{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#f7fbff}
 .items-table .row.header{display:grid;grid-template-columns:2fr repeat(10,1fr) 60px;gap:6px;margin-bottom:8px;font-weight:700}
 #itemsBody .row{display:grid;grid-template-columns:2fr repeat(10,1fr) 60px;gap:6px;align-items:center;margin:6px 0}
 #itemsBody input,#itemsBody select{padding:8px;border:1px solid #ddd;border-radius:8px}
 
+/* الإجماليات والجرعة */
 .summary.sticky{position:sticky;bottom:0;background:linear-gradient(#fff,#fff)}
-.sum-grid{display:grid;grid-template-columns:repeat(4,1fr) repeat(4,1fr);gap:8px}
+.sum-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px}
 .sum-box{background:#f7fbff;border:1px solid var(--border);border-radius:12px;padding:10px}
 .sum-box .label{font-size:12px;color:#555}
 .sum-box .value{font-weight:800}
@@ -33,20 +36,22 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',syst
 .dose-badge{display:inline-block;padding:3px 8px;border:1px solid var(--border);border-radius:999px;background:#fff}
 .dose-badge.danger{border-color:#fecaca;background:#fef2f2;color:#991b1b}
 
+/* قائمة وجبات اليوم */
 .meals-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
 .meal-card{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fff}
 .meal-card .type{font-weight:800}
 .meal-card .actions{display:flex;gap:8px;margin-top:8px}
 
+/* التنبيهات المنبثقة */
 .toast{position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;z-index:1000}
-.hidden{display:none}
 
+/* GL Badge */
 .gl-badge{margin-inline-start:8px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:#fff}
 .gl-badge.low{color:#065f46;border-color:#bbf7d0;background:#ecfdf5}
 .gl-badge.medium{color:#b45309;border-color:#fde68a;background:#fff7ed}
 .gl-badge.high{color:#991b1b;border-color:#fecaca;background:#fef2f2}
 
-/* === المودالات === */
+/* المودالات العامة */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.25);display:flex;align-items:flex-start;justify-content:center;padding:30px;z-index:100}
 .modal.hidden{display:none}
 .modal-body{background:#fff;border-radius:12px;max-width:980px;width:100%;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
