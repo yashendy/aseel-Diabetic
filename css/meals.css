@@ -85,3 +85,17 @@ button[disabled]{opacity:.6;cursor:not-allowed}
 .badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
 .badge{background:#f7fbff;border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:12px;color:#444}
 .card-actions{display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:6px}
+/* === إضافات مساعد الوجبة (AI) === */
+.ai-btn{background:#0ea5e9;border:1px solid #bae6fd}
+.ai-btn:hover{filter:brightness(.97)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.25);display:flex;align-items:flex-start;justify-content:center;padding:30px;z-index:100}
+.modal.hidden{display:none}
+.modal-body{background:#fff;border-radius:12px;max-width:900px;width:100%;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.close{background:#eee;color:#333;border-radius:8px;padding:6px 10px;border:1px solid #ddd}
+.ai-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:8px}
+.ai-out{margin-top:10px;border:1px dashed var(--border);border-radius:12px;background:#f8fbff;padding:12px;min-height:80px}
+.ai-card{border:1px solid var(--border);border-radius:12px;background:#fff;padding:10px;margin-top:10px}
+.ai-card h4{margin:0 0 6px 0}
+.ai-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.badge-soft{background:#eef6ff;border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:12px;margin-inline-end:6px}
