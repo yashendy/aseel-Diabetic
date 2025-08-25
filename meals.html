@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>الوجبات</title>
+  <title>إدارة الوجبات</title>
   <link rel="stylesheet" href="css/meals.css?v=7" />
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
 </head>
@@ -14,7 +14,7 @@
     <header class="top card">
       <div class="head-grid">
         <div>
-          <h1>🍽️ إدارة الوجبات — <span id="childName">...</span></h1>
+          <h1>🍽️ إدارة الوجبات — <span id="childName">…</span></h1>
           <p id="childMeta" class="muted">—</p>
         </div>
         <div class="controls">
@@ -31,7 +31,6 @@
       </div>
       <div class="top-actions">
         <button id="backBtn" class="secondary">⬅️ رجوع</button>
-        <!-- زر المساعد الجديد -->
         <button id="aiHelperBtn" class="ai-btn">🤖 مساعد الوجبة</button>
       </div>
     </header>
@@ -114,7 +113,33 @@
     </section>
   </div>
 
-  <!-- مودال مساعد الوجبة (Gemini) -->
+  <!-- === مودال اختيار الأصناف (المكتبة) — IDs مطلوبة لحل الخطأ === -->
+  <div id="pickerModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="اختيار صنف من المكتبة">
+    <div class="modal-body" role="document">
+      <div class="modal-header">
+        <h3>📚 مكتبة الأصناف</h3>
+        <button id="closePicker" class="close" aria-label="إغلاق">✕</button>
+      </div>
+
+      <div class="picker-tools">
+        <input id="pickSearch" placeholder="ابحث بالاسم أو #وسم" />
+        <select id="pickCategory">
+          <option value="الكل">كل الفئات</option>
+          <option value="حبوب">حبوب</option>
+          <option value="خضار">خضار</option>
+          <option value="فواكه">فواكه</option>
+          <option value="ألبان">ألبان</option>
+          <option value="حلويات">حلويات</option>
+          <option value="مشروبات">مشروبات</option>
+        </select>
+      </div>
+
+      <div id="pickerGrid" class="picker-grid"></div>
+      <div id="pickerEmpty" class="empty hidden">لا توجد نتائج مطابقة.</div>
+    </div>
+  </div>
+
+  <!-- === مودال مساعد الوجبة (Gemini) === -->
   <div id="aiModal" class="modal hidden" aria-modal="true" role="dialog">
     <div class="modal-body" role="document">
       <div class="modal-header">
@@ -126,7 +151,7 @@
         <div class="field">
           <label>مفتاح Gemini (مرة واحدة)</label>
           <input id="aiKey" placeholder="AIza..." />
-          <small class="muted">يُحفظ محليًا في المتصفح — يمكنك تجربته أولًا من <em>gemini-key-check.html</em></small>
+          <small class="muted">يُحفظ محليًا في المتصفح — يمكنك اختباره من <em>gemini-key-check.html</em></small>
         </div>
 
         <div class="field">
@@ -156,9 +181,7 @@
 
   <!-- مكتبات -->
   <script type="module" src="js/firebase-config.js"></script>
-  <!-- SDK Gemini -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/@google/generative-ai/dist/index.min.mjs"></script>
-  <!-- كود الصفحة -->
   <script type="module" src="js/meals.js?v=7"></script>
 </body>
 </html>
