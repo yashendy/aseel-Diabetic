@@ -4,37 +4,58 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>إدارة الوجبات</title>
-  <link rel="stylesheet" href="css/meals.css?v=7" />
+  <link rel="stylesheet" href="css/meals.css?v=8" />
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
 </head>
 <body>
   <div class="container">
-    <div id="toast" class="toast hidden" role="status" aria-live="polite"><div class="msg"></div></div>
+    <div id="toast" class="toast hidden" role="status" aria-live="polite">
+      <div class="msg"></div>
+    </div>
 
+    <!-- رأس الصفحة -->
     <header class="top card">
       <div class="head-grid">
         <div>
           <h1>🍽️ إدارة الوجبات — <span id="childName">…</span></h1>
           <p id="childMeta" class="muted">—</p>
         </div>
+
         <div class="controls">
-          <div class="field"><label>تاريخ</label><input type="date" id="mealDate" /></div>
+          <div class="field">
+            <label>التاريخ</label>
+            <input type="date" id="mealDate" />
+          </div>
+
           <div class="field">
             <label>نوع الوجبة</label>
             <select id="mealType">
-              <option>فطور</option><option>غداء</option><option>عشاء</option><option>سناك</option>
+              <option>فطور</option>
+              <option>غداء</option>
+              <option>عشاء</option>
+              <option>سناك</option>
             </select>
           </div>
-          <div class="field"><label>قياس قبل الوجبة (اختياري)</label><select id="preReading"></select></div>
-          <div class="field"><label>قياس بعد الوجبة (اختياري)</label><select id="postReading"></select></div>
+
+          <div class="field">
+            <label>قياس قبل الوجبة (اختياري)</label>
+            <select id="preReading"></select>
+          </div>
+
+          <div class="field">
+            <label>قياس بعد الوجبة (اختياري)</label>
+            <select id="postReading"></select>
+          </div>
         </div>
       </div>
+
       <div class="top-actions">
         <button id="backBtn" class="secondary">⬅️ رجوع</button>
         <button id="aiHelperBtn" class="ai-btn">🤖 مساعد الوجبة</button>
       </div>
     </header>
 
+    <!-- مُنشئ الوجبة -->
     <section class="builder card">
       <div class="builder-head">
         <h3>مكوّنات الوجبة</h3>
@@ -62,6 +83,7 @@
         <div id="itemsBody"></div>
       </div>
 
+      <!-- الإجماليات والجرعة -->
       <div class="summary sticky">
         <div class="sum-grid">
           <div class="sum-box"><div class="label">إجمالي الجرامات</div><div class="value"><span id="tGrams">0</span> g</div></div>
@@ -71,21 +93,33 @@
           <div class="sum-box"><div class="label">السعرات</div><div class="value"><span id="tCal">0</span> kcal</div></div>
           <div class="sum-box"><div class="label">البروتين</div><div class="value"><span id="tProt">0</span> g</div></div>
           <div class="sum-box"><div class="label">الدهون</div><div class="value"><span id="tFat">0</span> g</div></div>
-          <div class="sum-box"><div class="label">GL الإجمالي (توعوي)</div><div class="value"><span id="tGL">0</span><span id="tGLBadge" class="gl-badge">—</span></div></div>
+          <div class="sum-box">
+            <div class="label">GL الإجمالي (توعوي)</div>
+            <div class="value"><span id="tGL">0</span><span id="tGLBadge" class="gl-badge">—</span></div>
+          </div>
         </div>
 
         <div class="dose">
           <div class="dose-line">
             <span>💉 الجرعة المقترحة:</span>
             <strong id="suggestedDose">0</strong> U
-            <small class="muted" id="doseExplain"></small>
+            <small id="doseExplain" class="muted"></small>
           </div>
+
           <div class="dose-line">
-            <span class="muted">نطاق متوقع (غير طبي):</span>
+            <span class="muted">نطاق متوقّع (غير طبي):</span>
             <span id="doseRange" class="dose-badge">—</span>
           </div>
-          <div class="dose-line"><label>الجرعة المعطاة فعليًا (اختياري)</label><input type="number" step="0.5" id="appliedDose" placeholder="مثال: 4.5" /></div>
-          <div class="dose-line"><label>ملاحظات</label><input type="text" id="mealNotes" placeholder="ملاحظات على الوجبة" /></div>
+
+          <div class="dose-line">
+            <label>الجرعة المُعطاة فعليًا (اختياري)</label>
+            <input type="number" step="0.5" id="appliedDose" placeholder="مثال: 4.5" />
+          </div>
+
+          <div class="dose-line">
+            <label>ملاحظات</label>
+            <input type="text" id="mealNotes" placeholder="ملاحظات على الوجبة" />
+          </div>
         </div>
 
         <div class="save-actions">
@@ -94,17 +128,21 @@
           <button id="printDayBtn" class="secondary">🖨️ طباعة وجبات اليوم</button>
         </div>
 
-        <p class="muted tiny">⚠️ هذا تقدير إرشادي يعتمد على المدخلات ولا يعتبر نصيحة طبية.</p>
+        <p class="muted tiny">⚠️ هذا تقدير إرشادي يعتمد على مدخلاتك ولا يُعدّ نصيحة طبية.</p>
       </div>
     </section>
 
+    <!-- وجبات اليوم -->
     <section class="card">
       <div class="table-head">
         <h3>وجبات يوم <span id="tableDate">—</span></h3>
         <div class="table-tools">
           <select id="filterType">
             <option value="الكل">كل الأنواع</option>
-            <option>فطور</option><option>غداء</option><option>عشاء</option><option>سناك</option>
+            <option>فطور</option>
+            <option>غداء</option>
+            <option>عشاء</option>
+            <option>سناك</option>
           </select>
         </div>
       </div>
@@ -113,7 +151,7 @@
     </section>
   </div>
 
-  <!-- === مودال اختيار الأصناف (المكتبة) — IDs مطلوبة لحل الخطأ === -->
+  <!-- مودال مكتبة الأصناف -->
   <div id="pickerModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="اختيار صنف من المكتبة">
     <div class="modal-body" role="document">
       <div class="modal-header">
@@ -122,7 +160,7 @@
       </div>
 
       <div class="picker-tools">
-        <input id="pickSearch" placeholder="ابحث بالاسم أو #وسم" />
+        <input id="pickSearch" placeholder="ابحثي بالاسم أو #وسم" />
         <select id="pickCategory">
           <option value="الكل">كل الفئات</option>
           <option value="حبوب">حبوب</option>
@@ -139,7 +177,7 @@
     </div>
   </div>
 
-  <!-- === مودال مساعد الوجبة (Gemini) === -->
+  <!-- مودال مساعد الوجبة (Gemini) -->
   <div id="aiModal" class="modal hidden" aria-modal="true" role="dialog">
     <div class="modal-body" role="document">
       <div class="modal-header">
@@ -151,7 +189,7 @@
         <div class="field">
           <label>مفتاح Gemini (مرة واحدة)</label>
           <input id="aiKey" placeholder="AIza..." />
-          <small class="muted">يُحفظ محليًا في المتصفح — يمكنك اختباره من <em>gemini-key-check.html</em></small>
+          <small class="muted">يُحفظ محليًا في المتصفح — يمكنكِ اختباره من <em>gemini-key-check.html</em></small>
         </div>
 
         <div class="field">
@@ -166,12 +204,12 @@
 
         <div class="field">
           <label>تعليمات إضافية (اختياري)</label>
-          <input id="aiNote" placeholder="بدائل محلية، ميزانية، بدون مكسرات…"/>
+          <input id="aiNote" placeholder="بدائل محلية، ميزانية، بدون مكسرات…" />
         </div>
       </div>
 
       <div class="row gap">
-        <button id="aiRun" class="btn">توليد اقتراحات</button>
+        <button id="aiRun" class="btn">توليد الاقتراحات</button>
         <button id="aiClear" class="btn secondary">مسح النتائج</button>
       </div>
 
@@ -179,9 +217,9 @@
     </div>
   </div>
 
-  <!-- مكتبات -->
+  <!-- سكربتات -->
   <script type="module" src="js/firebase-config.js"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@google/generative-ai/dist/index.min.mjs"></script>
-  <script type="module" src="js/meals.js?v=7"></script>
+  <script type="module" src="js/meals.js?v=8"></script>
 </body>
 </html>
