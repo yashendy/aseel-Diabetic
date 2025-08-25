@@ -266,6 +266,9 @@ function addItemRow(item){
 function renderItems(){
   itemsBodyEl.innerHTML = '';
   currentItems.forEach((r)=>{
+    // ✅ احسبي قيم الصف قبل البناء
+    recomputeRow(r);
+
     const el = document.createElement('div');
     el.className = 'row';
     el.innerHTML = `
@@ -293,6 +296,23 @@ function renderItems(){
     `;
     itemsBodyEl.appendChild(el);
   });
+
+  // ربط الأحداث
+  itemsBodyEl.querySelectorAll('select, input').forEach(inp=>{
+    inp.addEventListener('change', onRowChange);
+  });
+  itemsBodyEl.querySelectorAll('.del').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const id = e.currentTarget.dataset.id;
+      const i = currentItems.findIndex(x=>x.id===id);
+      if (i>-1){ currentItems.splice(i,1); renderItems(); recalcAll(); }
+    });
+  });
+
+  // ✅ بعد ما رسمنا الصفوف والقيم مظبوطة، حدّثي الإجماليات
+  recalcAll();
+}
+
 
   // ربط الحقول
   itemsBodyEl.querySelectorAll('select, input').forEach(inp=>{
