@@ -1,10 +1,8 @@
-// js/meals.js v7 — إضافة مساعد الوجبة (Gemini)
-// يعتمد على إصدارك السابق (v6) مع الحفاظ على كل السلوك القديم
-
+// js/meals.js v7 — كامل
 import { auth, db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
-  query, where, orderBy, serverTimestamp
+  query, where, orderBy, limit, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
@@ -53,7 +51,7 @@ const filterTypeEl    = document.getElementById('filterType');
 const mealsListEl     = document.getElementById('mealsList');
 const noMealsEl       = document.getElementById('noMeals');
 
-// مودال الأصناف (موجود سابقًا v6)
+// مودال المكتبة
 const pickerModal     = document.getElementById('pickerModal');
 const closePicker     = document.getElementById('closePicker');
 const pickSearchEl    = document.getElementById('pickSearch');
@@ -61,7 +59,7 @@ const pickCategoryEl  = document.getElementById('pickCategory');
 const pickerGrid      = document.getElementById('pickerGrid');
 const pickerEmpty     = document.getElementById('pickerEmpty');
 
-// ========== عناصر المساعد (جديدة) ==========
+// المساعد
 const aiHelperBtn   = document.getElementById('aiHelperBtn');
 const aiModal       = document.getElementById('aiModal');
 const closeAi       = document.getElementById('closeAi');
@@ -82,14 +80,12 @@ let cachedMeasurements = [];
 // ========== أدوات ==========
 const pad = n => String(n).padStart(2,'0');
 function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
-function setMaxToday(inp){ inp && inp.setAttribute('max', todayStr()); }
-setMaxToday(mealDateEl);
-
+function setMaxToday(inp){ inp && inp.setAttribute('max', todayStr()); } setMaxToday(mealDateEl);
 function esc(s){ return (s||'').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
 function toNumber(x){ const n = Number(String(x ?? '').replace(',','.')); return isNaN(n)?0:n; }
 function round1(x){ return Math.round((x||0)*10)/10; }
 function roundHalf(x){ return Math.round((x||0)*2)/2; }
-function showToast(msg){ toastMsgEl.textContent = msg; toastEl.classList.remove('hidden'); setTimeout(()=>toastEl.classList.add('hidden'), 2000); }
+function showToast(msg){ toastMsgEl.textContent = msg; toastEl.classList.remove('hidden'); setTimeout(()=>toastEl.classList.add('hidden'), 1800); }
 function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
 
 const SLOT_MAP = {
@@ -100,16 +96,9 @@ const SLOT_MAP = {
 };
 const SLOTS_ORDER = ["الاستيقاظ","ق.الفطار","ب.الفطار","ق.الغدا","ب.الغدا","ق.العشا","ب.العشا","سناك","ق.النوم","أثناء النوم","ق.الرياضة","ب.الرياضة"];
 
-function glLevel(gl){
-  if (gl < 10) return {cls:'low',    text:'منخفض'};
-  if (gl < 20) return {cls:'medium', text:'متوسط'};
-  return {cls:'high',  text:'مرتفع'};
-}
-function updateGLBadge(totalGL){
-  const {cls,text} = glLevel(totalGL||0);
-  tGLBadge.className = `gl-badge ${cls}`;
-  tGLBadge.textContent = text;
-}
+function glLevel(gl){ if (gl < 10) return {cls:'low',text:'منخفض'}; if (gl < 20) return {cls:'medium',text:'متوسط'}; return {cls:'high',text:'مرتفع'}; }
+function updateGLBadge(totalGL){ const {cls,text} = glLevel(totalGL||0); tGLBadge.className = `gl-badge ${cls}`; tGLBadge.textContent = text; }
+function calcAge(bd){ if(!bd) return '-'; const b=new Date(bd), t=new Date(); let a=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth(); if(m<0||(m===0&&t.getDate()<b.getDate())) a--; return a; }
 
 // ========== تهيئة ==========
 (function init(){
@@ -139,15 +128,6 @@ onAuthStateChanged(auth, async (user)=>{
   await loadMealsOfDay();
   recalcAll();
 });
-
-function calcAge(bd){
-  if(!bd) return '-';
-  const b = new Date(bd), t = new Date();
-  let a = t.getFullYear()-b.getFullYear();
-  const m = t.getMonth()-b.getMonth();
-  if(m<0 || (m===0 && t.getDate()<b.getDate())) a--;
-  return a;
-}
 
 // ========== القياسات ==========
 async function loadMeasurements(){
@@ -203,7 +183,6 @@ function populateReadingSelects(){
   preReadingEl.innerHTML  = build(pref);
   postReadingEl.innerHTML = build(postf);
 }
-
 function inWindow(dateObj, win){
   if(!dateObj || !win) return true;
   const [h,m] = [dateObj.getHours(), dateObj.getMinutes()];
@@ -222,7 +201,6 @@ async function loadMealsOfDay(){
   const rows = []; snap.forEach(s=> rows.push({ id:s.id, ...s.data() }));
   renderMealsList(rows);
 }
-
 function renderMealsList(rows){
   const typeFilter = filterTypeEl.value || 'الكل';
   const list = typeFilter==='الكل' ? rows : rows.filter(r=> (r.type||'')===typeFilter);
@@ -251,29 +229,303 @@ function renderMealsList(rows){
   });
 }
 
-// ========== عناصر الوجبة ==========
+// ========== عناصر الجدول ==========
 addItemBtn.addEventListener('click', openPicker);
 repeatLastBtn.addEventListener('click', repeatLastMealTemplate);
 
-// (نفس addItemRow / renderItems / recomputeRow / recalcAll … كما في v6)
-// ———— كبُرت الشيفرة؛ حفاظًا على التركيز، أُبقي نفس الشيفرات من إصدارك v6 التي أرسلتها لك سابقًا دون تغيير ————
-// (… ضعي هنا نفس دوال v6 من addItemRow, renderItems, recomputeRow, recalcAll, saveMeal, editMeal, deleteMeal, إلخ …)
-//  ✅ ملاحظة: لا يوجد أي تعديل على منطق الحسابات. كل الإضافة خاصة بالمساعد فقط.
+function addItemRow(item){
+  const row = {
+    id: crypto.randomUUID(),
+    name: item.name,
+    unit: 'grams',           // grams | household
+    qty: 100,
+    measure: item.measures?.[0]?.name || '',
+    measures: item.measures || [],
+    per100: {
+      carbs: toNumber(item.nutrPer100?.carbs_g),
+      fiber: toNumber(item.nutrPer100?.fiber_g),
+      calories: toNumber(item.nutrPer100?.cal_kcal),
+      protein: toNumber(item.nutrPer100?.protein_g),
+      fat: toNumber(item.nutrPer100?.fat_g)
+    },
+    gi: toNumber(item.gi) || null,
+    tags: item.tags || [],
+    calc: {}
+  };
+  currentItems.push(row);
+  renderItems(); recalcAll();
+}
+function renderItems(){
+  itemsBodyEl.innerHTML = '';
+  currentItems.forEach((r,idx)=>{
+    const el = document.createElement('div');
+    el.className = 'row';
+    el.innerHTML = `
+      <div>${esc(r.name)}</div>
+      <div>
+        <select data-id="${r.id}" data-k="unit">
+          <option value="grams" ${r.unit==='grams'?'selected':''}>جرامات</option>
+          <option value="household" ${r.unit==='household'?'selected':''}>تقدير بيتي</option>
+        </select>
+      </div>
+      <div><input type="number" step="0.1" value="${r.qty}" data-id="${r.id}" data-k="qty"/></div>
+      <div>
+        <select data-id="${r.id}" data-k="measure" ${r.unit==='household'?'':'disabled'}>
+          ${r.measures.map(m=>`<option ${m.name===r.measure?'selected':''}>${esc(m.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="g">${round1(r.calc.grams||0)}</div>
+      <div class="c">${round1(r.calc.carbs||0)}</div>
+      <div class="f">${round1(r.calc.fiber||0)}</div>
+      <div class="n">${round1(r.calc.netCarbs||0)}</div>
+      <div class="k">${round1(r.calc.cal||0)}</div>
+      <div class="p">${round1(r.calc.prot||0)}</div>
+      <div class="fa">${round1(r.calc.fat||0)}</div>
+      <div><button class="secondary del" data-id="${r.id}">حذف</button></div>
+    `;
+    itemsBodyEl.appendChild(el);
+  });
 
-// ------------- اختصار: سنعيد استخدام الدوال نفسها من إصدار v6 -------------
-/*  ضعي هنا نسخة دوال v6 كما أرسلتها لك سابقًا (لم أحذف شيئًا).  */
+  // ربط
+  itemsBodyEl.querySelectorAll('select, input').forEach(inp=>{
+    inp.addEventListener('change', onRowChange);
+  });
+  itemsBodyEl.querySelectorAll('.del').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const id = e.currentTarget.dataset.id;
+      const i = currentItems.findIndex(x=>x.id===id);
+      if (i>-1){ currentItems.splice(i,1); renderItems(); recalcAll(); }
+    });
+  });
 
-// ========== مودال الأصناف ==========
-closePicker.addEventListener('click', ()=> pickerModal.classList.add('hidden'));
-pickSearchEl.addEventListener('input', debounce(applyPickerFilters, 250));
-pickCategoryEl.addEventListener('change', applyPickerFilters);
+  // إعادة حساب
+  currentItems.forEach(recomputeRow);
+}
+function onRowChange(e){
+  const id = e.target.dataset.id;
+  const k  = e.target.dataset.k;
+  const row= currentItems.find(r=> r.id===id);
+  if (!row) return;
+  if (k==='unit'){ row.unit = e.target.value; }
+  if (k==='qty'){ row.qty = toNumber(e.target.value); }
+  if (k==='measure'){ row.measure = e.target.value; }
+  // تفعيل/تعطيل measure
+  const sel = e.target.parentElement?.parentElement?.querySelector('select[data-k="measure"]');
+  if (k==='unit' && sel){ sel.disabled = (row.unit!=='household'); }
+  recomputeRow(row); recalcAll();
+}
+function recomputeRow(r){
+  let grams = 0;
+  if (r.unit==='grams'){ grams = r.qty; }
+  else{
+    const m = r.measures.find(mm=> mm.name===r.measure) || r.measures[0];
+    grams = m ? (toNumber(m.grams) * toNumber(r.qty)) : 0;
+  }
+  const factor = grams/100;
+  const carbs = r.per100.carbs * factor;
+  const fiber = r.per100.fiber * factor;
+  const net   = childData.netCarbRule==='halfFiber' ? (carbs - 0.5*fiber) : (carbs - fiber);
+  const cal   = r.per100.calories * factor;
+  const prot  = r.per100.protein * factor;
+  const fat   = r.per100.fat * factor;
 
-// (نفس loadFoodItems/applyPickerFilters/renderPickerGrid/catIcon/saveLastMealTemplate/repeatLastMealTemplate … من v6)
+  let gl = 0;
+  if (r.gi && carbs>0){ gl = (r.gi * carbs)/100; }
 
-// ===================== مساعد الوجبة (Gemini) =====================
+  r.calc = { grams, carbs, fiber, netCarbs: Math.max(0,net), cal, prot, fat, gl };
+}
+function recalcAll(){
+  let tg=0, tc=0, tf=0, tn=0, kcal=0, pr=0, ft=0, tgl=0;
+  currentItems.forEach(r=>{
+    tg += r.calc.grams||0; tc += r.calc.carbs||0; tf += r.calc.fiber||0; tn += r.calc.netCarbs||0;
+    kcal += r.calc.cal||0; pr += r.calc.prot||0; ft += r.calc.fat||0; tgl += r.calc.gl||0;
+  });
+  tGramsEl.textContent = round1(tg);
+  tCarbsEl.textContent = round1(tc);
+  tFiberEl.textContent = round1(tf);
+  tNetEl.textContent   = round1(tn);
+  tCalEl.textContent   = round1(kcal);
+  tProtEl.textContent  = round1(pr);
+  tFatEl.textContent   = round1(ft);
+  tGLEl.textContent    = round1(tgl);
+  updateGLBadge(tgl);
+
+  // الجرعة (صافي أو كلي حسب إعداد الطفل)
+  const cr = Number(childData.carbRatio || 12);  // g/U
+  const useNet = childData.useNetCarbs!==false;
+  const carbsForDose = useNet ? tn : tc;
+  const dose = carbsForDose>0 && cr>0 ? (carbsForDose/cr) : 0;
+  suggestedDoseEl.textContent = roundHalf(dose);
+  doseExplainEl.textContent = useNet ? ' (اعتمادًا على الكارب الصافي)' : ' (اعتمادًا على الكارب الكلي)';
+  doseRangeEl.textContent = dose ? `U ${roundHalf(Math.max(0,dose-0.5))}–${roundHalf(dose+0.5)}` : '—';
+}
+
+// ========== حفظ/تعديل/حذف ==========
+async function saveMeal(){
+  if (!currentItems.length){ showToast('أضيفي مكونات أولًا'); return; }
+  const d = mealDateEl.value;
+  const type = mealTypeEl.value;
+
+  const payload = {
+    date: d,
+    type,
+    items: currentItems.map(r=>({
+      name:r.name, unit:r.unit, qty:r.qty, measure:r.measure, measures:r.measures,
+      per100:r.per100, gi:r.gi, tags:r.tags, calc:r.calc
+    })),
+    totals: {
+      grams_g: Number(tGramsEl.textContent)||0,
+      carbs_g: Number(tCarbsEl.textContent)||0,
+      fiber_g: Number(tFiberEl.textContent)||0,
+      netCarbs_g: Number(tNetEl.textContent)||0,
+      calories_kcal: Number(tCalEl.textContent)||0,
+      protein_g: Number(tProtEl.textContent)||0,
+      fat_g: Number(tFatEl.textContent)||0,
+      gl_total: Number(tGLEl.textContent)||0
+    },
+    preReading: preReadingEl.value ? { id: preReadingEl.value } : null,
+    postReading: postReadingEl.value ? { id: postReadingEl.value } : null,
+    suggestedMealDose: Number(suggestedDoseEl.textContent) || 0,
+    appliedMealDose: appliedDoseEl.value ? Number(appliedDoseEl.value) : null,
+    notes: mealNotesEl.value || null,
+    createdAt: serverTimestamp()
+  };
+
+  const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/meals`);
+  if (editingMealId){
+    await updateDoc(doc(ref, editingMealId), payload);
+    showToast('تم تحديث الوجبة');
+  }else{
+    await addDoc(ref, payload);
+    showToast('تم حفظ الوجبة');
+  }
+  editingMealId = null;
+  await loadMealsOfDay(); resetForm(false);
+}
+async function editMeal(r){
+  editingMealId = r.id;
+  mealTypeEl.value = r.type || 'فطور';
+  preReadingEl.value = r.preReading?.id || '';
+  postReadingEl.value = r.postReading?.id || '';
+  appliedDoseEl.value = r.appliedMealDose ?? '';
+  mealNotesEl.value   = r.notes || '';
+
+  currentItems = (r.items||[]).map(x=> ({...structuredClone(x), id: crypto.randomUUID()}));
+  renderItems(); recalcAll();
+  window.scrollTo({ top: 0, behavior:'smooth' });
+}
+async function deleteMeal(r){
+  if (!confirm('حذف الوجبة؟')) return;
+  const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/meals/${r.id}`);
+  await deleteDoc(ref);
+  showToast('تم الحذف'); await loadMealsOfDay();
+}
+function resetForm(clear=true){
+  if (clear){ currentItems = []; renderItems(); recalcAll(); }
+  editingMealId = null; appliedDoseEl.value=''; mealNotesEl.value='';
+}
+
+// ========== مكتبة الأصناف ==========
+function bindPickerOnce(){
+  // حماية: لو العناصر غير موجودة لا نربط (عشان ما يقعش addEventListener على null)
+  if (!pickerModal || !closePicker || !pickSearchEl || !pickCategoryEl) return;
+  if (bindPickerOnce.__bound) return;
+  closePicker.addEventListener('click', ()=> pickerModal.classList.add('hidden'));
+  pickSearchEl.addEventListener('input', debounce(applyPickerFilters, 250));
+  pickCategoryEl.addEventListener('change', applyPickerFilters);
+  bindPickerOnce.__bound = true;
+}
+async function openPicker(){
+  bindPickerOnce();
+  if (!pickerModal){ alert('كتلة مودال المكتبة غير موجودة في الصفحة'); return; }
+  pickerModal.classList.remove('hidden');
+  pickSearchEl.value='';
+  pickCategoryEl.value='الكل';
+  await loadFoodItems();
+  applyPickerFilters();
+}
+async function loadFoodItems(){
+  // نحمل مرة واحدة ثم نخزن
+  if (cachedFood.length) return;
+  const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
+  const snap = await getDocs(ref);
+  cachedFood = [];
+  snap.forEach(s=>{
+    const d = s.data();
+    cachedFood.push({
+      id: s.id,
+      name: d.name || d.measures?.[0]?.name || 'صنف',
+      nutrPer100: {
+        carbs_g: Number(d.nutrPer100?.carbs_g ?? 0),
+        fiber_g: Number(d.nutrPer100?.fiber_g ?? 0),
+        cal_kcal: Number(d.nutrPer100?.cal_kcal ?? 0),
+        protein_g: Number(d.nutrPer100?.protein_g ?? 0),
+        fat_g: Number(d.nutrPer100?.fat_g ?? 0)
+      },
+      measures: d.measures || [],
+      gi: Number(d.gi ?? 0) || null,
+      tags: d.tags || [],
+      category: d.category || 'أخرى'
+    });
+  });
+}
+function applyPickerFilters(){
+  if (!pickerGrid || !pickerEmpty) return;
+  const q  = (pickSearchEl.value||'').trim().toLowerCase();
+  const cat= pickCategoryEl.value || 'الكل';
+
+  let list = cachedFood;
+  if (cat && cat!=='الكل'){ list = list.filter(x=> (x.category||'').includes(cat)); }
+
+  if (q){
+    if (q.startsWith('#')){
+      const tag = q.slice(1);
+      list = list.filter(x=> (x.tags||[]).some(t=> (t||'').toLowerCase().includes(tag)));
+    }else{
+      list = list.filter(x=> (x.name||'').toLowerCase().includes(q));
+    }
+  }
+
+  renderPickerGrid(list);
+}
+function renderPickerGrid(list){
+  if (!pickerGrid || !pickerEmpty) return;
+  pickerGrid.innerHTML = '';
+  if (!list.length){ pickerEmpty.classList.remove('hidden'); return; }
+  pickerEmpty.classList.add('hidden');
+
+  list.forEach(it=>{
+    const card = document.createElement('div');
+    card.className = 'food-card';
+    const info = `
+      <div>
+        <div><strong>${esc(it.name)}</strong></div>
+        <div class="meta">كارب/100g: ${round1(it.nutrPer100.carbs_g)} • ألياف: ${round1(it.nutrPer100.fiber_g)}${it.gi?` • GI: ${it.gi}`:''}</div>
+      </div>
+    `;
+    const btn = document.createElement('button'); btn.className='add'; btn.textContent='إضافة';
+    btn.addEventListener('click', ()=>{
+      addItemRow(it);
+      pickerModal.classList.add('hidden');
+    });
+    card.innerHTML = info; card.appendChild(btn);
+    pickerGrid.appendChild(card);
+  });
+}
+
+// ========== تكرار آخر وجبة قالب ==========
+async function repeatLastMealTemplate(){
+  const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/meals`);
+  const sn = await getDocs(query(ref, orderBy('createdAt','desc'), limit(1)));
+  if (sn.empty){ showToast('لا توجد وجبة سابقة'); return; }
+  const last = sn.docs[0].data();
+  currentItems = (last.items||[]).map(x=> ({...structuredClone(x), id: crypto.randomUUID()}));
+  renderItems(); recalcAll(); showToast('تم تكرار آخر وجبة');
+}
+
+// ========== مساعد الوجبة (Gemini) ==========
 aiHelperBtn?.addEventListener('click', ()=>{
   aiModal.classList.remove('hidden');
-  // تحميل المفتاح من localStorage
   const k = localStorage.getItem('gemini_api_key') || '';
   aiKeyEl.value = k;
 });
@@ -285,7 +537,7 @@ aiRunBtn?.addEventListener('click', runAiHelper);
 async function runAiHelper(){
   try{
     const key = (aiKeyEl.value||'').trim();
-    if (!key){ alert('ضعي مفتاح Gemini أولًا.'); return; }
+    if (!key){ alert('ضعي مفتاح Gemini أولًا'); return; }
     localStorage.setItem('gemini_api_key', key);
 
     const payload = buildMealSummary();
@@ -294,48 +546,38 @@ async function runAiHelper(){
 
     aiOutEl.innerHTML = '⏳ جارٍ توليد الاقتراحات…';
 
-    // استدعاء Gemini (SDK تم تحميله في الصفحة كـ ES Module)
-    // @ts-ignore
+    // eslint-disable-next-line
     const { GoogleGenerativeAI } = await import('https://cdn.jsdelivr.net/npm/@google/generative-ai/dist/index.min.mjs');
     const genAI = new GoogleGenerativeAI(key);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const sys = `
-أنت مساعد تغذية للسكري من النوع الأول للأطفال. لديك وجبة بقيم تفصيلية (لكل صنف: الجرامات، الكارب، الألياف، الصافي، GI/GL). 
-ارجع اقتراحات مختصرة قابلة للتنفيذ لتحسين الوجبة وفق الهدف.
-القواعد: 
-- إذا كان GL الإجمالي مرتفعًا → اقترح تقليل كمية أعلى صنف GL أو استبداله ببديل منخفض.
-- إذا كانت الألياف منخفضة (<4g) → اقترح إضافة صنف غني بالألياف (خضار، شوفان…).
-- إذا كانت نسبة البروتين إلى الكارب الصافي منخفضة (<0.25) → اقترح مصدر بروتين بسيط.
-- شكل الإخراج JSON فقط بدون أي نص زائد، بالشكل التالي:
+أنت مساعد تغذية للسكري من النوع الأول للأطفال. رجّع JSON فقط بدون نص زائد:
 {
- "explain": "جملة قصيرة تشرح المنطق العام",
+ "explain": "جملة مختصرة",
  "suggestions": [
-   { "type":"adjustQuantity", "itemName":"اسم صنف موجود", "newGrams": رقم, "reason":"..." },
-   { "type":"replace", "itemName":"اسم صنف موجود", "withTags":["حبوب_كاملة" أو "خضار" ...], "reason":"..." },
-   { "type":"addItem", "name":"اسم صنف مقترح", "tags":["خضار","ألياف"], "grams": رقم, "reason":"..." }
+   { "type":"adjustQuantity", "itemName":"...", "newGrams": 120, "reason":"..." },
+   { "type":"replace", "itemName":"...", "withTags":["حبوب_كاملة"], "reason":"..." },
+   { "type":"addItem", "name":"...", "tags":["خضار","ألياف"], "grams": 80, "reason":"..." }
  ]
-}
-التزم بـ JSON صالح.
-    `.trim();
+}`.trim();
 
     const prompt = `
 الهدف: ${goal || 'عام'}
 تعليمات إضافية: ${note || 'لا'}
 بيانات الوجبة (JSON):
 ${JSON.stringify(payload, null, 2)}
-    `.trim();
+`.trim();
 
     const res = await model.generateContent([{role:"user", parts:[{text: sys + "\n\n" + prompt}]}]);
     const text = res?.response?.text() || '';
 
     let data;
     try{
-      // استخراج JSON من أي نص
       const m = text.match(/\{[\s\S]*\}$/);
       data = JSON.parse(m ? m[0] : text);
     }catch(e){
-      aiOutEl.innerHTML = 'لم أستطع فهم استجابة الذكاء الاصطناعي. جرّبي مرة أخرى.';
+      aiOutEl.innerHTML = 'تعذّر فهم استجابة الذكاء الاصطناعي.';
       console.error('AI parse error:', text);
       return;
     }
@@ -347,19 +589,16 @@ ${JSON.stringify(payload, null, 2)}
     aiOutEl.innerHTML = 'حدث خطأ أثناء طلب الذكاء الاصطناعي.';
   }
 }
-
 function buildMealSummary(){
-  // نبني ملخصًا بسيطًا للوجبة الحالية
   const items = currentItems.map(r=>({
     name: r.name,
-    grams: r.grams,
-    carbs: round1(r.calc?.carbs || 0),
-    fiber: round1(r.calc?.fiber || 0),
-    netCarbs: round1(r.calc?.netCarbs || 0),
+    grams: round1(r.calc?.grams||0),
+    carbs: round1(r.calc?.carbs||0),
+    fiber: round1(r.calc?.fiber||0),
+    netCarbs: round1(r.calc?.netCarbs||0),
     gi: r.gi ?? null,
-    gl: round1(r.calc?.gl || 0)
+    gl: round1(r.calc?.gl||0)
   }));
-
   const totals = {
     grams: Number(tGramsEl.textContent)||0,
     carbs: Number(tCarbsEl.textContent)||0,
@@ -370,77 +609,49 @@ function buildMealSummary(){
     fat: Number(tFatEl.textContent)||0,
     gl: Number(tGLEl.textContent)||0
   };
-
-  // نسبة بروتين/صافي كارب (توعوي)
   const protToNet = totals.netCarbs>0 ? round1(totals.prot / totals.netCarbs) : 0;
-
-  return {
-    type: mealTypeEl.value,
-    totals, items,
-    ratios: { proteinToNetCarb: protToNet }
-  };
+  return { type: mealTypeEl.value, totals, items, ratios: { proteinToNetCarb: protToNet } };
 }
-
 function renderAiSuggestions(data){
   const explain = data?.explain || '';
   const suggs = Array.isArray(data?.suggestions) ? data.suggestions : [];
 
   const wrap = document.createElement('div');
-  wrap.innerHTML = '';
-  if (explain){
-    const p = document.createElement('div');
-    p.className = 'badge-soft';
-    p.textContent = explain;
-    wrap.appendChild(p);
-  }
+  if (explain){ const p = document.createElement('div'); p.className = 'badge-soft'; p.textContent = explain; wrap.appendChild(p); }
 
   if (!suggs.length){
-    const d = document.createElement('div');
-    d.className = 'ai-card';
-    d.textContent = 'لا توجد اقتراحات حالياً.';
-    wrap.appendChild(d);
-  } else {
-    suggs.forEach((s, idx)=>{
-      const card = document.createElement('div');
-      card.className = 'ai-card';
-      const title = document.createElement('h4');
+    const d = document.createElement('div'); d.className='ai-card'; d.textContent='لا توجد اقتراحات حالياً.'; wrap.appendChild(d);
+  }else{
+    suggs.forEach(s=>{
+      const card = document.createElement('div'); card.className='ai-card';
+      const title = document.createElement('h4'); card.appendChild(title);
 
       if (s.type==='adjustQuantity'){
         title.textContent = `تعديل كمية: ${s.itemName} → ${s.newGrams} جم`;
-        const btn = document.createElement('button');
-        btn.className = 'btn';
-        btn.textContent = 'تطبيق الكمية';
+        const btn = document.createElement('button'); btn.className='btn'; btn.textContent='تطبيق الكمية';
         btn.onclick = ()=> applyAdjustQuantity(s.itemName, Number(s.newGrams)||0);
-        card.appendChild(title);
-        if (s.reason){ const r = document.createElement('div'); r.className='tiny muted'; r.textContent=s.reason; card.appendChild(r); }
-        const act = document.createElement('div'); act.className='ai-actions'; act.appendChild(btn); card.appendChild(act);
+        if (s.reason){ const r=document.createElement('div'); r.className='tiny muted'; r.textContent=s.reason; card.appendChild(r); }
+        const act=document.createElement('div'); act.className='ai-actions'; act.appendChild(btn); card.appendChild(act);
       }
       else if (s.type==='replace'){
         title.textContent = `استبدال: ${s.itemName}`;
-        const btn = document.createElement('button');
-        btn.className = 'btn';
-        btn.textContent = 'فتح بدائل مناسبة';
+        const btn = document.createElement('button'); btn.className='btn'; btn.textContent='فتح بدائل مناسبة';
         btn.onclick = ()=> openPickerWithTags(s.withTags||[]);
-        card.appendChild(title);
-        if (s.reason){ const r = document.createElement('div'); r.className='tiny muted'; r.textContent=s.reason; card.appendChild(r); }
-        const chips = document.createElement('div'); (s.withTags||[]).forEach(t=>{ const c=document.createElement('span'); c.className='badge-soft'; c.textContent='#'+t; chips.appendChild(c); }); card.appendChild(chips);
-        const act = document.createElement('div'); act.className='ai-actions'; act.appendChild(btn); card.appendChild(act);
+        if (s.reason){ const r=document.createElement('div'); r.className='tiny muted'; r.textContent=s.reason; card.appendChild(r); }
+        const chips=document.createElement('div'); (s.withTags||[]).forEach(t=>{ const c=document.createElement('span'); c.className='badge-soft'; c.textContent='#'+t; chips.appendChild(c); }); card.appendChild(chips);
+        const act=document.createElement('div'); act.className='ai-actions'; act.appendChild(btn); card.appendChild(act);
       }
       else if (s.type==='addItem'){
         title.textContent = `إضافة صنف: ${s.name} (${s.grams} جم)`;
-        const btn = document.createElement('button');
-        btn.className = 'btn';
-        btn.textContent = 'ابحث في المكتبة';
+        const btn = document.createElement('button'); btn.className='btn'; btn.textContent='ابحث في المكتبة';
         btn.onclick = ()=> openPickerWithSearch(s.name);
-        card.appendChild(title);
-        if (s.reason){ const r = document.createElement('div'); r.className='tiny muted'; r.textContent=s.reason; card.appendChild(r); }
-        const chips = document.createElement('div'); (s.tags||[]).forEach(t=>{ const c=document.createElement('span'); c.className='badge-soft'; c.textContent='#'+t; chips.appendChild(c); }); card.appendChild(chips);
-        const act = document.createElement('div'); act.className='ai-actions'; act.appendChild(btn); card.appendChild(act);
-      }
-      else{
+        if (s.reason){ const r=document.createElement('div'); r.className='tiny muted'; r.textContent=s.reason; card.appendChild(r); }
+        const chips=document.createElement('div'); (s.tags||[]).forEach(t=>{ const c=document.createElement('span'); c.className='badge-soft'; c.textContent='#'+t; chips.appendChild(c); }); card.appendChild(chips);
+        const act=document.createElement('div'); act.className='ai-actions'; act.appendChild(btn); card.appendChild(act);
+      } else {
         title.textContent = 'معلومة';
-        const r = document.createElement('div'); r.className='tiny muted'; r.textContent= JSON.stringify(s);
-        card.appendChild(title); card.appendChild(r);
+        const r=document.createElement('div'); r.className='tiny muted'; r.textContent=JSON.stringify(s);
+        card.appendChild(r);
       }
 
       wrap.appendChild(card);
@@ -450,41 +661,34 @@ function renderAiSuggestions(data){
   aiOutEl.innerHTML = '';
   aiOutEl.appendChild(wrap);
 }
-
 function applyAdjustQuantity(itemName, newGrams){
   if (!(newGrams>0)) return;
-  // نبحث عن صف بالاسم، ثم نعدّل الكمية بالجرامات مباشرة
   const row = currentItems.find(r=> (r.name||'').trim() === (itemName||'').trim());
   if (!row){ showToast('لم يتم العثور على الصنف المقترح'); return; }
-
-  // لو الوحدة household نحسب الكمية الأقرب لتحقيق الجرامات المطلوبة
   if (row.unit==='household' && row.measures?.length){
     const m = row.measures.find(mm=> mm.name===row.measure) || row.measures[0];
-    row.qty = m ? round1(newGrams / m.grams) : row.qty;
+    row.qty = m ? round1(newGrams / (toNumber(m.grams)||1)) : row.qty;
   }else{
-    row.unit = 'grams';
-    row.qty  = newGrams; // الكمية = جرامات
+    row.unit = 'grams'; row.qty = newGrams;
   }
-  renderItems(); recalcAll();
-  showToast('تم تطبيق الكمية المقترحة');
+  renderItems(); recalcAll(); showToast('تم تطبيق الكمية المقترحة');
 }
-
 function openPickerWithTags(tags){
-  pickerModal.classList.remove('hidden');
-  pickCategoryEl.value='الكل';
-  pickSearchEl.value = tags && tags.length ? '#'+tags[0] : '';
+  openPicker();
+  if (pickCategoryEl){ pickCategoryEl.value='الكل'; }
+  if (pickSearchEl){ pickSearchEl.value = tags && tags.length ? '#'+tags[0] : ''; }
   applyPickerFilters();
 }
 function openPickerWithSearch(q){
-  pickerModal.classList.remove('hidden');
-  pickCategoryEl.value='الكل';
-  pickSearchEl.value = q || '';
+  openPicker();
+  if (pickCategoryEl){ pickCategoryEl.value='الكل'; }
+  if (pickSearchEl){ pickSearchEl.value = q || ''; }
   applyPickerFilters();
 }
 
-// ====== ربط الأحداث الباقية كما في v6 ======
+// ====== ربط باقي الأحداث ======
 saveMealBtn.addEventListener('click', saveMeal);
-resetMealBtn.addEventListener('click', ()=> resetForm(false));
+resetMealBtn.addEventListener('click', ()=> resetForm(true));
 printDayBtn.addEventListener('click', ()=> window.print());
 filterTypeEl.addEventListener('change', async ()=>{ await loadMealsOfDay(); });
 mealTypeEl.addEventListener('change', ()=>{ populateReadingSelects(); recalcAll(); });
@@ -495,10 +699,4 @@ mealDateEl.addEventListener('change', async ()=>{
   await loadMealsOfDay();
   recalcAll();
 });
-preReadingEl.addEventListener('change', ()=>{ recalcAll(); });
-postReadingEl.addEventListener('change', ()=>{ /* للحفظ فقط */ });
-
-// --------- ملاحظة مهمة ---------
-// حافظي على بقية دوال v6 كما هي (addItemRow, renderItems, recomputeRow, recalcAll, saveMeal, editMeal,
-// deleteMeal, openPicker, loadFoodItems, applyPickerFilters, renderPickerGrid, catIcon,
-// saveLastMealTemplate, repeatLastMealTemplate). لم تتغير.
+preReadingEl.addEventListener('change', ()=> recalcAll());
