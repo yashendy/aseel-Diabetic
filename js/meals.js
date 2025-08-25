@@ -328,7 +328,7 @@ function renderItems(){
 
   // إعادة حساب
   currentItems.forEach(recomputeRow);
-}
+
 function onRowChange(e){
   const id = e.target.dataset.id;
   const k  = e.target.dataset.k;
