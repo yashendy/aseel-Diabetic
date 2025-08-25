@@ -481,18 +481,32 @@ async function loadFoodItems(){
   const ref = collection(db, `parents/${currentUser.uid}/foodItems`);
   const snap = await getDocs(ref);
   cachedFood = [];
+
   snap.forEach(s=>{
     const d = s.data();
+
+    // ✅ تطبيع مسار التغذية: nutrPer100 | nutrPer100g | nutr
+    const rawN = d.nutrPer100 || d.nutrPer100g || d.nutr || {};
+    const n100 = {
+      carbs_g:   Number(rawN.carbs_g   ?? rawN.carb_g   ?? rawN.carbs   ?? rawN.carb   ?? 0),
+      fiber_g:   Number(rawN.fiber_g   ?? rawN.fibre_g  ?? rawN.fiber   ?? rawN.fibre  ?? 0),
+      protein_g: Number(rawN.protein_g ?? rawN.protein  ?? 0),
+      fat_g:     Number(rawN.fat_g     ?? rawN.fat      ?? 0),
+      cal_kcal:  Number(rawN.cal_kcal  ?? rawN.kcal     ?? rawN.cal     ?? 0),
+    };
+
     cachedFood.push({
       id: s.id,
       name: d.name || d.measures?.[0]?.name || 'صنف',
-      nutrPer100: {
-        carbs_g: Number(d.nutrPer100?.carbs_g ?? 0),
-        fiber_g: Number(d.nutrPer100?.fiber_g ?? 0),
-        cal_kcal: Number(d.nutrPer100?.cal_kcal ?? 0),
-        protein_g: Number(d.nutrPer100?.protein_g ?? 0),
-        fat_g: Number(d.nutrPer100?.fat_g ?? 0)
+      // نخزّن نسخة جاهزة للحساب عشان نستعملها مباشرة
+      per100: {
+        carbs:   n100.carbs_g,
+        fiber:   n100.fiber_g,
+        calories:n100.cal_kcal,
+        protein: n100.protein_g,
+        fat:     n100.fat_g
       },
+      nutrPer100: n100,               // لو حبيتي ترجعيله لاحقًا
       measures: d.measures || [],
       gi: Number(d.gi ?? 0) || null,
       tags: d.tags || [],
@@ -500,6 +514,7 @@ async function loadFoodItems(){
     });
   });
 }
+
 
 function applyPickerFilters(){
   if (!pickerGrid || !pickerEmpty) return;
