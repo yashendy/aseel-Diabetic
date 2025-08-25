@@ -1,8 +1,8 @@
 // js/child.js
 // -----------------------------------------------------------
-// - يحافظ على كل البطاقات القديمة كما هي
-// - يملأ بطاقة "بيانات الطفل" بالبيانات الحقيقية
-// - يضيف بطاقة "التحاليل الطبية" مع Sparkline/Progress
+// - يملأ بطاقة "بيانات الطفل" بالبيانات (الجهاز/الأنسولين) مع دعم القديم
+// - يجعل بطاقة التحاليل الطبية غير قابلة للنقر بالكامل؛ الأزرار فقط تفعل
+// - يحافظ على سلوك البطاقات الأخرى كرابط كامل
 // -----------------------------------------------------------
 
 import { auth, db } from './firebase-config.js';
@@ -85,7 +85,7 @@ function calcAge(bd){
   return a;
 }
 function loader(show){ loaderEl && loaderEl.classList.toggle('hidden', !show); }
-function setText(el, v){ if(el) el.textContent = (v==null?'—':v); }
+function setText(el, v){ if(el) el.textContent = (v==null || v==='') ? '—' : v; }
 function setHref(el, url){ if(el) el.href = url; }
 function fmt(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function dayDiff(a,b){ return Math.ceil((a-b)/86400000); }
@@ -132,14 +132,32 @@ onAuthStateChanged(auth, async (user)=>{
     setText(chipCREl,    `CarbRatio: ${cr} g/U`);
     setText(chipCFEl,    `CF: ${cf ?? '—'} mmol/L per U`);
 
-    // ✅ تعبئة بطاقة "بيانات الطفل"
+    // ✅ تعبئة بطاقة "بيانات الطفل" (مع دعم الصيغ القديمة)
+    const ageStr    = calcAge(c.birthDate);
+    const weightStr = (c.weightKg!=null ? `${c.weightKg} كجم` : (c.weight!=null ? `${c.weight} كجم` : '—'));
+    const heightStr = (c.heightCm!=null ? `${c.heightCm} سم` : (c.height!=null ? `${c.height} سم` : '—'));
+
+    const devType  = c.device?.type || null;
+    const devName  = c.device?.name || c.deviceName || null;
+    const devModel = c.device?.model || null;
+    let deviceStr  = devName || devType || '—';
+    if (devType && devName) deviceStr = `${devType} — ${devName}`;
+    if (devModel) deviceStr += ` (${devModel})`;
+
+    const bolus = c.insulin?.bolusType || c.insulinBolusType || c.insulinType || null;
+    const basal = c.insulin?.basalType || c.insulinBasalType || null;
+    let insulinStr = '—';
+    if (bolus || basal){
+      insulinStr = `${bolus ? `Bolus: ${bolus}` : ''}${(bolus && basal) ? ' • ' : ''}${basal ? `Basal: ${basal}` : ''}`;
+    }
+
     setText(infoName,    c.name ?? '—');
-    setText(infoAge,     calcAge(c.birthDate));
+    setText(infoAge,     ageStr);
     setText(infoGender,  c.gender ?? '—');
-    setText(infoWeight,  (c.weight ? `${c.weight} كجم` : '—'));
-    setText(infoHeight,  (c.height ? `${c.height} سم` : '—'));
-    setText(infoDevice,  c.device ?? '—');
-    setText(infoInsulin, c.insulinType ?? '—');
+    setText(infoWeight,  weightStr);
+    setText(infoHeight,  heightStr);
+    setText(infoDevice,  deviceStr);
+    setText(infoInsulin, insulinStr);
     setText(infoRange,   `${min}–${max} mmol/L`);
     setText(infoCR,      `${cr} g/U`);
     setText(infoCF,      (cf==null ? '—' : `${cf} mmol/L/U`));
@@ -189,7 +207,7 @@ onAuthStateChanged(auth, async (user)=>{
     // ----- بطاقة التحاليل الطبية -----
     await renderLabCard(user.uid);
 
-    // أزرار البطاقة
+    // ✅ الأزرار فقط تفتح الصفحات/التقارير
     addLabBtn?.addEventListener('click', (e)=>{
       e.stopPropagation();
       location.href = `labs.html?child=${encodeURIComponent(childId)}`;
@@ -208,15 +226,7 @@ onAuthStateChanged(auth, async (user)=>{
       }
     });
 
-    labCard?.addEventListener('click', ()=>{
-      location.href = `labs.html?child=${encodeURIComponent(childId)}`;
-    });
-    labCard?.addEventListener('keydown', (e)=>{
-      if (e.key==='Enter' || e.key===' ') {
-        e.preventDefault();
-        location.href = `labs.html?child=${encodeURIComponent(childId)}`;
-      }
-    });
+    // ❌ لا نجعل البطاقة كاملة قابلة للنقر — لا Listeners على labCard
 
   }catch(err){
     console.error(err);
@@ -269,7 +279,7 @@ async function renderLabCard(uid){
     labHba1cVal.className = `value tone ${tone}`;
   }
 
-  // دلتا + tooltip
+  // دلتا
   if (prev?.hba1c?.value!=null && hba!=null){
     const pv = Number(prev.hba1c.value);
     if (!Number.isNaN(pv)){
