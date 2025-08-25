@@ -24,8 +24,10 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Taho
 .stat-label{font-size:12px;color:#555}
 
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:16px}
-.card.link:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(0,0,0,.09)}
+a.card.link{cursor:pointer}
+a.card.link:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(0,0,0,.09)}
 
+/* البطاقات الملوّنة */
 .card.measurements{border-left:6px solid #42A5F5}
 .card.meals{border-left:6px solid #66BB6A}
 .card.food{border-left:6px solid #FFA726}
@@ -33,10 +35,11 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Taho
 .card.visits{border-left:6px solid #26C6DA}
 .card.child-edit{border-left:6px solid #EF5350}
 
-/* --- بطاقة التحاليل الطبية --- */
-.card.labs{border-left:6px solid var(--labs); cursor:pointer}
-.card.labs .no-pointer{pointer-events:none}
+/* --- بطاقة التحاليل الطبية (ليست رابطًا كاملاً) --- */
+.card.labs{border-left:6px solid var(--labs)}
+.card.labs button{cursor:pointer}
 
+/* عناصر مساعدة */
 .pill{display:inline-block;padding:3px 8px;border:1px solid var(--border);border-radius:999px;background:#fff}
 .pill.ok{color:var(--ok);border-color:#bbf7d0;background:#ecfdf5}
 .pill.warn{color:#b45309;border-color:#fde68a;background:#fff7ed}
@@ -61,6 +64,15 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Taho
 .loader{position:fixed;inset:0;background:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;font-weight:700;z-index:1000}
 .hidden{display:none}
 
+/* أزرار */
+.btn{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:#f7fbff}
+.btn.ghost{background:#fff}
+.btn:hover{filter:brightness(.98)}
+
+/* مساعدات تخطيط */
+.row{display:flex;align-items:center}
+.row.gap{gap:10px}
+.row.space{justify-content:space-between}
 .mini-list{margin-top:6px;background:#f9fcff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;display:grid;gap:4px;font-size:13px}
 .mini-list .lbl{color:#555}
 .mini-list strong{font-weight:700;color:#111}
