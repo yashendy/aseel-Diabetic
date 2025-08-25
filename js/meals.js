@@ -243,21 +243,23 @@ function addItemRow(item){
     qty: 100,
     measure: item.measures?.[0]?.name || '',
     measures: Array.isArray(item.measures) ? item.measures : [],
+    // ✅ الآن نقرأ مباشرة من per100 الموحّدة
     per100: {
-      carbs: toNumber(item.nutrPer100?.carbs_g),
-      fiber: toNumber(item.nutrPer100?.fiber_g),
-      calories: toNumber(item.nutrPer100?.cal_kcal),
-      protein: toNumber(item.nutrPer100?.protein_g),
-      fat: toNumber(item.nutrPer100?.fat_g)
+      carbs:    toNumber(item.per100?.carbs),
+      fiber:    toNumber(item.per100?.fiber),
+      calories: toNumber(item.per100?.calories),
+      protein:  toNumber(item.per100?.protein),
+      fat:      toNumber(item.per100?.fat)
     },
     gi: (item.gi==null || isNaN(Number(item.gi))) ? null : Number(item.gi),
     tags: item.tags || [],
     calc: {}
   };
   currentItems.push(row);
-  renderItems();          // سيُعاد الحساب قبل البناء
+  renderItems();        // هيعيد الحساب قبل البناء (معدّلة بالفعل)
   recalcAll();
 }
+
 
 function renderItems(){
   itemsBodyEl.innerHTML = '';
