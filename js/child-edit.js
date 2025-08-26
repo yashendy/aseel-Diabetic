@@ -1,134 +1,191 @@
+// js/child-edit.js v3 — يحمّل بيانات الطفل ويحدّثها لتتوافق مع صفحة الوجبات
+// - يحفظ carbTargets (breakfast/lunch/dinner/snack)
+// - يحفظ glucoseUnit (mgdl|mmol)
+// - يحافظ على باقي الحقول الموجودة سلفًا
+
 import { auth, db } from './firebase-config.js';
+import {
+  doc, getDoc, updateDoc, deleteDoc
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-const $ = (id) => document.getElementById(id);
-const form = $('form');
-const loader = $('loader');
-const childLabel = $('childLabel');
-
-const nameEl = $('name');
-const genderEl = $('gender');
-const birthDateEl = $('birthDate');
-const weightKgEl = $('weightKg');
-const heightCmEl = $('heightCm');
-
-const rangeMinEl = $('rangeMin');
-const rangeMaxEl = $('rangeMax');
-const carbRatioEl = $('carbRatio');
-const correctionFactorEl = $('correctionFactor');
-const severeLowEl = $('severeLow');
-const severeHighEl = $('severeHigh');
-
-const deviceNameEl = $('deviceName');
-const basalTypeEl = $('basalType');
-const bolusTypeEl = $('bolusType');
-
-// الحقول الجديدة
-const useNetCarbsEl = $('useNetCarbs');
-const netCarbRuleEl = $('netCarbRule');
-
+/* عناصر */
 const params = new URLSearchParams(location.search);
 const childId = params.get('child');
 
-function showLoader(b){ loader.classList.toggle('show', !!b); }
+const form = document.getElementById('form');
+const childLabel = document.getElementById('childLabel');
+const loader = document.getElementById('loader');
+const toastEl = document.getElementById('toast');
 
+const nameEl = document.getElementById('name');
+const genderEl = document.getElementById('gender');
+const birthDateEl = document.getElementById('birthDate');
+const weightKgEl = document.getElementById('weightKg');
+const heightCmEl = document.getElementById('heightCm');
+
+const rangeMinEl = document.getElementById('rangeMin');
+const rangeMaxEl = document.getElementById('rangeMax');
+const carbRatioEl = document.getElementById('carbRatio');
+const correctionFactorEl = document.getElementById('correctionFactor');
+const severeLowEl = document.getElementById('severeLow');
+const severeHighEl = document.getElementById('severeHigh');
+
+const deviceNameEl = document.getElementById('deviceName');
+const basalTypeEl = document.getElementById('basalType');
+const bolusTypeEl = document.getElementById('bolusType');
+
+const brMinEl = document.getElementById('brMin'); const brMaxEl = document.getElementById('brMax');
+const luMinEl = document.getElementById('luMin'); const luMaxEl = document.getElementById('luMax');
+const diMinEl = document.getElementById('diMin'); const diMaxEl = document.getElementById('diMax');
+const snMinEl = document.getElementById('snMin'); const snMaxEl = document.getElementById('snMax');
+
+const unitRadios = document.querySelectorAll('input[name="unit"]');
+
+const useNetCarbsEl = document.getElementById('useNetCarbs');
+const netCarbRuleEl = document.getElementById('netCarbRule');
+
+const deleteBtn = document.getElementById('deleteBtn');
+
+/* حالة */
+let currentUser, childRef, childData;
+
+function showToast(msg){
+  toastEl.innerHTML = `<div class="msg">${escapeHTML(msg)}</div>`;
+  toastEl.classList.remove('hidden');
+  setTimeout(()=> toastEl.classList.add('hidden'), 2200);
+}
+function escapeHTML(s){ return (s||'').toString()
+  .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+  .replaceAll('"','&quot;').replaceAll("'","&#039;"); }
+function busy(b){ loader.classList.toggle('hidden', !b); }
+
+/* جلسة */
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href='index.html'; return; }
-  if(!childId){ alert('لا يوجد معرف طفل في الرابط'); history.back(); return; }
-
+  if(!childId){ alert('لا يوجد معرف طفل'); history.back(); return; }
+  currentUser = user;
+  childRef = doc(db, `parents/${user.uid}/children/${childId}`);
+  busy(true);
   try{
-    showLoader(true);
-    const ref = doc(db, `parents/${user.uid}/children/${childId}`);
-    const snap = await getDoc(ref);
-    if(!snap.exists()){ alert('لم يتم العثور على الطفل'); history.back(); return; }
-    const c = snap.data();
-
-    // ملء البيانات
-    childLabel.textContent = c.name || '—';
-    nameEl.value = c.name || '';
-    genderEl.value = c.gender || '';
-    birthDateEl.value = c.birthDate || '';
-    weightKgEl.value = c.weightKg ?? '';
-    heightCmEl.value = c.heightCm ?? '';
-
-    rangeMinEl.value = c.normalRange?.min ?? '';
-    rangeMaxEl.value = c.normalRange?.max ?? '';
-    carbRatioEl.value = c.carbRatio ?? '';
-    correctionFactorEl.value = c.correctionFactor ?? '';
-    severeLowEl.value  = c.severeLow  ?? '';
-    severeHighEl.value = c.severeHigh ?? '';
-
-    deviceNameEl.value = c.deviceName || c.device?.name || '';
-    basalTypeEl.value = c.insulin?.basalType || c.insulinBasalType || '';
-    bolusTypeEl.value = c.insulin?.bolusType || c.insulinBolusType || '';
-
-    // الإعدادات الجديدة
-    useNetCarbsEl.checked = (c.useNetCarbs !== false);
-    netCarbRuleEl.value = c.netCarbRule || 'fullFiber';
-
-    // حفظ
-    form.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      try{
-        showLoader(true);
-
-        const payload = {
-          name: nameEl.value.trim(),
-          gender: genderEl.value || null,
-          birthDate: birthDateEl.value || null,
-          weightKg: weightKgEl.value ? Number(weightKgEl.value) : null,
-          heightCm: heightCmEl.value ? Number(heightCmEl.value) : null,
-          normalRange: {
-            min: rangeMinEl.value ? Number(rangeMinEl.value) : null,
-            max: rangeMaxEl.value ? Number(rangeMaxEl.value) : null,
-          },
-          carbRatio: carbRatioEl.value ? Number(carbRatioEl.value) : null,
-          correctionFactor: correctionFactorEl.value ? Number(correctionFactorEl.value) : null,
-          severeLow:  severeLowEl.value  ? Number(severeLowEl.value)  : null,
-          severeHigh: severeHighEl.value ? Number(severeHighEl.value) : null,
-          deviceName: deviceNameEl.value.trim() || null,
-          insulin: {
-            basalType: basalTypeEl.value.trim() || null,
-            bolusType: bolusTypeEl.value.trim() || null,
-          },
-          // الحقول الجديدة
-          useNetCarbs: useNetCarbsEl.checked,
-          netCarbRule: netCarbRuleEl.value || 'fullFiber',
-          updatedAt: new Date().toISOString()
-        };
-
-        await updateDoc(ref, payload);
-        alert('✅ تم حفظ التعديلات بنجاح');
-        history.back();
-      }catch(err){
-        console.error(err);
-        alert('تعذر الحفظ. تأكدي من الاتصال بالإنترنت.');
-      }finally{
-        showLoader(false);
-      }
-    });
-
-    // حذف الطفل
-    $('deleteBtn').addEventListener('click', async ()=>{
-      if(!confirm('هل أنتِ متأكدة من حذف الطفل؟')) return;
-      try{
-        showLoader(true);
-        await deleteDoc(ref);
-        alert('تم حذف الطفل.');
-        location.href = 'parent.html';
-      }catch(err){
-        console.error(err);
-        alert('تعذر الحذف.');
-      }finally{
-        showLoader(false);
-      }
-    });
-
-  }catch(err){
-    console.error(err);
-    alert('تعذر تحميل البيانات.');
+    const snap = await getDoc(childRef);
+    if (!snap.exists()){ alert('لم يتم العثور على الطفل'); history.back(); return; }
+    childData = snap.data();
+    fillForm(childData);
+  }catch(e){
+    console.error(e); alert('تعذر تحميل البيانات');
   }finally{
-    showLoader(false);
+    busy(false);
+  }
+});
+
+/* تعبئة النموذج */
+function fillForm(d){
+  childLabel.textContent = d?.name ? `(${d.name})` : '—';
+
+  nameEl.value = d?.name || '';
+  genderEl.value = d?.gender || '';
+  birthDateEl.value = d?.birthDate || '';
+  weightKgEl.value = valOrEmpty(d?.weightKg);
+  heightCmEl.value = valOrEmpty(d?.heightCm);
+
+  rangeMinEl.value = valOrEmpty(d?.normalRange?.min);
+  rangeMaxEl.value = valOrEmpty(d?.normalRange?.max);
+  carbRatioEl.value = valOrEmpty(d?.carbRatio);
+  correctionFactorEl.value = valOrEmpty(d?.correctionFactor);
+  severeLowEl.value = valOrEmpty(d?.severeLow);
+  severeHighEl.value = valOrEmpty(d?.severeHigh);
+
+  deviceNameEl.value = d?.deviceName || '';
+  basalTypeEl.value = d?.basalType || '';
+  bolusTypeEl.value = d?.bolusType || '';
+
+  const t = d?.carbTargets || {};
+  brMinEl.value = valOrEmpty(t.breakfast?.min); brMaxEl.value = valOrEmpty(t.breakfast?.max);
+  luMinEl.value = valOrEmpty(t.lunch?.min);     luMaxEl.value = valOrEmpty(t.lunch?.max);
+  diMinEl.value = valOrEmpty(t.dinner?.min);    diMaxEl.value = valOrEmpty(t.dinner?.max);
+  snMinEl.value = valOrEmpty(t.snack?.min);     snMaxEl.value = valOrEmpty(t.snack?.max);
+
+  const unit = d?.glucoseUnit || 'mgdl';
+  unitRadios.forEach(r=> r.checked = (r.value===unit));
+
+  useNetCarbsEl.checked = !!d?.useNetCarbs;
+  netCarbRuleEl.value = d?.netCarbRule || 'fullFiber';
+}
+
+function valOrEmpty(x){ return (x===0 || x) ? x : ''; }
+function toNum(x){ const n = Number(String(x||'').replace(',','.')); return isNaN(n)? null : n; }
+function clampMin0(n){ return (n==null || n<0) ? 0 : n; }
+
+/* حفظ */
+form.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const payload = {
+    name: nameEl.value?.trim() || null,
+    gender: genderEl.value || null,
+    birthDate: birthDateEl.value || null,
+    weightKg: toNum(weightKgEl.value),
+    heightCm: toNum(heightCmEl.value),
+
+    normalRange: {
+      min: toNum(rangeMinEl.value),
+      max: toNum(rangeMaxEl.value)
+    },
+    carbRatio: toNum(carbRatioEl.value),
+    correctionFactor: toNum(correctionFactorEl.value),
+    severeLow: toNum(severeLowEl.value),
+    severeHigh: toNum(severeHighEl.value),
+
+    deviceName: deviceNameEl.value?.trim() || null,
+    basalType: basalTypeEl.value?.trim() || null,
+    bolusType: bolusTypeEl.value?.trim() || null,
+
+    carbTargets: {
+      breakfast: rangeObj(brMinEl.value, brMaxEl.value),
+      lunch:     rangeObj(luMinEl.value, luMaxEl.value),
+      dinner:    rangeObj(diMinEl.value, diMaxEl.value),
+      snack:     rangeObj(snMinEl.value, snMaxEl.value)
+    },
+    glucoseUnit: (Array.from(unitRadios).find(r=>r.checked)?.value) || 'mgdl',
+
+    useNetCarbs: !!useNetCarbsEl.checked,
+    netCarbRule: netCarbRuleEl.value || 'fullFiber'
+  };
+
+  // نظّف بعض القيم: حوّل null/undefined لأصفار حيث يلزم
+  if (payload.carbTargets.breakfast) { payload.carbTargets.breakfast.min = clampMin0(payload.carbTargets.breakfast.min); payload.carbTargets.breakfast.max = clampMin0(payload.carbTargets.breakfast.max); }
+  if (payload.carbTargets.lunch)     { payload.carbTargets.lunch.min     = clampMin0(payload.carbTargets.lunch.min);     payload.carbTargets.lunch.max     = clampMin0(payload.carbTargets.lunch.max); }
+  if (payload.carbTargets.dinner)    { payload.carbTargets.dinner.min    = clampMin0(payload.carbTargets.dinner.min);    payload.carbTargets.dinner.max    = clampMin0(payload.carbTargets.dinner.max); }
+  if (payload.carbTargets.snack)     { payload.carbTargets.snack.min     = clampMin0(payload.carbTargets.snack.min);     payload.carbTargets.snack.max     = clampMin0(payload.carbTargets.snack.max); }
+
+  busy(true);
+  try{
+    await updateDoc(childRef, payload);
+    showToast('✅ تم حفظ التعديلات');
+  }catch(e){
+    console.error(e); alert('تعذر حفظ التعديلات');
+  }finally{
+    busy(false);
+  }
+});
+
+function rangeObj(min,max){
+  const a = toNum(min), b = toNum(max);
+  if (a==null && b==null) return null;
+  return { min: a==null? 0 : a, max: b==null? 0 : b };
+}
+
+/* حذف الطفل */
+deleteBtn?.addEventListener('click', async ()=>{
+  if (!confirm('هل تريدين حذف هذا الطفل؟ لا يمكن التراجع.')) return;
+  busy(true);
+  try{
+    await deleteDoc(childRef);
+    showToast('🗑️ تم حذف الطفل');
+    setTimeout(()=> location.href='index.html', 1200);
+  }catch(e){
+    console.error(e); alert('تعذر حذف الطفل');
+  }finally{
+    busy(false);
   }
 });
