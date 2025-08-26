@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>لوحة الطبيب</title>
+  <link rel="stylesheet" href="css/doctor-dashboard.css?v=4" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+</head>
+<body>
+  <div class="container">
+    <header class="card top">
+      <div class="head">
+        <h1>👨‍⚕️ لوحة الطبيب</h1>
+        <p class="muted">يعرض الأطفال المعيّنين لك مع موافقة مشاركة فعّالة.</p>
+      </div>
+      <div class="tools">
+        <input id="search" placeholder="🔎 بحث باسم الطفل" />
+        <div class="range">
+          <span class="lbl">الفترة:</span>
+          <button class="chipBtn active" data-days="7">7 أيام</button>
+          <button class="chipBtn" data-days="14">14 يوم</button>
+          <button class="chipBtn" data-days="30">30 يوم</button>
+        </div>
+        <span id="totals" class="muted tiny">—</span>
+      </div>
+    </header>
+
+    <section class="card">
+      <div id="grid" class="grid"></div>
+      <div id="empty" class="empty hidden">لا يوجد أطفال معيّنين أو لا توجد موافقة فعّالة.</div>
+    </section>
+  </div>
+
+  <div id="loader" class="loader hidden" aria-hidden="true"></div>
+
+  <script type="module" src="js/firebase-config.js"></script>
+  <script type="module" src="js/doctor-dashboard.js?v=4"></script>
+</body>
+</html>
