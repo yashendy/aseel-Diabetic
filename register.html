@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>إنشاء حساب</title>
+  <link rel="stylesheet" href="css/auth.css?v=1" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+</head>
+<body class="auth-body">
+  <main class="auth-card">
+    <header class="auth-head">
+      <h1>✨ أنشئ حسابك</h1>
+      <p class="muted">الحسابات الجديدة تُسجَّل تلقائيًا كـ <strong>وليّ أمر</strong>. يمكن للإدارة ترقية الدور لاحقًا.</p>
+    </header>
+
+    <form id="registerForm" class="form">
+      <div class="field">
+        <label>الاسم الكامل</label>
+        <input type="text" id="regName" required autocomplete="name" />
+      </div>
+      <div class="field">
+        <label>البريد الإلكتروني</label>
+        <input type="email" id="regEmail" required autocomplete="email" />
+      </div>
+      <div class="field">
+        <label>كلمة السر (٦ أحرف فأكثر)</label>
+        <input type="password" id="regPassword" minlength="6" required autocomplete="new-password" />
+      </div>
+      <button class="btn primary w100" type="submit">إنشاء الحساب</button>
+    </form>
+
+    <div class="links">
+      <a href="login.html">عندي حساب بالفعل</a>
+    </div>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Firebase compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=2"></script>
+
+  <!-- منطق المصادقة والتوجيه حسب الدور -->
+  <script src="js/auth.js?v=1"></script>
+</body>
+</html>
