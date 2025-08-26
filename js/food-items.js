@@ -43,7 +43,7 @@ const toastEl       = document.getElementById('toast');
 const toastMsgEl    = toastEl.querySelector('.msg');
 
 document.getElementById('goMeals').addEventListener('click', ()=> location.href='meals.html');
-document.getElementById('goHome').addEventListener('click', ()=> location.href='index.html');
+document.getElementById('goHome').addEventListener('click', ()=> location.href='child.html');
 
 /* ===== حالة ===== */
 let currentUser = null;
