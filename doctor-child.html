@@ -3,64 +3,38 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ملف الطفل — الطبيب</title>
-  <link rel="stylesheet" href="css/doctor-child.css?v=3" />
+  <title>لوحة الطبيب</title>
+  <link rel="stylesheet" href="css/doctor-dashboard.css?v=3" />
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
 </head>
 <body>
   <div class="container">
     <header class="card top">
-      <div class="head-grid">
-        <h1>📄 ملف الطفل</h1>
-        <a class="btn secondary" href="doctor-dashboard.html">⬅ عودة للوحة الطبيب</a>
+      <div class="head">
+        <h1>👨‍⚕️ لوحة الطبيب</h1>
+        <p class="muted">يعرض الأطفال المعيّنين لك مع موافقة مشاركة فعّالة.</p>
       </div>
-      <div id="childMeta" class="muted">—</div>
+      <div class="tools">
+        <input id="search" placeholder="🔎 بحث باسم الطفل" />
+        <div class="range">
+          <span class="lbl">الفترة:</span>
+          <button class="chipBtn active" data-days="7">7 أيام</button>
+          <button class="chipBtn" data-days="14">14 يوم</button>
+          <button class="chipBtn" data-days="30">30 يوم</button>
+        </div>
+        <span id="totals" class="muted tiny">—</span>
+      </div>
     </header>
 
-    <!-- جدول القياسات لآخر أسبوع -->
     <section class="card">
-      <div class="table-head">
-        <h3>📊 قياسات آخر 7 أيام</h3>
-        <div class="legend">
-          <span class="pill low">هبوط</span>
-          <span class="pill ok">طبيعي</span>
-          <span class="pill high">ارتفاع</span>
-          <span class="unit" id="unitLabel"></span>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table class="glucose-table" id="weekTable" aria-label="جدول قياسات آخر أسبوع">
-          <thead>
-            <tr>
-              <th>أثناء النوم</th>
-              <th>سناك</th>
-              <th>ب.العشا</th>
-              <th>ق.العشا</th>
-              <th>ب.الغدا</th>
-              <th>ق.الغدا</th>
-              <th>ب.الفطار</th>
-              <th>ق.الفطار</th>
-              <th>الاستيقاظ</th>
-              <th>التاريخ</th>
-            </tr>
-          </thead>
-          <tbody id="weekBody">
-            <!-- يُملأ من js -->
-          </tbody>
-        </table>
-      </div>
-      <div id="weekEmpty" class="empty hidden">لا توجد قراءات خلال الأيام السبعة الماضية.</div>
-    </section>
-
-    <!-- آخر 3 وجبات -->
-    <section class="card">
-      <h3>🍽️ آخر 3 وجبات</h3>
-      <div id="mealsList" class="list"></div>
-      <div id="mealsEmpty" class="empty hidden">لا توجد وجبات مسجلة مؤخرًا.</div>
+      <div id="grid" class="grid"></div>
+      <div id="empty" class="empty hidden">لا يوجد أطفال معيّنين أو لا توجد موافقة فعّالة.</div>
     </section>
   </div>
 
+  <div id="loader" class="loader hidden" aria-hidden="true"></div>
+
   <script type="module" src="js/firebase-config.js"></script>
-  <script type="module" src="js/doctor-child.js?v=3"></script>
+  <script type="module" src="js/doctor-dashboard.js?v=3"></script>
 </body>
 </html>
