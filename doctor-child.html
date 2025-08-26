@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ملف الطفل — الطبيب</title>
+  <link rel="stylesheet" href="css/doctor-child.css?v=2" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+</head>
+<body>
+  <div class="container">
+    <header class="card top">
+      <div class="head-grid">
+        <h1>📄 ملف الطفل</h1>
+        <a class="btn secondary" href="doctor-dashboard.html">⬅ عودة للوحة الطبيب</a>
+      </div>
+      <div id="childMeta" class="muted">—</div>
+    </header>
+
+    <!-- جدول القياسات لآخر أسبوع -->
+    <section class="card">
+      <div class="table-head">
+        <h3>📊 قياسات آخر 7 أيام</h3>
+        <div class="legend">
+          <span class="pill low">هبوط</span>
+          <span class="pill ok">طبيعي</span>
+          <span class="pill high">ارتفاع</span>
+          <span class="unit" id="unitLabel"></span>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="glucose-table" id="weekTable" aria-label="جدول قياسات آخر أسبوع">
+          <thead>
+            <tr>
+              <th>أثناء النوم</th>
+              <th>سناك</th>
+              <th>ب.العشا</th>
+              <th>ق.العشا</th>
+              <th>ب.الغدا</th>
+              <th>ق.الغدا</th>
+              <th>ب.الفطار</th>
+              <th>ق.الفطار</th>
+              <th>الاستيقاظ</th>
+              <th>التاريخ</th>
+            </tr>
+          </thead>
+          <tbody id="weekBody">
+            <!-- يُملأ من js -->
+          </tbody>
+        </table>
+      </div>
+      <div id="weekEmpty" class="empty hidden">لا توجد قراءات خلال الأيام السبعة الماضية.</div>
+    </section>
+
+    <!-- آخر 3 وجبات (كما هي) -->
+    <section class="card">
+      <h3>🍽️ آخر 3 وجبات</h3>
+      <div id="mealsList" class="list"></div>
+      <div id="mealsEmpty" class="empty hidden">لا توجد وجبات مسجلة مؤخرًا.</div>
+    </section>
+  </div>
+
+  <script type="module" src="js/firebase-config.js"></script>
+  <script type="module" src="js/doctor-child.js?v=2"></script>
+</body>
+</html>
