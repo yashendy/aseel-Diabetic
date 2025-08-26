@@ -29,7 +29,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 
 .kid-actions{
   display:grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap:8px;
   margin-top:6px;
 }
@@ -38,6 +38,12 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 .btn:focus{outline:3px solid rgba(79,70,229,.25); outline-offset:2px}
 .btn.primary{background:var(--brand);color:#fff;border:none}
 
+/* حالة الربط مع الطبيب */
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--line)}
+.badge.ok{background:color-mix(in srgb,var(--ok) 12%,#fff)}
+.badge.warn{background:color-mix(in srgb,var(--warn) 8%,#fff)}
+
+/* المساعد الذكي */
 .empty{padding:20px;text-align:center;color:var(--muted)}
 .loader{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:8px 12px;border-radius:10px;z-index:99}
 
