@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>مشاركة بيانات الطفل</title>
+  <link rel="stylesheet" href="css/share-access.css?v=1" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+</head>
+<body>
+  <div class="container">
+    <header class="card">
+      <div class="head">
+        <h1>🔗 مشاركة بيانات الطفل مع الطبيب</h1>
+        <div class="actions">
+          <button id="btnBack" class="btn">⬅ رجوع</button>
+        </div>
+      </div>
+      <p class="muted" id="childMeta">—</p>
+    </header>
+
+    <section class="card">
+      <h3>الحالة الحالية</h3>
+      <div class="grid">
+        <div class="field">
+          <label>الطبيب الحالي</label>
+          <div id="docSummary" class="info">—</div>
+        </div>
+        <div class="field">
+          <label>حالة الموافقة</label>
+          <div id="consentSummary" class="info">—</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>تغيير الربط</h3>
+      <div class="grid">
+        <div class="field">
+          <label for="doctorCode">كود الطبيب</label>
+          <input id="doctorCode" placeholder="مثال: ABC123" />
+          <div class="hint">اطلبي الكود من طبيبك، ثم الصقيه هنا.</div>
+        </div>
+        <div class="field">
+          <label>تفعيل الموافقة</label>
+          <label class="switch">
+            <input type="checkbox" id="consentToggle" />
+            <span></span>
+          </label>
+          <div class="hint">يمكنك إيقاف المشاركة مؤقتًا بدون إزالة الربط.</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btnSave" class="btn primary">💾 حفظ</button>
+        <button id="btnUnlink" class="btn danger">إزالة الربط</button>
+      </div>
+
+      <div id="toast" class="toast hidden"></div>
+    </section>
+  </div>
+
+  <div id="loader" class="loader hidden">جارٍ المعالجة…</div>
+
+  <script type="module" src="js/firebase-config.js"></script>
+  <script type="module" src="js/share-access.js?v=1"></script>
+</body>
+</html>
