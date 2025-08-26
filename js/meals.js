@@ -145,7 +145,7 @@ onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href = 'index.html'; return; }
   if(!childId){ alert('لا يوجد معرف طفل في الرابط'); return; }
   currentUser = user;
-  settingsLink.href = `child-settings.html?child=${encodeURIComponent(childId)}`;
+  settingsLink.href = `child-edit.html?child=${encodeURIComponent(childId)}`;
 
   const childRef = doc(db, `parents/${user.uid}/children/${childId}`);
   const snap = await getDoc(childRef);
