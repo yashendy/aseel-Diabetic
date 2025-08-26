@@ -1,77 +1,120 @@
 :root{
-  --bg:#F7FAFF; --card:#fff; --border:#e6eef7; --text:#222; --muted:#666;
-  --primary:#4CAF50; --accent:#2196F3; --danger:#E53935; --warn:#FB8C00;
+  --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#333; --muted:#555;
+  --primary:#4CAF50; --accent:#2196F3; --danger:#E53935; --warn:#FB8C00; --focus:#2962FF;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
+html{scroll-behavior:smooth}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);margin:0;color:var(--text)}
 .container{max-width:1200px;margin:auto;padding:16px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 6px 16px rgba(0,0,0,.06)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
 .muted{color:var(--muted)} .tiny{font-size:12px}
+.toast{position:fixed;inset-block-start:16px;inset-inline:0;display:flex;justify-content:center;z-index:200}
+.toast .msg{background:#111;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.toast.hidden{display:none}
+.field{display:flex;flex-direction:column}
+label{font-size:13px;color:var(--muted);margin-bottom:6px}
+input,select,button,textarea{padding:10px;border:1px solid #ccc;border-radius:8px;background:#fff;font-size:14px}
+textarea{resize:vertical}
+input:focus-visible, select:focus-visible, button:focus-visible, textarea:focus-visible{outline:3px solid color-mix(in srgb, var(--focus) 35%, transparent);outline-offset:2px}
+button{background:var(--primary);color:#fff;border:none;cursor:pointer;transition:opacity .15s ease,transform .06s ease}
+button.secondary{background:#e5e5e5;color:#222}
+button:hover{opacity:.96} button:active{transform:scale(.99)}
+button[disabled]{opacity:.6;cursor:not-allowed}
+.head-grid{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;min-width:380px}
+.top-actions{margin-top:8px;display:flex;gap:8px;justify-content:flex-end}
+
+/* هدف الكارب */
+.goal-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.goal-chip{background:#eefbf1;border:1px solid #d3f0d8;color:#1b5e20;border-radius:999px;padding:6px 10px;font-weight:600}
+.unit-chip{background:#eef3ff;border:1px solid #d8e3ff;color:#1a3d9c;border-radius:999px;padding:6px 10px}
+.progress-wrap{margin-top:10px}
+.progress-bar{height:10px;background:#f0f3f7;border-radius:999px;overflow:hidden;border:1px solid var(--border)}
+.progress-bar span{display:block;height:100%;width:0%;background:linear-gradient(90deg,#4caf50,#2196f3)}
+.progress-legend{display:flex;justify-content:space-between;margin-top:6px}
+
+/* جدول العناصر */
+.items-table{border:1px solid var(--border);border-radius:12px;overflow:auto}
+.row{display:grid;grid-template-columns:2fr 120px 110px 140px 110px 110px 110px 110px 110px 80px;gap:0;border-bottom:1px solid var(--border);align-items:center;min-width:1040px}
+.row>div{padding:8px;border-inline-start:1px solid var(--border)}
+.row.header{background:#F0F6FF;font-weight:600;position:sticky;top:0;z-index:1}
+.row .del{background:#ffdfe0;color:#b3122f}
+.row .name{display:flex;flex-direction:column}
+.row .sub{font-size:12px;color:#666}
+.row .chips{margin-top:4px;display:flex;gap:6px;flex-wrap:wrap}
+.row input[type="number"]{width:100%}
+
+/* الخلاصة */
+.summary{margin-top:12px;border-top:1px dashed var(--border);padding-top:12px}
+.summary.sticky{position:sticky;bottom:0;background:linear-gradient(180deg,rgba(255,255,255,.6),#fff 30%);backdrop-filter:saturate(1.2) blur(4px);border-radius:12px;padding-bottom:12px}
+.sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.sum-box{background:#f7fbff;border:1px solid var(--border);border-radius:10px;padding:10px}
+.sum-box .label{font-size:12px;color:#555}
+.sum-box .value{font-weight:700; font-variant-numeric:tabular-nums}
+.opts-line{display:flex;gap:10px;align-items:center;margin:10px 0}
+.switch{display:flex;align-items:center;gap:8px}
+.dose{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dose .dose-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dose input{max-width:160px}
+.save-actions{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
+.dose-badge{background:#E8F5E9;border:1px solid #C8E6C9;color:#2E7D32;border-radius:999px;padding:4px 8px;font-size:12px;display:inline-block}
+.dose-badge.danger{background:#FFEBEE;border-color:#FFCDD2;color:#C62828}
+
+/* GL إجمالي */
+.gl-badge{display:inline-block;border-radius:999px;border:1px solid var(--border);padding:2px 8px;font-size:12px;margin-inline-start:8px}
+.gl-badge.low{background:#E8F5E9;border-color:#C8E6C9;color:#2E7D32}
+.gl-badge.medium{background:#FFF8E1;border-color:#FFECB3;color:#E65100}
+.gl-badge.high{background:#FFEBEE;border-color:#FFCDD2;color:#C62828}
+/* GL لكل صنف */
+.gl-chip{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:0 8px;font-size:11px;line-height:20px}
+.gl-chip.low{background:#E8F5E9;border-color:#C8E6C9;color:#2E7D32}
+.gl-chip.medium{background:#FFF8E1;border-color:#FFECB3;color:#E65100}
+.gl-chip.high{background:#FFEBEE;border-color:#FFCDD2;color:#C62828}
+
+/* مودالات + القوائم */
+.table-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap}
+.meals-list{display:flex;flex-direction:column;gap:10px}
+.meal-card{border:1px solid var(--border);border-radius:12px;padding:10px;display:grid;grid-template-columns:120px 1fr 1fr 140px 160px;gap:10px;align-items:center;background:#fff}
+.meal-card .type{font-weight:700}
+.meal-card .actions{display:flex;gap:8px;justify-content:flex-end}
+.empty{padding:20px;text-align:center;color:#666}
 .hidden{display:none}
 
-/* رأس الصفحة */
-.top .head-grid{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.controls{display:flex;gap:10px;flex-wrap:wrap}
-.controls .field{display:flex;flex-direction:column;gap:6px;min-width:160px}
-.controls input,.controls select{padding:10px;border:1px solid #ddd;border-radius:10px;background:#fff}
-.top-actions{display:flex;gap:8px;margin-top:10px}
-.secondary{background:#f3f4f6;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}
-
-/* منشئ الوجبة */
-.builder-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.actions button{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#f7fbff}
-.items-table .row.header{display:grid;grid-template-columns:2fr repeat(10,1fr) 60px;gap:6px;margin-bottom:8px;font-weight:700}
-#itemsBody .row{display:grid;grid-template-columns:2fr repeat(10,1fr) 60px;gap:6px;align-items:center;margin:6px 0}
-#itemsBody input,#itemsBody select{padding:8px;border:1px solid #ddd;border-radius:8px}
-
-/* الإجماليات والجرعة */
-.summary.sticky{position:sticky;bottom:0;background:linear-gradient(#fff,#fff)}
-.sum-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px}
-.sum-box{background:#f7fbff;border:1px solid var(--border);border-radius:12px;padding:10px}
-.sum-box .label{font-size:12px;color:#555}
-.sum-box .value{font-weight:800}
-
-.dose{border-top:1px dashed #e5e7eb;margin-top:10px;padding-top:10px}
-.dose-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0}
-.dose-badge{display:inline-block;padding:3px 8px;border:1px solid var(--border);border-radius:999px;background:#fff}
-.dose-badge.danger{border-color:#fecaca;background:#fef2f2;color:#991b1b}
-
-/* قائمة وجبات اليوم */
-.meals-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
-.meal-card{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fff}
-.meal-card .type{font-weight:800}
-.meal-card .actions{display:flex;gap:8px;margin-top:8px}
-
-/* التنبيهات المنبثقة */
-.toast{position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;z-index:1000}
-
-/* GL Badge */
-.gl-badge{margin-inline-start:8px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:#fff}
-.gl-badge.low{color:#065f46;border-color:#bbf7d0;background:#ecfdf5}
-.gl-badge.medium{color:#b45309;border-color:#fde68a;background:#fff7ed}
-.gl-badge.high{color:#991b1b;border-color:#fecaca;background:#fef2f2}
-
-/* المودالات العامة */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.25);display:flex;align-items:flex-start;justify-content:center;padding:30px;z-index:100}
 .modal.hidden{display:none}
-.modal-body{background:#fff;border-radius:12px;max-width:980px;width:100%;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.modal-body{background:#fff;border-radius:12px;max-width:960px;width:100%;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2);max-height:80vh;overflow:auto}
 .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.close{background:#eee;color:#333;border-radius:8px;padding:6px 10px;border:1px solid #ddd;cursor:pointer}
+.close{background:#eee;border:none;border-radius:8px;padding:6px 10px;cursor:pointer}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.picker-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:10px}
+.pick-card{display:flex;gap:10px;border:1px solid var(--border);border-radius:12px;padding:8px;background:#fff}
+.pick-thumb{width:56px;height:56px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fafcff}
+.pick-thumb img{width:100%;height:100%;object-fit:cover}
+.pick-meta{flex:1}
+.pick-actions{display:flex;gap:6px;margin-top:6px}
+.badge{background:#f7fbff;border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:12px;color:#444}
 
-/* مكتبة الأصناف */
-.picker-tools{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-.picker-tools input,.picker-tools select{padding:10px;border:1px solid #ddd;border-radius:10px}
-.picker-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
-.food-card{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fff;display:flex;justify-content:space-between;align-items:center}
-.food-card .meta{font-size:12px;color:#555}
-.food-card .add{padding:6px 10px;border-radius:10px;border:1px solid var(--border);background:#f7fbff}
+/* AI نتائج */
+.ai-results{margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px}
+.ai-card{border:1px solid var(--border);border-radius:10px;padding:8px;background:#fff}
+.ai-card .title{font-weight:700;margin-bottom:4px}
+.ai-card .meta{font-size:12px;color:#666}
+.ai-card .ok{color:#2E7D32}
+.ai-card .warn{color:#E65100}
 
-/* مساعد الوجبة */
-.ai-btn{background:#0ea5e9;border:1px solid #bae6fd;color:#fff;border-radius:10px;padding:10px 12px}
-.ai-btn:hover{filter:brightness(.97)}
-.ai-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:8px}
-.ai-out{margin-top:10px;border:1px dashed var(--border);border-radius:12px;background:#f8fbff;padding:12px;min-height:80px}
-.ai-card{border:1px solid var(--border);border-radius:12px;background:#fff;padding:10px;margin-top:10px}
-.ai-card h4{margin:0 0 6px 0}
-.ai-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.badge-soft{background:#eef6ff;border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:12px;margin-inline-end:6px}
+/* الوجبات الجاهزة */
+.preset-tabs{display:flex;gap:6px;margin:8px 0}
+.preset-tabs .tab{background:#eef3ff;color:#1a3d9c;border:1px solid var(--border);padding:6px 10px;border-radius:999px;cursor:pointer}
+.preset-tabs .tab.active{background:#d9e6ff}
+.preset-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:8px}
+.preset-card{border:1px solid var(--border);border-radius:12px;background:#fff;overflow:hidden;display:flex;flex-direction:column}
+.preset-top{display:flex;gap:8px;padding:8px;border-bottom:1px solid var(--border);align-items:center}
+.preset-top .thumb{width:52px;height:52px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fafcff}
+.preset-top .thumb img{width:100%;height:100%;object-fit:cover}
+.preset-top .title{font-weight:700}
+.preset-body{padding:8px;font-size:13px;color:#555}
+.preset-footer{padding:8px;display:flex;gap:8px;justify-content:flex-end}
+
+@media print{
+  body{background:#fff}
+}
