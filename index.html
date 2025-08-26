@@ -6,25 +6,12 @@
   <title>منصة أسيل — تسجيل الدخول</title>
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
   <link rel="stylesheet" href="css/auth.css?v=1" />
-  <style>
-    /* لمسات خفيفة لتقريب الشكل للصورة */
-    .brand { display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:8px }
-    .brand .logo { width:72px; height:72px; object-fit:contain }
-    .brand h1 { font-size:22px; margin:0 }
-    .brand .sub { color:#64748b; margin:0; font-size:14px }
-    .auth-card { padding-top:28px; }
-    .title-row { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin:8px 0 14px }
-    .title-row b { font-weight:700 }
-    .btn.primary { background:#2e7d32 }       /* أخضر زي الصورة */
-    input { text-align:center }               /* سنتر الحقول */
-  </style>
 </head>
 <body class="auth-body">
 
   <main class="auth-card">
     <div class="brand">
-      <!-- بدّلي مسار الشعار لو عندك ملف آخر -->
-      <img class="logo" src="images/logo.png" alt="منصة أسيل">
+      <img class="logo" src="images/logo.png" alt="منصة أسيل" />
       <h1>منصة أسيل</h1>
       <p class="sub">لمتابعة سكر الأطفال</p>
     </div>
@@ -45,6 +32,8 @@
 
     <div class="links" style="margin-top:12px">
       <a href="register.html">ما عندكيش حساب؟ <b>سجّلي الآن</b></a>
+      <span>•</span>
+      <a href="forgot.html">نسيت كلمة السر؟</a>
     </div>
   </main>
 
@@ -55,8 +44,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js?v=2"></script>
-
-  <!-- منطق المصادقة + إنشاء users/{uid} + التوجيه حسب الدور -->
   <script src="js/auth.js?v=1"></script>
 </body>
 </html>
