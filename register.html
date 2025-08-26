@@ -3,47 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>إنشاء حساب</title>
+  <title>إنشاء حساب جديد</title>
   <link rel="stylesheet" href="css/auth.css?v=1" />
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
 </head>
 <body class="auth-body">
+
   <main class="auth-card">
-    <header class="auth-head">
-      <h1>✨ أنشئ حسابك</h1>
-      <p class="muted">الحسابات الجديدة تُسجَّل تلقائيًا كـ <strong>وليّ أمر</strong>. يمكن للإدارة ترقية الدور لاحقًا.</p>
-    </header>
+    <div class="brand">
+      <h1>✨ إنشاء حساب</h1>
+      <p class="sub">سيتم تسجيلك كـ <b>ولي أمر</b> افتراضيًا</p>
+    </div>
 
     <form id="registerForm" class="form">
       <div class="field">
-        <label>الاسم الكامل</label>
-        <input type="text" id="regName" required autocomplete="name" />
+        <input type="text" id="regName" required placeholder="الاسم الكامل" />
       </div>
       <div class="field">
-        <label>البريد الإلكتروني</label>
-        <input type="email" id="regEmail" required autocomplete="email" />
+        <input type="email" id="regEmail" required placeholder="البريد الإلكتروني" />
       </div>
       <div class="field">
-        <label>كلمة السر (٦ أحرف فأكثر)</label>
-        <input type="password" id="regPassword" minlength="6" required autocomplete="new-password" />
+        <input type="password" id="regPassword" required minlength="6" placeholder="كلمة السر (6 أحرف فأكثر)" />
       </div>
-      <button class="btn primary w100" type="submit">إنشاء الحساب</button>
+      <button class="btn primary w100" type="submit">تسجيل</button>
     </form>
 
     <div class="links">
-      <a href="login.html">عندي حساب بالفعل</a>
+      <a href="index.html">عندي حساب</a>
     </div>
   </main>
 
   <div id="toast" class="toast hidden"></div>
 
-  <!-- Firebase compat -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js?v=2"></script>
-
-  <!-- منطق المصادقة والتوجيه حسب الدور -->
   <script src="js/auth.js?v=1"></script>
 </body>
 </html>
