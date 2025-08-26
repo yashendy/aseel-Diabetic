@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>لوحة وليّ الأمر</title>
   <link rel="icon" type="image/png" href="images/favicon-32.png" />
-  <link rel="stylesheet" href="css/parent.css" />
+  <link rel="stylesheet" href="css/parent.css?v=2" />
 </head>
 <body>
   <div class="container">
@@ -58,14 +58,15 @@
 
   <div id="loader" class="loader hidden">جارٍ تحميل البيانات…</div>
 
-  <!-- مفتاح API -->
+  <!-- مفتاح API (لو بتستخدمي المساعد الذكي من نفس الصفحة) -->
   <script> window.GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"; </script>
 
   <!-- سكربت الصفحة -->
+  <script type="module" src="js/firebase-config.js"></script>
   <script type="module">
     import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
-    import "./js/parent.js";
     window.GoogleGenerativeAI = GoogleGenerativeAI;
+    import "./js/parent.js?v=2";
   </script>
 </body>
 </html>
