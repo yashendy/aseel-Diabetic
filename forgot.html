@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>استرجاع كلمة السر</title>
+  <link rel="stylesheet" href="css/auth.css?v=1" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+</head>
+<body class="auth-body">
+  <main class="auth-card">
+    <header class="auth-head">
+      <h1>🔒 نسيت كلمة السر؟</h1>
+      <p class="muted">أدخل بريدك لإرسال رابط إعادة التعيين.</p>
+    </header>
+
+    <form id="forgotForm" class="form">
+      <div class="field">
+        <label>البريد الإلكتروني</label>
+        <input type="email" id="forgotEmail" required autocomplete="username" />
+      </div>
+      <button class="btn primary w100" type="submit">إرسال رابط الاسترجاع</button>
+    </form>
+
+    <div class="links">
+      <a href="login.html">العودة لتسجيل الدخول</a>
+    </div>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Firebase compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=2"></script>
+
+  <!-- منطق المصادقة والتوجيه حسب الدور -->
+  <script src="js/auth.js?v=1"></script>
+</body>
+</html>
