@@ -1,6 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { collection, getDocs, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const kidsGrid = document.getElementById('kidsGrid');
 const emptyEl  = document.getElementById('empty');
@@ -22,18 +22,20 @@ const GEMINI_MODEL   = "gemini-1.5-flash";
 let currentUser, kids = [], filtered = [];
 const aiState = { child:null, chatSession:null };
 
+/* أدوات بسيطة */
 const pad=n=>String(n).padStart(2,'0');
-const todayStr=()=>{const d=new Date();return`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
 function calcAge(bd){if(!bd)return '-';const b=new Date(bd),t=new Date();let a=t.getFullYear()-b.getFullYear();const m=t.getMonth()-b.getMonth();if(m<0||(m===0&&t.getDate()<b.getDate()))a--;return a;}
 function avatarColor(i){const c=['#42A5F5','#7E57C2','#66BB6A','#FFA726','#26C6DA','#EC407A','#8D6E63'];return c[i%c.length]}
 function esc(s){return (s||'').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;")}
 function loader(x){loaderEl?.classList.toggle('hidden',!x)}
+function normArabic(s=''){return s.toString().replace(/[\u064B-\u0652]/g,'').replace(/[إأآا]/g,'ا').replace(/ى/g,'ي').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ة/g,'ه').replace(/\s+/g,' ').trim().toLowerCase();}
 
+/* دخول المستخدم وتحميل الأطفال */
 onAuthStateChanged(auth, async (u)=>{ if(!u) return location.href='index.html'; currentUser=u; await loadKids(); });
 
 searchEl?.addEventListener('input', ()=>{
-  const q=searchEl.value.trim().toLowerCase();
-  filtered = q ? kids.filter(k => (k.name||'').toLowerCase().includes(q)) : kids;
+  const q = normArabic(searchEl.value);
+  filtered = q ? kids.filter(k => normArabic(k.name||'').includes(q)) : kids;
   render();
 });
 
@@ -44,10 +46,9 @@ async function loadKids(){
     const qy=query(ref,orderBy('name','asc'));
     const snap=await getDocs(qy);
     kids=[];
-    const today=todayStr();
-
     for(const d of snap.docs){
-      const kid={id:d.id,...d.data()};
+      const kid={ id:d.id, ...d.data() };
+      // نتوقع الحقول: assignedDoctor, assignedDoctorInfo, sharingConsent.doctor
       kids.push(kid);
     }
     filtered=kids;
@@ -62,6 +63,12 @@ function render(){
   emptyEl.classList.add('hidden');
 
   filtered.forEach((k,idx)=>{
+    const linked = !!k.assignedDoctor;
+    const consentOn = !!(k.sharingConsent?.doctor);
+    const badge = linked
+      ? `<span class="badge ${consentOn?'ok':'warn'}">${consentOn?'مرتبط بطبيب (موافقة فعّالة)':'مرتبط بطبيب (الموافقة موقوفة)'}</span>`
+      : `<span class="badge">غير مرتبط بطبيب</span>`;
+
     const card=document.createElement('div');
     card.className='kid card';
     card.innerHTML=`
@@ -70,29 +77,45 @@ function render(){
         <div>
           <div class="name">${esc(k.name||'طفل')}</div>
           <div class="meta">${esc(k.gender||'-')} • العمر: ${calcAge(k.birthDate)} سنة</div>
+          ${badge}
         </div>
       </div>
+
       <div class="chips">
         <span class="chip">CR: ${k.carbRatio ?? '—'}</span>
         <span class="chip">CF: ${k.correctionFactor ?? '—'}</span>
       </div>
+
       <div class="kid-actions">
         <button class="btn primary kid-open" data-id="${k.id}">📂 فتح لوحة الطفل</button>
         <button class="btn kid-ai" data-id="${k.id}">🤖 مساعد هذا الطفل</button>
+        <button class="btn kid-share" data-id="${k.id}">🔗 مشاركة بيانات الطفل</button>
       </div>
     `;
+
+    // فتح لوحة الطفل
     card.querySelector('.kid-open').onclick = e=>{
       e.stopPropagation();
       location.href = `child.html?child=${encodeURIComponent(k.id)}`;
     };
+
+    // فتح المساعد لسياق الطفل
     card.querySelector('.kid-ai').onclick = e=>{
       e.stopPropagation();
       openAIForChild(k);
     };
+
+    // مشاركة بيانات الطفل (الربط مع الطبيب)
+    card.querySelector('.kid-share').onclick = e=>{
+      e.stopPropagation();
+      location.href = `share-access.html?child=${encodeURIComponent(k.id)}`;
+    };
+
     kidsGrid.appendChild(card);
   });
 }
 
+/* ====== المساعد الذكي ====== */
 function openAIWidget(){ aiWidget.classList.remove('hidden'); aiWidget.dataset.minimized='0'; }
 function closeAIWidget(){ aiWidget.classList.add('hidden'); aiMessages.innerHTML=''; aiState.child=null; aiState.chatSession=null; aiContext.textContent='بدون سياق طفل'; }
 function appendMsg(role,text){const d=document.createElement('div');d.className=role==='assistant'?'msg assistant':(role==='system'?'msg sys':'msg user');d.textContent=text;aiMessages.appendChild(d);aiMessages.scrollTop=aiMessages.scrollHeight;}
