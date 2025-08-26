@@ -124,7 +124,34 @@
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"><div class="msg"></div></div>
 
+  <!-- Firebase + الصفحة -->
   <script type="module" src="js/firebase-config.js"></script>
   <script type="module" src="js/food-items.js?v=4"></script>
+
+  <!-- توجيه ذكي يحافظ على childId ويمنع أي تعارض مع Listeners قديمة -->
+  <script>
+    (function(){
+      const params = new URLSearchParams(location.search);
+      const childId = params.get('child');
+      const goMealsBtn = document.getElementById('goMeals');
+      const goHomeBtn  = document.getElementById('goHome');
+
+      const mealsUrl = childId ? `meals.html?child=${encodeURIComponent(childId)}` : 'meals.html';
+      const dashUrl  = childId ? `child-dashboard.html?child=${encodeURIComponent(childId)}` : 'child-dashboard.html';
+
+      function hardNavigate(url){
+        return function(e){
+          // نمنع أي Listeners أخرى من التداخل (حتى لو مضافة في ملف JS خارجي)
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          location.href = url;
+        }
+      }
+
+      // نستخدم نمط الالتقاط علشان يشتغل قبل أي مستمعات أخرى
+      goMealsBtn?.addEventListener('click', hardNavigate(mealsUrl), true);
+      goHomeBtn?.addEventListener('click',  hardNavigate(dashUrl),  true);
+    })();
+  </script>
 </body>
 </html>
