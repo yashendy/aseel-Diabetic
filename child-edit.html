@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>تعديل بيانات الطفل</title>
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/child-edit.css?v=2" />
+  <link rel="stylesheet" href="css/child-edit.css?v=3" />
 </head>
 <body>
   <div class="container">
@@ -14,6 +14,8 @@
       <h1>تعديل بيانات الطفل</h1>
       <span class="muted" id="childLabel">—</span>
     </div>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
     <div class="card">
       <form id="form">
@@ -92,10 +94,10 @@
           </div>
         </fieldset>
 
-        <!-- أهداف الكارب لكل وجبة (جديد) -->
+        <!-- أهداف الكارب لكل وجبة -->
         <fieldset class="row-1">
           <legend>🎯 أهداف الكارب لكل وجبة</legend>
-          <p class="hint">تُستخدم هذه الأهداف في صفحة الوجبات لعرض شريط التقدّم، وضبط الكميات تلقائيًا، ومقترحات المساعد.</p>
+          <p class="hint">تُستخدم في صفحة الوجبات لعرض شريط التقدّم، وضبط الكميات تلقائيًا، ومقترحات المساعد.</p>
 
           <div class="targets-grid">
             <div class="meal-col">
@@ -132,14 +134,14 @@
           </div>
         </fieldset>
 
-        <!-- وحدة قياس الجلوكوز (جديد) -->
+        <!-- وحدة قياس الجلوكوز -->
         <fieldset class="row-1">
           <legend>🧪 وحدة قياس الجلوكوز المفضّلة</legend>
           <div class="unit-row">
             <label class="radio"><input type="radio" name="unit" value="mgdl"> mg/dL</label>
             <label class="radio"><input type="radio" name="unit" value="mmol"> mmol/L</label>
           </div>
-          <p class="muted tiny">سيتم عرض القيم والقوائم في صفحة الوجبات بالوحدة المختارة فقط (يتم التحويل داخليًا عند الحاجة).</p>
+          <p class="muted tiny">سيتم عرض القيم والقوائم بالوحدة المختارة فقط (يُجرى التحويل داخليًا).</p>
         </fieldset>
 
         <!-- إعدادات الكارب الصافي -->
@@ -169,7 +171,7 @@
     </div>
   </div>
 
-  <div id="loader" class="loader"></div>
+  <div id="loader" class="loader hidden"></div>
 
   <script type="module" src="js/firebase-config.js"></script>
   <script type="module" src="js/child-edit.js?v=3"></script>
