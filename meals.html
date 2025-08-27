@@ -1,11 +1,10 @@
-<!-- meals.html (v4) + Templates -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>الوجبات</title>
-  <link rel="stylesheet" href="css/meals.css?v=4" />
+  <link rel="stylesheet" href="css/meals.css?v=5" />
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
 </head>
 <body>
@@ -47,13 +46,12 @@
         </div>
       </div>
 
-      <!-- زر الرجوع -->
       <div class="top-actions">
         <button id="backBtn" class="secondary">⬅️ رجوع</button>
       </div>
     </header>
 
-    <!-- قوالب الوجبات (Templates) -->
+    <!-- قوالب الوجبات -->
     <section class="card">
       <div class="builder-head">
         <h3>🍱 وجبات جاهزة</h3>
@@ -68,7 +66,6 @@
           <button id="saveAsTplBtn">💾 حفظ الحالية كقالب</button>
         </div>
       </div>
-
       <div id="tplGrid" class="tpl-grid"></div>
       <div id="tplEmpty" class="empty hidden">لا توجد قوالب بعد لهذا النوع.</div>
     </section>
@@ -80,6 +77,8 @@
         <div class="actions">
           <button id="addItemBtn">➕ إضافة صنف من المكتبة</button>
           <button id="repeatLastBtn" class="secondary">🧲 تكرار آخر وجبة من نفس النوع</button>
+          <button id="aiChatBtn" class="secondary">🤖 محادثة ذكية</button>
+          <button id="autoAdjustBtn" title="ضبط تلقائي لهدف الكارب">⚖️ ضبط للهدف</button>
         </div>
       </div>
 
@@ -100,7 +99,7 @@
         <div id="itemsBody"></div>
       </div>
 
-      <!-- ملخص (Sticky) -->
+      <!-- ملخص -->
       <div class="summary sticky">
         <div class="sum-grid">
           <div class="sum-box"><div class="label">إجمالي الجرامات</div><div class="value"><span id="tGrams">0</span> g</div></div>
@@ -136,7 +135,7 @@
           <button id="printDayBtn" class="secondary">🖨️ طباعة وجبات اليوم</button>
         </div>
 
-        <p class="muted tiny">⚠️ هذا تقدير إرشادي يعتمد على المدخلات ولا يعتبر نصيحة طبية.</p>
+        <p class="muted tiny">⚠️ هذا تقدير إرشادي تعليمي، راجعي الطبيب لخطة الجرعات.</p>
       </div>
     </section>
 
@@ -159,13 +158,14 @@
     </section>
   </div>
 
-  <!-- مودال الأصناف -->
+  <!-- مودال الأصناف (متمركز ومتناسق) -->
   <div id="pickerModal" class="modal hidden" aria-modal="true" role="dialog">
     <div class="modal-body" role="document">
       <div class="modal-header">
         <h3>اختيار صنف من المكتبة</h3>
         <button id="closePicker" class="close" aria-label="إغلاق">✕</button>
       </div>
+
       <div class="form-grid">
         <div class="field">
           <label>بحث بالاسم أو #هاشتاج</label>
@@ -184,20 +184,74 @@
           </select>
         </div>
       </div>
-      <div id="pickerGrid" class="picker-grid"></div>
-      <div id="pickerEmpty" class="empty hidden">لا نتائج.</div>
+
+      <div class="picker-outer">
+        <div id="pickerGrid" class="picker-grid"></div>
+        <div id="pickerEmpty" class="empty hidden">لا نتائج.</div>
+      </div>
     </div>
   </div>
 
-  <!-- Firebase v8 compat -->
+  <!-- مودال معاينة الضبط التلقائي -->
+  <div id="adjustModal" class="modal hidden" aria-modal="true" role="dialog">
+    <div class="modal-body" role="document">
+      <div class="modal-header">
+        <h3>معاينة التعديلات</h3>
+        <button id="closeAdjust" class="close" aria-label="إغلاق">✕</button>
+      </div>
+      <div id="adjustDiff" class="adjust-diff"></div>
+      <div class="adjust-actions">
+        <button id="applyAdjustBtn">تطبيق</button>
+        <button id="cancelAdjustBtn" class="secondary">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ودجت محادثة الذكاء (خفيف) -->
+  <div class="ai-widget hidden" id="aiWidget">
+    <div class="ai-header">
+      <div>
+        <strong>محادثة ذكية عن الوجبة</strong>
+        <div class="muted tiny" id="aiContext">—</div>
+      </div>
+      <div>
+        <button class="icon-btn" id="aiClose" title="إغلاق">✕</button>
+      </div>
+    </div>
+    <div class="ai-messages" id="aiMessages"></div>
+    <div class="ai-input">
+      <div class="ai-quick">
+        <span class="chip ai-quick-btn" data-q="اضبط الوجبة لتكون ضمن هدف الكارب مع GL منخفض.">ضمن الهدف + GL منخفض</span>
+        <span class="chip ai-quick-btn" data-q="اقترح بدائل قليلة GI مع الحفاظ على البروتين.">بدائل قليلة GI</span>
+        <span class="chip ai-quick-btn" data-q="كيف أقلل السكر بدون تقليل الشبع؟">قلل السكر مع الشبع</span>
+      </div>
+      <div class="ai-row">
+        <textarea id="aiInput" placeholder="اكتبي سؤالك هنا…"></textarea>
+        <button class="btn primary" id="aiSend">إرسال</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase compat -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-
-  <!-- ملف التهيئة المتوافق -->
   <script src="firebase-config.js?v=2"></script>
 
+  <!-- Gemini (اختياري) -->
+  <script>
+    // ضعي مفتاحك هنا أو من إعدادات عامة
+    window.GEMINI_API_KEY = window.GEMINI_API_KEY || "";
+  </script>
+  <script type="module">
+    // تحميل مكتبة Gemini فقط لو فيه مفتاح
+    if (window.GEMINI_API_KEY) {
+      const { GoogleGenerativeAI } = await import("https://esm.run/@google/generative-ai");
+      window.GoogleGenerativeAI = GoogleGenerativeAI;
+    }
+  </script>
+
   <!-- سكربت الصفحة -->
-  <script src="js/meals.js?v=4"></script>
+  <script src="js/meals.js?v=5"></script>
 </body>
 </html>
