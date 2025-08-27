@@ -1,5 +1,5 @@
-// js/meals.js (v4) — إضافة قوالب الوجبات + الحفاظ على كل الميزات السابقة
-// يعتمد على Firebase compat (window.firebase) كما في النسخة السابقة.
+// js/meals.js (v5)
+// إضافة: AI Chat + Auto Adjust للهدف، وتحسين مودال الأصناف (متناسق ومتمركز)
 
 //////////////// عناصر عامة //////////////////
 const params = new URLSearchParams(location.search);
@@ -49,12 +49,23 @@ const pickCategoryEl  = document.getElementById('pickCategory');
 const pickerGrid      = document.getElementById('pickerGrid');
 const pickerEmpty     = document.getElementById('pickerEmpty');
 
-//////////////// عناصر القوالب //////////////////
-const tplTypeEl    = document.getElementById('tplType');
-const tplGridEl    = document.getElementById('tplGrid');
-const tplEmptyEl   = document.getElementById('tplEmpty');
-const saveAsTplBtn = document.getElementById('saveAsTplBtn');
-const refreshTplBtn= document.getElementById('refreshTplBtn');
+// الضبط التلقائي
+const autoAdjustBtn   = document.getElementById('autoAdjustBtn');
+const adjustModal     = document.getElementById('adjustModal');
+const closeAdjust     = document.getElementById('closeAdjust');
+const cancelAdjustBtn = document.getElementById('cancelAdjustBtn');
+const applyAdjustBtn  = document.getElementById('applyAdjustBtn');
+const adjustDiffEl    = document.getElementById('adjustDiff');
+
+// AI Chat
+const aiChatBtn   = document.getElementById('aiChatBtn');
+const aiWidget    = document.getElementById('aiWidget');
+const aiClose     = document.getElementById('aiClose');
+const aiMessages  = document.getElementById('aiMessages');
+const aiInput     = document.getElementById('aiInput');
+const aiSend      = document.getElementById('aiSend');
+const aiContext   = document.getElementById('aiContext');
+const quickBtns   = document.querySelectorAll('.ai-quick-btn');
 
 //////////////// حالة //////////////////
 let currentUser, childData;
@@ -63,8 +74,8 @@ let currentItems = [];
 let cachedFood = [];
 let cachedMeasurements = [];
 let lastUsedMap = {};
-
-let cachedTemplates = []; // القوالب الحالية بعد التحميل
+let cachedTemplates = [];
+let pendingAdjust = null; // diff preview
 
 //////////////// أدوات //////////////////
 const pad = n => String(n).padStart(2,'0');
@@ -84,8 +95,7 @@ function toNumber(x){ const n = Number(String(x ?? '').replace(',','.')); return
 function round1(x){ return Math.round((x||0)*10)/10; }
 function roundHalf(x){ return Math.round((x||0)*2)/2; }
 function showToast(msg){ if(!toastWrap) return; toastMsg.textContent = msg; toastWrap.classList.remove('hidden'); setTimeout(()=>toastWrap.classList.add('hidden'), 2000); }
-
-function slotToMealType(ar){ // نحول "ق.الفطار" / "ب.الفطار" ... إلى فطور/غداء/عشاء/سناك
+function slotToMealType(ar){
   if(!ar) return 'سناك';
   if(ar.includes('فطار')) return 'فطور';
   if(ar.includes('غدا'))  return 'غداء';
@@ -93,6 +103,16 @@ function slotToMealType(ar){ // نحول "ق.الفطار" / "ب.الفطار" .
   if(ar.includes('سناك')) return 'سناك';
   return 'سناك';
 }
+function typeIcon(type){
+  switch(type){
+    case 'فطور': return '🍳';
+    case 'غداء': return '🍛';
+    case 'عشاء': return '🍲';
+    case 'سناك': return '🍎';
+    default:     return '🍱';
+  }
+}
+function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 
 //////////////// جلسة المستخدم //////////////////
 firebase.auth().onAuthStateChanged(async (user)=>{
@@ -117,16 +137,24 @@ firebase.auth().onAuthStateChanged(async (user)=>{
   });
   filterTypeEl.addEventListener('change', loadMealsOfDay);
 
-  // قوالب
-  tplTypeEl.addEventListener('change', loadTemplates);
-  saveAsTplBtn.addEventListener('click', saveCurrentAsTemplate);
-  refreshTplBtn.addEventListener('click', loadTemplates);
+  // AI
+  aiChatBtn?.addEventListener('click', openAIWidget);
+  aiClose?.addEventListener('click', closeAIWidget);
+  aiSend?.addEventListener('click', sendAI);
+  aiInput?.addEventListener('keydown', e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendAI();}});
+  quickBtns.forEach(b=>b.addEventListener('click',()=>{ aiInput.value=b.dataset.q||''; aiInput.focus(); }));
+
+  // ضبط تلقائي
+  autoAdjustBtn?.addEventListener('click', autoAdjustFlow);
+  closeAdjust?.addEventListener('click', ()=>adjustModal.classList.add('hidden'));
+  cancelAdjustBtn?.addEventListener('click', ()=>adjustModal.classList.add('hidden'));
+  applyAdjustBtn?.addEventListener('click', applyAdjustDiff);
 
   await loadChild();
-  await loadMeasurementsWindow(); // لبناء قوائم القياسات
-  await loadFoodLibrary();        // لمودال الأصناف
-  await loadTemplates();          // القوالب
-  await loadMealsOfDay();         // وجبات اليوم
+  await loadMeasurementsWindow();
+  await loadFoodLibrary();
+  await loadTemplates();
+  await loadMealsOfDay();
 });
 
 async function loadChild(){
@@ -139,7 +167,7 @@ async function loadChild(){
 }
 function calcAge(bd){ if(!bd) return '-'; const b=new Date(bd),t=new Date(); let a=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth(); if(m<0||(m===0&&t.getDate()<b.getDate())) a--; return a; }
 
-//////////////// القياسات (اختصار من نسختك السابقة) //////////////////
+//////////////// القياسات //////////////////
 function inWindow(d, [a,b]){ if(!(d instanceof Date)) return false; const x=d.getTime(); return x>=a.getTime() && x<=b.getTime(); }
 function windowForDayStr(day){ const t = new Date(day + 'T00:00:00'); const a = new Date(t); const b = new Date(t); b.setDate(b.getDate()+1); b.setMilliseconds(b.getMilliseconds()-1); return [a,b]; }
 
@@ -157,7 +185,6 @@ async function loadMeasurementsWindow(){
   });
   buildReadingsDropdowns(win);
 }
-
 function buildReadingsDropdowns(win){
   const pref = ['PRE_BREAKFAST','PRE_LUNCH','PRE_DINNER','SNACK'];
   const postf= ['POST_BREAKFAST','POST_LUNCH','POST_DINNER'];
@@ -180,7 +207,7 @@ function buildReadingsDropdowns(win){
   postReadingEl.innerHTML = build(postf);
 }
 
-//////////////// مكتبة الأصناف (نفس طريقتك السابقة مبسّطة) //////////////////
+//////////////// مكتبة الأصناف //////////////////
 async function loadFoodLibrary(){
   const ref = firebase.firestore().collection(`parents/${currentUser.uid}/foodItems`);
   let snap;
@@ -194,10 +221,12 @@ async function loadFoodLibrary(){
   renderPicker();
 }
 function normalizeFoodDoc(it){
-  const carbs_g = toNumber(it?.nutrPer100g?.carbs_g ?? it?.carbs_100g);
+  const carbs_g  = toNumber(it?.nutrPer100g?.carbs_g ?? it?.carbs_100g);
   const cal_kcal = toNumber(it?.nutrPer100g?.cal_kcal ?? it?.calories_100g);
   const protein_g= toNumber(it?.nutrPer100g?.protein_g ?? it?.protein_100g);
   const fat_g    = toNumber(it?.nutrPer100g?.fat_g ?? it?.fat_100g);
+  const fiber_g  = toNumber(it?.nutrPer100g?.fiber_g ?? it?.fiber_100g);
+  const gi       = toNumber(it?.gi ?? it?.GI); // اختياري
 
   let measures = [];
   if (Array.isArray(it?.measures)){
@@ -210,7 +239,7 @@ function normalizeFoodDoc(it){
   }
   return {
     id: it.id, name: it.name, brand: it.brand || null, category: it.category || '-',
-    nutrPer100g: { carbs_g, cal_kcal, protein_g, fat_g },
+    nutrPer100g: { carbs_g, cal_kcal, protein_g, fat_g, fiber_g }, gi,
     measures, imageUrl: it.imageUrl, autoImage: it.autoImage
   };
 }
@@ -232,7 +261,7 @@ function renderPicker(){
     card.className = 'pick-card';
     const thumbHTML = it.imageUrl && String(it.autoImage)!=='true'
       ? `<img src="${esc(it.imageUrl)}" alt="">`
-      : `<span>${categoryIcon(it.category)}</span>`;
+      : `<div class="pick-thumb-emoji">${categoryIcon(it.category)}</div>`;
 
     card.innerHTML = `
       <div class="pick-thumb">${thumbHTML}</div>
@@ -241,7 +270,8 @@ function renderPicker(){
         <div class="badges">
           <span class="badge">${esc(it.category||'-')}</span>
           <span class="badge">كارب/100g: ${it?.nutrPer100g?.carbs_g ?? '-'}</span>
-          <span class="badge">سعرات/100g: ${it?.nutrPer100g?.cal_kcal ?? '-'}</span>
+          ${it.gi? `<span class="badge">GI: ${it.gi}</span>`:''}
+          ${it?.nutrPer100g?.fiber_g? `<span class="badge">ألياف/100g: ${it.nutrPer100g.fiber_g}</span>`:''}
         </div>
         <div class="pick-actions">
           <button class="chooseBtn">اختيار</button>
@@ -269,7 +299,6 @@ function categoryIcon(cat){
     default:        return '🍽️';
   }
 }
-function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 function openPicker(){ pickerModal.classList.remove('hidden'); renderPicker(); }
 
 //////////////// وجبات اليوم //////////////////
@@ -323,9 +352,11 @@ function addItemRow(itemDoc){
       carbs: toNumber(itemDoc?.nutrPer100g?.carbs_g),
       cal:   toNumber(itemDoc?.nutrPer100g?.cal_kcal),
       prot:  toNumber(itemDoc?.nutrPer100g?.protein_g),
-      fat:   toNumber(itemDoc?.nutrPer100g?.fat_g)
+      fat:   toNumber(itemDoc?.nutrPer100g?.fat_g),
+      fiber: toNumber(itemDoc?.nutrPer100g?.fiber_g)
     },
-    calc:{carbs:0,cal:0,prot:0,fat:0},
+    gi: toNumber(itemDoc?.gi) || null,
+    calc:{carbs:0,cal:0,prot:0,fat:0, fiber:0, gl:0},
     measures: Array.isArray(itemDoc.measures) ? itemDoc.measures.filter(m=>m.name && m.grams>0) : []
   };
   currentItems.push(row);
@@ -410,7 +441,11 @@ function recalcRow(r, div){
   const cal   = r.per100.cal   * r.grams / 100;
   const prot  = r.per100.prot  * r.grams / 100;
   const fat   = r.per100.fat   * r.grams / 100;
-  r.calc = {carbs, cal, prot, fat};
+  const fiber = r.per100.fiber * r.grams / 100;
+  const carbPerGram = (r.per100.carbs||0)/100;
+  const gl = r.gi ? (r.gi * carbs / 100) : 0;
+
+  r.calc = {carbs, cal, prot, fat, fiber, gl};
   div.querySelector('.carbs').textContent = round1(carbs);
   div.querySelector('.cal').textContent   = Math.round(cal);
   div.querySelector('.prot').textContent  = round1(prot);
@@ -425,6 +460,8 @@ function recalcAll(){
     cal:  (a.cal||0)  +(r.calc.cal||0),
     prot: (a.prot||0) +(r.calc.prot||0),
     fat:  (a.fat||0)  +(r.calc.fat||0),
+    fiber:(a.fiber||0)+(r.calc.fiber||0),
+    gl:   (a.gl||0)   +(r.calc.gl||0),
   }),{});
   tGramsEl.textContent = round1(sum.grams||0);
   tCarbsEl.textContent = round1(sum.carbs||0);
@@ -432,7 +469,6 @@ function recalcAll(){
   tProtEl.textContent  = round1(sum.prot||0);
   tFatEl.textContent   = round1(sum.fat||0);
 
-  // الجرعة المقترحة تقريبية (CR/CF) إن كانت متاحة في childData
   const CR = Number(childData?.carbRatio||0) || null;
   const dose = CR ? roundHalf((sum.carbs||0)/CR) : 0;
   suggestedDoseEl.textContent = dose || 0;
@@ -504,9 +540,11 @@ function editMeal(row){
       carbs: i.grams>0 ? (i.carbs_g*100/i.grams) : 0,
       cal:   i.grams>0 ? (i.cal_kcal*100/i.grams) : 0,
       prot:  i.grams>0 ? (i.protein_g*100/i.grams) : 0,
-      fat:   i.grams>0 ? (i.fat_g*100/i.grams) : 0
+      fat:   i.grams>0 ? (i.fat_g*100/i.grams) : 0,
+      fiber: 0
     },
-    calc:{carbs: i.carbs_g, cal: i.cal_kcal, prot: i.protein_g, fat: i.fat_g},
+    gi: null,
+    calc:{carbs: i.carbs_g, cal: i.cal_kcal, prot: i.protein_g, fat: i.fat_g, fiber:0, gl:0},
     measures: []
   }));
   renderItems(); recalcAll(); saveDraft();
@@ -520,7 +558,7 @@ async function deleteMeal(row){
   await loadMealsOfDay();
 }
 
-//////////////// قوالب الوجبات (Templates) //////////////////
+//////////////// قوالب الوجبات //////////////////
 async function loadTemplates(){
   const type = tplTypeEl.value || 'فطور';
   const ref = firebase.firestore().collection(`parents/${currentUser.uid}/children/${childId}/mealTemplates`);
@@ -535,6 +573,8 @@ async function loadTemplates(){
   renderTplGrid();
 }
 function renderTplGrid(){
+  const tplGridEl = document.getElementById('tplGrid');
+  const tplEmptyEl = document.getElementById('tplEmpty');
   tplGridEl.innerHTML = '';
   if(!cachedTemplates.length){ tplEmptyEl.classList.remove('hidden'); return; }
   tplEmptyEl.classList.add('hidden');
@@ -567,37 +607,6 @@ function renderTplGrid(){
     tplGridEl.appendChild(card);
   });
 }
-function typeIcon(type){
-  switch(type){
-    case 'فطور': return '🍳';
-    case 'غداء': return '🍛';
-    case 'عشاء': return '🍲';
-    case 'سناك': return '🍎';
-    default:     return '🍱';
-  }
-}
-
-async function saveCurrentAsTemplate(){
-  if(!currentItems.length){ showToast('أضيفي مكونات أولًا'); return; }
-  const name = prompt('اسم القالب؟ (اختياري)', '');
-  const type = asMealType();
-  // بناء الملخص
-  const sum = currentItems.reduce((a,r)=>({
-    carbs:(a.carbs||0)+(r.calc.carbs||0),
-    cal:  (a.cal||0)  +(r.calc.cal||0)
-  }),{});
-  const payload = {
-    name: (name||'').trim() || null,
-    type,
-    items: currentItems.map(packItemForSave),
-    summary: { carbs_g: round1(sum.carbs||0), cal_kcal: Math.round(sum.cal||0) },
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  };
-  const ref = firebase.firestore().collection(`parents/${currentUser.uid}/children/${childId}/mealTemplates`);
-  await ref.add(payload);
-  showToast('تم حفظ القالب ✅');
-  await loadTemplates();
-}
 function applyTemplate(t){
   currentItems = (t.items||[]).map(i=>({
     itemId: i.itemId, name: i.name, brand: i.brand || null,
@@ -607,9 +616,11 @@ function applyTemplate(t){
       carbs: i.grams>0 ? (i.carbs_g*100/i.grams) : 0,
       cal:   i.grams>0 ? (i.cal_kcal*100/i.grams) : 0,
       prot:  i.grams>0 ? (i.protein_g*100/i.grams) : 0,
-      fat:   i.grams>0 ? (i.fat_g*100/i.grams) : 0
+      fat:   i.grams>0 ? (i.fat_g*100/i.grams) : 0,
+      fiber: 0
     },
-    calc:{carbs: i.carbs_g, cal: i.cal_kcal, prot: i.protein_g, fat: i.fat_g},
+    gi: null,
+    calc:{carbs: i.carbs_g, cal: i.cal_kcal, prot: i.protein_g, fat: i.fat_g, fiber:0, gl:0},
     measures: []
   }));
   renderItems(); recalcAll(); saveDraft();
@@ -622,54 +633,255 @@ async function deleteTemplate(t){
   showToast('تم الحذف ✅');
   await loadTemplates();
 }
+async function saveCurrentAsTemplate(){
+  if(!currentItems.length){ showToast('أضيفي مكونات أولًا'); return; }
+  const name = prompt('اسم القالب؟ (اختياري)', '');
+  const type = asMealType();
+  const sum = currentItems.reduce((a,r)=>({ carbs:(a.carbs||0)+(r.calc.carbs||0), cal:(a.cal||0)+(r.calc.cal||0) }),{});
+  const payload = {
+    name: (name||'').trim() || null,
+    type,
+    items: currentItems.map(packItemForSave),
+    summary: { carbs_g: round1(sum.carbs||0), cal_kcal: Math.round(sum.cal||0) },
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  const ref = firebase.firestore().collection(`parents/${currentUser.uid}/children/${childId}/mealTemplates`);
+  await ref.add(payload);
+  showToast('تم حفظ القالب ✅');
+  await loadTemplates();
+}
+document.getElementById('saveAsTplBtn')?.addEventListener('click', saveCurrentAsTemplate);
+document.getElementById('refreshTplBtn')?.addEventListener('click', loadTemplates);
 
-//////////////// LocalStorage (الموجود سابقًا + آخر وجبة لنفس النوع) ////////////////
-function saveDraft(){
-  try{
-    const k=`draftMeal:${currentUser.uid}:${childId}`;
-    localStorage.setItem(k, JSON.stringify({ items: currentItems }));
-  }catch(_){}
+//////////////// LocalStorage //////////////////
+function saveDraft(){ try{ const k=`draftMeal:${currentUser.uid}:${childId}`; localStorage.setItem(k, JSON.stringify({ items: currentItems })); }catch(_){ } }
+function loadDraft(){ try{ const k=`draftMeal:${currentUser?.uid||'u'}:${childId||'c'}`; const raw = localStorage.getItem(k); if(!raw) return null; const d=JSON.parse(raw); return d?.items||null; }catch(_){ return null; } }
+function clearDraft(){ try{ const k=`draftMeal:${currentUser?.uid||'u'}:${childId||'c'}`; localStorage.removeItem(k); }catch(_){} }
+function saveLastMealTemplate(type, payload){ try{ const k = `tpl:lastMeal:${currentUser.uid}:${childId}:${type}`; localStorage.setItem(k, JSON.stringify({ items: payload.items })); }catch(_){ } }
+function loadLastMealTemplate(type){ try{ const k = `tpl:lastMeal:${currentUser?.uid||'u'}:${childId||'c'}:${type}`; const raw = localStorage.getItem(k); return raw? JSON.parse(raw) : null; }catch(_){ return null; } }
+function saveLastUsed(map){ try{ const k = `lastUsed:${currentUser.uid}:${childId}`; localStorage.setItem(k, JSON.stringify(map)); }catch(_){ } }
+function loadLastUsed(){ try{ const k = `lastUsed:${currentUser?.uid||'u'}:${childId||'c'}`; const raw = localStorage.getItem(k); return raw? JSON.parse(raw) : {}; }catch(_){ return {}; } }
+lastUsedMap = loadLastUsed();
+
+//////////////// ضبط تلقائي لهدف الكارب //////////////////
+function getMealCarbTarget(type){
+  // يدعم مفاتيح عربية/إنجليزية
+  const t = (childData?.carbTargets)||{};
+  const map = {
+    'فطور': t.breakfast || t.futoor || t['فطور'] || t['فطار'],
+    'غداء': t.lunch     || t['غداء'],
+    'عشاء': t.dinner    || t['عشاء'],
+    'سناك': t.snack     || t['سناك']
+  };
+  const v = map[type] || null;
+  if (Array.isArray(v) && v.length>=2) return { min: toNumber(v[0]), max: toNumber(v[1]) };
+  if (v && typeof v==='object') return { min: toNumber(v.min), max: toNumber(v.max) };
+  return { min: 0, max: Infinity };
 }
-function loadDraft(){
-  try{
-    const k=`draftMeal:${currentUser?.uid||'u'}:${childId||'c'}`;
-    const raw = localStorage.getItem(k);
-    if(!raw) return null;
-    const d=JSON.parse(raw);
-    return d?.items||null;
-  }catch(_){ return null; }
+function carbsPerGram(row){ return (row?.per100?.carbs||0)/100; }
+function glPerGram(row){
+  const cpg = carbsPerGram(row);
+  return row.gi ? (row.gi * cpg) / 100 : cpg * 0.5; // تقدير بسيط لو مفيش GI
 }
-function clearDraft(){
-  try{
-    const k=`draftMeal:${currentUser?.uid||'u'}:${childId||'c'}`;
-    localStorage.removeItem(k);
-  }catch(_){}
+function autoAdjustFlow(){
+  if(!currentItems.length){ showToast('أضيفي مكونات أولًا'); return; }
+  const type = asMealType();
+  const {min, max} = getMealCarbTarget(type);
+  const totalCarb = currentItems.reduce((a,r)=>a+(r.calc.carbs||0),0);
+
+  if (max===Infinity && min===0){
+    showToast('لا يوجد هدف كارب مُحدد لهذه الوجبة'); return;
+  }
+
+  // نبني نسخة عمل
+  const before = currentItems.map(r=>({...r}));
+  let after = currentItems.map(r=>({...r, grams: r.grams }));
+
+  const step = 5; // 5g لكل خطوة تعديل
+  if (totalCarb > max){
+    // قلل من العناصر ذات GL/جرام الأعلى
+    const sorted = [...after].sort((a,b)=> glPerGram(b) - glPerGram(a));
+    let carbsNow = totalCarb;
+    for (const r of sorted){
+      if (carbsNow <= max) break;
+      const cpg = carbsPerGram(r);
+      if (cpg <= 0) continue;
+      while (r.grams > 10 && carbsNow > max){ // لا ننزل أقل من 10g للعنصر
+        r.grams = Math.max(10, r.grams - step);
+        carbsNow -= cpg * step;
+      }
+    }
+    after = recomputeRows(after);
+  } else if (totalCarb < min){
+    // زود عناصر ذات GL/جرام منخفض
+    const sorted = [...after]
+      .filter(r=> carbsPerGram(r) > 0.01)
+      .sort((a,b)=> glPerGram(a) - glPerGram(b));
+    let carbsNow = totalCarb;
+    for (const r of sorted){
+      if (carbsNow >= min) break;
+      const cpg = carbsPerGram(r);
+      for (let i=0;i<50 && carbsNow < min;i++){
+        r.grams += step;
+        carbsNow += cpg * step;
+      }
+    }
+    after = recomputeRows(after);
+  } else {
+    showToast('الوجبة بالفعل ضمن الهدف ✅'); return;
+  }
+
+  // كوّني diff للمعاينة
+  const diffs = [];
+  for (let i=0;i<before.length;i++){
+    const a = before[i], b = after[i];
+    if (!a || !b) continue;
+    if (Math.abs((b.grams||0)-(a.grams||0)) >= 1){
+      diffs.push({
+        name: a.name,
+        before: round1(a.grams||0),
+        after:  round1(b.grams||0),
+        delta:  round1((b.grams||0)-(a.grams||0))
+      });
+    }
+  }
+  pendingAdjust = { after, diffs, type, target: {min,max},
+    sums: {
+      before: sumCarbs(before),
+      after : sumCarbs(after)
+    }
+  };
+  renderAdjustPreview();
 }
-function saveLastMealTemplate(type, payload){
-  try{
-    const k = `tpl:lastMeal:${currentUser.uid}:${childId}:${type}`;
-    localStorage.setItem(k, JSON.stringify({ items: payload.items }));
-  }catch(_){}
+
+function sumCarbs(rows){
+  const carbs = rows.reduce((a,r)=>a+(((r.per100?.carbs||0)/100)* (r.grams||0)),0);
+  const gl    = rows.reduce((a,r)=>a+( (r.gi? (r.gi*((r.per100?.carbs||0)/100)*(r.grams||0))/100 : 0) ),0);
+  return { carbs: round1(carbs), gl: round1(gl) };
 }
-function loadLastMealTemplate(type){
-  try{
-    const k = `tpl:lastMeal:${currentUser?.uid||'u'}:${childId||'c'}:${type}`;
-    const raw = localStorage.getItem(k);
-    return raw? JSON.parse(raw) : null;
-  }catch(_){ return null; }
+function recomputeRows(rows){
+  return rows.map(r=>{
+    const carbs = (r.per100.carbs||0) * (r.grams||0) / 100;
+    const cal   = (r.per100.cal  ||0) * (r.grams||0) / 100;
+    const prot  = (r.per100.prot ||0) * (r.grams||0) / 100;
+    const fat   = (r.per100.fat  ||0) * (r.grams||0) / 100;
+    const fiber = (r.per100.fiber||0) * (r.grams||0) / 100;
+    const gl    = r.gi ? (r.gi * carbs / 100) : 0;
+    return {...r, calc:{carbs,cal,prot,fat,fiber,gl}};
+  });
 }
-function saveLastUsed(map){
-  try{
-    const k = `lastUsed:${currentUser.uid}:${childId}`;
-    localStorage.setItem(k, JSON.stringify(map));
-  }catch(_){}
+function renderAdjustPreview(){
+  if(!pendingAdjust){ showToast('لا يوجد تعديلات'); return; }
+  const { diffs, sums, target } = pendingAdjust;
+  adjustDiffEl.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className='diff-row';
+  head.innerHTML = `
+    <div><strong>الهدف:</strong> ${target.min}–${target.max} g كارب</div>
+    <div class="fromto">قبل: ${sums.before.carbs} g • GL≈${sums.before.gl} → بعد: ${sums.after.carbs} g • GL≈${sums.after.gl}</div>
+  `;
+  adjustDiffEl.appendChild(head);
+
+  if (!diffs.length){
+    const no = document.createElement('div');
+    no.className='diff-row';
+    no.textContent = 'لا تغييرات مطلوبة — ضمن الهدف بالفعل.';
+    adjustDiffEl.appendChild(no);
+  }else{
+    diffs.forEach(d=>{
+      const row = document.createElement('div');
+      row.className='diff-row';
+      row.innerHTML = `
+        <div>${esc(d.name)}</div>
+        <div class="fromto">${d.before} g → <strong>${d.after} g</strong> (${d.delta>0?'+':''}${d.delta} g)</div>
+      `;
+      adjustDiffEl.appendChild(row);
+    });
+  }
+  adjustModal.classList.remove('hidden');
 }
-function loadLastUsed(){
+function applyAdjustDiff(){
+  if(!pendingAdjust) return;
+  // طبّقي الجرامات الجديدة
+  currentItems.forEach((r,i)=>{
+    const newR = pendingAdjust.after[i];
+    if (newR) r.grams = newR.grams;
+  });
+  renderItems(); recalcAll(); saveDraft();
+  adjustModal.classList.add('hidden');
+  showToast('تم تطبيق الضبط ✅');
+}
+
+//////////////// AI Chat //////////////////
+function openAIWidget(){
+  aiMessages.innerHTML = '';
+  aiContext.textContent = buildAIContextLabel();
+  aiWidget.classList.remove('hidden');
+}
+function closeAIWidget(){ aiWidget.classList.add('hidden'); aiMessages.innerHTML=''; }
+function appendMsg(role,text){const d=document.createElement('div');d.className=role==='assistant'?'msg assistant':'msg user';d.textContent=text;aiMessages.appendChild(d);aiMessages.scrollTop=aiMessages.scrollHeight;}
+
+function buildAIContextLabel(){
+  const type = asMealType();
+  const carbs = tCarbsEl.textContent;
+  return `سياق: ${childData?.name||'طفل'} • ${type} • كارب حالي ≈ ${carbs}g`;
+}
+function buildAIPrompt(userText=''){
+  const type = asMealType();
+  const {min,max} = getMealCarbTarget(type);
+  const items = currentItems.map(r=>{
+    const gi = r.gi? `, GI=${r.gi}`:``;
+    const fiber = r.per100?.fiber? `, fiber/100g=${r.per100.fiber}`:``;
+    return `${r.name}: ${round1(r.grams)}g, carbs=${round1(r.calc.carbs)}g${gi}${fiber}`;
+  }).join('\n');
+
+  return `
+أنت مساعد تغذوي للأطفال السكّريين. اقترح تعديلات آمنة تعليمية (ليست نصيحة طبية).
+
+الطفل:
+- الاسم: ${childData?.name||'—'}
+- CR: ${childData?.carbRatio ?? '—'}, CF: ${childData?.correctionFactor ?? '—'}
+- وحدة القياس: ${childData?.glucoseUnit || 'mg/dL'}
+
+هدف الكارب لهذه الوجبة (${type}): ${min}–${max} g (إن كان غير محدد تجاهله).
+الوجبة الحالية (اسم، جرامات، كارب، GI/ألياف إن وجدت):
+${items}
+
+المطلوب:
+- لو الكارب خارج النطاق، اقترح زيادات/تخفيضات بالجرام أو بالوحدة المنزلية (خطوات صغيرة).
+- فضّل خفض العناصر عالية GL/جرام، وزيادة عناصر منخفضة GI/عالية ألياف حيث أمكن.
+- أظهر الفرق على شكل نقاط: "الأرز −30g، التفاح −20g، خيار +50g".
+- أعطِ بدائل اختيارية منخفضة GI.
+- اختم بتحذير: "اقتراحات تعليمية لا تغني عن خطة الطبيب".
+
+سؤال المستخدم: ${userText||'اضبط الوجبة لتكون ضمن الهدف مع GL منخفض'}
+`.trim();
+}
+
+async function sendAI(){
+  const text=aiInput.value.trim(); if(!text) return;
+  aiInput.value=''; appendMsg('user',text);
+  const wait='… جارٍ التحليل';
+  appendMsg('assistant',wait);
+
   try{
-    const k = `lastUsed:${currentUser?.uid||'u'}:${childId||'c'}`;
-    const raw = localStorage.getItem(k);
-    return raw? JSON.parse(raw) : {};
-  }catch(_){ return {}; }
+    if(!window.GEMINI_API_KEY || !window.GoogleGenerativeAI){
+      showToast('مفتاح Gemini غير مُعدّ'); return;
+    }
+    const genAI = new window.GoogleGenerativeAI(window.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model:'gemini-1.5-flash' });
+    const prompt = buildAIPrompt(text);
+    const res = await model.generateContent(prompt);
+    const reply = res.response?.text?.() || 'لم يتم استلام رد.';
+    // استبدلي رسالة الانتظار
+    const last = aiMessages.querySelector('.msg.assistant:last-child');
+    if (last && last.textContent===wait) last.remove();
+    appendMsg('assistant', reply);
+  }catch(e){
+    console.error(e);
+    showToast('تعذّر الاتصال بالذكاء');
+  }
 }
 
 //////////////// مساعدة //////////////////
@@ -684,11 +896,12 @@ function repeatLastMealTemplate(){
       carbs: i.grams>0 ? (i.carbs_g*100/i.grams) : 0,
       cal:   i.grams>0 ? (i.cal_kcal*100/i.grams) : 0,
       prot:  i.grams>0 ? (i.protein_g*100/i.grams) : 0,
-      fat:   i.grams>0 ? (i.fat_g*100/i.grams) : 0
+      fat:   i.grams>0 ? (i.fat_g*100/i.grams) : 0,
+      fiber: 0
     },
-    calc:{carbs: i.carbs_g, cal: i.cal_kcal, prot: i.protein_g, fat: i.fat_g},
+    gi: null,
+    calc:{carbs: i.carbs_g, cal: i.cal_kcal, prot: i.protein_g, fat: i.fat_g, fiber:0, gl:0},
     measures: []
   }));
   renderItems(); recalcAll(); saveDraft();
 }
-
