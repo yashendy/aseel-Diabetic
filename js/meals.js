@@ -944,13 +944,13 @@ presetSaveBtn?.addEventListener('click', async ()=>{
     })),
     createdAt: serverTimestamp()
   };
-  await addDoc(collection(db, `parents/${currentUser.uid}/presetMeals`), payload);
+  await addDoc(collection(db, `parents/${currentUser.uid}/children/${childId}/presetMeals`), payload);
   showToast('✅ تم حفظ الوجبة كوجبة جاهزة');
   await loadPresets();
 });
 
 async function loadPresets(){
-  const ref = collection(db, `parents/${currentUser.uid}/presetMeals`);
+  const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/presetMeals`);
   const snap = await getDocs(query(ref, orderBy('createdAt','desc')));
   cachedPresets = [];
   snap.forEach(d=> cachedPresets.push({ id:d.id, ...d.data() }));
@@ -995,7 +995,7 @@ function renderPresets(){
     });
     div.querySelector('.delBtn').addEventListener('click', async ()=>{
       if (!confirm('حذف هذه الوجبة الجاهزة؟')) return;
-      await deleteDoc(doc(db, `parents/${currentUser.uid}/presetMeals/${p.id}`));
+      await deleteDoc(doc(db, `parents/${currentUser.uid}/children/${childId}/presetMeals`));
       await loadPresets(); renderPresets();
     });
     presetGrid.appendChild(div);
