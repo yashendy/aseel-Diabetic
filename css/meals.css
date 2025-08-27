@@ -1,48 +1,49 @@
 :root{
   --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#333; --muted:#555;
-  --primary:#4CAF50; --accent:#2196F3; --danger:#E53935; --warn:#FB8C00; --focus:#2962FF;
+  --primary:#4CAF50; --danger:#E53935;
 }
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);margin:0;color:var(--text)}
+body{font-family:'Segoe UI',system-ui;background:var(--bg);margin:0;color:var(--text)}
 .container{max-width:1200px;margin:auto;padding:16px}
-
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+
 .row{display:flex;gap:8px}
 .between{justify-content:space-between}
 .center{align-items:center}
 .wrap{flex-wrap:wrap}
 .grow{flex:1}
-.mb-12{margin-bottom:12px}
 .mt-12{margin-top:12px}
+.mb-12{margin-bottom:12px}
 .gap-8{gap:8px}
 .tiny{font-size:12px}
 .muted{opacity:.7}
 
 .table{display:grid}
-.thead,.tbody>.trow{display:grid;grid-template-columns:64px repeat(4,1fr) 120px 160px 140px 120px 1.6fr;gap:8px;align-items:center}
+.thead,.tbody>.trow{
+  display:grid;
+  grid-template-columns:64px repeat(4,1fr) 120px 160px 140px 120px 1.6fr;
+  gap:8px;align-items:center
+}
 .thead{font-weight:600;border-bottom:1px solid var(--border);padding-bottom:8px}
 .trow{padding:8px 0;border-bottom:1px dashed var(--border)}
 .num{text-align:center}
 
-input[type=number],select,textarea{padding:8px;border:1px solid var(--border);border-radius:8px;width:100%}
-button{padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:#fff;cursor:pointer}
-button.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+input,select,textarea{padding:8px;border:1px solid var(--border);border-radius:8px;width:100%}
+button{padding:10px 14px;border-radius:10px;cursor:pointer}
+button.primary{background:var(--primary);color:#fff;border:0}
 button.secondary{background:#f5f7fb}
-button.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
-.icon-btn{padding:6px 10px}
+button.danger{background:var(--danger);color:#fff;border:0}
 
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 14px;border-radius:8px;z-index:1000}
 .toast.hidden{display:none}
 
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center;z-index:1000}
 .modal.hidden{display:none}
-.modal-card{background:#fff;border-radius:12px;padding:16px;min-width:300px;max-width:720px;width:95%}
+.modal-card{background:#fff;border-radius:12px;padding:16px;max-width:720px;width:95%}
 .diff-row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed var(--border);padding:8px 0}
-.fromto{font-family:ui-monospace,Menlo,monospace}
+.fromto{font-family:ui-monospace}
 
-.ai-widget{position:fixed;right:16px;bottom:16px;background:#fff;border:1px solid var(--border);border-radius:12px;width:360px;max-height:65vh;display:flex;flex-direction:column;box-shadow:0 10px 28px rgba(0,0,0,.08)}
-.ai-header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border)}
+.ai-widget{position:fixed;right:16px;bottom:16px;background:#fff;border:1px solid var(--border);border-radius:12px;width:360px;max-height:65vh;display:flex;flex-direction:column}
+.ai-header{display:flex;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border)}
 .ai-body{padding:12px;overflow:auto}
 .msgs{display:flex;flex-direction:column;gap:8px}
 .ai-footer{display:flex;gap:8px;padding:8px;border-top:1px solid var(--border)}
@@ -50,20 +51,5 @@ button.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
 .sum-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .cells{border:1px solid var(--border);border-radius:10px;padding:10px;background:#fff}
 
-@media(max-width:900px){
-  .thead,.tbody>.trow{grid-template-columns:64px repeat(4,1fr) 110px 140px 120px 100px 1.4fr}
-}
-@media(max-width:680px){
-  .thead,.tbody>.trow{grid-template-columns:48px repeat(4,1fr) 100px 120px 100px 100px 1fr}
-  .ai-widget{width:94vw;right:3vw}
-}
-@media(max-width:520px){
-  .thead,.tbody>.trow{grid-template-columns:44px repeat(4,1fr) 100px 120px 100px 100px 1fr}
-  .container{padding:8px}
-  .modal-card{width:98vw;min-width:auto}
-  .sum-grid{grid-template-columns:repeat(2,1fr)}
-}
-
-/* لتحسين سطر "الكمية" في معاينة الضبط */
 .diff-row .tiny{font-size:12px}
 .diff-row .muted{opacity:.7}
