@@ -1,130 +1,0 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>وجبات الطفل</title>
-  <link rel="stylesheet" href="meals.css" />
-  <!-- Firebase compat SDKs (نفس اللي عندك) -->
-  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
-
-  <!-- تهيئة مشروعك -->
-  <script defer src="firebase-config.js"></script>
-  <script defer src="meals.js"></script>
-</head>
-<body>
-  <header class="topbar">
-    <h1>تسجيل وجبة</h1>
-    <div class="ctx">
-      <label>الطفل:
-        <select id="childSelect"></select>
-      </label>
-      <label>التاريخ:
-        <input id="dateInput" type="date" />
-      </label>
-      <label>وقت القياس:
-        <select id="mealSlot">
-          <option value="PRE_BREAKFAST">ق.الفطار</option>
-          <option value="PRE_LUNCH">ق.الغدا</option>
-          <option value="PRE_DINNER">ق.العشا</option>
-          <option value="POST_BREAKFAST">ب.الفطار</option>
-          <option value="POST_LUNCH">ب.الغدا</option>
-          <option value="POST_DINNER">ب.العشا</option>
-          <option value="SNACK">السناك</option>
-        </select>
-      </label>
-    </div>
-
-    <div class="meas">
-      <label>قياس قبل:
-        <input id="preReading" type="number" step="0.1" placeholder="mmol/L" />
-      </label>
-      <label>قياس بعد:
-        <input id="postReading" type="number" step="0.1" placeholder="mmol/L" />
-      </label>
-      <button id="reloadMeasures" class="ghost">جلب قياسات اليوم</button>
-    </div>
-
-    <div class="tpl-bar">
-      <button id="openTpl" class="ghost">🍱 إضافة من قالب</button>
-      <button id="saveAsTpl" class="primary">💾 حفظ الحالية كقالب</button>
-      <span id="tplMsg" class="muted"></span>
-    </div>
-  </header>
-
-  <main class="card">
-    <div class="tableHead">
-      <div>الصنف</div>
-      <div>وحدة</div>
-      <div>جم/الوحدة</div>
-      <div>الكمية</div>
-      <div>الجرامات</div>
-      <div>كارب/100جم</div>
-      <div>الكارب</div>
-      <div>GI</div>
-      <div>GL</div>
-      <div>سعرات</div>
-      <div>بروتين</div>
-      <div>دهون</div>
-      <div>إجراء</div>
-    </div>
-    <div id="rows" class="rows"></div>
-
-    <button id="addRow" class="primary">+ إضافة صنف</button>
-
-    <section class="summary">
-      <div><strong>إجمالي الكارب:</strong> <span id="sumCarbs">0</span> جم</div>
-      <div><strong>إجمالي GL:</strong> <span id="sumGL">0</span></div>
-      <div><strong>متوسط GI (مرجّح بالكارب):</strong> <span id="avgGI">—</span></div>
-    </section>
-
-    <footer class="actions">
-      <button id="saveMeal" class="success">حفظ الوجبة</button>
-      <span id="saveStatus" class="muted"></span>
-    </footer>
-  </main>
-
-  <!-- مودال القوالب -->
-  <dialog id="tplModal">
-    <div class="tpl-header">
-      <h2>اختر قالب وجبة</h2>
-      <button id="closeTpl" class="ghost">إغلاق</button>
-    </div>
-
-    <div class="tabs">
-      <button class="tab active" data-type="فطار">فطار</button>
-      <button class="tab" data-type="غدا">غدا</button>
-      <button class="tab" data-type="عشا">عشا</button>
-      <button class="tab" data-type="سناك">سناك</button>
-    </div>
-
-    <div id="tplList" class="tpl-list">
-      <!-- بطاقات القوالب تظهر هنا -->
-    </div>
-  </dialog>
-
-  <!-- مودال حفظ كقالب -->
-  <dialog id="saveTplModal">
-    <form method="dialog" class="save-tpl">
-      <h3>حفظ الحالية كقالب</h3>
-      <label>اسم القالب
-        <input id="tplName" required placeholder="مثال: فطار سريع" />
-      </label>
-      <label>النوع
-        <select id="tplType" required>
-          <option value="فطار">فطار</option>
-          <option value="غدا">غدا</option>
-          <option value="عشا">عشا</option>
-          <option value="سناك">سناك</option>
-        </select>
-      </label>
-      <div class="actions">
-        <button id="confirmSaveTpl" class="success">حفظ</button>
-        <button id="cancelSaveTpl" class="ghost">إلغاء</button>
-      </div>
-    </form>
-  </dialog>
-</body>
-</html>
