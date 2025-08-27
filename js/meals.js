@@ -1,254 +1,365 @@
-/* meals.js — نسخة كاملة بعد التعديلات */
+/* ======= إعداد Firebase =======
+   لو عندك firebase-config.js بيصدر app, auth, db بدعم compat،
+   احذفي الكتلة البديلة هنا. */
+window._ensureFirebaseReady = (function(){
+  if (!window.firebase?.apps?.length) {
+    console.warn('تأكدي من تحميل firebase-config.js قبل هذا الملف.');
+  }
+})();
 
-/* === المراجع لعناصر DOM === */
-const toastWrap = document.getElementById('toast');
-const childNameEl = document.getElementById('childName');
-const childMetaEl = document.getElementById('childMeta');
-const mealDateEl = document.getElementById('mealDate');
-const mealTypeEl = document.getElementById('mealType');
-const preReadingEl = document.getElementById('preReading');
-const postReadingEl = document.getElementById('postReading');
-const itemsBodyEl = document.getElementById('itemsBody');
-const addItemBtn = document.getElementById('addItemBtn');
-const repeatLastBtn = document.getElementById('repeatLastBtn');
-const backBtn = document.getElementById('backBtn');
-const tGramsEl = document.getElementById('tGrams');
-const tCarbsEl = document.getElementById('tCarbs');
-const tCalEl = document.getElementById('tCal');
-const tProtEl = document.getElementById('tProt');
-const tFatEl   = document.getElementById('tFat');
-const tplTypeEl = document.getElementById('tplType');   // ✅ إصلاح undefined
+/* ======= ثوابت ======= */
+const PATHS = {
+  childCollection: (uid) => `parents/${uid}/children`,
+  mealsCollectionForDate: (uid, childId, ymd) =>
+    `parents/${uid}/children/${childId}/meals/${ymd}/items`,
+  measurementsCollection: (uid, childId) =>
+    `parents/${uid}/children/${childId}/measurements`,
+};
 
-const suggestedDoseEl = document.getElementById('suggestedDose');
-const doseExplainEl   = document.getElementById('doseExplain');
-const doseRangeEl     = document.getElementById('doseRange');
-const appliedDoseEl   = document.getElementById('appliedDose');
+const SLOT_LABELS = {
+  PRE_BREAKFAST: "ق.الفطار",
+  PRE_LUNCH: "ق.الغدا",
+  PRE_DINNER: "ق.العشا",
+  POST_BREAKFAST: "ب.الفطار",
+  POST_LUNCH: "ب.الغدا",
+  POST_DINNER: "ب.العشا",
+  SNACK: "السناك",
+};
 
-const adjustModal = document.getElementById('adjustModal');
-const closeAdjustBtn = document.getElementById('closeAdjust');
-const adjustDiffEl = document.getElementById('adjustDiff');
-const applyAdjustBtn = document.getElementById('applyAdjustBtn');
-const cancelAdjustBtn = document.getElementById('cancelAdjustBtn');
-const smartAdjustBtn = document.getElementById('smartAdjustBtn');
+const SLOT_GROUP = {
+  PRE: ["PRE_BREAKFAST","PRE_LUNCH","PRE_DINNER","SNACK"],
+  POST: ["POST_BREAKFAST","POST_LUNCH","POST_DINNER"],
+};
 
-/* === دوال مساعدة === */
-function esc(s){
-  return (s||'').toString()
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'",'&#039;');
-}
-function round1(x){ return Math.round((Number(x)||0)*10)/10; }
+const round1 = (n) => Math.round((+n || 0) * 10) / 10;
+const clampNonNeg = (n) => Math.max(0, +n || 0);
+const fmt = (n) => (isFinite(n) ? (Math.round(n*10)/10).toFixed(1) : "0.0");
 
-/* 🌟 إضافات جديدة للتقريب والتحويل بين الكمية/الجرامات */
-const QTY_STEP = 0.1;
-function roundToStep(x, step=QTY_STEP){
-  const s = Number(step) || 0.1;
-  return Math.round((Number(x)||0)/s)*s;
-}
-function measureOf(r){
-  if (!r || r.unit!=='household') return null;
-  const name = r.measure || null;
-  if (!name) return null;
-  const list = r.measures || r.ms || [];
-  return list.find(m=>m && m.name===name && Number(m.grams)>0) || null;
-}
-function qtyFromGrams(r, grams){
-  const m = measureOf(r);
-  if (!m) return (r.unit==='grams') ? roundToStep(grams) : (r.qty ?? 0);
-  return roundToStep((Number(grams)||0) / Number(m.grams||1), QTY_STEP);
-}
-function gramsFromQty(r, qty){
-  if (r.unit==='grams') return Number(qty)||0;
-  const m = measureOf(r);
-  if (!m) return Number(r.grams)||0;
-  return Number(qty||0) * Number(m.grams||0);
-}
+/* ======= عناصر DOM ======= */
+const childSel = document.getElementById("childSelect");
+const dateInput = document.getElementById("dateInput");
+const slotSel = document.getElementById("mealSlot");
+const rowsEl = document.getElementById("rows");
+const addRowBtn = document.getElementById("addRow");
+const saveBtn = document.getElementById("saveMeal");
+const saveStatus = document.getElementById("saveStatus");
+const preReading = document.getElementById("preReading");
+const postReading = document.getElementById("postReading");
+const reloadMeasures = document.getElementById("reloadMeasures");
+const sumCarbsEl = document.getElementById("sumCarbs");
+const sumGLEl = document.getElementById("sumGL");
+const avgGIEl = document.getElementById("avgGI");
 
-/* === بيانات حالة === */
-let currentItems = [];
-let pendingAdjust = null;
+/* ======= تهيئة أولية ======= */
+document.addEventListener("DOMContentLoaded", async () => {
+  // افتراضي: اليوم
+  dateInput.valueAsDate = new Date();
 
-/* === عرض العناصر في الجدول === */
-function renderItems(){
-  itemsBodyEl.innerHTML = '';
-  currentItems.forEach((r, idx)=>{
-    const div = document.createElement('div');
-    div.className = 'trow';
-    div.innerHTML = `
-      <button class="del danger">حذف</button>
-      <div class="num">${round1(r.per100?.fat||0)}</div>
-      <div class="num">${round1(r.per100?.protein||0)}</div>
-      <div class="num">${round1(r.calc?.cal||0)}</div>
-      <div class="num">${round1(r.calc?.carbs||0)}</div>
-      <input type="number" class="grams" step="1" value="${round1(r.grams||0)}" />
-      <select class="measure">${(r.measures||[]).map(m=>`<option value="${m.name}" ${m.name===r.measure?'selected':''}>${m.name} (${m.grams}g)</option>`).join('')}</select>
-      <input type="number" class="qty" step="0.1" value="${roundToStep(r.qty||0)}" />
-      <select class="unit">
-        <option value="household" ${r.unit==='household'?'selected':''}>منزلي</option>
-        <option value="grams" ${r.unit==='grams'?'selected':''}>جرام</option>
-      </select>
-      <div class="name">${esc(r.name)}</div>
-    `;
+  // تحميل الأطفال المتاحين للمستخدم
+  await populateChildren();
 
-    const grInp = div.querySelector('.grams');
-    const msSel = div.querySelector('.measure');
-    const qtyInp= div.querySelector('.qty');
+  // صف مبدئي
+  addRow();
 
-    // عند تغيير المقياس
-    msSel.addEventListener('change', ()=>{
-      r.measure = msSel.value || null;
-      if(r.unit==='household'){
-        const m = (r.measures||[]).find(x=>x.name===r.measure);
-        r.grams = m? r.qty*Number(m.grams||0) : 0;
-        grInp.value = r.grams;
-      }
-      recalcRow(r, div);
-    });
+  // مستمعات
+  addRowBtn.addEventListener("click", addRow);
+  saveBtn.addEventListener("click", saveMeal);
+  dateInput.addEventListener("change", tryPrefillMeasuresForDay);
+  slotSel.addEventListener("change", tryPrefillMeasuresForDay);
+  reloadMeasures.addEventListener("click", tryPrefillMeasuresForDay);
 
-    // ✅ عند إدخال الكمية
-    qtyInp.addEventListener('input', ()=>{
-      r.qty = roundToStep(Number(qtyInp.value)||0);
-      r.grams = gramsFromQty(r, r.qty);
-      grInp.value = round1(r.grams);
-      recalcRow(r, div);
-    });
+  // أول تحميل
+  tryPrefillMeasuresForDay();
+});
 
-    // ✅ عند إدخال الجرامات
-    grInp.addEventListener('input', ()=>{
-      const g = Number(grInp.value)||0;
-      r.grams = g;
-      if (r.unit==='grams') {
-        r.qty = roundToStep(g);
-        qtyInp.value = r.qty;
-      } else {
-        const m = measureOf(r);
-        if (m) {
-          r.qty = qtyFromGrams(r, g);
-          qtyInp.value = r.qty;
-        }
-        // منزلي بلا مقياس: نترك الكمية كما هي ونعدّل الجرامات فقط
-      }
-      recalcRow(r, div);
-    });
+/* ======= إدارة الأطفال ======= */
+async function populateChildren(){
+  // توقّع أن المستخدم مسجل دخول
+  const user = firebase.auth().currentUser || await new Promise(resolve=>{
+    const unsub = firebase.auth().onAuthStateChanged(u=>{unsub();resolve(u)});
+  });
+  if(!user){ alert("يجب تسجيل الدخول أولًا"); return; }
 
-    div.querySelector('.del').addEventListener('click', ()=>{
-      currentItems.splice(idx,1); renderItems(); recalcAll(); saveDraft();
-    });
-
-    itemsBodyEl.appendChild(div);
+  const db = firebase.firestore();
+  const colRef = db.collection(PATHS.childCollection(user.uid));
+  const snap = await colRef.get();
+  childSel.innerHTML = "";
+  snap.forEach(doc=>{
+    const opt = document.createElement("option");
+    opt.value = doc.id;
+    opt.textContent = doc.data().name || `طفل (${doc.id.slice(0,4)})`;
+    childSel.appendChild(opt);
   });
 }
 
-/* === الحسابات المجمّعة (مثال) === */
-function recalcRow(r, div){
-  // هنا بيتم تحديث r.calc بناءً على r.grams (من الكود الأصلي)
-}
-function recalcAll(){
-  // تحديث المجموع الكلي في الأسفل (من الكود الأصلي)
-}
+/* ======= نموذج الصف ======= */
+function addRow(pref={}){
+  const row = document.createElement("div");
+  row.className = "row";
 
-/* === منطق ضبط الهدف (autoAdjustFlow) === */
-function autoAdjustFlow(){
-  if(!currentItems.length){ showToast('أضيفي مكونات أولًا'); return; }
-  const type = asMealType();
-  const {min, max} = getMealCarbTarget(type);
-  const totalCarb = currentItems.reduce((a,r)=>a+(r.calc.carbs||0),0);
-
-  if (max===Infinity && min===0){
-    showToast('لا يوجد هدف كارب مُحدد لهذه الوجبة'); return;
-  }
-
-  const before = currentItems.map(r=>({...r}));
-  let after = currentItems.map(r=>({...r, grams: r.grams }));
-
-  // ... خوارزمية التعديل (كما كانت) ...
-
-  const diffs = [];
-  for (let i=0;i<before.length;i++){
-    const a = before[i], b = after[i];
-    if (!a || !b) continue;
-    if (Math.abs((b.grams||0)-(a.grams||0)) >= 0.5){
-      diffs.push({
-        idx: i,
-        name: a.name,
-        beforeG: round1(a.grams||0),
-        afterG : round1(b.grams||0),
-        deltaG : round1((b.grams||0)-(a.grams||0))
-      });
-    }
-  }
-  pendingAdjust = { before, after, diffs, type, target: {min,max},
-    sums: { before: sumCarbs(before), after : sumCarbs(after) }
-  };
-  renderAdjustPreview();
-}
-
-function renderAdjustPreview(){
-  if(!pendingAdjust){ showToast('لا يوجد تعديلات'); return; }
-  const { diffs, sums, target } = pendingAdjust;
-  adjustDiffEl.innerHTML = '';
-
-  const head = document.createElement('div');
-  head.className='diff-row';
-  head.innerHTML = `
-    <div><strong>الهدف:</strong> ${target.min}–${target.max} g كارب</div>
-    <div class="fromto">قبل: ${sums.before.carbs} g • GL≈${sums.before.gl} → بعد: ${sums.after.carbs} g • GL≈${sums.after.gl}</div>
+  row.innerHTML = `
+    <input class="name" placeholder="اسم الصنف" value="${pref.name||""}">
+    <select class="measure">
+      <option value="g">جرام</option>
+      <option value="unit"${pref.measure==="unit"?" selected":""}>منزلية</option>
+    </select>
+    <input type="number" class="gPerUnit" step="0.1" min="0" value="${fmt(pref.gPerUnit??0)}" title="عدد الجرامات في الوحدة المنزلية">
+    <input type="number" class="qty" step="0.1" min="0" value="${fmt(pref.qty??0)}">
+    <input type="number" class="grams" step="0.1" min="0" value="${fmt(pref.grams??0)}">
+    <input type="number" class="carb100" step="0.1" min="0" value="${fmt(pref.carb100??0)}" title="كارب لكل 100جرام">
+    <input type="number" class="carbs" step="0.1" min="0" value="${fmt(pref.carbs??0)}">
+    <input type="number" class="gi" step="1" min="0" max="110" value="${(pref.gi??"")}">
+    <input type="text" class="gl" disabled value="${fmt(pref.gl??0)}">
+    <input type="number" class="kcals" step="0.1" min="0" value="${fmt(pref.kcals??0)}">
+    <input type="number" class="prot" step="0.1" min="0" value="${fmt(pref.prot??0)}">
+    <input type="number" class="fat" step="0.1" min="0" value="${fmt(pref.fat??0)}">
+    <button class="del">حذف</button>
   `;
-  adjustDiffEl.appendChild(head);
 
-  if (!diffs.length){
-    const no = document.createElement('div');
-    no.className='diff-row';
-    no.textContent = 'لا تغييرات مطلوبة — ضمن الهدف بالفعل.';
-    adjustDiffEl.appendChild(no);
-  }else{
-    diffs.forEach(d=>{
-      const row = document.createElement('div');
-      row.className='diff-row';
-      const a = pendingAdjust.before[d.idx];
-      const b = pendingAdjust.after[d.idx];
-      const aM = measureOf(a);
-      const bM = measureOf(b);
-      const aQty = (a.unit==='household' && aM) ? roundToStep((a.grams||0)/(aM.grams||1)) : (a.unit==='grams' ? roundToStep(a.grams||0) : null);
-      const bQty = (b.unit==='household' && bM) ? roundToStep((b.grams||0)/(bM.grams||1)) : (b.unit==='grams' ? roundToStep(b.grams||0) : null);
-      const qtyLine = (aQty!=null || bQty!=null)
-        ? `<div class="muted tiny">الكمية: ${aQty!=null?aQty:'—'} → <strong>${bQty!=null?bQty:'—'}</strong></div>`
-        : '';
-      row.innerHTML = `
-        <div>${esc(d.name)}</div>
-        <div class="fromto">
-          الجرامات: ${d.beforeG} g → <strong>${d.afterG} g</strong> (${d.deltaG>0?'+':''}${d.deltaG} g)
-          ${qtyLine}
-        </div>
-      `;
-      adjustDiffEl.appendChild(row);
-    });
-  }
-  adjustModal.classList.remove('hidden');
-}
+  // عناصر
+  const measure = row.querySelector(".measure");
+  const gPerUnit = row.querySelector(".gPerUnit");
+  const qty = row.querySelector(".qty");
+  const grams = row.querySelector(".grams");
+  const carb100 = row.querySelector(".carb100");
+  const carbs = row.querySelector(".carbs");
+  const gi = row.querySelector(".gi");
+  const gl = row.querySelector(".gl");
+  const del = row.querySelector(".del");
 
-function applyAdjustDiff(){
-  if(!pendingAdjust) return;
-  currentItems.forEach((r,i)=>{
-    const newR = pendingAdjust.after[i];
-    if (!newR) return;
-    r.grams = newR.grams;
-    if (r.unit==='grams'){
-      r.qty = roundToStep(r.grams);
-    } else {
-      const m = measureOf(r);
-      if (m) {
-        r.qty = qtyFromGrams(r, r.grams);
-      }
-      // منزلي بلا مقياس: نترك الكمية كما هي والتعديل على الجرامات فقط
+  // ربط أحداث التزامن
+  measure.addEventListener("change", ()=>{
+    if(measure.value==="g"){
+      // في وضع الجرام: اجعل qty = grams (للتيسير) ولا نستخدم gPerUnit
+      qty.value = fmt(grams.value);
+    }else{
+      // في وضع الوحدة المنزلية: حدّث grams اعتمادًا على gPerUnit
+      grams.value = fmt(round1(qty.value * ( +gPerUnit.value || 0 )));
+    }
+    recalcRow(row); recalcSummary();
+  });
+
+  gPerUnit.addEventListener("input", ()=>{
+    if(measure.value==="unit"){
+      grams.value = fmt(round1(qty.value * ( +gPerUnit.value || 0 )));
+      recalcRow(row); recalcSummary();
     }
   });
-  renderItems(); recalcAll(); saveDraft();
-  adjustModal.classList.add('hidden');
-  showToast('تم تطبيق الضبط ✅');
+
+  qty.addEventListener("input", ()=>{
+    qty.value = fmt(round1(clampNonNeg(qty.value)));
+    if(measure.value==="g"){
+      grams.value = fmt(qty.value);
+    }else{
+      grams.value = fmt(round1(qty.value * ( +gPerUnit.value || 0 )));
+    }
+    recalcRow(row); recalcSummary();
+  });
+
+  grams.addEventListener("input", ()=>{
+    grams.value = fmt(round1(clampNonNeg(grams.value)));
+    if(measure.value==="g"){
+      qty.value = fmt(grams.value);
+    }else{
+      const gpu = +gPerUnit.value || 0;
+      qty.value = gpu ? fmt(round1(grams.value / gpu)) : fmt(0);
+    }
+    recalcRow(row); recalcSummary();
+  });
+
+  // الكارب المحسوب من ك/100جم ↔ قابل للتعديل يدويًا
+  carb100.addEventListener("input", ()=>{ recalcRow(row); recalcSummary(); });
+  gi.addEventListener("input", ()=>{ recalcRow(row); recalcSummary(); });
+  carbs.addEventListener("input", ()=>{
+    // لو المستخدم عدّل الكارب يدويًّا، نعيد حساب GL مباشرة من الكارب
+    carbs.value = fmt(round1(clampNonNeg(carbs.value)));
+    const giVal = +gi.value || 0;
+    gl.value = fmt(round1((giVal * (+carbs.value||0))/100));
+    recalcSummary();
+  });
+
+  del.addEventListener("click", ()=>{ row.remove(); recalcSummary(); });
+
+  // حساب أولي
+  recalcRow(row);
+  rowsEl.appendChild(row);
+  recalcSummary();
 }
 
-/* === دوال أخرى موجودة في الملف الأصلي (حفظ draft, Firebase, dose, AI widget ...) === */
+function recalcRow(row){
+  const grams = +row.querySelector(".grams").value || 0;
+  const carb100 = +row.querySelector(".carb100").value || 0;
+  const gi = +row.querySelector(".gi").value || 0;
+  const carbsEl = row.querySelector(".carbs");
+  const glEl = row.querySelector(".gl");
+
+  // احسب كارب السطر من ك/100جم
+  const carbs = round1((carb100 * grams) / 100);
+  if(document.activeElement !== carbsEl){ carbsEl.value = fmt(carbs); }
+
+  // GL
+  const gl = round1((gi * (+carbsEl.value || 0)) / 100);
+  glEl.value = fmt(gl);
+}
+
+function recalcSummary(){
+  let totalCarb = 0, totalGL = 0, giWeightedSum = 0;
+
+  rowsEl.querySelectorAll(".row").forEach(row=>{
+    const carb = +row.querySelector(".carbs").value || 0;
+    const gi = +row.querySelector(".gi").value || 0;
+    const gl = +row.querySelector(".gl").value || 0;
+    totalCarb += carb;
+    totalGL += gl;
+    giWeightedSum += gi * carb;
+  });
+
+  sumCarbsEl.textContent = fmt(totalCarb);
+  sumGLEl.textContent = fmt(totalGL);
+  avgGIEl.textContent = totalCarb > 0 ? fmt(giWeightedSum/totalCarb) : "—";
+}
+
+/* ======= القياسات (نفس اليوم + نفس الوقت) ======= */
+async function tryPrefillMeasuresForDay(){
+  const user = firebase.auth().currentUser || await new Promise(resolve=>{
+    const unsub = firebase.auth().onAuthStateChanged(u=>{unsub();resolve(u)});
+  });
+  if(!user) return;
+
+  const childId = childSel.value;
+  if(!childId) return;
+
+  const ymd = getYMD();
+  const db = firebase.firestore();
+  const col = db.collection(PATHS.measurementsCollection(user.uid, childId));
+
+  // بداية ونهاية اليوم المحدد
+  const start = new Date(dateInput.value);
+  start.setHours(0,0,0,0);
+  const end = new Date(start); end.setHours(23,59,59,999);
+
+  // نفترض هيكل القياس: { value:Number, ts:Timestamp, slot:String }
+  const qs = await col
+    .where("ts",">=", start)
+    .where("ts","<=", end)
+    .get();
+
+  const chosenSlot = slotSel.value;
+  // اختيارات ذكية: قبل/بعد حسب المجموعة
+  const isPre = SLOT_GROUP.PRE.includes(chosenSlot);
+
+  // نبحث أولاً عن قياس بنفس الـ slot تمامًا
+  let exactPre = null, exactPost = null;
+
+  qs.forEach(d=>{
+    const m = d.data();
+    if(!m) return;
+    if(m.slot === chosenSlot){
+      if(isPre) exactPre = m;
+      else exactPost = m;
+    }
+  });
+
+  // لو مفيش مطابق، نختار أقرب قياس من نفس النوع (ق أو ب)
+  if(!exactPre && isPre){
+    exactPre = nearestByType(qs.docs.map(d=>d.data()), "PRE", start);
+  }
+  if(!exactPost && !isPre){
+    exactPost = nearestByType(qs.docs.map(d=>d.data()), "POST", start);
+  }
+
+  // تعبئة الحقول
+  preReading.value = exactPre?.value != null ? fmt(exactPre.value) : "";
+  postReading.value = exactPost?.value != null ? fmt(exactPost.value) : "";
+}
+
+function nearestByType(measures, typePrefix, dayStart){
+  const wanted = measures.filter(m=>{
+    const isPre = (m.slot||"").startsWith("PRE") || m.slot==="SNACK";
+    return typePrefix==="PRE" ? isPre : !isPre;
+  });
+  if(!wanted.length) return null;
+  // أقرب زمنًا لمنتصف اليوم
+  const mid = new Date(dayStart); mid.setHours(12,0,0,0);
+  wanted.sort((a,b)=>Math.abs(a.ts?.toDate?.() - mid) - Math.abs(b.ts?.toDate?.() - mid));
+  return wanted[0] || null;
+}
+
+/* ======= حفظ الوجبة ======= */
+async function saveMeal(){
+  try{
+    saveStatus.textContent = "جارٍ الحفظ...";
+    const user = firebase.auth().currentUser || await new Promise(resolve=>{
+      const unsub = firebase.auth().onAuthStateChanged(u=>{unsub();resolve(u)});
+    });
+    if(!user){ alert("سجّلي الدخول أولًا."); return; }
+
+    const childId = childSel.value;
+    if(!childId){ alert("اختاري الطفل."); return; }
+
+    const ymd = getYMD();
+    const db = firebase.firestore();
+    const col = db.collection(PATHS.mealsCollectionForDate(user.uid, childId, ymd));
+
+    // بيانات العناصر
+    const items = [];
+    rowsEl.querySelectorAll(".row").forEach(row=>{
+      const doc = {
+        name: row.querySelector(".name").value.trim(),
+        measure: row.querySelector(".measure").value,
+        gPerUnit: +row.querySelector(".gPerUnit").value || 0,
+        qty: +row.querySelector(".qty").value || 0,
+        grams: +row.querySelector(".grams").value || 0,
+        carb100: +row.querySelector(".carb100").value || 0,
+        carbs_g: +row.querySelector(".carbs").value || 0,
+        gi: +row.querySelector(".gi").value || null,
+        gl: +row.querySelector(".gl").value || 0,
+        kcals: +row.querySelector(".kcals").value || 0,
+        protein_g: +row.querySelector(".prot").value || 0,
+        fat_g: +row.querySelector(".fat").value || 0,
+        slot: slotSel.value,
+        date: firebase.firestore.Timestamp.fromDate(new Date(dateInput.value))
+      };
+      if(doc.name){ items.push(doc); }
+    });
+
+    // ملخّص
+    const totalCarb = items.reduce((s,i)=>s+(i.carbs_g||0),0);
+    const totalGL = items.reduce((s,i)=>s+(i.gl||0),0);
+    const giWeighted = totalCarb>0 ? items.reduce((s,i)=>s+((i.gi||0)*(i.carbs_g||0)),0)/totalCarb : null;
+
+    // إضافة كل عنصر كمستند مستقل تحت تاريخ اليوم
+    const batch = db.batch();
+    items.forEach(i=>{
+      const ref = col.doc(); batch.set(ref,i);
+    });
+
+    // مستند ملخص لليوم (اختياري مفيد)
+    const summaryRef = db.doc(`parents/${user.uid}/children/${childId}/meals/${ymd}`);
+    batch.set(summaryRef,{
+      _meta:true,
+      date: firebase.firestore.Timestamp.fromDate(new Date(dateInput.value)),
+      slot: slotSel.value,
+      preReading: preReading.value ? +preReading.value : null,
+      postReading: postReading.value ? +postReading.value : null,
+      totalCarb, totalGL, avgGI: giWeighted
+    },{merge:true});
+
+    await batch.commit();
+
+    saveStatus.textContent = "تم الحفظ ✅";
+    setTimeout(()=> saveStatus.textContent = "", 2500);
+  }catch(err){
+    console.error(err);
+    saveStatus.textContent = "خطأ أثناء الحفظ";
+  }
+}
+
+/* ======= أدوات ======= */
+function getYMD(){
+  const d = new Date(dateInput.value);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
