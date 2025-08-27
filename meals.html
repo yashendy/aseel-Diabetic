@@ -4,37 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>الوجبات</title>
-  <link rel="stylesheet" href="css/meals.css?v=5" />
+  <link rel="stylesheet" href="css/meals.css?v=6" />
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
 </head>
 <body>
   <div class="container">
-    <!-- Toast -->
-    <div id="toast" class="toast hidden" role="status" aria-live="polite">
-      <div class="msg"></div>
-    </div>
+    <div id="toast" class="toast hidden"><div class="msg"></div></div>
 
     <!-- رأس -->
     <div class="row between center mb-12">
       <div class="row center gap-8">
         <button id="backBtn" class="secondary">رجوع</button>
-        <h2 class="row center gap-8">وجبات جاهزة
-          <span class="emoji">🧃</span>
-        </h2>
+        <h2 class="row center gap-8">وجبات جاهزة <span class="emoji">🧃</span></h2>
       </div>
       <div class="row center gap-8">
         <button id="saveDraftBtn" class="primary">حفظ كمسودة</button>
-        <div class="dropdown">
-          <button id="moreBtn">أخرى</button>
-          <div class="menu" id="moreMenu" hidden>
-            <button id="exportBtn">تصدير</button>
-            <button id="importBtn">استيراد</button>
-          </div>
-        </div>
       </div>
     </div>
 
-    <!-- بيانات الطفل والوجبة -->
+    <!-- بيانات الطفل -->
     <div class="card">
       <div class="row wrap gap-12">
         <div>
@@ -70,12 +58,12 @@
       </div>
     </div>
 
-    <!-- مكوّنات الوجبة -->
+    <!-- مكوّنات -->
     <div class="card">
       <div class="row between center">
         <h3>مكوّنات الوجبة</h3>
         <div class="row gap-8">
-          <button id="addItemBtn" class="primary">إضافة مكوّن من الفهرس</button>
+          <button id="addItemBtn" class="primary">إضافة مكوّن</button>
           <button id="repeatLastBtn" class="secondary">تكرار آخر وجبة</button>
           <button id="smartAdjustBtn" class="primary">ضبط الهدف</button>
         </div>
@@ -83,85 +71,36 @@
 
       <div class="table mt-12">
         <div class="thead">
-          <div>حذف</div>
-          <div>دهون</div>
-          <div>بروتين</div>
-          <div>سعرات</div>
-          <div>كارب (g)</div>
-          <div>الجرامات</div>
-          <div>المقياس</div>
-          <div>الكمية</div>
-          <div>الوحدة</div>
-          <div>الصنف</div>
+          <div>حذف</div><div>دهون</div><div>بروتين</div><div>سعرات</div>
+          <div>كارب</div><div>الجرامات</div><div>المقياس</div>
+          <div>الكمية</div><div>الوحدة</div><div>الصنف</div>
         </div>
         <div id="itemsBody" class="tbody"></div>
       </div>
 
       <div class="sum-grid mt-12">
-        <div class="sum cells">
-          <div class="muted tiny">الدهون</div>
-          <div id="tFat" class="b">0</div>
-        </div>
-        <div class="sum cells">
-          <div class="muted tiny">البروتين</div>
-          <div id="tProt" class="b">0</div>
-        </div>
-        <div class="sum cells">
-          <div class="muted tiny">السعرات</div>
-          <div id="tCal" class="b">0</div>
-        </div>
-        <div class="sum cells">
-          <div class="muted tiny">الكارب</div>
-          <div id="tCarbs" class="b">0</div>
-        </div>
-        <div class="sum cells">
-          <div class="muted tiny">الجرامات</div>
-          <div id="tGrams" class="b">0</div>
-        </div>
+        <div class="cells"><div class="muted tiny">الدهون</div><div id="tFat" class="b">0</div></div>
+        <div class="cells"><div class="muted tiny">البروتين</div><div id="tProt" class="b">0</div></div>
+        <div class="cells"><div class="muted tiny">السعرات</div><div id="tCal" class="b">0</div></div>
+        <div class="cells"><div class="muted tiny">الكارب</div><div id="tCarbs" class="b">0</div></div>
+        <div class="cells"><div class="muted tiny">الجرامات</div><div id="tGrams" class="b">0</div></div>
       </div>
 
       <div class="mt-12">
-        <div class="muted tiny">ملاحظات على الوجبة</div>
-        <textarea id="mealNotes" rows="2" placeholder="اكتبي ملاحظاتك هنا..."></textarea>
+        <div class="muted tiny">ملاحظات</div>
+        <textarea id="mealNotes" rows="2"></textarea>
       </div>
     </div>
 
-    <!-- معايرة الجرعة -->
-    <div class="card">
-      <h3>معايرة ذكية عن الجرعة</h3>
-      <div class="muted tiny" id="aiContext">—</div>
-      <div class="row gap-8 mt-8 wrap">
-        <div class="cells">
-          <div class="muted tiny">الجرعة المقترحة</div>
-          <div id="suggestedDose" class="b">0</div>
-        </div>
-        <div class="cells">
-          <div class="muted tiny">CR/ISF</div>
-          <div id="doseExplain" class="b">—</div>
-        </div>
-        <div class="cells">
-          <div class="muted tiny">نطاق الجرعة</div>
-          <div id="doseRange" class="b">—</div>
-        </div>
-        <div class="cells">
-          <div class="muted tiny">جرعة مطبّقة</div>
-          <div id="appliedDose" class="b">0</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- نافذة ضبط الهدف -->
-    <div class="modal hidden" id="adjustModal" aria-modal="true" role="dialog">
+    <!-- نافذة ضبط -->
+    <div class="modal hidden" id="adjustModal">
       <div class="modal-card">
         <div class="row between center">
           <h3>ضبط هدف الكارب</h3>
           <button id="closeAdjust" class="icon-btn">✕</button>
         </div>
-        <div class="muted tiny">الهدف المُقترح</div>
-        <div class="muted tiny" id="suggestedTarget"></div>
-
+        <div id="suggestedTarget" class="muted tiny"></div>
         <div id="adjustDiff" class="mt-12"></div>
-
         <div class="row gap-8 mt-12">
           <button id="applyAdjustBtn" class="primary">تطبيق</button>
           <button id="cancelAdjustBtn" class="secondary">إلغاء</button>
@@ -170,44 +109,35 @@
     </div>
   </div>
 
-  <!-- ودجت محادثة الذكاء (خفيف) -->
+  <!-- AI Widget -->
   <div class="ai-widget hidden" id="aiWidget">
     <div class="ai-header">
-      <div>
-        <strong>محادثة ذكية عن الوجبة</strong>
-        <div class="muted tiny" id="aiContext">—</div>
-      </div>
-      <div>
-        <button class="icon-btn" id="aiClose" title="إغلاق">✕</button>
-      </div>
+      <strong>محادثة ذكية</strong>
+      <button class="icon-btn" id="aiClose">✕</button>
     </div>
-    <div class="ai-body">
-      <div id="aiMessages" class="msgs"></div>
-    </div>
+    <div class="ai-body"><div id="aiMessages" class="msgs"></div></div>
     <div class="ai-footer">
-      <input id="aiInput" type="text" placeholder="اكتبي سؤالك هنا..." />
+      <input id="aiInput" type="text" placeholder="سؤالك..." />
       <button id="aiSend" class="primary">إرسال</button>
     </div>
   </div>
 
-  <!-- تحميل Firebase وملحقاتها -->
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <!-- تهيئة مفتاح Gemini وتحميل المكتبة عند وجود المفتاح -->
+  <!-- Gemini -->
   <script>
-    /* تم وضع مفتاحك هنا كما طلبتِ */
     window.GEMINI_API_KEY = "AIzaSyBJOzP2znhOTBeVDdLn7XwMs_KtYn_tMV4";
   </script>
   <script type="module">
-    // تحميل مكتبة Gemini فقط لو فيه مفتاح
     if (window.GEMINI_API_KEY) {
       const { GoogleGenerativeAI } = await import("https://esm.run/@google/generative-ai");
       window.GoogleGenerativeAI = GoogleGenerativeAI;
     }
   </script>
 
-  <!-- سكربت الصفحة -->
-  <script src="js/meals.js?v=5"></script>
+  <!-- Script -->
+  <script src="js/meals.js?v=6"></script>
 </body>
 </html>
