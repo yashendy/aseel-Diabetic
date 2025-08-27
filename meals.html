@@ -1,143 +1,82 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>الوجبات</title>
-  <link rel="stylesheet" href="css/meals.css?v=6" />
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>وجبة اليوم — الكاربات + GI/GL</title>
+  <link rel="stylesheet" href="meals.css" />
+  <!-- Firebase SDKs (لو عندك firebase-config.js يتهيأ فيها) -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+
+  <!-- تهيئة مشروعك -->
+  <script defer src="firebase-config.js"></script>
+  <script defer src="meals.js"></script>
 </head>
 <body>
-  <div class="container">
-    <div id="toast" class="toast hidden"><div class="msg"></div></div>
-
-    <!-- رأس -->
-    <div class="row between center mb-12">
-      <div class="row center gap-8">
-        <button id="backBtn" class="secondary">رجوع</button>
-        <h2 class="row center gap-8">وجبات جاهزة <span class="emoji">🧃</span></h2>
-      </div>
-      <div class="row center gap-8">
-        <button id="saveDraftBtn" class="primary">حفظ كمسودة</button>
-      </div>
+  <header class="topbar">
+    <h1>تسجيل وجبة</h1>
+    <div class="ctx">
+      <label>الطفل:
+        <select id="childSelect"></select>
+      </label>
+      <label>التاريخ:
+        <input id="dateInput" type="date" />
+      </label>
+      <label>وقت القياس:
+        <select id="mealSlot">
+          <option value="PRE_BREAKFAST">ق.الفطار</option>
+          <option value="PRE_LUNCH">ق.الغدا</option>
+          <option value="PRE_DINNER">ق.العشا</option>
+          <option value="POST_BREAKFAST">ب.الفطار</option>
+          <option value="POST_LUNCH">ب.الغدا</option>
+          <option value="POST_DINNER">ب.العشا</option>
+          <option value="SNACK">السناك</option>
+        </select>
+      </label>
     </div>
-
-    <!-- بيانات الطفل -->
-    <div class="card">
-      <div class="row wrap gap-12">
-        <div>
-          <div class="muted tiny">الطفل</div>
-          <div id="childName" class="b"></div>
-          <div id="childMeta" class="muted tiny"></div>
-        </div>
-        <div class="grow"></div>
-        <div>
-          <div class="muted tiny">التاريخ</div>
-          <input id="mealDate" type="date" />
-        </div>
-        <div>
-          <div class="muted tiny">نوع الوجبة</div>
-          <select id="mealType">
-            <option value="breakfast">فطور</option>
-            <option value="lunch">غداء</option>
-            <option value="dinner">عشاء</option>
-            <option value="snack">سناك</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row gap-12 mt-12 wrap">
-        <div>
-          <div class="muted tiny">القراءة قبل</div>
-          <input id="preReading" type="number" step="0.1" />
-        </div>
-        <div>
-          <div class="muted tiny">القراءة بعد</div>
-          <input id="postReading" type="number" step="0.1" />
-        </div>
-      </div>
+    <div class="meas">
+      <label>قياس قبل:
+        <input id="preReading" type="number" step="0.1" placeholder="mmol/L" />
+      </label>
+      <label>قياس بعد:
+        <input id="postReading" type="number" step="0.1" placeholder="mmol/L" />
+      </label>
+      <button id="reloadMeasures" class="ghost">جلب قياسات اليوم</button>
     </div>
+  </header>
 
-    <!-- مكوّنات -->
-    <div class="card">
-      <div class="row between center">
-        <h3>مكوّنات الوجبة</h3>
-        <div class="row gap-8">
-          <button id="addItemBtn" class="primary">إضافة مكوّن</button>
-          <button id="repeatLastBtn" class="secondary">تكرار آخر وجبة</button>
-          <button id="smartAdjustBtn" class="primary">ضبط الهدف</button>
-        </div>
-      </div>
-
-      <div class="table mt-12">
-        <div class="thead">
-          <div>حذف</div><div>دهون</div><div>بروتين</div><div>سعرات</div>
-          <div>كارب</div><div>الجرامات</div><div>المقياس</div>
-          <div>الكمية</div><div>الوحدة</div><div>الصنف</div>
-        </div>
-        <div id="itemsBody" class="tbody"></div>
-      </div>
-
-      <div class="sum-grid mt-12">
-        <div class="cells"><div class="muted tiny">الدهون</div><div id="tFat" class="b">0</div></div>
-        <div class="cells"><div class="muted tiny">البروتين</div><div id="tProt" class="b">0</div></div>
-        <div class="cells"><div class="muted tiny">السعرات</div><div id="tCal" class="b">0</div></div>
-        <div class="cells"><div class="muted tiny">الكارب</div><div id="tCarbs" class="b">0</div></div>
-        <div class="cells"><div class="muted tiny">الجرامات</div><div id="tGrams" class="b">0</div></div>
-      </div>
-
-      <div class="mt-12">
-        <div class="muted tiny">ملاحظات</div>
-        <textarea id="mealNotes" rows="2"></textarea>
-      </div>
+  <main class="card">
+    <div class="tableHead">
+      <div>الصنف</div>
+      <div>وحدة</div>
+      <div>جم/الوحدة</div>
+      <div>الكمية</div>
+      <div>الجرامات</div>
+      <div>كارب/100جم</div>
+      <div>الكارب</div>
+      <div>GI</div>
+      <div>GL</div>
+      <div>سعرات</div>
+      <div>بروتين</div>
+      <div>دهون</div>
+      <div>إجراء</div>
     </div>
+    <div id="rows" class="rows"></div>
 
-    <!-- نافذة ضبط -->
-    <div class="modal hidden" id="adjustModal">
-      <div class="modal-card">
-        <div class="row between center">
-          <h3>ضبط هدف الكارب</h3>
-          <button id="closeAdjust" class="icon-btn">✕</button>
-        </div>
-        <div id="suggestedTarget" class="muted tiny"></div>
-        <div id="adjustDiff" class="mt-12"></div>
-        <div class="row gap-8 mt-12">
-          <button id="applyAdjustBtn" class="primary">تطبيق</button>
-          <button id="cancelAdjustBtn" class="secondary">إلغاء</button>
-        </div>
-      </div>
-    </div>
-  </div>
+    <button id="addRow" class="primary">+ إضافة صنف</button>
 
-  <!-- AI Widget -->
-  <div class="ai-widget hidden" id="aiWidget">
-    <div class="ai-header">
-      <strong>محادثة ذكية</strong>
-      <button class="icon-btn" id="aiClose">✕</button>
-    </div>
-    <div class="ai-body"><div id="aiMessages" class="msgs"></div></div>
-    <div class="ai-footer">
-      <input id="aiInput" type="text" placeholder="سؤالك..." />
-      <button id="aiSend" class="primary">إرسال</button>
-    </div>
-  </div>
+    <section class="summary">
+      <div><strong>إجمالي الكارب:</strong> <span id="sumCarbs">0</span> جم</div>
+      <div><strong>إجمالي GL:</strong> <span id="sumGL">0</span></div>
+      <div><strong>متوسط GI (مرجّح بالكارب):</strong> <span id="avgGI">—</span></div>
+    </section>
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-
-  <!-- Gemini -->
-  <script>
-    window.GEMINI_API_KEY = "AIzaSyBJOzP2znhOTBeVDdLn7XwMs_KtYn_tMV4";
-  </script>
-  <script type="module">
-    if (window.GEMINI_API_KEY) {
-      const { GoogleGenerativeAI } = await import("https://esm.run/@google/generative-ai");
-      window.GoogleGenerativeAI = GoogleGenerativeAI;
-    }
-  </script>
-
-  <!-- Script -->
-  <script src="js/meals.js?v=6"></script>
+    <footer class="actions">
+      <button id="saveMeal" class="success">حفظ الوجبة</button>
+      <span id="saveStatus" class="muted"></span>
+    </footer>
+  </main>
 </body>
 </html>
