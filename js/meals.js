@@ -924,16 +924,22 @@ presetTabs.forEach(b=>{
     renderPresets();
   });
 });
-presetSaveBtn?.addEventListener('click', async ()=>{
-  if (!currentItems.length){ alert('أضف عنصرًا واحدًا على الأقل لحفظه كوجبة جاهزة'); return; }
-  const name = prompt('اسم الوجبة الجاهزة (مثال: فطور بيض وجبن)');
+presetSaveBtn?.addEventListener('click', async () => {
+  if (!currentItems.length) { alert('أضف عنصرًا واحدًا على الأقل لحفظه كوجبة جاهزة'); return; }
+
+  const name = prompt('اسم الوجبة الجاهزة (مثال: فطار بيض وجبن)');
   if (!name) return;
+
+  const user = firebase.auth().currentUser;                  // ولي الأمر الحالي
+  const childId = document.getElementById('childSelect')?.value;  // أو المتغير عندك للطفلة
+  if (!user || !childId) { alert('اختاري الطفل أولًا'); return; }
+
   const payload = {
     name: name.trim(),
-    type: mealTypeEl.value || 'فطار',
-    items: currentItems.map(i=>({
-      itemId:i.itemId, name:i.name, brand:i.brand||null,
-      unit:i.unit, qty:Number(i.qty)||0, measure:i.measure||null,
+    type: mealTypeEl.value || 'فطار',                        // تأكدي من: فطار/غدا/عشا/سناك
+    items: currentItems.map(i => ({
+      itemId: i.itemId, name: i.name, brand: i.brand || null,
+      unit: i.unit, qty: Number(i.qty) || 0, measure: i.measure || null,
       grams: round1(i.grams || 0),
       carbs_g: round1(i.calc.carbs || 0),
       fiber_g: round1(i.calc.fiber || 0),
@@ -942,12 +948,16 @@ presetSaveBtn?.addEventListener('click', async ()=>{
       fat_g: round1(i.calc.fat || 0),
       gi: i.gi || null, gl: round1(i.calc.gl || 0)
     })),
-    createdAt: serverTimestamp()
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
-  await addDoc(collection(db, `parents/${currentUser.uid}/presetMeals`), payload);
-  showToast('✅ تم حفظ الوجبة كوجبة جاهزة');
-  await loadPresets();
+
+  const db = firebase.firestore();
+  await db.collection(`parents/${user.uid}/children/${childId}/mealTemplates`).add(payload);
+
+  showToast('✅ تم حفظ الوجبة كقالب للطفلة');
+  await loadPresets?.(); // أو دالة التحميل عندك
 });
+
 
 async function loadPresets(){
   const ref = collection(db, `parents/${currentUser.uid}/presetMeals`);
