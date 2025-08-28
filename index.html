@@ -12,6 +12,8 @@
     .card{width:min(520px,100%);background:var(--card);border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.06);padding:24px}
     h1{margin:0 0 8px 0;font-size:22px}
     p.muted{color:var(--muted);margin:0 0 20px 0}
+    .brand{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    .brand img{width:40px;height:40px}
     .tabs{display:flex;gap:8px;margin-bottom:16px}
     .tab{flex:1;padding:10px;border:1px solid #e5e7eb;background:#f9fafb;border-radius:10px;cursor:pointer;text-align:center}
     .tab.active{background:#eef2ff;border-color:#c7d2fe;color:#3730a3;font-weight:600}
@@ -31,8 +33,15 @@
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>منصة متابعة سكر الأطفال</h1>
-      <p class="muted">سجّلي الدخول أو أنشئي حساب جديد. يمكنك أيضًا استعادة كلمة المرور.</p>
+
+      <!-- الشعار -->
+      <div class="brand">
+        <img src="img/logo.svg" alt="Logo" onerror="this.remove()">
+        <div>
+          <h1>منصة متابعة سكر الأطفال</h1>
+          <p class="muted">سجّلي الدخول أو أنشئي حساب جديد. يمكنك أيضًا استعادة كلمة المرور.</p>
+        </div>
+      </div>
 
       <!-- تبويبات -->
       <div class="tabs">
