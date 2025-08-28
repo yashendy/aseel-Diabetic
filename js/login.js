@@ -1,6 +1,4 @@
-// js/login.js
-// تسجيل الدخول / إنشاء حساب / استعادة كلمة المرور + إعادة التوجيه حسب الدور (admin / parent)
-
+// js/login.js (نسخة تتحقق من DOM وتمنع أخطاء null)
 import { auth, db } from './firebase-config.js';
 import {
   signInWithEmailAndPassword,
@@ -8,176 +6,164 @@ import {
   sendPasswordResetEmail,
   onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import {
-  doc, getDoc, setDoc, serverTimestamp
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-/* ===== عناصر الواجهة ===== */
-const btnTabLogin    = document.getElementById('btn-tab-login');
-const btnTabRegister = document.getElementById('btn-tab-register');
-const btnTabReset    = document.getElementById('btn-tab-reset');
+window.addEventListener('DOMContentLoaded', () => {
+  // اجلب العناصر بعد جاهزية الـ DOM
+  const btnTabLogin    = document.getElementById('btn-tab-login');
+  const btnTabRegister = document.getElementById('btn-tab-register');
+  const btnTabReset    = document.getElementById('btn-tab-reset');
 
-const emailEl    = document.getElementById('email');
-const passEl     = document.getElementById('password');
-const btnSubmit  = document.getElementById('btnSubmit');
-const msgEl      = document.getElementById('msg'); // <div id="msg"></div> اختياري للرسائل
+  const emailEl   = document.getElementById('email');
+  const passEl    = document.getElementById('password');
+  const btnSubmit = document.getElementById('btnSubmit');
+  const msgEl     = document.getElementById('msg');
 
-/* ===== حالة الوضع الحالي ===== */
-let mode = 'login'; // login | register | reset
+  // لو عناصر أساسية ناقصة، نعرض تحذير واضح بدل ما نكسر
+  function ensure(el, id){
+    if (!el) console.warn(`[login] لم أجد العنصر #${id} — تأكد من الـ HTML.`);
+    return !!el;
+  }
+  ensure(btnSubmit, 'btnSubmit'); // أهم واحد
 
-function setMode(m) {
-  mode = m;
-  // تمييز أزرار التبويب
-  [btnTabLogin, btnTabRegister, btnTabReset].forEach(b => b?.classList.remove('active'));
-  if (m === 'login')    btnTabLogin?.classList.add('active');
-  if (m === 'register') btnTabRegister?.classList.add('active');
-  if (m === 'reset')    btnTabReset?.classList.add('active');
+  /* ===== أدوات واجهة ===== */
+  let mode = 'login';
 
-  // الحقول المطلوبة حسب الوضع
-  if (m === 'reset') {
-    passEl?.setAttribute('disabled', 'disabled');
-    passEl?.classList.add('disabled');
-    btnSubmit.textContent = 'إرسال رابط الاستعادة';
-  } else if (m === 'register') {
-    passEl?.removeAttribute('disabled');
-    passEl?.classList.remove('disabled');
-    btnSubmit.textContent = 'إنشاء حساب';
-  } else {
-    passEl?.removeAttribute('disabled');
-    passEl?.classList.remove('disabled');
-    btnSubmit.textContent = 'دخول';
+  function showMsg(text, type='info') {
+    if (!msgEl) { alert(text); return; }
+    msgEl.textContent = text;
+    msgEl.className = `msg ${type}`;
+  }
+  function clearMsg(){ if(msgEl){ msgEl.textContent=''; msgEl.className='msg'; } }
+  function lockUI(lock=true){
+    if (!btnSubmit) return;
+    if (lock) {
+      btnSubmit.disabled = true;
+      btnSubmit.dataset._old = btnSubmit.textContent || '';
+      btnSubmit.textContent = '…جارٍ المعالجة';
+    } else {
+      btnSubmit.disabled = false;
+      if (btnSubmit.dataset._old) btnSubmit.textContent = btnSubmit.dataset._old;
+    }
   }
 
-  clearMsg();
-}
+  function setMode(m){
+    mode = m;
 
-btnTabLogin?.addEventListener('click',   () => setMode('login'));
-btnTabRegister?.addEventListener('click',() => setMode('register'));
-btnTabReset?.addEventListener('click',   () => setMode('reset'));
+    [btnTabLogin, btnTabRegister, btnTabReset].forEach(b => b?.classList.remove('active'));
+    if (m === 'login')    btnTabLogin?.classList.add('active');
+    if (m === 'register') btnTabRegister?.classList.add('active');
+    if (m === 'reset')    btnTabReset?.classList.add('active');
 
-// بداية افتراضيًا على "تسجيل الدخول"
-setMode('login');
+    // الحقول حسب الوضع
+    if (m === 'reset') {
+      passEl?.setAttribute('disabled', 'disabled');
+      passEl?.classList.add('disabled');
+      if (btnSubmit) btnSubmit.textContent = 'إرسال رابط الاستعادة';
+    } else if (m === 'register') {
+      passEl?.removeAttribute('disabled');
+      passEl?.classList.remove('disabled');
+      if (btnSubmit) btnSubmit.textContent = 'إنشاء حساب';
+    } else {
+      passEl?.removeAttribute('disabled');
+      passEl?.classList.remove('disabled');
+      if (btnSubmit) btnSubmit.textContent = 'دخول';
+    }
 
-/* ===== أدوات مساعدة ===== */
-function showMsg(text, type='info') {
-  if (!msgEl) return alert(text);
-  msgEl.textContent = text;
-  msgEl.className = `msg ${type}`; // .msg.info / .msg.error / .msg.success
-}
-function clearMsg(){ if(msgEl){ msgEl.textContent=''; msgEl.className='msg'; } }
-function lockUI(lock=true){
-  if (lock) {
-    btnSubmit.disabled = true;
-    btnSubmit.dataset._old = btnSubmit.textContent;
-    btnSubmit.textContent = '…جارٍ المعالجة';
-  } else {
-    btnSubmit.disabled = false;
-    if (btnSubmit.dataset._old) btnSubmit.textContent = btnSubmit.dataset._old;
+    clearMsg();
   }
-}
 
-/* ===== توجيه بعد الدخول حسب الدور ===== */
-async function redirectByRole(uid) {
-  try {
-    const uref = doc(db, 'users', uid);
-    const snap = await getDoc(uref);
+  btnTabLogin   ?.addEventListener('click', () => setMode('login'));
+  btnTabRegister?.addEventListener('click', () => setMode('register'));
+  btnTabReset   ?.addEventListener('click', () => setMode('reset'));
 
-    if (snap.exists()) {
-      const role = snap.data().role;
-      if (role === 'admin') {
+  // ابدأ بـ login بعد ما صفحتك بقت جاهزة (هنا زر btnSubmit موجود)
+  setMode('login');
+
+  /* ===== توجيه حسب الدور ===== */
+  async function redirectByRole(uid) {
+    try {
+      const uref = doc(db, 'users', uid);
+      const snap = await getDoc(uref);
+      if (snap.exists() && snap.data().role === 'admin') {
         location.href = 'admin-doctors.html?uid=' + encodeURIComponent(uid);
         return;
       }
-      // ممكن تضيفي أدوار أخرى لاحقًا (doctor …)
+      location.href = 'parent.html?uid=' + encodeURIComponent(uid);
+    } catch {
+      location.href = 'parent.html?uid=' + encodeURIComponent(uid);
     }
-    // الافتراضي: وليّ أمر
-    location.href = 'parent.html?uid=' + encodeURIComponent(uid);
-  } catch (e) {
-    // لو حصلت مشكلة في القراءة، نرجّع للوضع الافتراضي
-    location.href = 'parent.html?uid=' + encodeURIComponent(uid);
-  }
-}
-
-/* ===== إنشاء وثائق أولية للمستخدم الجديد (وليّ أمر) ===== */
-async function ensureInitialParentDocs(uid, email) {
-  // users/{uid} لو مش موجودة، هننشئ role=parent
-  const uref = doc(db, 'users', uid);
-  const usnap = await getDoc(uref);
-  if (!usnap.exists()) {
-    await setDoc(uref, {
-      role: 'parent',
-      email: email || null,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
   }
 
-  // parents/{uid} كمجلد مالك (لو حابة تضيفي حقول أساسية)
-  const pref = doc(db, 'parents', uid);
-  const psnap = await getDoc(pref);
-  if (!psnap.exists()) {
-    await setDoc(pref, {
-      owner: uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+  async function ensureInitialParentDocs(uid, email) {
+    const uref = doc(db, 'users', uid);
+    const usnap = await getDoc(uref);
+    if (!usnap.exists()) {
+      await setDoc(uref, {
+        role: 'parent',
+        email: email || null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    }
+    const pref = doc(db, 'parents', uid);
+    const psnap = await getDoc(pref);
+    if (!psnap.exists()) {
+      await setDoc(pref, {
+        owner: uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    }
   }
-}
 
-/* ===== تنفيذ الإجراء حسب الوضع ===== */
-btnSubmit?.addEventListener('click', async (e) => {
-  e.preventDefault();
-  clearMsg();
+  btnSubmit?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    clearMsg();
 
-  const email = (emailEl?.value || '').trim();
-  const pass  = passEl?.value || '';
+    const email = (emailEl?.value || '').trim();
+    const pass  = passEl?.value || '';
 
-  if (!email) { showMsg('من فضلك أدخل البريد الإلكتروني.', 'error'); return; }
+    if (!email) { showMsg('من فضلك أدخل البريد الإلكتروني.', 'error'); return; }
 
-  try {
-    lockUI(true);
+    try {
+      lockUI(true);
 
-    if (mode === 'login') {
-      if (!pass) { showMsg('أدخل كلمة المرور.', 'error'); lockUI(false); return; }
-      const cred = await signInWithEmailAndPassword(auth, email, pass);
-      await redirectByRole(cred.user.uid);
+      if (mode === 'login') {
+        if (!pass) { showMsg('أدخل كلمة المرور.', 'error'); lockUI(false); return; }
+        const cred = await signInWithEmailAndPassword(auth, email, pass);
+        await redirectByRole(cred.user.uid);
 
-    } else if (mode === 'register') {
-      if (!pass || pass.length < 6) {
-        showMsg('كلمة المرور يجب ألا تقل عن 6 أحرف.', 'error'); lockUI(false); return;
+      } else if (mode === 'register') {
+        if (!pass || pass.length < 6) {
+          showMsg('كلمة المرور يجب ألا تقل عن 6 أحرف.', 'error'); lockUI(false); return;
+        }
+        const cred = await createUserWithEmailAndPassword(auth, email, pass);
+        await ensureInitialParentDocs(cred.user.uid, email);
+        showMsg('تم إنشاء الحساب بنجاح ✅ سيتم تحويلك...', 'success');
+        await redirectByRole(cred.user.uid);
+
+      } else if (mode === 'reset') {
+        await sendPasswordResetEmail(auth, email);
+        showMsg('تم إرسال رابط استعادة كلمة المرور إلى بريدك ✉️', 'success');
+        setMode('login');
       }
-      const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      // إنشاء مستندات أولية للمستخدم الجديد كوليّ أمر
-      await ensureInitialParentDocs(cred.user.uid, email);
-      showMsg('تم إنشاء الحساب بنجاح ✅ سيتم تحويلك...', 'success');
-      await redirectByRole(cred.user.uid);
 
-    } else if (mode === 'reset') {
-      await sendPasswordResetEmail(auth, email);
-      showMsg('تم إرسال رابط استعادة كلمة المرور إلى بريدك ✉️', 'success');
-      setMode('login');
+    } catch (err) {
+      console.error(err);
+      let m = 'حدث خطأ. حاول مجددًا.';
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') m = 'بيانات الدخول غير صحيحة.';
+      if (err.code === 'auth/user-not-found') m = 'لا يوجد مستخدم بهذا البريد.';
+      if (err.code === 'auth/email-already-in-use') m = 'هذا البريد مستخدم بالفعل.';
+      if (err.code === 'auth/invalid-email') m = 'بريد إلكتروني غير صالح.';
+      if (err.code === 'permission-denied') m = 'لا توجد صلاحية كافية. تواصلي مع الأدمن.';
+      showMsg(m, 'error');
+    } finally {
+      lockUI(false);
     }
+  });
 
-  } catch (err) {
-    console.error(err);
-    // رسائل عربية بسيطة للأخطاء الشائعة
-    let m = 'حدث خطأ. حاول مجددًا.';
-    if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') m = 'بيانات الدخول غير صحيحة.';
-    if (err.code === 'auth/user-not-found') m = 'لا يوجد مستخدم بهذا البريد.';
-    if (err.code === 'auth/email-already-in-use') m = 'هذا البريد مستخدم بالفعل.';
-    if (err.code === 'auth/invalid-email') m = 'بريد إلكتروني غير صالح.';
-    if (err.code === 'permission-denied') m = 'لا توجد صلاحية كافية. تواصلي مع الأدمن.';
-    showMsg(m, 'error');
-
-  } finally {
-    lockUI(false);
-  }
-});
-
-/* ===== لو المستخدم داخل بالفعل وجاهز ===== */
-onAuthStateChanged(auth, async (u) => {
-  if (u) {
-    // في حالة رجع للصفحة وهو مسجّل مسبقًا
-    await redirectByRole(u.uid);
-  }
+  onAuthStateChanged(auth, async (u) => {
+    if (u) await redirectByRole(u.uid);
+  });
 });
