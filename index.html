@@ -3,59 +3,54 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>الدخول — منصّة متابعة سكر الأطفال</title>
-  <link rel="icon" href="data:,">
+  <title>الدخول — منصة متابعة سكر الأطفال</title>
+  <link rel="icon" href="favicon.ico">
   <style>
-    :root{--bg:#f6f8fb;--card:#fff;--text:#1f2937;--muted:#6b7280;--brand:#4f46e5;--brand-2:#6366f1;--danger:#dc2626}
-    html,body{margin:0;height:100%;font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text)}
-    .wrap{min-height:100%;display:grid;place-items:center;padding:24px}
-    .card{width:min(420px,92vw);background:var(--card);border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.06);padding:24px}
-    .logo{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:10px}
-    .logo img{width:64px;height:64px;object-fit:contain}
-    h1{font-size:20px;margin:0 0 6px}
-    p.muted{margin:0 0 18px;color:var(--muted);font-size:14px}
-    label{display:block;margin:10px 0 6px;font-size:14px}
-    input{width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-size:15px}
-    .actions{margin-top:16px;display:flex;gap:10px;align-items:center}
-    .btn{padding:12px 14px;border-radius:10px;border:0;background:#e5e7eb;color:#111;cursor:pointer}
-    .btn.primary{background:var(--brand);color:#fff}
-    .btn.primary:disabled{opacity:.6;cursor:not-allowed}
-    .links{margin-top:12px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
-    .links a{color:var(--brand-2);text-decoration:none}
-    #msg{margin-top:10px;font-size:14px}
-    .ok{color:#047857}.err{color:var(--danger)}
+    body{font-family:Segoe UI, Tahoma, Arial; background:#f7f8fa; display:grid; place-items:center; min-height:100vh; margin:0;}
+    .wrap{width: min(92vw, 380px); background:#fff; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,.08); padding:22px 22px 26px;}
+    .logo{display:flex; align-items:center; gap:10px; margin-bottom:14px}
+    .logo img{width:36px; height:36px}
+    h1{font-size:20px; margin:0}
+    .muted{color:#6b7280; font-size:13px; margin:4px 0 16px}
+    label{display:block; margin:14px 2px 6px; font-weight:600; font-size:13px}
+    .input{width:100%; padding:12px 12px; border-radius:10px; border:1px solid #e5e7eb; outline:none; font-size:14px}
+    .btn{width:100%; margin-top:18px; padding:12px; border-radius:10px; border:0; background:#4f46e5; color:#fff; font-weight:700; cursor:pointer}
+    .btn:disabled{opacity:.5; cursor:not-allowed}
+    .msg{margin-top:10px; font-size:13px; padding:10px 12px; border-radius:10px; display:none}
+    .msg.info{display:block; background:#eef2ff; color:#3730a3}
+    .msg.warn{display:block; background:#fff7ed; color:#7c2d12}
+    .msg.error{display:block; background:#fee2e2; color:#991b1b}
+    .links{display:flex; justify-content:space-between; margin-top:12px; font-size:13px}
+    a{color:#2563eb; text-decoration:none}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <div class="logo">
-        <img src="logo.png" alt="شعار" onerror="this.style.display='none'">
-        <h1>منصّة متابعة سكر الأطفال</h1>
-      </div>
+    <div class="logo">
+      <img src="logo.png" alt="">
+      <h1>منصة متابعة سكر الأطفال</h1>
+    </div>
+    <p class="muted">سجّل دخولك بحسابك. لو نسيت كلمة المرور تقدر تستعيدها من الرابط بالأسفل.</p>
 
-      <p class="muted">سجِّل دخولك بحسابك. يمكنك إنشاء حساب جديد أو استعادة كلمة المرور من الروابط أدناه.</p>
+    <form id="formLogin">
+      <label for="email">البريد الإلكتروني</label>
+      <input id="email" type="email" class="input" placeholder="example@mail.com" required>
 
-      <form id="loginForm" novalidate>
-        <label for="login-email">البريد الإلكتروني</label>
-        <input id="login-email" type="email" placeholder="example@mail.com" required />
+      <label for="password">كلمة المرور</label>
+      <input id="password" type="password" class="input" required>
 
-        <label for="login-password">كلمة المرور</label>
-        <input id="login-password" type="password" placeholder="••••••••" required />
+      <button id="btnSubmit" class="btn" type="submit">دخول</button>
 
-        <div class="actions">
-          <button class="btn primary" id="btnLogin" type="submit">دخول</button>
-          <span id="msg"></span>
-        </div>
-      </form>
+      <div id="msg" class="msg info"></div>
 
       <div class="links">
         <a href="register.html">إنشاء حساب جديد</a>
         <a href="forgot.html">نسيت كلمة المرور؟</a>
       </div>
-    </div>
+    </form>
   </div>
 
+  <!-- سكربت الدخول -->
   <script type="module" src="js/login.js"></script>
 </body>
 </html>
