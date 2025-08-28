@@ -1,49 +1,109 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>منصة أسيل — تسجيل الدخول</title>
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/auth.css?v=1" />
+  <title>تسجيل الدخول</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root{--bg:#f7fafc;--card:#fff;--ink:#1f2937;--muted:#6b7280;--pri:#6366f1}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,Arial,sans-serif}
+    .wrap{min-height:100dvh;display:grid;place-items:center;padding:24px}
+    .card{width:min(520px,100%);background:var(--card);border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.06);padding:24px}
+    h1{margin:0 0 8px 0;font-size:22px}
+    p.muted{color:var(--muted);margin:0 0 20px 0}
+    .tabs{display:flex;gap:8px;margin-bottom:16px}
+    .tab{flex:1;padding:10px;border:1px solid #e5e7eb;background:#f9fafb;border-radius:10px;cursor:pointer;text-align:center}
+    .tab.active{background:#eef2ff;border-color:#c7d2fe;color:#3730a3;font-weight:600}
+    form{display:grid;gap:12px}
+    label{font-size:13px}
+    input,select{width:100%;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;outline:none}
+    .row{display:grid;gap:12px}
+    .row.two{grid-template-columns:1fr 1fr}
+    .actions{display:flex;gap:10px}
+    .btn{padding:10px 14px;border-radius:10px;border:0;cursor:pointer}
+    .btn.primary{background:var(--pri);color:#fff}
+    .btn.ghost{background:#f3f4f6}
+    .hint{font-size:12px;color:var(--muted)}
+    .hidden{display:none}
+  </style>
 </head>
-<body class="auth-body">
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>منصة متابعة سكر الأطفال</h1>
+      <p class="muted">سجّلي الدخول أو أنشئي حساب جديد. يمكنك أيضًا استعادة كلمة المرور.</p>
 
-  <main class="auth-card">
-    <div class="brand">
-      <img class="logo" src="images/logo.png" alt="منصة أسيل" />
-      <h1>منصة أسيل</h1>
-      <p class="sub">لمتابعة سكر الأطفال</p>
-    </div>
-
-    <div class="title-row">
-      <b>تسجيل الدخول</b>
-    </div>
-
-    <form id="loginForm" class="form">
-      <div class="field">
-        <input type="email" id="loginEmail" required autocomplete="username" placeholder="البريد الإلكتروني" />
+      <!-- تبويبات -->
+      <div class="tabs">
+        <button class="tab active" data-go="login">تسجيل الدخول</button>
+        <button class="tab" data-go="register">إنشاء حساب</button>
+        <button class="tab" data-go="reset">نسيت كلمة المرور</button>
       </div>
-      <div class="field">
-        <input type="password" id="loginPassword" required autocomplete="current-password" placeholder="كلمة المرور" />
-      </div>
-      <button class="btn primary w100" type="submit">دخول</button>
-    </form>
 
-    <div class="links" style="margin-top:12px">
-      <a href="register.html">ما عندكيش حساب؟ <b>سجّلي الآن</b></a>
-      <span>•</span>
-      <a href="forgot.html">نسيت كلمة السر؟</a>
+      <!-- نموذج الدخول -->
+      <form id="login-form">
+        <div class="row">
+          <div>
+            <label>البريد الإلكتروني</label>
+            <input id="login-email" type="email" required />
+          </div>
+          <div>
+            <label>كلمة المرور</label>
+            <input id="login-password" type="password" required />
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="submit">دخول</button>
+          <button class="btn ghost" type="button" data-go="reset">هل نسيتِ كلمة المرور؟</button>
+        </div>
+      </form>
+
+      <!-- نموذج التسجيل -->
+      <form id="register-form" class="hidden">
+        <div class="row two">
+          <div>
+            <label>الاسم</label>
+            <input id="register-name" required />
+          </div>
+          <div>
+            <label>البريد الإلكتروني</label>
+            <input id="register-email" type="email" required />
+          </div>
+        </div>
+        <div class="row two">
+          <div>
+            <label>كلمة المرور</label>
+            <input id="register-password" type="password" minlength="6" required />
+          </div>
+          <div>
+            <label>تأكيد كلمة المرور</label>
+            <input id="register-confirm" type="password" minlength="6" required />
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="submit">إنشاء الحساب</button>
+          <button class="btn ghost" type="button" data-go="login">عندي حساب بالفعل</button>
+        </div>
+        <div class="hint">بإنشائك حسابًا فأنتِ توافقين على سياسات الخصوصية.</div>
+      </form>
+
+      <!-- نموذج نسيان كلمة المرور -->
+      <form id="reset-form" class="hidden">
+        <div class="row">
+          <div>
+            <label>أدخلي بريدك لاستعادة كلمة المرور</label>
+            <input id="reset-email" type="email" required />
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="submit">إرسال رابط إعادة التعيين</button>
+          <button class="btn ghost" type="button" data-go="login">رجوع للدخول</button>
+        </div>
+      </form>
     </div>
-  </main>
+  </div>
 
-  <div id="toast" class="toast hidden"></div>
-
-  <!-- Firebase compat -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=2"></script>
-  <script src="js/auth.js?v=1"></script>
+  <script type="module" src="js/login.js"></script>
 </body>
 </html>
