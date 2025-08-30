@@ -1,50 +1,34 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>إدارة الأصناف</title>
-  <link rel="stylesheet" href="css/food-items.css" />
   <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/food-items.css">
 </head>
 <body>
-
-  <header class="topbar">
-    <div class="left">
+  <div class="page">
+    <header class="topbar">
       <button class="btn ghost" onclick="history.back()">⬅ رجوع</button>
-      <h1>إدارة الأصناف 🍎</h1>
-      <div class="meta" id="pathMeta">سيتم حفظ الأصناف على مكتبة الأدمن (عامّة القراءة)</div>
-    </div>
-    <div class="right">
-      <button id="btnReload" class="btn">إعادة التحميل</button>
-    </div>
-  </header>
+      <h1>🍎 إدارة الأصناف</h1>
+      <small class="muted">سيتم حفظ الأصناف على مكتبة الأدمن (عامّة القراءة)</small>
+    </header>
 
-  <main class="page">
-
-    <!-- فورم إضافة/تعديل صنف -->
+    <!-- النموذج -->
     <section class="card">
-      <header class="card__head">
-        <h2>إضافة/تعديل صنف</h2>
-      </header>
-
-      <form id="itemForm" class="form">
+      <h2>إضافة صنف</h2>
+      <form id="itemForm">
         <input type="hidden" id="itemId"/>
 
-        <div class="row two">
-          <div>
-            <label>الاسم <span class="req">*</span></label>
-            <input id="name" class="input" required placeholder="مثال: أرز بسمتي أبيض" />
-          </div>
-          <div>
-            <label>العلامة التجارية</label>
-            <input id="brand" class="input" placeholder="اختياري: شركة/براند" />
-          </div>
+        <div class="row">
+          <label>الاسم<span class="req">*</span></label>
+          <input id="name" class="input" required />
         </div>
 
         <div class="row two">
           <div>
-            <label>التصنيف <span class="req">*</span></label>
+            <label>التصنيف<span class="req">*</span></label>
             <select id="category" class="input" required>
               <option value="">— اختَر —</option>
               <option>نشويات</option>
@@ -53,20 +37,21 @@
               <option>خضروات</option>
               <option>لحوم</option>
               <option>دهون</option>
-              <option>أخرى</option>
+              <option>مخبوزات</option>
+              <option>حلويات</option>
             </select>
           </div>
           <div>
-            <label>وسوم (افصلي بفواصل أو هاشتاج #)</label>
-            <input id="tags" class="input" placeholder="#أرز, #فطور, سريع" />
+            <label>العلامة التجارية</label>
+            <input id="brand" class="input"/>
           </div>
         </div>
 
         <fieldset class="group">
-          <legend>القيم لكل 100g</legend>
-          <div class="row three">
+          <legend>القيم لكل 100 جرام</legend>
+          <div class="row four">
             <div>
-              <label>كارب (g) <span class="req">*</span></label>
+              <label>كارب (g)<span class="req">*</span></label>
               <input id="carb100" type="number" step="0.1" min="0" class="input" required />
             </div>
             <div>
@@ -77,93 +62,81 @@
               <label>دهون (g)</label>
               <input id="fat100" type="number" step="0.1" min="0" class="input" />
             </div>
+            <div>
+              <label>ألياف (g)</label>
+              <input id="fiber100" type="number" step="0.1" min="0" class="input" />
+            </div>
           </div>
-
-          <div class="row three">
+          <div class="row two">
             <div>
-              <label>السعرات (kcal)</label>
-              <input id="kcal100" type="number" step="1" min="0" class="input" placeholder="يُحسب تلقائيًا لو تركته فارغًا"/>
+              <label>السعرات (kcal) <small>(تحسب تلقائيًا إذا تُركت فارغة)</small></label>
+              <input id="kcal100" type="number" step="1" min="0" class="input" />
             </div>
             <div>
-              <label>GI (اختياري 0-110)</label>
-              <input id="gi" type="number" step="1" min="0" max="110" class="input" placeholder="مثال: 70"/>
-            </div>
-            <div>
-              <label>المصدر</label>
-              <input id="source" class="input" placeholder="جدول/مرجع/تقديري"/>
+              <label>GI (اختياري 0–110)</label>
+              <input id="gi" type="number" step="1" min="0" max="110" class="input" value="0" />
             </div>
           </div>
         </fieldset>
+
+        <div class="row">
+          <label>المصدر</label>
+          <input id="source" class="input" placeholder="مثال: USDA FDC / جدول جامعة سيتى / تقديري"/>
+        </div>
 
         <fieldset class="group">
           <legend>مقادير بيتية (منزلية)</legend>
-
-          <div id="unitsList" class="units">
-            <span class="meta">لا توجد مقادير مضافة.</span>
-          </div>
-
-          <div class="row two">
+          <div id="unitsList" class="units meta">لا توجد مقادير مضافة.</div>
+          <div class="row three">
             <input id="uName" class="input" placeholder="اسم المقدار (كوب/معلقة/حبة…)" />
-            <input id="uGrams" class="input" type="number" step="1" min="1" placeholder="الجرام المكافئ (>=1)" />
+            <input id="uGrams" type="number" step="1" min="1" class="input" placeholder="الجرام المكافئ" />
+            <button id="btnAddUnit" type="button" class="btn">+ إضافة مقدار</button>
           </div>
-          <button id="btnAddUnit" type="button" class="btn">+ إضافة مقدار</button>
         </fieldset>
 
-        <div class="row two">
-          <div>
-            <label>رابط صورة (اختياري)</label>
-            <input id="imageUrl" class="input" placeholder="https://…" />
-          </div>
-          <div class="hint">لو تركت الصورة فارغة، هتتولد تلقائيًا من اسم الصنف</div>
+        <div class="row">
+          <label>رابط صورة (اختياري)</label>
+          <input id="imageUrl" class="input" placeholder="https://…"/>
+        </div>
+
+        <div class="row">
+          <label>وسوم (افصل بفاصلة أو #)</label>
+          <input id="tags" class="input" placeholder="#أرز, #مخبوزات, سريع"/>
         </div>
 
         <footer class="form__actions">
-          <button type="submit" class="btn primary" id="btnSave">💾 حفظ الصنف</button>
-          <button type="button" class="btn ghost" id="btnReset">تفريغ النموذج</button>
-          <button type="button" class="btn danger" id="btnDelete" disabled>حذف الصنف</button>
+          <button id="btnSave" type="submit" class="btn primary">💾 حفظ الصنف</button>
+          <button id="btnReset" type="button" class="btn ghost">تفريغ النموذج</button>
+          <button id="btnDelete" type="button" class="btn danger">حذف الصنف</button>
         </footer>
       </form>
     </section>
 
-    <!-- فلاتر و جدول -->
+    <!-- شبكة الأصناف -->
     <section class="card">
-      <header class="card__head">
-        <h2>الأصناف</h2>
-      </header>
-
-      <div class="filters">
+      <h2>الأصناف</h2>
+      <div class="filters row three">
         <select id="fCat" class="input">
           <option value="">كل التصنيفات</option>
-          <option>نشويات</option>
-          <option>حليب</option>
-          <option>فاكهة</option>
-          <option>خضروات</option>
-          <option>لحوم</option>
-          <option>دهون</option>
-          <option>أخرى</option>
+          <option>نشويات</option><option>حليب</option><option>فاكهة</option>
+          <option>خضروات</option><option>لحوم</option><option>دهون</option>
+          <option>مخبوزات</option><option>حلويات</option>
         </select>
-
-        <input id="q" class="input" placeholder="بحث بالاسم أو #تاج…"/>
-        <button id="btnClear" class="btn ghost">مسح الفلاتر</button>
+        <select id="fPhoto" class="input">
+          <option value="">الصور: الكل</option>
+          <option value="with">فقط يوجد صورة</option>
+          <option value="without">فقط بلا صورة</option>
+        </select>
+        <input id="q" class="input" placeholder="بحث بالاسم أو بالهاشتاج (#)"/>
       </div>
 
-      <!-- جدول العرض -->
-      <div id="grid" class="grid">
-        <div class="meta">جارِ التحميل…</div>
-      </div>
+      <div id="grid" class="grid">جارِ التحميل…</div>
     </section>
+  </div>
 
-    <!-- آخر أصناف تم تعديلها -->
-    <section class="card">
-      <header class="card__head"><h3>أحدث الأصناف (آخر 10)</h3></header>
-      <div id="recent" class="meta">—</div>
-    </section>
-
-  </main>
-
-  <div id="snack" class="snack" hidden>
+  <div id="snack" hidden class="snack">
     <span id="snackText"></span>
-    <button id="snackUndo" class="link">تراجع</button>
+    <button id="snackUndo" class="btn ghost">تراجع</button>
   </div>
 
   <script type="module" src="js/food-items.js"></script>
