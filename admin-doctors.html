@@ -1,45 +1,40 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>إدارة أكواد الأطباء</title>
-  <link rel="stylesheet" href="css/admin-doctors.css?v=1" />
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة التحكم - الأدمن</title>
+  <link rel="stylesheet" href="css/dashboard.css">
+  <link rel="icon" href="data:,">
 </head>
 <body>
   <div class="container">
-    <header class="card head">
-      <div class="left">
-        <h1>⚙️ إدارة أكواد الأطباء</h1>
-        <p class="muted">أنشئ أو حدّث كود الطبيب لمشاركة الأطفال بسهولة.</p>
-      </div>
-      <div class="right">
-        <a class="btn" href="parent.html">⬅ لوحة وليّ الأمر</a>
-        <a class="btn" href="doctor-dashboard.html">🩺 لوحة الطبيب</a>
-      </div>
+    <header class="topbar">
+      <h1>👨‍⚕️ لوحة التحكم - الأدمن</h1>
+      <button onclick="logout()" class="btn danger">🚪 تسجيل خروج</button>
     </header>
 
-    <section class="card tools">
-      <div class="field">
-        <label>بحث</label>
-        <input id="search" placeholder="الاسم أو الإيميل…" />
-      </div>
-      <div class="stat">
-        <span id="count">—</span>
-      </div>
-    </section>
+    <section class="cards">
+      <a class="card" href="food-items.html">
+        <div>📘</div>
+        <h3>مكتبة الأصناف</h3>
+        <p>إدارة وإضافة وتعديل أصناف الطعام</p>
+      </a>
 
-    <section class="card">
-      <div id="grid" class="grid"></div>
-      <div id="empty" class="empty hidden">لا يوجد أطباء.</div>
+      <a class="card" href="reports.html">
+        <div>📄</div>
+        <h3>التقارير</h3>
+        <p>عرض وتحليل بيانات القياسات</p>
+      </a>
+
+      <a class="card" href="visits.html">
+        <div>🩺</div>
+        <h3>الزيارات الطبية</h3>
+        <p>إدارة ومراجعة الزيارات</p>
+      </a>
     </section>
   </div>
 
-  <div id="toast" class="toast hidden"></div>
-  <div id="loader" class="loader hidden">جارٍ التحميل…</div>
-
-  <script type="module" src="js/firebase-config.js"></script>
-  <script type="module" src="js/admin-doctors.js?v=1"></script>
+  <script type="module" src="js/admin-doctors.js"></script>
 </body>
 </html>
