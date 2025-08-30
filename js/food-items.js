@@ -1,13 +1,12 @@
-// js/food-items.js — Admin Catalog (globalFoodItems)
+// js/food-items.js — Admin Catalog (root: foodItems)
 // متوافق مع Firebase v12 (CDN)
-// يحوّل الصفحة لإدارة الأصناف مركزياً بواسطة الأدمن فقط
 
 import { auth, db } from './firebase-config.js';
 import {
   collection, addDoc, updateDoc, deleteDoc, getDocs, doc, query, orderBy,
   serverTimestamp, setDoc, getDoc
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* --- DOM --- */
 const grid = document.getElementById('grid');
@@ -73,27 +72,7 @@ const showError = (msg, retryFn)=> setGrid(`
 `);
 function attachRetry(fn){ document.getElementById('__retry')?.addEventListener('click', fn); }
 
-/* --- Drawer helpers --- */
-function openDrawer(){ drawer.classList.add('open'); }
-function closeDrawer(){ drawer.classList.remove('open'); resetForm(); }
-function resetForm(){
-  itemId.value=''; formTitle.textContent='إضافة صنف';
-  nameEl.value=''; brandEl.value=''; categoryEl.value='';
-  carb100El.value=''; prot100El.value=''; fat100El.value=''; kcal100El.value='';
-  UNITS=[]; renderUnits(); imageUrlEl.value=''; tagsEl.value=''; notesEl.value='';
-  sourceEl.value='manual'; metaText.textContent='—';
-}
-function renderUnits(){
-  unitsList.innerHTML = UNITS.length? '' : '<span class="meta">لا توجد مقادير مضافة.</span>';
-  UNITS.forEach((u,i)=>{
-    const el=document.createElement('span');
-    el.className='unit';
-    el.innerHTML=`<strong>${esc(u.name)}</strong> = <span>${esc(u.grams)} g</span> <span class="x" data-i="${i}">✖</span>`;
-    unitsList.appendChild(el);
-  });
-}
-
-/* --- Auto image (SVG) --- */
+/* --- صورة تلقائية (SVG) --- */
 function autoImageFor(name='صنف'){
   const hue=(Array.from(name).reduce((a,c)=>a+c.charCodeAt(0),0)%360);
   const bg=`hsl(${hue} 80% 90%)`, fg=`hsl(${hue} 60% 40%)`, ch=esc(name[0]||'ص');
@@ -106,19 +85,20 @@ function autoImageFor(name='صنف'){
   );
 }
 
-/* --- Auth + Admin-guard + Load --- */
+/* --- تحقق الدور: أدمن فقط --- */
 async function ensureAdmin(u){
   const snap = await getDoc(doc(db, 'users', u.uid));
   const role = snap.exists()? (snap.data()?.role||'') : '';
   if(role !== 'admin'){
     alert('هذه الصفحة مخصّصة للمسؤول فقط.');
-    // بدّلي المسار لصفحة ولي الأمر عندك
+    // بدّلي لاسم صفحة وليّ الأمر عندك
     location.href = 'parent.html';
     return false;
   }
   return true;
 }
 
+/* --- Auth + Load --- */
 async function safeLoadItems(){
   try{ await loadItems(); }
   catch(err){ console.error('[catalog] load error:', err); showError(err.message || 'تحقق من الاتصال والصلاحيات.', safeLoadItems); attachRetry(safeLoadItems); }
@@ -134,13 +114,13 @@ onAuthStateChanged(auth, async (user)=>{
 
 async function loadItems(){
   showLoading();
-  const ref = collection(db, 'globalFoodItems');
+  const ref = collection(db, 'foodItems'); // ← جذر موحد
   const snap = await getDocs(query(ref, orderBy('name')));
   ITEMS = snap.docs.map(d=> ({ id:d.id, ...d.data() }));
   renderGrid();
 }
 
-/* --- Filters + Render grid --- */
+/* --- فلاتر + رندر الشبكة --- */
 [qEl,fCat,fSource,fPhoto,fSort].forEach(el=> el?.addEventListener('input', renderGrid));
 btnClear?.addEventListener('click', ()=>{ if(qEl) qEl.value=''; fCat.value=''; fSource.value=''; fPhoto.value=''; fSort.value='name_asc'; renderGrid(); });
 
@@ -204,13 +184,12 @@ function renderGrid(){
       <div class="meta">${esc((it.tags||[]).join(', '))}</div>
     `;
 
-    // أحداث
     card.querySelector('.qEdit').addEventListener('click', ()=> openEdit(it));
     card.querySelector('.qCopy').addEventListener('click', ()=> openCopy(it));
     card.querySelector('.qDel').addEventListener('click', async ()=>{
       if(!confirm(`حذف الصنف «${it.name}»؟`)) return;
       lastDeleted={...it};
-      await deleteDoc(doc(db, `globalFoodItems/${it.id}`));
+      await deleteDoc(doc(db, `foodItems/${it.id}`));
       await safeLoadItems();
       showSnack(`تم حذف «${it.name}»`);
     });
@@ -226,9 +205,9 @@ snackUndo?.addEventListener('click', async ()=>{
   if(!lastDeleted) return;
   const data={...lastDeleted}; lastDeleted=null;
   try{
-    await setDoc(doc(db, `globalFoodItems/${data.id}`), {...data, updatedAt: serverTimestamp()});
+    await setDoc(doc(db, `foodItems/${data.id}`), {...data, updatedAt: serverTimestamp()});
   }catch{
-    await addDoc(collection(db, `globalFoodItems`), {...data, id: undefined, createdAt: serverTimestamp(), updatedAt: serverTimestamp()});
+    await addDoc(collection(db, `foodItems`), {...data, id: undefined, createdAt: serverTimestamp(), updatedAt: serverTimestamp()});
   }
   await safeLoadItems();
   showSnack('تم التراجع عن الحذف');
@@ -265,10 +244,10 @@ form?.addEventListener('submit', async (e)=>{
   };
   try{
     if(itemId.value){
-      await updateDoc(doc(db, `globalFoodItems/${itemId.value}`), payload);
+      await updateDoc(doc(db, `foodItems/${itemId.value}`), payload);
       alert('تم التحديث بنجاح');
     }else{
-      await addDoc(collection(db, `globalFoodItems`), {...payload, createdAt:serverTimestamp()});
+      await addDoc(collection(db, `foodItems`), {...payload, createdAt:serverTimestamp()});
       alert('تمت الإضافة بنجاح');
     }
     closeDrawer(); await safeLoadItems();
