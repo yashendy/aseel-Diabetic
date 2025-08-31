@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>لوحة الأدمن</title>
+  <link rel="stylesheet" href="css/meals.css" />
+  <style>
+    .tabs{display:flex;gap:8px;margin:8px 0}
+    .tabs .tab{background:#eef3ff;border:1px solid #d8e3ff;border-radius:999px;padding:6px 10px;cursor:pointer}
+    .tabs .active{background:#d9e6ff}
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+    .muted{color:#667}
+    .meal-card{border:1px solid #e6eef7;border-radius:12px;padding:10px;margin:8px 0}
+    .meal-card .actions{display:flex;gap:8px;margin-top:6px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h2>لوحة الأدمن</h2>
+      <div class="tabs">
+        <button class="tab active" data-tab="pending">طلبات دكاترة</button>
+        <button class="tab" data-tab="assign">ربط دكتور بطفل</button>
+      </div>
+    </div>
+
+    <!-- تبويب: موافقة الدكاترة -->
+    <section id="tab-pending" class="card">
+      <h3>طلبات دكاترة قيد المراجعة</h3>
+      <div id="pendingList"></div>
+      <div id="pendingEmpty" class="muted" style="display:none">لا توجد طلبات.</div>
+    </section>
+
+    <!-- تبويب: الربط + توليد كود -->
+    <section id="tab-assign" class="card" style="display:none">
+      <h3>ربط دكتور بطفل</h3>
+
+      <div class="form-grid">
+        <div class="field">
+          <label>وليّ الأمر</label>
+          <select id="parentSel"></select>
+        </div>
+        <div class="field">
+          <label>الطفل</label>
+          <select id="childSel"></select>
+        </div>
+        <div class="field">
+          <label>الدكتور</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="doctorSel"></select>
+            <button id="genCodeBtn" type="button">توليد كود</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="codeBox" class="muted" style="display:none;margin-top:10px">
+        <div>الكود: <b id="theCode"></b></div>
+        <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">
+          <button id="copyCodeBtn" type="button" class="secondary">نسخ</button>
+          <a id="waLink" class="secondary" target="_blank">واتساب</a>
+          <a id="mailLink" class="secondary" target="_blank">بريد</a>
+          <img id="qrImg" alt="QR" style="height:48px;border:1px solid #eee;border-radius:6px"/>
+        </div>
+      </div>
+
+      <div class="top-actions" style="margin-top:10px">
+        <button id="assignBtn">حفظ الربط وتفعيل المشاركة</button>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>
