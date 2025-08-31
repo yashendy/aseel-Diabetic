@@ -3,105 +3,81 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تسجيل حساب — منصّة متابعة سكر الأطفال</title>
+  <title>إنشاء حساب — منصّة متابعة سكر الأطفال</title>
   <link rel="icon" href="data:,">
   <style>
     :root{--bg:#f6f8fb;--card:#fff;--text:#1f2937;--muted:#6b7280;--brand:#4f46e5;--danger:#dc2626}
     body{margin:0;background:var(--bg);font-family:"Segoe UI",Tahoma,Arial,sans-serif;color:var(--text)}
     .wrap{min-height:100vh;display:grid;place-items:center;padding:24px}
-    .card{width:min(460px,92vw);background:#fff;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.06);padding:24px}
+    .card{width:min(520px,92vw);background:#fff;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.06);padding:24px}
     h1{margin:0 0 10px;font-size:20px}
     p.muted{color:var(--muted);margin:0 0 16px}
     label{display:block;margin:10px 0 6px}
-    input{width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px}
+    input,select{width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px}
+    .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
     .actions{margin-top:16px;display:flex;gap:10px;align-items:center}
     .btn{padding:12px 14px;border-radius:10px;border:0;background:var(--brand);color:#fff;cursor:pointer}
     #msg{font-size:14px}
     .err{color:var(--danger)}
-    a{color:#6366f1;text-decoration:none}
+    .muted small{color:#6b7280}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>إنشاء حساب وليّ أمر</h1>
-      <p class="muted">أدخل بياناتك الأساسية لإنشاء الحساب.</p>
+      <h1>إنشاء حساب جديد</h1>
+      <p class="muted">اختر نوع الحساب: <small>وليّ أمر أو دكتور</small></p>
 
       <form id="registerForm" novalidate>
-        <label for="reg-name">الاسم</label>
-        <input id="reg-name" type="text" placeholder="الاسم الكامل" required />
+        <div class="row">
+          <div>
+            <label for="reg-name">الاسم</label>
+            <input id="reg-name" type="text" placeholder="الاسم الكامل" required />
+          </div>
+          <div>
+            <label for="reg-email">البريد الإلكتروني</label>
+            <input id="reg-email" type="email" placeholder="example@mail.com" required />
+          </div>
+        </div>
 
-        <label for="reg-email">البريد الإلكتروني</label>
-        <input id="reg-email" type="email" placeholder="example@mail.com" required />
+        <div class="row">
+          <div>
+            <label for="reg-pass">كلمة المرور</label>
+            <input id="reg-pass" type="password" placeholder="••••••••" required />
+          </div>
+          <div>
+            <label for="reg-pass2">تأكيد كلمة المرور</label>
+            <input id="reg-pass2" type="password" placeholder="أعد كتابة كلمة المرور" required />
+          </div>
+        </div>
 
-        <label for="reg-pass">كلمة المرور</label>
-        <input id="reg-pass" type="password" placeholder="••••••••" required />
+        <label>نوع الحساب</label>
+        <div>
+          <label><input type="radio" name="role" value="parent" checked> وليّ أمر</label>
+          <label style="margin-inline-start:16px"><input type="radio" name="role" value="doctor"> دكتور</label>
+        </div>
+        <p id="pendingNote" class="muted" style="display:none;margin-top:6px">لو اخترت “دكتور” سيتم إنشاء الحساب بحالة <b>قيد المراجعة</b> حتى يوافق الأدمن.</p>
 
-        <label for="reg-pass2">تأكيد كلمة المرور</label>
-        <input id="reg-pass2" type="password" placeholder="أعد كتابة كلمة المرور" required />
+        <div id="doctorFields" class="row" style="display:none;margin-top:8px">
+          <div>
+            <label for="reg-specialty">التخصص</label>
+            <input id="reg-specialty" type="text" placeholder="مثال: غدد صماء" />
+          </div>
+          <div>
+            <label for="reg-clinic">العيادة/المستشفى</label>
+            <input id="reg-clinic" type="text" />
+          </div>
+        </div>
 
         <div class="actions">
           <button class="btn" id="btnRegister" type="submit">تسجيل</button>
           <span id="msg"></span>
         </div>
+        <p class="muted" style="margin-top:14px">لديك حساب؟ <a href="index.html">العودة للدخول</a></p>
       </form>
-
-      <p class="muted" style="margin-top:14px">لديك حساب بالفعل؟ <a href="index.html">عودة لصفحة الدخول</a></p>
     </div>
   </div>
 
-  <script type="module">
-    import { auth, db } from './js/firebase-config.js';
-    import {
-      createUserWithEmailAndPassword, updateProfile
-    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-    import {
-      doc, setDoc, serverTimestamp
-    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-
-    const f = document.getElementById('registerForm');
-    const nameEl = document.getElementById('reg-name');
-    const emailEl = document.getElementById('reg-email');
-    const passEl = document.getElementById('reg-pass');
-    const pass2El = document.getElementById('reg-pass2');
-    const btn = document.getElementById('btnRegister');
-    const msg = document.getElementById('msg');
-
-    function say(txt, ok=false){ msg.textContent = txt; msg.className = ok? 'ok' : 'err'; }
-
-    f.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      msg.textContent='';
-      if(!nameEl.value.trim()){ say('الاسم مطلوب'); return; }
-      if(passEl.value !== pass2El.value){ say('تأكيد كلمة المرور لا يطابق'); return; }
-
-      btn.disabled = true; btn.textContent = '...جارٍ التسجيل';
-      try{
-        const cred = await createUserWithEmailAndPassword(auth, emailEl.value.trim(), passEl.value);
-        await updateProfile(cred.user, { displayName: nameEl.value.trim() });
-
-        // إنشاء وثيقة وَلِيّ الأمر (يسمح بها القواعد لأن المالك = uid)
-        await setDoc(doc(db, `parents/${cred.user.uid}`), {
-          name: nameEl.value.trim(),
-          email: emailEl.value.trim(),
-          createdAt: serverTimestamp()
-        });
-
-        // (اختياري) إنشاء users/{uid} بدور parent إذا كانت القواعد تسمح
-        try{
-          await setDoc(doc(db, `users/${cred.user.uid}`), {
-            role: 'parent', createdAt: serverTimestamp()
-          }, { merge: true });
-        }catch{}
-
-        say('تم إنشاء الحساب بنجاح.', true);
-        location.href = 'parent.html';
-      }catch(err){
-        say(err.message || 'تعذّر إنشاء الحساب');
-      }finally{
-        btn.disabled = false; btn.textContent = 'تسجيل';
-      }
-    });
-  </script>
+  <script type="module" src="js/register.js"></script>
 </body>
 </html>
