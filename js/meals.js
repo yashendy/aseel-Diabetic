@@ -1,10 +1,13 @@
-// js/meals.js — نفس واجهة الوجبات لديك، مع قراءة الكتالوج من admin/global/foodItems
+// js/meals.js — واجهة الوجبات تقرأ الكتالوج من admin/global/foodItems وتظل بقية الصفحة كما هي
 import { auth, db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
   query, where, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+
+/* ====== تعريف مسار الكتالوج العام (المكتبة) ====== */
+const PUBLIC_FOOD_COLLECTION = () => collection(db, 'admin', 'global', 'foodItems');
 
 /* ========= عناصر من DOM ========= */
 const params = new URLSearchParams(location.search);
@@ -67,14 +70,26 @@ const pickCategoryEl  = $('pickCategory');
 const pickerGrid      = $('pickerGrid');
 const pickerEmpty     = $('pickerEmpty');
 
+/* مودال الوجبات الجاهزة */
+const presetBtn       = $('presetBtn');
+const presetSaveBtn   = $('presetSaveBtn');
+const presetModal     = $('presetModal');
+const presetClose     = $('presetClose');
+const presetGrid      = $('presetGrid');
+const presetEmpty     = $('presetEmpty');
+
 /* ========= حالة ========= */
 let currentUser, childData;
 let editingMealId = null;
 let currentItems = [];
-let cachedFood = [];          // ← سنملؤها من admin/global/foodItems
+let cachedFood = [];            // من مكتبة الأدمن
 let cachedMeasurements = [];
 let lastUsedMap = {};
 let ROUND = 0.5;
+
+/* كاش الوجبات الجاهزة */
+const PRESET_TYPES = ['فطار','غدا','عشا']; // نفس التابات في الصفحة
+let cachedPresets = { 'فطار':[], 'غدا':[], 'عشا':[] };
 
 /* ========= أدوات صغيرة ========= */
 const pad = n => String(n).padStart(2,'0');
@@ -121,6 +136,7 @@ onAuthStateChanged(auth, async (user)=>{
   await loadMeasurements();
   await loadMealsOfDay();
   await ensureFoodCache();   // ← من مكتبة الأدمن
+  await preloadAllPresets(); // ← تحميل الوجبات الجاهزة لكل نوع
   applyCarbGoalUI();
   recalcAll();
 });
@@ -223,12 +239,10 @@ function renderMealsList(rows){
 
 /* ========= تحميل كتالوج الأصناف (من مكتبة الأدمن) ========= */
 function mapAdminItem(d){
-  // دعم الشكلين
   const nutr = d.nutrPer100g || {
     carbs_g:   Number(d.carbs_100g ?? 0),
     fiber_g:   Number(d.fiber_100g ?? 0),
     protein_g: Number(d.protein_100g ?? 0),
-    fat_100g: undefined, // احتياطي
     fat_g:     Number(d.fat_100g ?? 0),
     cal_kcal:  Number(d.calories_100g ?? 0),
   };
@@ -248,23 +262,15 @@ function mapAdminItem(d){
 
 async function ensureFoodCache(){
   if (cachedFood.length) return;
-
-  // نقرأ الكتالوج العام
   let snap;
   try {
     snap = await getDocs(query(PUBLIC_FOOD_COLLECTION(), orderBy('name')));
   } catch {
-    // لو الترتيب بالاسم مش متاح، نقرأ بدون ترتيب
     snap = await getDocs(PUBLIC_FOOD_COLLECTION());
   }
-
   cachedFood = [];
-  snap.forEach(s => {
-    // mapAdminItem يتكفل بتطبيع الحقول (carbs_100g/fiber_100g/... أو nutrPer100g)
-    cachedFood.push(mapAdminItem({ id: s.id, ...s.data() }));
-  });
+  snap.forEach(s => cachedFood.push(mapAdminItem({ id: s.id, ...s.data() })));
 }
-
 
 /* ========= إضافة صف عنصر للوجبة ========= */
 function addItemRow(itemDoc){
@@ -421,12 +427,11 @@ function recalcAll(){
   tFatEl.textContent     = round1(totals.fat);
   if (tGLEl){ tGLEl.textContent = round1(totals.gl); }
 
-  // جرعة (تعليمي)
   const carbForDose = useNetCarbsEl?.checked ? net : totals.carbs;
   const carbRatio = Number(childData?.carbRatio || 12);
   const mealDose = carbForDose>0 ? (carbForDose / carbRatio) : 0;
 
-  let corr = 0, explain = `${useNetCarbsEl?.checked?'netCarbs':'carbs'} ${round1(carbForDose)} / CR ${carbRatio}`;
+  let corr = 0;
   const preId = preReadingEl.value;
   if (preId){
     const pre = cachedMeasurements.find(m=> m.id===preId);
@@ -435,12 +440,11 @@ function recalcAll(){
     const CF   = Number(childData?.correctionFactor || 0);
     if (CF>0 && mmol>nMax){
       corr = (mmol - nMax)/CF;
-      explain += ` + ((pre ${mmol.toFixed(1)} - ${nMax}) / CF ${CF})`;
     }
   }
   const totalDose = roundHalf(mealDose + corr);
   suggestedDoseEl.textContent = Number.isFinite(totalDose) ? (totalDose.toFixed(1).replace('.0','')) : '0';
-  doseExplainEl.textContent = `= ${mealDose.toFixed(2)} + ${corr.toFixed(2)} ⇒ تقريب ${totalDose.toFixed(1)}`;
+  doseExplainEl.textContent = `= ${(mealDose).toFixed(2)} + ${(corr).toFixed(2)} ⇒ تقريب ${totalDose.toFixed(1)}`;
 
   const range = computeDoseRange(carbForDose, carbRatio, preId);
   doseRangeEl.textContent = range ? `${range.min}–${range.max} U` : '—';
@@ -650,9 +654,13 @@ async function deleteMeal(r){
   }
 }
 
+/* ====== setBusy (تعريف واحد فقط لتفادي التكرار) ====== */
 function setBusy(btn, busy){
+  if(!btn) return;
   btn.disabled = !!busy;
-  btn.textContent = busy ? 'جارٍ الحفظ…' : 'حفظ الوجبة';
+  const original = btn.dataset.originalText ?? btn.textContent;
+  if(!btn.dataset.originalText) btn.dataset.originalText = original;
+  btn.textContent = busy ? 'جارٍ الحفظ…' : btn.dataset.originalText;
 }
 
 /* ========= مودال الأصناف ========= */
@@ -728,7 +736,7 @@ function renderPicker(list){
   });
 }
 
-/* ========= تكرار آخر وجبة (كما هو) ========= */
+/* ========= تكرار آخر وجبة ========= */
 repeatLastBtn.addEventListener('click', repeatLastMealTemplate);
 function saveLastMealTemplate(type, payload){
   const key = `lastMealTemplate:${currentUser?.uid||'u'}:${childId||'c'}:${type}`;
@@ -758,6 +766,185 @@ function repeatLastMealTemplate(){
     renderItems(); recalcAll(); saveDraft();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }catch(_){ showToast('تعذر استرجاع القالب'); }
+}
+
+/* ========= الوجبات الجاهزة (Firestore) ========= */
+// مجموعة الوجبات الجاهزة للمستخدم
+const PRESETS_COL = () => collection(db, `parents/${currentUser?.uid}/presets`);
+
+// تحميل مسبق لكل الأنواع (لتسريع فتح المودال)
+async function preloadAllPresets(){
+  if (!currentUser) return;
+  for (const t of PRESET_TYPES){
+    cachedPresets[t] = await fetchPresetsOfType(t);
+  }
+}
+
+async function fetchPresetsOfType(type){
+  const rows = [];
+  try{
+    const snap = await getDocs(query(PRESETS_COL(), where('type','==', type), orderBy('name')));
+    snap.forEach(s=> rows.push({ id:s.id, ...s.data() }));
+  }catch{
+    // fallback بدون orderBy
+    const snap = await getDocs(query(PRESETS_COL(), where('type','==', type)));
+    snap.forEach(s=> rows.push({ id:s.id, ...s.data() }));
+  }
+  return rows;
+}
+
+// حفظ الحالية كوجبة جاهزة
+presetSaveBtn?.addEventListener('click', async ()=>{
+  if (!currentUser) return;
+  if (!currentItems.length){ alert('أضف عنصرًا واحدًا على الأقل قبل الحفظ'); return; }
+
+  const name = prompt('اكتبي اسمًا للوجبة الجاهزة (مثال: شوفان الصباح):');
+  if (!name || !name.trim()) return;
+
+  const type = mealTypeEl.value || 'فطار';
+  const items = currentItems.map(r=> ({
+    itemId: r.itemId, name: r.name, brand: r.brand || null,
+    unit: r.unit, qty: Number(r.qty)||0, measure: r.measure || null,
+    grams: round1(r.grams || 0),
+    carbs_g: round1(r.calc.carbs || 0),
+    fiber_g: round1(r.calc.fiber || 0),
+    cal_kcal: Math.round(r.calc.cal || 0),
+    protein_g: round1(r.calc.prot || 0),
+    fat_g: round1(r.calc.fat || 0),
+    gi: r.gi || null,
+    gl: round1(r.calc.gl || 0)
+  }));
+
+  const totals = {
+    grams: round1(items.reduce((a,i)=>a+i.grams,0)),
+    carbs_g: round1(items.reduce((a,i)=>a+i.carbs_g,0)),
+    fiber_g: round1(items.reduce((a,i)=>a+i.fiber_g,0)),
+    net_carbs_g: Math.max(0, round1(items.reduce((a,i)=>a+i.carbs_g,0) - items.reduce((a,i)=>a+i.fiber_g,0))),
+    cal_kcal: Math.round(items.reduce((a,i)=>a+i.cal_kcal,0)),
+    protein_g: round1(items.reduce((a,i)=>a+i.protein_g,0)),
+    fat_g: round1(items.reduce((a,i)=>a+i.fat_g,0)),
+    gl: round1(items.reduce((a,i)=>a+i.gl,0))
+  };
+
+  try{
+    await addDoc(PRESETS_COL(), {
+      name: name.trim(),
+      type,
+      items,
+      totals,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    showToast('💾 تم حفظ الوجبة كوجبة جاهزة');
+    cachedPresets[type] = await fetchPresetsOfType(type);
+  }catch(e){
+    console.error(e);
+    alert('تعذر حفظ الوجبة الجاهزة');
+  }
+});
+
+// فتح مودال الوجبات الجاهزة
+presetBtn?.addEventListener('click', async ()=>{
+  if (!currentUser) return;
+  // عيّني التاب حسب نوع الوجبة الحالي
+  const desired = mealTypeEl.value || 'فطار';
+  document.querySelectorAll('#presetModal .tab').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.type===desired);
+  });
+
+  // حمل أو استخدم الكاش
+  if (!cachedPresets[desired] || !cachedPresets[desired].length){
+    cachedPresets[desired] = await fetchPresetsOfType(desired);
+  }
+  renderPresetGrid(desired);
+  presetModal.classList.remove('hidden');
+});
+
+// تبديل التابات
+document.querySelectorAll('#presetModal .tab').forEach(btn=>{
+  btn.addEventListener('click', async ()=>{
+    document.querySelectorAll('#presetModal .tab').forEach(b=> b.classList.remove('active'));
+    btn.classList.add('active');
+    const t = btn.dataset.type;
+    if (!cachedPresets[t] || !cachedPresets[t].length){
+      cachedPresets[t] = await fetchPresetsOfType(t);
+    }
+    renderPresetGrid(t);
+  });
+});
+
+// إغلاق المودال
+presetClose?.addEventListener('click', ()=> presetModal.classList.add('hidden'));
+
+function renderPresetGrid(type){
+  const list = cachedPresets[type] || [];
+  presetGrid.innerHTML = '';
+  if (!list.length){ presetEmpty.classList.remove('hidden'); return; }
+  presetEmpty.classList.add('hidden');
+
+  list.forEach(p=>{
+    const card = document.createElement('div');
+    card.className = 'preset-card';
+    card.innerHTML = `
+      <div class="preset-top">
+        <div class="thumb"><span>🍱</span></div>
+        <div class="title">${esc(p.name||'-')}</div>
+        <div style="margin-inline-start:auto" class="tiny muted">${esc(p.type||'-')}</div>
+      </div>
+      <div class="preset-body">
+        <div class="muted tiny">عناصر: ${p.items?.length||0} • كارب: ${round1(p.totals?.carbs_g||0)} g • سعرات: ${Math.round(p.totals?.cal_kcal||0)} kcal</div>
+      </div>
+      <div class="preset-footer">
+        <button class="secondary addBtn">إضافة للوجبة</button>
+        <button class="secondary replaceBtn">استبدال الحالية</button>
+        <button class="delBtn">حذف</button>
+      </div>
+    `;
+    card.querySelector('.addBtn').addEventListener('click', ()=> applyPreset(p, 'append'));
+    card.querySelector('.replaceBtn').addEventListener('click', ()=> applyPreset(p, 'replace'));
+    card.querySelector('.delBtn').addEventListener('click', ()=> deletePreset(p));
+    presetGrid.appendChild(card);
+  });
+}
+
+function applyPreset(preset, mode){
+  if (!preset || !Array.isArray(preset.items)) return;
+  if (mode==='replace'){ currentItems = []; }
+
+  const rows = preset.items.map(i=>({
+    itemId: i.itemId, name: i.name, brand: i.brand || null,
+    unit: i.unit || 'grams', qty: Number(i.qty)||0, measure: i.measure || null,
+    grams: Number(i.grams)||0,
+    per100: {
+      carbs: i.grams>0 ? (i.carbs_g*100/i.grams) : 0,
+      fiber: i.grams>0 ? (i.fiber_g*100/i.grams) : 0,
+      cal:   i.grams>0 ? (i.cal_kcal*100/i.grams) : 0,
+      prot:  i.grams>0 ? (i.protein_g*100/i.grams) : 0,
+      fat:   i.grams>0 ? (i.fat_g*100/i.grams) : 0
+    },
+    gi: i.gi ?? null,
+    calc:{carbs: i.carbs_g, fiber:i.fiber_g, cal: i.cal_kcal, prot: i.protein_g, fat: i.fat_g, gl: i.gl||0},
+    measures: []
+  }));
+
+  currentItems = currentItems.concat(rows);
+  renderItems(); recalcAll(); saveDraft();
+  presetModal.classList.add('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deletePreset(p){
+  if (!confirm('حذف هذه الوجبة الجاهزة؟')) return;
+  try{
+    await deleteDoc(doc(db, `parents/${currentUser.uid}/presets/${p.id}`));
+    const t = p.type || 'فطار';
+    cachedPresets[t] = (cachedPresets[t]||[]).filter(x=> x.id!==p.id);
+    renderPresetGrid(t);
+    showToast('🗑️ تم حذف الوجبة الجاهزة');
+  }catch(e){
+    console.error(e);
+    alert('تعذر حذف الوجبة الجاهزة');
+  }
 }
 
 /* ========= كاش آخر كميات ========= */
@@ -813,4 +1000,3 @@ function clearDraft(){
 
 /* ========= أدوات ========= */
 function debounce(fn, ms=250){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); }; }
-function setBusy(btn, busy){ btn.disabled = !!busy; btn.textContent = busy ? 'جارٍ الحفظ…' : 'حفظ الوجبة'; }
