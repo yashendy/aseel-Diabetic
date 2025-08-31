@@ -1,113 +1,141 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>📘 مكتبة الأصناف (الأدمن)</title>
-  <style>
-    :root{--bg:#f8fafc;--card:#fff;--muted:#6b7280;--primary:#4f46e5;--border:#e5e7eb}
-    body{font-family:system-ui,Segoe UI,Tahoma,Arial; background:var(--bg); color:#111827; margin:0}
-    .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2}
-    .btn{padding:10px 12px;border:1px solid var(--border);background:#fff;border-radius:8px;cursor:pointer}
-    .btn.primary{background:var(--primary);color:#fff;border:0}
-    .btn.danger{background:#ef4444;color:#fff;border:0}
-    .btn.ghost{background:#f3f4f6}
-    .page{max-width:1100px;margin:0 auto;padding:16px}
-    .row{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
-    .row.two>*{grid-column:span 6}
-    .row.three>*{grid-column:span 4}
-    @media(max-width:800px){.row.two>*,.row.three>*{grid-column:span 12}}
-    .card{background:#fff;border:1px solid var(--border);border-radius:14px; padding:14px}
-    .card__head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-    label{display:block;font-size:13px;color:#334155;margin-bottom:6px}
-    input,select,textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff}
-    .meta{color:var(--muted);font-size:13px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-    .item{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fff}
-    .imgbox{width:120px;height:120px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#fafafa;display:grid;place-items:center}
-    .imgbox img{width:100%;height:100%;object-fit:cover}
-    .hidden{display:none}
-    progress{width:100%}
-  </style>
+  <link rel="stylesheet" href="food-items.css" />
+  <style>body{direction:rtl}</style>
 </head>
 <body>
+  <!-- Topbar -->
   <div class="topbar">
+    <h1>📋 إدارة الأصناف</h1>
     <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn" onclick="location.href='admin.html'">⬅︎ رجوع</button>
-      <strong>مكتبة الأصناف</strong>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <input id="q" placeholder="ابحث..." style="min-width:260px">
-      <select id="fCat"><option value="">كل الفئات</option></select>
+      <input id="q" class="input" placeholder="🔍 بحث..." style="min-width:260px">
+      <select id="fCat" class="input"><option value="">كل الفئات</option></select>
       <button id="btnNew" class="btn">➕ إضافة صنف</button>
     </div>
   </div>
 
   <div class="page">
-    <section class="card">
-      <div class="card__head">
-        <strong id="formTitle">إضافة صنف</strong>
-        <span class="meta">المسار: <code>admin/global/foodItems</code></span>
-      </div>
-
-      <form id="form" class="row two" novalidate>
+    <!-- Form -->
+    <div class="card">
+      <div class="card__head"><h2 id="formTitle">إضافة صنف</h2></div>
+      <form id="form" class="form" novalidate>
         <input type="hidden" id="itemId">
         <input type="hidden" id="currentImageUrl">
 
-        <div class="row three" style="grid-column:1/-1">
+        <div class="row two">
           <div>
-            <label>الصورة</label>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <div class="imgbox"><img id="imgPrev" alt="preview"></div>
-              <div>
-                <input id="imgFile" type="file" accept="image/*" class="hidden">
-                <div style="display:flex;gap:8px;flex-wrap:wrap">
-                  <button class="btn" type="button" id="btnPick">📤 اختيار/تغيير الصورة</button>
-                  <button class="btn danger" type="button" id="btnRemoveImg">🗑️ إزالة الصورة</button>
-                </div>
-                <progress id="imgProg" class="hidden" min="0" max="100" value="0"></progress>
-                <p class="meta">ترفع تلقائيًا إلى Firebase Storage ويُخزن رابطها في المستند.</p>
-              </div>
-            </div>
+            <label>الاسم <span class="req">*</span></label>
+            <input id="name" class="input" required>
           </div>
-
-          <div>
-            <label>الاسم *</label>
-            <input id="name" required>
-          </div>
-
           <div>
             <label>الفئة</label>
-            <input id="category" placeholder="خبز، ألبان…">
+            <input id="category" class="input" placeholder="خبز، ألبان…">
           </div>
         </div>
 
-        <div><label>البراند</label><input id="brand"></div>
-        <div>
-          <label>الوحدة</label>
-          <select id="unit"><option value="g">g</option><option value="ml">ml</option><option value="piece">حبة</option></select>
+        <div class="row two">
+          <div>
+            <label>العلامة التجارية</label>
+            <input id="brand" class="input">
+          </div>
+          <div>
+            <label>الوحدة</label>
+            <select id="unit" class="input">
+              <option value="g">جرام</option>
+              <option value="ml">مللي</option>
+              <option value="piece">حبة</option>
+            </select>
+          </div>
         </div>
-        <div><label>كارب/100</label><input id="carb100" type="number" step="any"></div>
-        <div><label>ألياف/100</label><input id="fiber100" type="number" step="any"></div>
-        <div><label>بروتين/100</label><input id="prot100" type="number" step="any"></div>
-        <div><label>دهون/100</label><input id="fat100" type="number" step="any"></div>
-        <div><label>سعرات/100</label><input id="kcal100" type="number" step="any"></div>
-        <div><label>GI</label><input id="gi" type="number" step="any" min="0" max="110" placeholder="اختياري"></div>
 
-        <div style="grid-column:1/-1">
-          <button class="btn primary" type="submit">💾 حفظ</button>
-          <button class="btn" type="button" id="btnReset">تفريغ</button>
-          <button class="btn danger" type="button" id="btnDelete">حذف</button>
+        <!-- ✅ القيم لكل 100 جم -->
+        <div class="row three">
+          <div>
+            <label>كارب (غ/100جم)</label>
+            <input id="carb100" type="number" step="any" class="input">
+          </div>
+          <div>
+            <label>ألياف (غ/100جم)</label>
+            <input id="fiber100" type="number" step="any" class="input">
+          </div>
+          <div>
+            <label>بروتين (غ/100جم)</label>
+            <input id="prot100" type="number" step="any" class="input">
+          </div>
+        </div>
+        <div class="row two">
+          <div>
+            <label>دهون (غ/100جم)</label>
+            <input id="fat100" type="number" step="any" class="input">
+          </div>
+          <div>
+            <label>سعرات (كال/100جم)</label>
+            <input id="kcal100" type="number" step="any" class="input">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>GI (اختياري)</label>
+            <input id="gi" type="number" min="0" max="110" step="any" class="input" placeholder="0 - 110">
+          </div>
+        </div>
+
+        <!-- ✅ المقادير -->
+        <div class="row">
+          <label>المقادير (نص حر)</label>
+          <textarea id="measuresText" class="input" placeholder="مثال: ثمرة، حبة، طبق، كوب..."></textarea>
+        </div>
+        <div class="row two">
+          <div>
+            <label>اسم المقدار</label>
+            <input id="measureName" class="input" placeholder="مثال: كوب">
+          </div>
+          <div>
+            <label>الوزن (جرام)</label>
+            <input id="measureWeight" type="number" class="input" placeholder="مثال: 200">
+          </div>
+        </div>
+        <button type="button" class="btn ghost" id="btnAddMeasure">➕ إضافة مقدار</button>
+        <div id="measuresWrap" class="units"></div>
+
+        <!-- الصورة -->
+        <div class="row two">
+          <div>
+            <label>الصورة</label>
+            <input type="file" id="imgFile" accept="image/*" hidden>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button type="button" class="btn ghost" id="btnPick">📷 اختر صورة</button>
+              <button type="button" class="btn danger" id="btnRemoveImg">🗑️ حذف</button>
+            </div>
+            <progress id="imgProg" class="hidden" max="100" value="0"></progress>
+            <p class="hint">تُرفع تلقائيًا إلى Firebase Storage ورابطها يُخزن في الوثيقة.</p>
+          </div>
+          <div>
+            <!-- ✅ صورة صغيرة -->
+            <div class="imgbox"><img id="imgPrev" src="" alt="preview"></div>
+          </div>
+        </div>
+
+        <div class="form__actions">
+          <button type="submit" class="btn primary">💾 حفظ</button>
+          <button type="reset" class="btn ghost" id="btnReset">تفريغ</button>
+          <button type="button" class="btn danger" id="btnDelete">🗑️ حذف</button>
         </div>
       </form>
-    </section>
+    </div>
 
-    <section class="card">
-      <div class="card__head"><strong>الأصناف</strong></div>
+    <!-- النتائج -->
+    <div class="card">
+      <div class="card__head"><h3>الأصناف</h3></div>
       <div id="grid" class="grid">جارِ التحميل…</div>
-    </section>
+    </div>
   </div>
 
-  <script type="module" src="js/food-items.js"></script>
+  <!-- Firebase config (تأكد من المسار لديك) -->
+  <script type="module" src="food-items (1).js"></script>
 </body>
 </html>
