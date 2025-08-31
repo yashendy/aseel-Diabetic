@@ -7,7 +7,7 @@ import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-
 
 /* صفحات التحويل */
 const ROUTES = {
-  parent:  'parent-dashboard.html',
+  parent:  'parent.html',
   doctor:  'doctor-dashboard.html',
   admin:   'admin.html',
   pending: 'pending.html'
