@@ -1,7 +1,7 @@
 // js/food-items.js
 import { auth, db } from './firebase-config.js';
 import {
-  collection, addDoc, updateDoc, deleteDoc, getDocs, doc, query, orderBy,
+  collection, updateDoc, deleteDoc, getDocs, doc, query, orderBy,
   serverTimestamp, setDoc
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
@@ -16,14 +16,27 @@ const qEl=$('q'), fCat=$('fCat'), grid=$('grid'), btnNew=$('btnNew');
 const form=$('form'), formTitle=$('formTitle');
 const itemId=$('itemId'), currentImageUrl=$('currentImageUrl');
 const nameEl=$('name'), categoryEl=$('category'), brandEl=$('brand'), unitEl=$('unit');
+
+/* ✅ القيم الغذائية — لكل 100 جم */
 const carb100El=$('carb100'), fiber100El=$('fiber100'), prot100El=$('prot100'), fat100El=$('fat100'), kcal100El=$('kcal100'), giEl=$('gi');
 
+/* ✅ المقادير */
+const measuresTextEl   = $('measuresText');   // نص حر: ثمرة، حبة، كوب...
+const measureNameEl    = $('measureName');    // اسم المقدار (مثال: كوب)
+const measureWeightEl  = $('measureWeight');  // وزنه بالجرام (مثال: 200)
+const btnAddMeasure    = $('btnAddMeasure');
+const measuresWrap     = $('measuresWrap');   // حاوية الـchips
+
+/* صورة */
 const imgFileEl=$('imgFile'), imgPrev=$('imgPrev'), imgProg=$('imgProg');
 const btnPick=$('btnPick'), btnRemoveImg=$('btnRemoveImg');
 const btnReset=$('btnReset'), btnDelete=$('btnDelete');
 
 let ITEMS=[], SELECTED_FILE=null, REMOVE_IMAGE=false;
 const MAX_IMAGE_MB=3;
+
+/* حالة محلية لوزن المقادير */
+let MEASURES = {}; // مثال: { "كوب": 200, "ملعقة": 15 }
 
 /* Utils */
 const esc=(s)=> (s??'').toString().replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -76,10 +89,13 @@ function renderGrid(){
   list.forEach(it=>{
     const img = it.imageUrl || autoImg(it.name);
     const n   = it.nutrPer100g || {};
+    const m   = it.measureQty || it.measures || null;
+    const mCount = m ? Object.keys(m).length : 0;
+
     const card=document.createElement('div');
     card.className='item';
     card.innerHTML=`
-      <div style="display:flex;gap:10px">
+      <div style="display:flex;gap:10px;align-items:center">
         <div class="imgbox"><img src="${esc(img)}" alt=""></div>
         <div style="flex:1">
           <div style="display:flex;justify-content:space-between;gap:8px">
@@ -87,7 +103,9 @@ function renderGrid(){
             <span class="meta">${esc(it.category||'-')}</span>
           </div>
           <div class="meta">${esc(it.brand||'')}</div>
-          <div class="meta">كارب/100: ${n?.carbs_g ?? '—'} | ألياف/100: ${n?.fiber_g ?? '—'}</div>
+          <div class="meta">القيم لكل 100 جم — كارب: ${n?.carbs_g ?? '—'}غ | بروتين: ${n?.protein_g ?? '—'}غ | دهون: ${n?.fat_g ?? '—'}غ | ألياف: ${n?.fiber_g ?? '—'}غ | سعرات: ${n?.cal_kcal ?? '—'} كال</div>
+          ${mCount ? `<div class="meta">مقادير معرفة: ${mCount} (مثال: ${esc(Object.keys(m)[0])} = ${m[Object.keys(m)[0]]} جم)</div>` : ''}
+          ${(it.measuresText? `<div class="meta">ملاحظات المقادير: ${esc(it.measuresText)}</div>`:'')}
           <div style="margin-top:8px;display:flex;gap:8px">
             <button class="btn" data-edit>تعديل</button>
             <button class="btn danger" data-del>حذف</button>
@@ -112,25 +130,39 @@ function openNew(){
   itemId.value=''; currentImageUrl.value='';
   nameEl.value=''; categoryEl.value=''; brandEl.value=''; unitEl.value='g';
   carb100El.value=''; fiber100El.value=''; prot100El.value=''; fat100El.value=''; kcal100El.value=''; giEl.value='';
+
+  // المقادير
+  measuresTextEl && (measuresTextEl.value='');
+  MEASURES = {};
+  renderMeasuresChips();
+
   SELECTED_FILE=null; REMOVE_IMAGE=false; imgFileEl.value=''; imgProg.classList.add('hidden'); imgProg.value=0;
   imgPrev.src = autoImg();
   window.scrollTo({top:0,behavior:'smooth'});
 }
+
 function openEdit(it){
   formTitle.textContent='تعديل صنف';
   itemId.value=it.id; currentImageUrl.value=it.imageUrl||'';
   nameEl.value=it.name||''; categoryEl.value=it.category||''; brandEl.value=it.brand||''; unitEl.value=it.unit||'g';
+
   const n=it.nutrPer100g||{};
   carb100El.value=n.carbs_g??''; fiber100El.value=n.fiber_g??''; prot100El.value=n.protein_g??''; fat100El.value=n.fat_g??''; kcal100El.value=n.cal_kcal??'';
   giEl.value=it.gi??'';
+
+  // المقادير
+  measuresTextEl && (measuresTextEl.value = it.measuresText || '');
+  MEASURES = {...(it.measureQty || it.measures || {})};
+  renderMeasuresChips();
+
   SELECTED_FILE=null; REMOVE_IMAGE=false; imgFileEl.value=''; imgProg.classList.add('hidden'); imgProg.value=0;
   imgPrev.src = it.imageUrl || autoImg(it.name);
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
 /* Image pick/remove */
-btnPick.addEventListener('click', ()=> imgFileEl.click());
-imgFileEl.addEventListener('change', ()=>{
+btnPick && btnPick.addEventListener('click', ()=> imgFileEl.click());
+imgFileEl && imgFileEl.addEventListener('change', ()=>{
   const f = imgFileEl.files?.[0]||null;
   if (f){
     if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) { alert('صيغة غير مدعومة'); imgFileEl.value=''; return; }
@@ -139,7 +171,7 @@ imgFileEl.addEventListener('change', ()=>{
   SELECTED_FILE=f; REMOVE_IMAGE=false;
   imgPrev.src = f ? URL.createObjectURL(f) : (currentImageUrl.value || autoImg(nameEl.value||'صنف'));
 });
-btnRemoveImg.addEventListener('click', ()=>{
+btnRemoveImg && btnRemoveImg.addEventListener('click', ()=>{
   SELECTED_FILE=null; REMOVE_IMAGE=true; imgFileEl.value='';
   imgPrev.src = autoImg(nameEl.value||'صنف');
 });
@@ -167,6 +199,31 @@ async function deleteImage(url){
   }catch(e){ /* تجاهل */ }
 }
 
+/* ✅ إدارة المقادير: إضافة/حذف وعرض chips */
+function renderMeasuresChips(){
+  if(!measuresWrap) return;
+  const entries = Object.entries(MEASURES);
+  if(!entries.length){ measuresWrap.innerHTML='<span class="meta">لا توجد مقادير معرفة.</span>'; return; }
+  measuresWrap.innerHTML = entries.map(([label,grams])=>(
+    `<span class="unit" data-k="${esc(label)}">${esc(label)} = ${grams} جم <span class="x" title="حذف">×</span></span>`
+  )).join('');
+  measuresWrap.querySelectorAll('.unit .x').forEach(x=>{
+    x.addEventListener('click', ()=>{
+      const k = x.parentElement?.parentElement?.getAttribute('data-k') || x.parentElement?.getAttribute('data-k') || x.closest('.unit')?.getAttribute('data-k');
+      if(k && (k in MEASURES)){ delete MEASURES[k]; renderMeasuresChips(); }
+    });
+  });
+}
+btnAddMeasure && btnAddMeasure.addEventListener('click', ()=>{
+  const label=(measureNameEl?.value||'').trim();
+  const grams=num(measureWeightEl?.value);
+  if(!label){ alert('اكتب اسم المقدار (مثل: كوب)'); return; }
+  if(!(grams>0)){ alert('اكتب وزن المقدار بالجرام (رقم موجب)'); return; }
+  MEASURES[label]=grams;
+  measureNameEl.value=''; measureWeightEl.value='';
+  renderMeasuresChips();
+});
+
 /* Save */
 form.addEventListener('submit', async (e)=>{
   e.preventDefault();
@@ -187,6 +244,9 @@ form.addEventListener('submit', async (e)=>{
       fat_g:     num(fat100El.value)  ?? 0,
       cal_kcal:  num(kcal100El.value) ?? Math.round(4*(+carb100El.value||0)+4*(+prot100El.value||0)+9*(+fat100El.value||0))
     },
+    /* ✅ الحقول الجديدة */
+    measuresText: (measuresTextEl?.value || '').trim() || null,
+    measureQty: Object.keys(MEASURES).length ? MEASURES : null,
     updatedAt: serverTimestamp()
   };
 
@@ -243,5 +303,4 @@ btnDelete.addEventListener('click', async ()=>{
   await loadItems(); openNew();
 });
 
-/* Search */
-function escapeHtml(s){return (s||'').toString().replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+/* Search (موجودة تلقائيًا منطق البحث في renderGrid) */
