@@ -1,25 +1,14 @@
 :root{
-  --bg: #f6f7fb;
-  --card: #fff;
-  --ink: #2b2d31;
-  --muted: #6b7280;
-  --primary: #4f46e5;
-  --danger: #ef4444;
-  --ghost: #e5e7eb;
-  --chip: #eef2ff;
-  --border: #e5e7eb;
+  --bg:#f6f7fb; --card:#fff; --ink:#2b2d31; --muted:#6b7280;
+  --primary:#4f46e5; --danger:#ef4444; --ghost:#e5e7eb; --chip:#eef2ff; --border:#e5e7eb
 }
 
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,Arial,sans-serif}
 
-.topbar{
-  position:sticky;top:0;z-index:2;
-  display:flex;align-items:center;justify-content:space-between;
-  padding:14px 18px;background:var(--card);border-bottom:1px solid var(--border)
-}
-.topbar h1{margin:0 12px 0 0;font-size:20px}
-.meta{color:var(--muted);font-size:13px}
+.topbar{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;background:var(--card);border-bottom:1px solid var(--border)}
+.topbar h1{margin:0;font-size:20px}
 .page{max-width:1050px;margin:18px auto;padding:0 14px}
 
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;margin:14px 0;overflow:hidden}
@@ -29,14 +18,9 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",
 .row{display:grid;gap:12px;margin-bottom:12px}
 .row.two{grid-template-columns:1fr 1fr}
 .row.three{grid-template-columns:1fr 1fr 1fr}
-@media (max-width:840px){
-  .row.two,.row.three{grid-template-columns:1fr}
-}
+@media (max-width:840px){.row.two,.row.three{grid-template-columns:1fr}}
 label{display:block;margin-bottom:6px}
-.input,.btn,select,textarea{
-  width:100%;padding:10px;border:1px solid var(--border);
-  border-radius:8px;background:#fff;font-size:14px
-}
+.input,.btn,select,textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;font-size:14px}
 textarea{resize:vertical}
 .req{color:#ef4444;font-weight:600}
 .hint{color:var(--muted);font-size:12px;padding-top:8px}
@@ -45,36 +29,21 @@ textarea{resize:vertical}
 .btn.ghost{background:var(--ghost)}
 .btn.primary{background:var(--primary);color:#fff;border:0}
 .btn.danger{background:var(--danger);color:#fff;border:0}
-
+.btn.ghost:hover{filter:brightness(.98)}
+.btn.primary:hover,.btn.danger:hover{filter:brightness(.96)}
 .form__actions{display:flex;gap:8px;flex-wrap:wrap}
 
-/* chips لعرض المقادير المعرفة */
+/* Chips لعرض المقادير */
 .units{display:flex;gap:8px;flex-wrap:wrap;padding:8px;border:1px dashed var(--border);border-radius:8px;background:#fafafa}
 .unit{background:var(--chip);border:1px solid #dbeafe;padding:6px 8px;border-radius:999px;font-size:12px}
 .unit .x{margin-inline-start:6px;cursor:pointer;color:#ef4444}
 
-/* فلاتر والجريد والجدول */
-.filters{display:flex;gap:8px;padding:12px;border-bottom:1px solid var(--border)}
-.grid{padding:12px}
-.table{width:100%;border-collapse:collapse}
-.table th,.table td{border-top:1px solid var(--border);padding:10px;text-align:center;font-size:14px}
-.table th{background:#fafafa}
+/* شبكة/جدول */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding:12px}
+.item{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fff}
+.meta{color:var(--muted);font-size:13px}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:#eef2ff;border:1px solid #dbeafe}
 
-/* تنبيه/توست */
-.snack{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#111827;color:#fff;border-radius:999px;padding:10px 14px;display:flex;gap:12px;align-items:center}
-.snack .link{background:none;border:0;color:#93c5fd;cursor:pointer}
-.btn.ghost:hover{filter:brightness(.98)}
-.btn.primary:hover,.btn.danger:hover{filter:brightness(.96)}
-
-/* ✅ صورة صغيرة داخل بطاقة/جدول العناصر */
-.imgbox{
-  width:72px;height:72px;flex:0 0 72px;
-  border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fff
-}
+/* ✅ صورة صغيرة */
+.imgbox{width:72px;height:72px;flex:0 0 72px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fff}
 .imgbox img{width:100%;height:100%;object-fit:cover;display:block}
-
-/* ولو الصورة داخل جدول عادي */
-.table img{
-  width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border)
-}
