@@ -248,13 +248,23 @@ function mapAdminItem(d){
 
 async function ensureFoodCache(){
   if (cachedFood.length) return;
-  const base = collection(db, 'admin','global','foodItems');
+
+  // نقرأ الكتالوج العام
   let snap;
-  try{ snap = await getDocs(query(base, orderBy('name'))); }
-  catch{ snap = await getDocs(base); }
+  try {
+    snap = await getDocs(query(PUBLIC_FOOD_COLLECTION(), orderBy('name')));
+  } catch {
+    // لو الترتيب بالاسم مش متاح، نقرأ بدون ترتيب
+    snap = await getDocs(PUBLIC_FOOD_COLLECTION());
+  }
+
   cachedFood = [];
-  snap.forEach(s=> cachedFood.push(mapAdminItem({ id:s.id, ...s.data() })));
+  snap.forEach(s => {
+    // mapAdminItem يتكفل بتطبيع الحقول (carbs_100g/fiber_100g/... أو nutrPer100g)
+    cachedFood.push(mapAdminItem({ id: s.id, ...s.data() }));
+  });
 }
+
 
 /* ========= إضافة صف عنصر للوجبة ========= */
 function addItemRow(itemDoc){
