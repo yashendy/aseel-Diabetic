@@ -48,10 +48,12 @@ textarea{resize:vertical}
 
 .form__actions{display:flex;gap:8px;flex-wrap:wrap}
 
+/* chips لعرض المقادير المعرفة */
 .units{display:flex;gap:8px;flex-wrap:wrap;padding:8px;border:1px dashed var(--border);border-radius:8px;background:#fafafa}
 .unit{background:var(--chip);border:1px solid #dbeafe;padding:6px 8px;border-radius:999px;font-size:12px}
 .unit .x{margin-inline-start:6px;cursor:pointer;color:#ef4444}
 
+/* فلاتر والجريد والجدول */
 .filters{display:flex;gap:8px;padding:12px;border-bottom:1px solid var(--border)}
 .grid{padding:12px}
 .table{width:100%;border-collapse:collapse}
@@ -59,7 +61,20 @@ textarea{resize:vertical}
 .table th{background:#fafafa}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:#eef2ff;border:1px solid #dbeafe}
 
+/* تنبيه/توست */
 .snack{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#111827;color:#fff;border-radius:999px;padding:10px 14px;display:flex;gap:12px;align-items:center}
 .snack .link{background:none;border:0;color:#93c5fd;cursor:pointer}
 .btn.ghost:hover{filter:brightness(.98)}
 .btn.primary:hover,.btn.danger:hover{filter:brightness(.96)}
+
+/* ✅ صورة صغيرة داخل بطاقة/جدول العناصر */
+.imgbox{
+  width:72px;height:72px;flex:0 0 72px;
+  border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fff
+}
+.imgbox img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* ولو الصورة داخل جدول عادي */
+.table img{
+  width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border)
+}
