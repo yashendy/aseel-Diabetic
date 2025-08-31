@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>📘 مكتبة الأصناف (الأدمن)</title>
-  <link rel="icon" href="data:,">
   <style>
     :root{--bg:#f8fafc;--card:#fff;--muted:#6b7280;--primary:#4f46e5;--border:#e5e7eb}
     body{font-family:system-ui,Segoe UI,Tahoma,Arial; background:var(--bg); color:#111827; margin:0}
@@ -22,67 +21,52 @@
     .card__head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
     label{display:block;font-size:13px;color:#334155;margin-bottom:6px}
     input,select,textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff}
-    textarea{resize:vertical}
     .meta{color:var(--muted);font-size:13px}
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
     .item{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fff}
-    .item .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-    .chip{font-size:12px;background:#eef2ff;border:1px solid #e0e7ff;border-radius:999px;padding:3px 8px}
     .imgbox{width:120px;height:120px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#fafafa;display:grid;place-items:center}
     .imgbox img{width:100%;height:100%;object-fit:cover}
-    .u{background:#f1f5f9;border:1px dashed #cbd5e1;border-radius:999px;padding:4px 8px;margin-inline-end:6px;display:inline-flex;gap:6px;align-items:center}
-    .u .x{cursor:pointer;font-weight:bold}
     .hidden{display:none}
-    .snack{position:fixed;inset-inline:0;bottom:16px;display:grid;place-items:center}
-    .snack>span{background:#111827;color:#fff;padding:8px 12px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15)}
     progress{width:100%}
   </style>
-  <!-- SheetJS (Excel) -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.2/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <div class="topbar">
     <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn" onclick="location.href='admin.html'">⬅︎ رجوع للوحة الأدمن</button>
+      <button class="btn" onclick="location.href='admin.html'">⬅︎ رجوع</button>
       <strong>مكتبة الأصناف</strong>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <input id="q" placeholder="ابحث بالاسم/الفئة/البراند/الوسوم…" style="min-width:260px">
-      <select id="fCat">
-        <option value="">كل الفئات</option>
-      </select>
+      <input id="q" placeholder="ابحث..." style="min-width:260px">
+      <select id="fCat"><option value="">كل الفئات</option></select>
       <button id="btnNew" class="btn">➕ إضافة صنف</button>
-
-      <input id="anyInput" type="file" accept=".csv,.xlsx,.xls" hidden />
-      <button id="importBtn" class="btn">⬆️ استيراد CSV/Excel</button>
-      <button id="templateBtn" class="btn ghost">📥 تنزيل قالب Excel</button>
-      <button id="exportBtn" class="btn ghost">⬇️ تصدير CSV</button>
     </div>
   </div>
 
   <div class="page">
-    <!-- نموذج الصنف -->
-    <section class="card" id="formCard">
+    <section class="card">
       <div class="card__head">
         <strong id="formTitle">إضافة صنف</strong>
-        <span class="meta">المسار: <code>admin/global/foodItems</code> — متوافق مع صفحة وجبات الأطفال</span>
+        <span class="meta">المسار: <code>admin/global/foodItems</code></span>
       </div>
 
       <form id="form" class="row two" novalidate>
         <input type="hidden" id="itemId">
+        <input type="hidden" id="currentImageUrl">
 
         <div class="row three" style="grid-column:1/-1">
-          <!-- صورة -->
           <div>
             <label>الصورة</label>
-            <div style="display:flex;gap:10px;align-items:center">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <div class="imgbox"><img id="imgPrev" alt="preview"></div>
               <div>
-                <input id="imgFile" type="file" accept="image/*">
+                <input id="imgFile" type="file" accept="image/*" class="hidden">
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button class="btn" type="button" id="btnPick">📤 اختيار/تغيير الصورة</button>
+                  <button class="btn danger" type="button" id="btnRemoveImg">🗑️ إزالة الصورة</button>
+                </div>
                 <progress id="imgProg" class="hidden" min="0" max="100" value="0"></progress>
-                <p class="meta">يمكن رفع صورة أو تركها فارغًا.</p>
-                <label class="meta">أو رابط صورة (اختياري)</label>
-                <input id="imageUrl" placeholder="https://..." />
+                <p class="meta">ترفع تلقائيًا إلى Firebase Storage ويُخزن رابطها في المستند.</p>
               </div>
             </div>
           </div>
@@ -98,81 +82,31 @@
           </div>
         </div>
 
+        <div><label>البراند</label><input id="brand"></div>
         <div>
-          <label>البراند</label>
-          <input id="brand">
+          <label>الوحدة</label>
+          <select id="unit"><option value="g">g</option><option value="ml">ml</option><option value="piece">حبة</option></select>
         </div>
-
-        <div>
-          <label>الوحدة الافتراضية</label>
-          <select id="unit">
-            <option value="g">جرام (لكل 100g)</option>
-            <option value="ml">مللي (لكل 100ml)</option>
-            <option value="piece">حبة</option>
-          </select>
-        </div>
-
-        <div><label>كارب/100</label><input id="carb100" type="number" step="any" placeholder="g"></div>
-        <div><label>ألياف/100</label><input id="fiber100" type="number" step="any" placeholder="g"></div>
-        <div><label>بروتين/100</label><input id="prot100" type="number" step="any" placeholder="g"></div>
-        <div><label>دهون/100</label><input id="fat100" type="number" step="any" placeholder="g"></div>
-        <div><label>سعرات/100</label><input id="kcal100" type="number" step="any" placeholder="kcal"></div>
-
-        <div>
-          <label>GI — Glycemic Index</label>
-          <input id="gi" type="number" min="0" max="110" step="any" placeholder="مثال: 55">
-          <small class="meta">GL/100g = (GI/100) × NetCarbs(100g) — حيث NetCarbs = كارب - ألياف</small>
-        </div>
-
-        <!-- GL preview -->
-        <div style="grid-column:1/-1" id="glPreview" class="meta"></div>
-
-        <!-- مقادير (measures) -->
-        <div style="grid-column:1/-1">
-          <label>مقادير جاهزة (اختياري)</label>
-          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-            <input id="uName" placeholder="اسم المقدار: ملعقة، كوب…">
-            <input id="uGrams" type="number" step="any" placeholder="جرامات (g)">
-            <button type="button" class="btn" id="btnAddUnit">إضافة مقدار</button>
-          </div>
-          <div id="unitsList" class="meta">لا توجد مقادير.</div>
-        </div>
+        <div><label>كارب/100</label><input id="carb100" type="number" step="any"></div>
+        <div><label>ألياف/100</label><input id="fiber100" type="number" step="any"></div>
+        <div><label>بروتين/100</label><input id="prot100" type="number" step="any"></div>
+        <div><label>دهون/100</label><input id="fat100" type="number" step="any"></div>
+        <div><label>سعرات/100</label><input id="kcal100" type="number" step="any"></div>
+        <div><label>GI</label><input id="gi" type="number" step="any" min="0" max="110" placeholder="اختياري"></div>
 
         <div style="grid-column:1/-1">
-          <label>وسوم (مفصولة بفواصل)</label>
-          <input id="tags" placeholder="خالي جلوتين, دايت">
-        </div>
-
-        <div class="row two" style="grid-column:1/-1">
-          <div>
-            <label>المصدر</label>
-            <input id="source" placeholder="manual, site…">
-          </div>
-          <div style="align-self:end;text-align:end">
-            <small class="meta">
-              سيتم حفظ: <b>gi</b> + <b>nutrPer100g</b> + <b>measures[]</b>، وحساب GL تلقائيًا في الواجهة.
-            </small>
-          </div>
-        </div>
-
-        <div class="row two" style="align-items:center;grid-column:1/-1">
-          <button class="btn primary" type="submit" id="btnSave">💾 حفظ</button>
-          <div style="display:flex;gap:8px;justify-content:flex-end">
-            <button class="btn danger" type="button" id="btnDelete">حذف</button>
-            <button class="btn ghost" type="button" id="btnReset">تفريغ</button>
-          </div>
+          <button class="btn primary" type="submit">💾 حفظ</button>
+          <button class="btn" type="button" id="btnReset">تفريغ</button>
+          <button class="btn danger" type="button" id="btnDelete">حذف</button>
         </div>
       </form>
     </section>
 
-    <!-- شبكة الأصناف -->
     <section class="card">
       <div class="card__head"><strong>الأصناف</strong></div>
       <div id="grid" class="grid">جارِ التحميل…</div>
     </section>
   </div>
-
-  <div id="snack" class="snack hidden"><span id="snackText"></span></div>
 
   <script type="module" src="js/food-items.js"></script>
 </body>
