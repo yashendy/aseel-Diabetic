@@ -1,40 +1,80 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>لوحة الطبيب</title>
-  <link rel="stylesheet" href="css/doctor-dashboard.css?v=3" />
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <title>بيانات الطفل — دكتور</title>
+  <link rel="stylesheet" href="css/meals.css" />
+  <style>
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+    .muted{color:#667}
+    .cardx{border:1px solid #e6eef7;border-radius:12px;padding:12px;margin:8px 0}
+    .table{width:100%;border-collapse:collapse}
+    .table th,.table td{border-bottom:1px solid #eee;padding:6px}
+  </style>
 </head>
 <body>
   <div class="container">
-    <header class="card top">
-      <div class="head">
-        <h1>👨‍⚕️ لوحة الطبيب</h1>
-        <p class="muted">يعرض الأطفال المعيّنين لك مع موافقة مشاركة فعّالة.</p>
-      </div>
-      <div class="tools">
-        <input id="search" placeholder="🔎 بحث باسم الطفل" />
-        <div class="range">
-          <span class="lbl">الفترة:</span>
-          <button class="chipBtn active" data-days="7">7 أيام</button>
-          <button class="chipBtn" data-days="14">14 يوم</button>
-          <button class="chipBtn" data-days="30">30 يوم</button>
+    <div class="card">
+      <a class="secondary" href="doctor-dashboard.html">⬅︎ رجوع</a>
+      <h2 id="title">الطفل</h2>
+      <div id="meta" class="muted"></div>
+    </div>
+
+    <!-- نموذج تعديل بيانات الطفل (الحقول المسموح بها للدكتور) -->
+    <section class="card">
+      <h3>تعديل بيانات الطفل (للدكتور)</h3>
+      <div class="grid">
+        <div class="field"><label>الوحدة</label>
+          <select id="glucoseUnit">
+            <option value="mg/dL">mg/dL</option>
+            <option value="mmol">mmol/L</option>
+          </select>
         </div>
-        <span id="totals" class="muted tiny">—</span>
+        <div class="field"><label>Carb Ratio</label><input id="carbRatio" type="number" step="any"></div>
+        <div class="field"><label>Correction Factor</label><input id="correctionFactor" type="number" step="any"></div>
+        <div class="field"><label>نوع البولس</label><input id="bolusType"></div>
+        <div class="field"><label>نوع القاعدي</label><input id="basalType"></div>
       </div>
-    </header>
+
+      <div class="grid" style="margin-top:8px">
+        <div class="field"><label>المدى الطبيعي (min)</label><input id="nMin" type="number" step="any"></div>
+        <div class="field"><label>المدى الطبيعي (max)</label><input id="nMax" type="number" step="any"></div>
+      </div>
+
+      <h4>أهداف الكارب</h4>
+      <div class="grid">
+        <div class="field"><label>فطار min</label><input id="bMin" type="number" step="any"></div>
+        <div class="field"><label>فطار max</label><input id="bMax" type="number" step="any"></div>
+        <div class="field"><label>غدا min</label><input id="lMin" type="number" step="any"></div>
+        <div class="field"><label>غدا max</label><input id="lMax" type="number" step="any"></div>
+        <div class="field"><label>عشا min</label><input id="dMin" type="number" step="any"></div>
+        <div class="field"><label>عشا max</label><input id="dMax" type="number" step="any"></div>
+      </div>
+
+      <div class="top-actions">
+        <button id="saveBtn">حفظ التعديلات</button>
+        <span id="msg" class="muted"></span>
+      </div>
+    </section>
 
     <section class="card">
-      <div id="grid" class="grid"></div>
-      <div id="empty" class="empty hidden">لا يوجد أطفال معيّنين أو لا توجد موافقة فعّالة.</div>
+      <h3>آخر الوجبات</h3>
+      <table class="table" id="mealsTbl">
+        <thead><tr><th>التاريخ</th><th>النوع</th><th>كارب (g)</th><th>جرعة مقترحة</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h3>آخر القياسات</h3>
+      <table class="table" id="measTbl">
+        <thead><tr><th>التاريخ</th><th>الوقت</th><th>النوع</th><th>القيمة</th></tr></thead>
+        <tbody></tbody>
+      </table>
     </section>
   </div>
 
-  <div id="loader" class="loader hidden" aria-hidden="true"></div>
-
-  <script type="module" src="js/firebase-config.js"></script>
-  <script type="module" src="js/doctor-dashboard.js?v=3"></script>
+  <script type="module" src="js/doctor-child.js"></script>
 </body>
 </html>
