@@ -3,29 +3,31 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>📘 مكتبة الأصناف (الأدمن)</title>
+  <title>📘 إدارة الأصناف</title>
   <link rel="stylesheet" href="food-items.css" />
   <style>body{direction:rtl}</style>
 </head>
 <body>
-  <!-- Topbar -->
+
+  <!-- الشريط العلوي -->
   <div class="topbar">
     <h1>📋 إدارة الأصناف</h1>
-    <div style="display:flex;gap:8px;align-items:center">
-      <input id="q" class="input" placeholder="🔍 بحث..." style="min-width:260px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="q" class="input" placeholder="🔍 بحث بالاسم/الفئة/العلامة..." style="min-width:260px">
       <select id="fCat" class="input"><option value="">كل الفئات</option></select>
       <button id="btnNew" class="btn">➕ إضافة صنف</button>
     </div>
   </div>
 
   <div class="page">
-    <!-- Form -->
+    <!-- الفورم -->
     <div class="card">
       <div class="card__head"><h2 id="formTitle">إضافة صنف</h2></div>
       <form id="form" class="form" novalidate>
         <input type="hidden" id="itemId">
         <input type="hidden" id="currentImageUrl">
 
+        <!-- البيانات الأساسية -->
         <div class="row two">
           <div>
             <label>الاسم <span class="req">*</span></label>
@@ -36,7 +38,6 @@
             <input id="category" class="input" placeholder="خبز، ألبان…">
           </div>
         </div>
-
         <div class="row two">
           <div>
             <label>العلامة التجارية</label>
@@ -52,7 +53,7 @@
           </div>
         </div>
 
-        <!-- ✅ القيم لكل 100 جم -->
+        <!-- القيم الغذائية (لكل 100 جم) -->
         <div class="row three">
           <div>
             <label>كارب (غ/100جم)</label>
@@ -74,12 +75,12 @@
           </div>
           <div>
             <label>سعرات (كال/100جم)</label>
-            <input id="kcal100" type="number" step="any" class="input">
+            <input id="kcal100" type="number" step="any" class="input" placeholder="يُحسب تلقائيًا إن تُرك فارغًا">
           </div>
         </div>
         <div class="row">
           <div>
-            <label>GI (اختياري)</label>
+            <label>GI (مؤشر جلايسيمي) — اختياري</label>
             <input id="gi" type="number" min="0" max="110" step="any" class="input" placeholder="0 - 110">
           </div>
         </div>
@@ -100,7 +101,7 @@
           </div>
         </div>
         <button type="button" class="btn ghost" id="btnAddMeasure">➕ إضافة مقدار</button>
-        <div id="measuresWrap" class="units"></div>
+        <div id="measuresWrap" class="units" style="margin-top:6px"></div>
 
         <!-- الصورة -->
         <div class="row two">
@@ -109,17 +110,18 @@
             <input type="file" id="imgFile" accept="image/*" hidden>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <button type="button" class="btn ghost" id="btnPick">📷 اختر صورة</button>
-              <button type="button" class="btn danger" id="btnRemoveImg">🗑️ حذف</button>
+              <button type="button" class="btn danger" id="btnRemoveImg">🗑️ حذف الصورة</button>
             </div>
-            <progress id="imgProg" class="hidden" max="100" value="0"></progress>
-            <p class="hint">تُرفع تلقائيًا إلى Firebase Storage ورابطها يُخزن في الوثيقة.</p>
+            <progress id="imgProg" class="hidden" max="100" value="0" style="margin-top:6px;width:220px"></progress>
+            <p class="hint">تُرفع الصورة إلى Firebase Storage، ورابطها يُحفظ في المستند.</p>
           </div>
           <div>
-            <!-- ✅ صورة صغيرة -->
+            <!-- صورة صغيرة -->
             <div class="imgbox"><img id="imgPrev" src="" alt="preview"></div>
           </div>
         </div>
 
+        <!-- الأزرار -->
         <div class="form__actions">
           <button type="submit" class="btn primary">💾 حفظ</button>
           <button type="reset" class="btn ghost" id="btnReset">تفريغ</button>
@@ -128,14 +130,14 @@
       </form>
     </div>
 
-    <!-- النتائج -->
+    <!-- شبكة الأصناف -->
     <div class="card">
       <div class="card__head"><h3>الأصناف</h3></div>
       <div id="grid" class="grid">جارِ التحميل…</div>
     </div>
   </div>
 
-  <!-- Firebase config (تأكد من المسار لديك) -->
+  <!-- سكربت الصفحة -->
   <script type="module" src="food-items (1).js"></script>
 </body>
 </html>
