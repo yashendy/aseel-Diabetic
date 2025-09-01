@@ -2,13 +2,15 @@
 // - يدعم measures كـ Array أو التحويل من measureQty (Map)
 // - زرارين: حفظ جديد / تعديل
 // - صورة صغيرة 60×60 مع اختيار ملف
-import { auth, db, storage } from './firebase-config.js';
+
+import { auth, db } from './firebase-config.js';
 import {
   collection, query, orderBy, getDocs, getDoc, doc,
   setDoc, updateDoc, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+// استيراد التخزين مباشرة (لا نحتاج تصديره من firebase-config.js)
 import {
-  ref, uploadBytesResumable, getDownloadURL
+  getStorage, ref, uploadBytesResumable, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
 /* ====== DOM ====== */
@@ -167,6 +169,7 @@ btnSave.addEventListener('click', async (e)=>{
   // صورة (اختياري)
   let imageUrl=null;
   if(SELECTED_FILE){
+    const storage = getStorage(); // default app
     const r = ref(storage, `food/${Date.now()}_${SELECTED_FILE.name}`);
     await uploadBytesResumable(r, SELECTED_FILE);
     imageUrl = await getDownloadURL(r);
@@ -191,6 +194,7 @@ btnUpdate.addEventListener('click', async (e)=>{
 
   let imageUrl=null;
   if(SELECTED_FILE){
+    const storage = getStorage();
     const r = ref(storage, `food/${Date.now()}_${SELECTED_FILE.name}`);
     await uploadBytesResumable(r, SELECTED_FILE);
     imageUrl = await getDownloadURL(r);
