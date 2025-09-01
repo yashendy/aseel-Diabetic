@@ -1,8 +1,8 @@
 // meals.js — صفحة الوجبات
-// الهدف في هذا التعديل: عند قراءة كتالوج الأصناف، ندعم الحالتين:
-// - measures (Array) جاهزة
-// - measureQty (Map) ونعمل لها تحويل إلى Array {name, grams}
-// وباقي منطق الصفحة يظل كما هو.
+// الهدف من الدمج:
+// 1) ربط الصفحة بطفل معيّن عبر ?child=<ID> (تحميل الاسم/الأهداف وتثبيت روابط الرجوع والإعدادات)
+// 2) الإبقاء على منطق الكتالوج/الإضافة/الحسابات كما هو
+// 3) دعم المقادير بصيغ مختلفة (measures أو measureQty) كما كان في النسخة الأصلية
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -13,46 +13,159 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/fi
 
 /* ====== مسارات Firestore ====== */
 const PUBLIC_FOOD_COLLECTION = () => collection(db, 'admin', 'global', 'foodItems');
-const params = new URLSearchParams(location.search);
-const childId = params.get('child');
 
-/* ====== DOM Helpers (نفس العناصر الموجودة عندك) ====== */
+/* ====== قراءة childId من الرابط ====== */
+const params  = new URLSearchParams(location.search);
+const childId = (params.get('child') || '').trim();
+
+/* ====== DOM Helpers ====== */
 const $ = (id)=>document.getElementById(id);
-const itemsBodyEl = $('itemsBody');
-const addBtn = $('addBtn');
-const foodPicker = $('foodPicker');
-const pickSearch = $('pickSearch');
-const pickList   = $('pickList');
-const totalCarbsEl = $('totalCarbs');
-const totalCalEl   = $('totalCal');
-const totalGLel    = $('totalGL');
-const doseFormEl   = $('doseForm');
-const doseResultEl = $('doseResult');
+
+// عناصر خاصة بالطفل/التنقل (لو غير موجودة في HTML لن يحدث خطأ)
+const childNameEl  = $('childName');     // اسم الطفل في الهيدر
+const settingsLink = $('settingsLink');  // رابط إعدادات الطفل
+const backBtn      = $('backBtn');       // زر الرجوع
+
+// عناصر عرض الهدف/الوحدة (اختيارية)
+const goalTypeEl = $('goalType');        // فطار/غدا/عشا (نص)
+const goalMinEl  = $('goalMin');
+const goalMaxEl  = $('goalMax');
+const unitChipEl = $('unitChip');
+
+// عناصر الصفحة الأصلية (تابعة للوجبات)
+const itemsBodyEl   = $('itemsBody');
+const addBtn        = $('addBtn');
+const foodPicker    = $('foodPicker');
+const pickSearch    = $('pickSearch');
+const pickList      = $('pickList');
+const totalCarbsEl  = $('totalCarbs');
+const totalCalEl    = $('totalCal');
+const totalGLel     = $('totalGL');
+const doseFormEl    = $('doseForm');
+const doseResultEl  = $('doseResult');
+
+// توست خفيف (اختياري)
+const toastEl = $('toast');
+function toast(msg, type='info'){
+  if(!toastEl) return;
+  toastEl.textContent = msg;
+  toastEl.className = `toast ${type}`;
+  toastEl.classList.remove('hidden');
+  setTimeout(()=> toastEl.classList.add('hidden'), 2500);
+}
+
+/* ====== حماية: لو مفيش childId ارجعي لصفحة الطفل/الاختيار ====== */
+(function safeRedirectIfNoChild(){
+  if(!childId){
+    // غيري الصفحة دي لو عندك صفحة أخرى لعرض/اختيار الطفل
+    location.replace('child.html');
+  }
+})();
+
+/* ====== تثبيت روابط التنقل بنفس الطفل ====== */
+(function wireNavLinks(){
+  if(settingsLink) settingsLink.href = `child-edit.html?child=${encodeURIComponent(childId)}`;
+  if(backBtn){
+    backBtn.addEventListener('click', ()=>{
+      location.href = `child.html?child=${encodeURIComponent(childId)}`;
+    });
+  }
+})();
 
 /* ====== حالة الصفحة ====== */
-let cachedFood = [];     // الكتالوج المؤقّت
+let cachedFood   = [];   // الكتالوج المؤقّت
 let currentItems = [];   // عناصر الوجبة الحالية
 
-/* ====== أدوات مساعدة ====== */
+// سياق الطفل (سيمتلئ بعد تحميل الطفل)
+let childRef  = null;
+let childData = null;
+let mealsCol  = null;    // …/children/{childId}/meals
+
+/* ====== أدوات مساعدة عامة ====== */
 const esc=(s)=> (s??'').toString().replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const toNumber=(v)=>{ const n=Number(v); return Number.isFinite(n)?n:0; };
 const round1=(n)=> Math.round((Number(n)||0)*10)/10;
 
+function activeMealType(){ return (goalTypeEl?.textContent || 'فطار').trim(); }
+function pickCarbTarget(cData){
+  // توقع: cData.carbTargets.breakfast/lunch/dinner = {min,max}
+  const map = { 'فطار':'breakfast', 'غدا':'lunch', 'عشا':'dinner' };
+  const key = map[activeMealType()] || 'breakfast';
+  const tgt = cData?.carbTargets?.[key];
+  if(tgt && typeof tgt.min === 'number' && typeof tgt.max === 'number') return {min:tgt.min, max:tgt.max};
+  return null;
+}
+
+/* ====== محاولة اكتشاف مسار الطفل (parents/* أو users/*) ====== */
+async function resolveChildRef(uid, cid){
+  // 1) parents/{uid}/children/{childId}
+  let pRef = doc(db, 'parents', uid, 'children', cid);
+  let snap = await getDoc(pRef);
+  if(snap.exists()) return { ref:pRef, data:snap.data(), pathType:'parents' };
+
+  // 2) users/{uid}/children/{childId}
+  let uRef = doc(db, 'users', uid, 'children', cid);
+  snap = await getDoc(uRef);
+  if(snap.exists()) return { ref:uRef, data:snap.data(), pathType:'users' };
+
+  return { ref:null, data:null, pathType:null };
+}
+
+/* ====== تحميل بيانات الطفل وتحديث الواجهة ====== */
+async function loadChildAndBind(uid){
+  const { ref, data, pathType } = await resolveChildRef(uid, childId);
+  if(!ref){
+    toast('لم يتم العثور على هذا الطفل لهذا الحساب', 'error');
+    setTimeout(()=> history.back(), 1000);
+    return;
+  }
+  childRef  = ref;
+  childData = data || {};
+  mealsCol  = collection(childRef, 'meals');
+
+  // اسم الطفل
+  if(childNameEl) childNameEl.textContent = (childData.displayName || childData.name || 'الطفل');
+
+  // الوحدة (اختياري لو الحقل موجود)
+  if(unitChipEl){
+    const unit = childData?.bolusType || childData?.unit || '—';
+    unitChipEl.textContent = `وحدة: ${unit}`;
+  }
+
+  // تطبيق أهداف الكارب حسب نوع الوجبة
+  const applyTargets = () => {
+    const tgt = pickCarbTarget(childData);
+    if(goalMinEl) goalMinEl.textContent = tgt ? String(tgt.min) : '—';
+    if(goalMaxEl) goalMaxEl.textContent = tgt ? String(tgt.max) : '—';
+  };
+  applyTargets();
+
+  // تحدّث تلقائيًا لو goalType اتغير داخل الصفحة
+  if(goalTypeEl){
+    const observer = new MutationObserver(applyTargets);
+    observer.observe(goalTypeEl, { childList:true, characterData:true, subtree:true });
+  }
+
+  // نجعل السياق متاحًا لباقي الأكواد (حفظ/قراءة الوجبات)
+  window.mealsChildContext = { childId, childRef, mealsCol, childData, pathType };
+}
+
+/* ================== منطق الكتالوج الأصلي ================== */
 /* ---------- تحويل المقادير إلى Array موحّدة ---------- */
 function normalizeMeasures(docData){
-  // 1) لو فيه measures Array وصحيحة، رجع نسخة نظيفة منها
+  // 1) measures Array
   if (Array.isArray(docData?.measures)) {
     return docData.measures
       .filter(m=>m && m.name && Number(m.grams)>0)
       .map(m=>({ name: m.name, grams: Number(m.grams) }));
   }
-  // 2) لو فيه measureQty كـ Map — حوّلها إلى Array
+  // 2) measureQty كـ Map
   if (docData?.measureQty && typeof docData.measureQty === 'object') {
     return Object.entries(docData.measureQty)
       .filter(([n,g])=> n && Number(g)>0)
       .map(([n,g])=>({ name:n, grams:Number(g) }));
   }
-  // 3) بدائل تاريخية (householdUnits)
+  // 3) بدائل تاريخية
   if (Array.isArray(docData?.householdUnits)) {
     return docData.householdUnits
       .filter(m=>m && m.name && Number(m.grams)>0)
@@ -61,7 +174,7 @@ function normalizeMeasures(docData){
   return [];
 }
 
-/* ---------- بناء عنصر الكتالوج ---------- */
+/* ---------- خريطة عنصر كتالوج من admin ---------- */
 function mapAdminItem(d){
   const nutr = d.nutrPer100g || {
     carbs_g:   Number(d.carbs_100g ?? 0),
@@ -97,15 +210,20 @@ async function ensureFoodCache(){
 }
 
 /* ---------- فتح منتقي الصنف ---------- */
-addBtn.addEventListener('click', async ()=>{
-  await ensureFoodCache();
-  pickSearch.value='';
-  renderPickList('');
-  foodPicker.showModal();
-});
-pickSearch.addEventListener('input', ()=> renderPickList(pickSearch.value));
+if(addBtn){
+  addBtn.addEventListener('click', async ()=>{
+    await ensureFoodCache();
+    if(pickSearch) pickSearch.value='';
+    renderPickList('');
+    if(foodPicker?.showModal) foodPicker.showModal();
+  });
+}
+if(pickSearch){
+  pickSearch.addEventListener('input', ()=> renderPickList(pickSearch.value));
+}
 
 function renderPickList(q){
+  if(!pickList) return;
   q=(q||'').trim();
   const list = cachedFood.filter(it=>{
     if(!q) return true;
@@ -125,7 +243,7 @@ function renderPickList(q){
   pickList.querySelectorAll('.pick').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const it = cachedFood.find(x=>x.id===btn.dataset.id);
-      if(it) { addRowFromCatalog(it); foodPicker.close(); }
+      if(it) { addRowFromCatalog(it); foodPicker?.close?.(); }
     });
   });
 }
@@ -159,6 +277,7 @@ function addRowFromCatalog(itemDoc){
 
 /* ---------- رسم الصفوف ---------- */
 function renderItems(){
+  if(!itemsBodyEl) return;
   itemsBodyEl.innerHTML = '';
   currentItems.forEach((r, idx)=>{
     const div = document.createElement('div');
@@ -242,11 +361,36 @@ function recalcRow(r, gramsEl, carbsEl){
 }
 function recalcAll(){
   const totalCarbs = currentItems.reduce((a,r)=> a + (r.calc.carbs||0), 0);
-  totalCarbsEl.textContent = round1(totalCarbs);
+  if(totalCarbsEl) totalCarbsEl.textContent = round1(totalCarbs);
   // (لو عندك حسابات إضافية للسعرات/GL… تفضل كما هي)
 }
 
-/* ---------- تهيئة ---------- */
+/* ================== التهيئة ================== */
 onAuthStateChanged(auth, async user=>{
+  if(!user){
+    // لو عندك صفحة تسجيل دخول مختلفة بدّليها
+    location.replace('index.html');
+    return;
+  }
+  try{
+    // حمّلي الطفل وحدّثي الواجهة
+    await loadChildAndBind(user.uid);
+  }catch(e){
+    console.error(e);
+    toast('تعذر تحميل بيانات الطفل', 'error');
+  }
+  // حمّلي كتالوج الطعام (كما في نسختك)
   await ensureFoodCache();
 });
+
+/* ====== أمثلة تكامل للحفظ (اختياري) ======
+async function saveCurrentMeal(items){
+  if(!window.mealsChildContext?.mealsCol) throw new Error('missing child context');
+  await addDoc(window.mealsChildContext.mealsCol, {
+    type: activeMealType(),
+    items,
+    createdAt: serverTimestamp()
+  });
+  toast('تم حفظ الوجبة ✔️', 'success');
+}
+*/
