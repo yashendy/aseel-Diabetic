@@ -353,57 +353,30 @@ async function loadMeasurementsOptions(){
 }
 
 /* ===== الوجبات الجاهزة ===== */
-// بدّلّي الدالة loadPresetsUI بالدالة التالية:
-async function loadPresetsUI(type = 'فطار') {
-  if (!presetGrid || !presetsCol) return;
-
-  const qy = query(presetsCol, where('type', '==', type));
-  const snap = await getDocs(qy);
-  const arr = [];
-  snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
-
-  // دالة مساعدة لاستخراج اسم معقول
-  const getDisplayName = (p) => {
-    const direct =
-      (p?.name ?? p?.title ?? p?.presetName ?? p?.meta?.name ?? '').toString().trim();
-    if (direct) return direct;
-
-    // اسم تلقائي من العناصر (لو الاسم فاضي)
-    const names = Array.isArray(p?.items) ? p.items.map(x => (x?.name || '')).filter(Boolean) : [];
-    if (names.length === 0) return 'وجبة جاهزة';
-    const sample = names.slice(0, 3).join(' + ');
-    return names.length > 3 ? `${sample} …` : sample;
-  };
-
-  presetGrid.innerHTML =
-    arr.map(p => {
-      const display = getDisplayName(p);
-      return `
-        <button class="card preset" data-id="${p.id}">
-          <div class="n">${display}</div>
-          <div class="m">
-            ${(p.items || []).slice(0, 5).map(x => `<span class="chip">${(x?.name || '').toString()}</span>`).join(' ')}
-          </div>
-        </button>
-      `;
-    }).join('') || '<div class="empty">لا توجد وجبات جاهزة لهذا النوع.</div>';
-
-  // ربط الضغط لتحميل الوجبة للمنشئ
-  presetGrid.querySelectorAll('.preset').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.id;
-      const p = arr.find(x => x.id === id);
-      if (!p) return;
-      items = (p.items || []).map(x => ({ ...x }));
-      renderItems();
-      recalcAll();
-      presetModal.classList.add('hidden');
-      document.body.style.overflow = '';
-      toast('تم إضافة الوجبة الجاهزة ✅', 'success');
+async function loadPresetsUI(type='فطار'){
+  if(!presetGrid||!presetsCol) return;
+  const qy=query(presetsCol, where('type','==',type));
+  const snap=await getDocs(qy); const arr=[]; snap.forEach(d=>arr.push({id:d.id,...d.data()}));
+  presetGrid.innerHTML=arr.map(p=>`
+    <button class="card preset" data-id="${esc(p.id)}">
+      <div class="n">${esc(p.name||'وجبة جاهزة')}</div>
+      <div class="m">${(p.items||[]).map(x=>`<span class="chip">${esc(x.name)}</span>`).join(' ')}</div>
+    </button>`).join('')||'<div class="empty">لا توجد وجبات جاهزة لهذا النوع.</div>';
+  presetGrid.querySelectorAll('.preset').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const p=arr.find(x=>x.id===btn.dataset.id); if(!p) return;
+      items=(p.items||[]).map(x=>({...x})); renderItems(); recalcAll();
+      presetModal.classList.add('hidden'); document.body.style.overflow=''; toast('تم إضافة الوجبة الجاهزة ✅','success');
     });
   });
 }
-
+async function saveAsPreset(){
+  if(!presetsCol){ toast('لم يتم تحميل الطفل','error'); return; }
+  const name=prompt('اسم الوجبة الجاهزة؟','وجبتي'); if(!name) return;
+  const type=mealTypeEl?.value||'فطار';
+  await addDoc(presetsCol,{name,type,items,createdAt:serverTimestamp()});
+  toast('تم الحفظ كوجبة جاهزة 💾','success');
+}
 
 /* ===== ربط الأحداث ===== */
 function wireEvents(){
