@@ -2,142 +2,75 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>📘 إدارة الأصناف</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📋 إدارة الأصناف</title>
   <link rel="stylesheet" href="food-items.css" />
-  <style>body{direction:rtl}</style>
 </head>
 <body>
-
-  <!-- الشريط العلوي -->
   <div class="topbar">
     <h1>📋 إدارة الأصناف</h1>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input id="q" class="input" placeholder="🔍 بحث بالاسم/الفئة/العلامة..." style="min-width:260px">
-      <select id="fCat" class="input"><option value="">كل الفئات</option></select>
-      <button id="btnNew" class="btn">➕ إضافة صنف</button>
-    </div>
+    <input type="text" id="searchInput" placeholder="🔍 بحث بالاسم أو الفئة أو العلامة" />
+    <select id="categoryFilter">
+      <option value="">كل الفئات</option>
+    </select>
+    <button id="addBtn">➕ إضافة صنف</button>
   </div>
 
-  <div class="page">
-    <!-- الفورم -->
+  <div class="container">
     <div class="card">
-      <div class="card__head"><h2 id="formTitle">إضافة صنف</h2></div>
-      <form id="form" class="form" novalidate>
-        <input type="hidden" id="itemId">
-        <input type="hidden" id="currentImageUrl">
-
-        <!-- البيانات الأساسية -->
-        <div class="row two">
-          <div>
-            <label>الاسم <span class="req">*</span></label>
-            <input id="name" class="input" required>
-          </div>
-          <div>
-            <label>الفئة</label>
-            <input id="category" class="input" placeholder="خبز، ألبان…">
-          </div>
-        </div>
-        <div class="row two">
-          <div>
-            <label>العلامة التجارية</label>
-            <input id="brand" class="input">
-          </div>
-          <div>
-            <label>الوحدة</label>
-            <select id="unit" class="input">
-              <option value="g">جرام</option>
-              <option value="ml">مللي</option>
-              <option value="piece">حبة</option>
+      <h2 id="formTitle">إضافة صنف</h2>
+      <form id="itemForm">
+        <div class="grid">
+          <label>الاسم* <input type="text" id="name" required /></label>
+          <label>الفئة <input type="text" id="category" /></label>
+          <label>العلامة التجارية <input type="text" id="brand" /></label>
+          <label>الوحدة
+            <select id="unit">
+              <option value="جرام">جرام</option>
+              <option value="مللي">مللي</option>
+              <option value="حبة">حبة</option>
             </select>
-          </div>
+          </label>
+          <label>كارب (لكل 100جم) <input type="number" id="carb" step="0.1" /></label>
+          <label>ألياف (لكل 100جم) <input type="number" id="fiber" step="0.1" /></label>
+          <label>بروتين (لكل 100جم) <input type="number" id="protein" step="0.1" /></label>
+          <label>دهون (لكل 100جم) <input type="number" id="fat" step="0.1" /></label>
+          <label>سعرات (لكل 100جم) <input type="number" id="calories" step="1" /></label>
+          <label>GI (اختياري) <input type="number" id="gi" min="0" max="110" /></label>
         </div>
-
-        <!-- القيم الغذائية (لكل 100 جم) -->
-        <div class="row three">
-          <div>
-            <label>كارب (غ/100جم)</label>
-            <input id="carb100" type="number" step="any" class="input">
+        <div>
+          <label>المقادير (نص حر)
+            <textarea id="measuresText"></textarea>
+          </label>
+          <div class="measureBox">
+            <input type="text" id="measureName" placeholder="اسم المقدار" />
+            <input type="number" id="measureWeight" placeholder="وزن (جم)" />
+            <button type="button" id="addMeasure">➕ إضافة مقدار</button>
           </div>
-          <div>
-            <label>ألياف (غ/100جم)</label>
-            <input id="fiber100" type="number" step="any" class="input">
-          </div>
-          <div>
-            <label>بروتين (غ/100جم)</label>
-            <input id="prot100" type="number" step="any" class="input">
-          </div>
+          <div id="measuresList" class="chipBox"></div>
         </div>
-        <div class="row two">
-          <div>
-            <label>دهون (غ/100جم)</label>
-            <input id="fat100" type="number" step="any" class="input">
-          </div>
-          <div>
-            <label>سعرات (كال/100جم)</label>
-            <input id="kcal100" type="number" step="any" class="input" placeholder="يُحسب تلقائيًا إن تُرك فارغًا">
-          </div>
+        <div>
+          <label>الصورة
+            <input type="file" id="imageInput" accept="image/*" />
+            <progress id="imgProg" class="hidden" value="0" max="100"></progress>
+            <div id="imgPreview"></div>
+            <button type="button" id="deleteImage">🗑️ حذف الصورة</button>
+          </label>
         </div>
-        <div class="row">
-          <div>
-            <label>GI (مؤشر جلايسيمي) — اختياري</label>
-            <input id="gi" type="number" min="0" max="110" step="any" class="input" placeholder="0 - 110">
-          </div>
-        </div>
-
-        <!-- ✅ المقادير -->
-        <div class="row">
-          <label>المقادير (نص حر)</label>
-          <textarea id="measuresText" class="input" placeholder="مثال: ثمرة، حبة، طبق، كوب..."></textarea>
-        </div>
-        <div class="row two">
-          <div>
-            <label>اسم المقدار</label>
-            <input id="measureName" class="input" placeholder="مثال: كوب">
-          </div>
-          <div>
-            <label>الوزن (جرام)</label>
-            <input id="measureWeight" type="number" class="input" placeholder="مثال: 200">
-          </div>
-        </div>
-        <button type="button" class="btn ghost" id="btnAddMeasure">➕ إضافة مقدار</button>
-        <div id="measuresWrap" class="units" style="margin-top:6px"></div>
-
-        <!-- الصورة -->
-        <div class="row two">
-          <div>
-            <label>الصورة</label>
-            <input type="file" id="imgFile" accept="image/*" hidden>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <button type="button" class="btn ghost" id="btnPick">📷 اختر صورة</button>
-              <button type="button" class="btn danger" id="btnRemoveImg">🗑️ حذف الصورة</button>
-            </div>
-            <progress id="imgProg" class="hidden" max="100" value="0" style="margin-top:6px;width:220px"></progress>
-            <p class="hint">تُرفع الصورة إلى Firebase Storage، ورابطها يُحفظ في المستند.</p>
-          </div>
-          <div>
-            <!-- صورة صغيرة -->
-            <div class="imgbox"><img id="imgPrev" src="" alt="preview"></div>
-          </div>
-        </div>
-
-        <!-- الأزرار -->
-        <div class="form__actions">
-          <button type="submit" class="btn primary">💾 حفظ</button>
-          <button type="reset" class="btn ghost" id="btnReset">تفريغ</button>
-          <button type="button" class="btn danger" id="btnDelete">🗑️ حذف</button>
+        <div class="buttons">
+          <button type="submit">💾 حفظ</button>
+          <button type="reset" id="clearBtn">تفريغ</button>
+          <button type="button" id="deleteBtn">🗑️ حذف</button>
         </div>
       </form>
     </div>
 
-    <!-- شبكة الأصناف -->
     <div class="card">
-      <div class="card__head"><h3>الأصناف</h3></div>
-      <div id="grid" class="grid">جارِ التحميل…</div>
+      <h2>الأصناف</h2>
+      <div id="itemsGrid" class="grid-container"></div>
     </div>
   </div>
 
-  <!-- سكربت الصفحة -->
   <script type="module" src="food-items.js"></script>
 </body>
 </html>
