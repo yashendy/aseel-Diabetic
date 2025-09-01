@@ -44,59 +44,55 @@
       </div>
     </section>
 
-    <!-- تبويب الأصناف -->
+    <!-- تبويب الأصناف (افتراضي) -->
     <section id="tab-foods" class="tab active">
       <div class="card">
         <h2>مكتبة الأصناف العامة</h2>
 
-        <!-- أدوات -->
         <div class="toolbar">
           <button id="btnNew" class="primary">➕ إضافة صنف</button>
           <input id="q" type="text" placeholder="بحث عن صنف..." />
         </div>
 
-        <!-- شبكة العرض -->
         <div id="grid" class="grid"></div>
 
         <!-- نافذة النموذج -->
         <dialog id="dlg">
           <form id="form" method="dialog">
             <!-- صورة المنتج -->
-            <div class="image-block" style="display:flex;align-items:center;gap:12px;margin:8px 0 14px;">
-              <img id="img" src="" alt="صورة الصنف" 
-                   style="width:60px;height:60px;object-fit:cover;
-                          border-radius:6px;border:1px solid #e5e8ef;cursor:pointer;" />
-              <input id="file" type="file" accept="image/*" style="display:none;" />
-              <div class="muted">انقري على الصورة لاختيار صورة (اختياري)</div>
+            <div class="image-block">
+              <img id="img" src="" alt="صورة الصنف" />
+              <input id="file" type="file" accept="image/*" />
+              <div class="hint">انقري على الصورة لاختيار صورة (اختياري)</div>
             </div>
 
             <!-- بيانات التغذية -->
             <div class="form-grid">
-              <label>الاسم *</label>
+              <label for="name">الاسم *</label>
               <input id="name" type="text" required />
 
-              <label>الفئة</label>
+              <label for="category">الفئة</label>
               <input id="category" type="text" placeholder="مثل: خضار، ألبان…" />
 
-              <label>البراند</label>
+              <label for="brand">البراند</label>
               <input id="brand" type="text" />
 
-              <label>كارب/100جم</label>
+              <label for="carbs">كارب/100جم</label>
               <input id="carbs" type="number" step="any" />
 
-              <label>ألياف/100جم</label>
+              <label for="fiber">ألياف/100جم</label>
               <input id="fiber" type="number" step="any" />
 
-              <label>بروتين/100جم</label>
+              <label for="prot">بروتين/100جم</label>
               <input id="prot" type="number" step="any" />
 
-              <label>دهون/100جم</label>
+              <label for="fat">دهون/100جم</label>
               <input id="fat" type="number" step="any" />
 
-              <label>سعرات/100جم</label>
+              <label for="cal">سعرات/100جم</label>
               <input id="cal" type="number" step="any" />
 
-              <label>GI</label>
+              <label for="gi">GI</label>
               <input id="gi" type="number" step="any" />
             </div>
 
@@ -112,9 +108,10 @@
 
             <!-- أزرار التحكم -->
             <div class="actions">
-              <button id="btnSave" class="primary" type="button">💾 حفظ</button>
-              <button id="btnReset" type="button">إلغاء</button>
-              <button id="btnDelete" type="button" class="danger">🗑️ حذف</button>
+              <button id="btnSave"   class="primary"   type="button">💾 حفظ جديد</button>
+              <button id="btnUpdate" class="secondary" type="button" style="display:none;">✏️ تعديل</button>
+              <button id="btnReset"  type="button">إلغاء</button>
+              <button id="btnDelete" type="button" class="danger" style="display:none;">🗑️ حذف</button>
             </div>
           </form>
         </dialog>
@@ -122,10 +119,9 @@
     </section>
   </main>
 
-  <!-- سكربت التحكم في التابات -->
+  <!-- سكربت التابات -->
   <script type="module" src="./js/admin.js?v=2025-09-01"></script>
-
-  <!-- سكربت الأصناف -->
+  <!-- سكربت الأصناف (يتعامل مع فيربيز من خلال firebase-config.js كـ Module) -->
   <script type="module" src="./js/food-items.js?v=2025-09-01"></script>
 </body>
 </html>
