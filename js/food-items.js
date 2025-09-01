@@ -1,28 +1,24 @@
 // إدارة مكتبة الأصناف (إضافة/تعديل/حذف + عرض)
-// - يدعم measures كـ Array أو التحويل من measureQty (Map)
+// - لا يوجد رفع صور: نستخدم imageUrl مباشرةً ونعاينها
 // - زرارين: حفظ جديد / تعديل
-// - صورة صغيرة 60×60 مع اختيار ملف
+// - يدعم measures كـ Array أو التحويل من measureQty (Map)
 
 import { auth, db } from './firebase-config.js';
 import {
   collection, query, orderBy, getDocs, getDoc, doc,
   setDoc, updateDoc, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-// استيراد التخزين مباشرة (لا نحتاج تصديره من firebase-config.js)
-import {
-  getStorage, ref, uploadBytesResumable, getDownloadURL
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
 /* ====== DOM ====== */
 const $ = (id)=>document.getElementById(id);
 const qEl=$('q'), grid=$('grid'), dlg=$('dlg'), form=$('form');
-const btnNew=$('btnNew'), btnSave=$('btnSave'), btnUpdate=$('btnUpdate'), btnDelete=$('btnDelete'), btnAddMeas=$('btnAddMeas');
+const btnNew=$('btnNew'), btnSave=$('btnSave'), btnUpdate=$('btnUpdate'), btnDelete=$('btnDelete'), btnAddMeas=$('btnAddMeas'), btnPreview=$('btnPreview');
 
-const nameEl=$('name'), brandEl=$('brand'), categoryEl=$('category'), imgEl=$('img'), fileEl=$('file');
+const nameEl=$('name'), brandEl=$('brand'), categoryEl=$('category'), imgEl=$('img'), imageUrlEl=$('imageUrl');
 const carbsEl=$('carbs'), fiberEl=$('fiber'), protEl=$('prot'), fatEl=$('fat'), calEl=$('cal'), giEl=$('gi');
 const measList=$('measList'), measNameEl=$('measName'), measGramsEl=$('measGrams');
 
-let ITEMS=[], MEASURES={}, SELECTED_FILE=null;
+let ITEMS=[], MEASURES={};
 
 /* ====== Helpers ====== */
 const ADMIN_ITEMS = ()=> collection(db,'admin','global','foodItems');
@@ -124,6 +120,9 @@ function collectFormData(){
   );
   const measures = Object.entries(measureQty).map(([n,g])=>({name:n, grams:g}));
 
+  // خذي الرابط كما هو (أو null لو فاضي)
+  const imageUrl = (imageUrlEl.value || '').trim() || null;
+
   return {
     name: (nameEl.value||'').trim(),
     brand: (brandEl.value||'').trim() || null,
@@ -132,21 +131,22 @@ function collectFormData(){
     gi: nn(giEl.value),
     measureQty,
     measures,
+    imageUrl,
     updatedAt: serverTimestamp()
   };
 }
 
-/* ====== Image Select ====== */
-imgEl.addEventListener('click', ()=> fileEl.click());
-fileEl.addEventListener('change', (e)=>{
-  const f=e.target.files?.[0]; if(!f) return;
-  SELECTED_FILE=f; const fr=new FileReader(); fr.onload=()=> imgEl.src=fr.result; fr.readAsDataURL(f);
+/* ====== Preview from URL ====== */
+btnPreview.addEventListener('click', ()=>{
+  const url = (imageUrlEl.value||'').trim();
+  imgEl.src = url || autoImg(nameEl.value || 'صنف');
 });
 
 /* ====== New Item ====== */
 btnNew.addEventListener('click', ()=>{
-  form.reset(); MEASURES={}; renderMeasures(); SELECTED_FILE=null;
+  form.reset(); MEASURES={}; renderMeasures();
   imgEl.src = autoImg('صنف');
+  imageUrlEl.value = '';
   delete form.dataset.id;
   btnSave.style.display='inline-block';
   btnUpdate.style.display='none';
@@ -166,19 +166,9 @@ btnSave.addEventListener('click', async (e)=>{
   e.preventDefault();
   if(!nameEl.value.trim()){ alert('اكتبي اسم الصنف'); return; }
 
-  // صورة (اختياري)
-  let imageUrl=null;
-  if(SELECTED_FILE){
-    const storage = getStorage(); // default app
-    const r = ref(storage, `food/${Date.now()}_${SELECTED_FILE.name}`);
-    await uploadBytesResumable(r, SELECTED_FILE);
-    imageUrl = await getDownloadURL(r);
-  }
-
   const toSave = collectFormData();
   await setDoc(doc(ADMIN_ITEMS(), crypto.randomUUID()), {
     ...toSave,
-    ...(imageUrl?{imageUrl}:{}),
     createdAt: serverTimestamp()
   });
 
@@ -192,19 +182,8 @@ btnUpdate.addEventListener('click', async (e)=>{
   const id=form.dataset.id;
   if(!id){ alert('لا يوجد صنف محدد للتعديل'); return; }
 
-  let imageUrl=null;
-  if(SELECTED_FILE){
-    const storage = getStorage();
-    const r = ref(storage, `food/${Date.now()}_${SELECTED_FILE.name}`);
-    await uploadBytesResumable(r, SELECTED_FILE);
-    imageUrl = await getDownloadURL(r);
-  }
-
   const toSave = collectFormData();
-  await updateDoc(doc(ADMIN_ITEMS(), id), {
-    ...toSave,
-    ...(imageUrl!==null ? { imageUrl } : {}) // لا تغيّر الصورة إن لم تُرفع واحدة جديدة
-  });
+  await updateDoc(doc(ADMIN_ITEMS(), id), toSave);
 
   delete form.dataset.id;
   dlg.close(); loadGrid();
@@ -225,7 +204,7 @@ async function openEdit(id){
   const s=await getDoc(doc(ADMIN_ITEMS(), id)); if(!s.exists()) return;
   const d=s.data();
 
-  form.reset(); SELECTED_FILE=null; MEASURES={};
+  form.reset(); MEASURES={};
   nameEl.value=d.name||''; brandEl.value=d.brand||''; categoryEl.value=d.category||'';
   carbsEl.value=d?.nutrPer100g?.carbs_g ?? d?.carbs_100g ?? '';
   fiberEl.value=d?.nutrPer100g?.fiber_g ?? d?.fiber_100g ?? '';
@@ -238,6 +217,8 @@ async function openEdit(id){
   normalizeMeasures(d).forEach(m=>{ MEASURES[m.name]=m.grams; });
   renderMeasures();
 
+  // صورة من الرابط
+  imageUrlEl.value = d.imageUrl || '';
   imgEl.src = d.imageUrl || autoImg(d.name||'صنف');
 
   form.dataset.id = s.id;
