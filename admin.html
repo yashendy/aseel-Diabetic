@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>لوحة الأدمن</title>
 
-  <!-- خط + ستايل عام -->
+  <!-- خطوط وستايل -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
 
-  <!-- CSS الخاص باللوحة -->
+  <!-- CSS -->
   <link rel="stylesheet" href="admin.css?v=2025-09-01">
+  <link rel="stylesheet" href="food-items.css?v=2025-09-01"><!-- ستايل الأصناف -->
 </head>
 <body>
   <header class="topbar">
@@ -20,7 +21,6 @@
       <span class="title">لوحة الأدمن</span>
     </div>
     <nav class="tabs">
-      <!-- خلى Tab الأصناف مفعّل مبدئيًا -->
       <button class="tab-btn" data-tab="requests">طلبات</button>
       <button class="tab-btn" data-tab="links">ربط</button>
       <button class="tab-btn active" data-tab="foods">الأصناف</button>
@@ -28,36 +28,89 @@
   </header>
 
   <main class="container">
-    <!-- محتوى طلبات -->
+    <!-- تبويب الطلبات -->
     <section id="tab-requests" class="tab">
       <div class="card">
         <h2>طلبات الأطباء/الأهالي</h2>
-        <p class="muted">هنا يتبعت جدول الطلبات… (اتركيه كما هو إن كان عندك محتوى).</p>
+        <p class="muted">هنا هيظهر جدول الطلبات…</p>
       </div>
     </section>
 
-    <!-- محتوى الربط -->
+    <!-- تبويب الربط -->
     <section id="tab-links" class="tab">
       <div class="card">
-        <h2>ربط بالحسابات</h2>
-        <p class="muted">إدارة أكواد الربط… (اتركيه كما هو إن كان عندك محتوى).</p>
+        <h2>إدارة أكواد الربط</h2>
+        <p class="muted">هنا هتظهر أكواد الربط…</p>
       </div>
     </section>
 
-    <!-- محتوى الأصناف -->
+    <!-- تبويب الأصناف -->
     <section id="tab-foods" class="tab active">
-      <!-- ✨ هنا ضعي نفس محتوى تبويب الأصناف الحالي عندك (نفس النموذج/الجدول) -->
-      <!-- لو كنتِ بالفعل قاسماه في ملفات مستقلة، سيستمر شغله لأننا لم نغيّر IDs -->
       <div class="card">
         <h2>مكتبة الأصناف العامة</h2>
-        <!-- مثال Placeholder: يمكن حذف هذا القسم إذا كان عندك المحتوى الفعلي -->
-        <p class="muted">تبويب الأصناف مفعل تلقائيًا الآن. ضعي هنا شبكتك/نموذجك الحالي.</p>
-        <!-- نهاية الـ Placeholder -->
+
+        <!-- ✨ ضيفي هنا محتوى صفحة الأصناف اللي عندك (من food-items.html) -->
+        <!-- النموذج + الجدول + الزرار بتاع "إضافة صنف" -->
+        <div id="foods-section">
+          <!-- ابدأي تنقلي الكود بتاع grid/form من food-items.html هنا -->
+          <input type="text" id="q" placeholder="بحث عن صنف...">
+          <button id="btnNew">➕ إضافة صنف</button>
+
+          <div id="grid" class="grid"></div>
+
+          <!-- Dialog للنموذج -->
+          <dialog id="dlg">
+            <form id="form" method="dialog">
+              <label>اسم الصنف:</label>
+              <input type="text" id="name" required>
+
+              <label>الماركة:</label>
+              <input type="text" id="brand">
+
+              <label>الفئة:</label>
+              <input type="text" id="category">
+
+              <label>الكربوهيدرات / 100جم:</label>
+              <input type="number" id="carbs">
+
+              <label>الألياف / 100جم:</label>
+              <input type="number" id="fiber">
+
+              <label>البروتين / 100جم:</label>
+              <input type="number" id="prot">
+
+              <label>الدهون / 100جم:</label>
+              <input type="number" id="fat">
+
+              <label>السعرات / 100جم:</label>
+              <input type="number" id="cal">
+
+              <label>GI:</label>
+              <input type="number" id="gi">
+
+              <!-- المقادير البيتية -->
+              <div id="measList" class="meas-list"></div>
+              <input type="text" id="measName" placeholder="مثال: كوب">
+              <input type="number" id="measGrams" placeholder="جرام">
+              <button id="btnAddMeas">إضافة مقياس</button>
+
+              <div class="actions">
+                <button id="btnSave">حفظ</button>
+                <button id="btnReset">إلغاء</button>
+                <button id="btnDelete" class="danger">حذف</button>
+              </div>
+            </form>
+          </dialog>
+        </div>
       </div>
     </section>
   </main>
 
-  <!-- سكربت التحكم في التابات + دعم #foods / ?tab=foods -->
+  <!-- سكربت التابات -->
   <script src="admin.js?v=2025-09-01"></script>
+
+  <!-- سكربت الأصناف -->
+  <script src="firebase-config.js?v=2025-09-01"></script>
+  <script src="food-items.js?v=2025-09-01"></script>
 </body>
 </html>
