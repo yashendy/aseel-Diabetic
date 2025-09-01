@@ -1,4 +1,5 @@
 // food-items (1).js
+// ✨ يفترض وجود firebase-config.js يجهّز auth و db
 import { auth, db } from './firebase-config.js';
 import {
   collection, updateDoc, deleteDoc, getDocs, doc, query, orderBy,
@@ -9,7 +10,7 @@ import {
   getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
-/* DOM */
+/* DOM helpers */
 const $=(id)=>document.getElementById(id);
 const qEl=$('q'), fCat=$('fCat'), grid=$('grid'), btnNew=$('btnNew');
 
@@ -17,10 +18,11 @@ const form=$('form'), formTitle=$('formTitle');
 const itemId=$('itemId'), currentImageUrl=$('currentImageUrl');
 const nameEl=$('name'), categoryEl=$('category'), brandEl=$('brand'), unitEl=$('unit');
 
-/* القيم الغذائية لكل 100 جم */
-const carb100El=$('carb100'), fiber100El=$('fiber100'), prot100El=$('prot100'), fat100El=$('fat100'), kcal100El=$('kcal100'), giEl=$('gi');
+/* قيم لكل 100جم */
+const carb100El=$('carb100'), fiber100El=$('fiber100'), prot100El=$('prot100'),
+      fat100El=$('fat100'), kcal100El=$('kcal100'), giEl=$('gi');
 
-/* المقادير */
+/* ✅ المقادير */
 const measuresTextEl=$('measuresText');
 const measureNameEl=$('measureName');
 const measureWeightEl=$('measureWeight');
@@ -35,10 +37,10 @@ const btnReset=$('btnReset'), btnDelete=$('btnDelete');
 let ITEMS=[], SELECTED_FILE=null, REMOVE_IMAGE=false;
 const MAX_IMAGE_MB=3;
 
-/* حالة محلية لوزن المقادير */
-let MEASURES={}; // { "كوب": 200, ... }
+/* حالة المقادير المحلية: { label: grams } */
+let MEASURES={};
 
-/* Utils */
+/* Utilities */
 const esc=(s)=> (s??'').toString().replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const num=(v)=>{ const n=Number(v); return Number.isFinite(n)?n:null; };
 function autoImg(name='صنف'){
@@ -52,21 +54,21 @@ function autoImg(name='صنف'){
   );
 }
 
-/* حسابات GL */
-function calcGLFor100g(nutr, gi){
+/* حساب GL */
+function glPer100g(nutr, gi){
   const carbs = +nutr?.carbs_g || 0;
   const fiber = +nutr?.fiber_g || 0;
   const net   = Math.max(0, carbs - fiber);
   if (!gi || !net) return null;
-  return +( (gi * net) / 100 ).toFixed(1);
+  return +((gi * net) / 100).toFixed(1);
 }
-function calcGLForPortion(nutr, gi, grams){
+function glForPortion(nutr, gi, grams){
   const carbs = +nutr?.carbs_g || 0;
   const fiber = +nutr?.fiber_g || 0;
   const net100 = Math.max(0, carbs - fiber);
   if (!gi || !net100 || !grams) return null;
-  const netPortion = (net100 * grams) / 100; // صافي الكارب في المقدار
-  return +( (gi * netPortion) / 100 ).toFixed(1);
+  const netPortion = (net100 * grams) / 100;
+  return +((gi * netPortion) / 100).toFixed(1);
 }
 
 /* Auth + load */
@@ -108,17 +110,19 @@ function renderGrid(){
     const n   = it.nutrPer100g || {};
     const gi  = +it.gi || 0;
 
-    // ✅ GL/100g
-    const gl100 = calcGLFor100g(n, gi);
+    // GL/100جم
+    const gl100 = glPer100g(n, gi);
 
-    // ✅ مثال GL لأول مقدار إن وُجد
+    // كل المقادير (إن وُجدت)
     const measMap = it.measureQty || it.measures || null;
-    let measLine = '';
+    let measHtml = '';
     if (measMap && Object.keys(measMap).length){
-      const k = Object.keys(measMap)[0];
-      const grams = +measMap[k] || 0;
-      const glPort = calcGLForPortion(n, gi, grams);
-      measLine = `<div class="meta">مقدار: ${esc(k)} = ${grams} جم${glPort!=null ? ` — GL≈<strong>${glPort}</strong>`:''}</div>`;
+      const parts = Object.entries(measMap).map(([label, grams])=>{
+        const g = +grams || 0;
+        const gl = glForPortion(n, gi, g);
+        return `<span class="badge" title="GL لمقدار ${esc(label)}">${esc(label)} = ${g} جم${gl!=null?` — GL≈${gl}`:''}</span>`;
+      });
+      measHtml = `<div class="meta" style="display:flex;gap:6px;flex-wrap:wrap">المقادير: ${parts.join(' ')}</div>`;
     }
 
     const card=document.createElement('div');
@@ -134,7 +138,7 @@ function renderGrid(){
           <div class="meta">${esc(it.brand||'')}</div>
           <div class="meta">القيم لكل 100 جم — كارب: ${n?.carbs_g ?? '—'}غ | ألياف: ${n?.fiber_g ?? '—'}غ | بروتين: ${n?.protein_g ?? '—'}غ | دهون: ${n?.fat_g ?? '—'}غ | سعرات: ${n?.cal_kcal ?? '—'} كال</div>
           <div class="meta">GI: ${gi || '—'}${gl100!=null ? ` — GL/100جم≈<span class="badge">${gl100}</span>`:''}</div>
-          ${measLine}
+          ${measHtml}
           ${(it.measuresText? `<div class="meta">ملاحظات المقادير: ${esc(it.measuresText)}</div>`:'')}
           <div style="margin-top:8px;display:flex;gap:8px">
             <button class="btn" data-edit>تعديل</button>
@@ -186,7 +190,7 @@ function openEdit(it){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
-/* Image handlers */
+/* صورة */
 btnPick && btnPick.addEventListener('click', ()=> imgFileEl.click());
 imgFileEl && imgFileEl.addEventListener('change', ()=>{
   const f = imgFileEl.files?.[0]||null;
@@ -202,7 +206,7 @@ btnRemoveImg && btnRemoveImg.addEventListener('click', ()=>{
   imgPrev.src = autoImg(nameEl.value||'صنف');
 });
 
-/* Upload helpers */
+/* رفع/حذف من Storage */
 async function uploadImage(itemId, file){
   const storage=getStorage();
   const path=`foodItems/${itemId}/${Date.now()}_${file.name}`.replace(/\s+/g,'_');
@@ -225,7 +229,7 @@ async function deleteImage(url){
   }catch(e){/* ignore */}
 }
 
-/* المقادير: chips */
+/* ✅ المقادير: إضافة/حذف/عرض chips */
 function renderMeasuresChips(){
   if(!measuresWrap) return;
   const entries = Object.entries(MEASURES);
@@ -246,12 +250,12 @@ btnAddMeasure && btnAddMeasure.addEventListener('click', ()=>{
   const grams=num(measureWeightEl?.value);
   if(!label){ alert('اكتب اسم المقدار (مثل: كوب)'); return; }
   if(!(grams>0)){ alert('اكتب وزن المقدار بالجرام (رقم موجب)'); return; }
-  MEASURES[label]=grams;
+  MEASURES[label]=grams;           // يبدّل السابق لو الاسم مكرر
   measureNameEl.value=''; measureWeightEl.value='';
   renderMeasuresChips();
 });
 
-/* Save */
+/* حفظ الصنف */
 form.addEventListener('submit', async (e)=>{
   e.preventDefault();
   if(!nameEl.value.trim()){ alert('الاسم مطلوب'); return; }
@@ -271,6 +275,7 @@ form.addEventListener('submit', async (e)=>{
       fat_g:     num(fat100El.value)  ?? 0,
       cal_kcal:  num(kcal100El.value) ?? Math.round(4*(+carb100El.value||0)+4*(+prot100El.value||0)+9*(+fat100El.value||0))
     },
+    /* ✅ الحقول الجديدة */
     measuresText: (measuresTextEl?.value || '').trim() || null,
     measureQty: Object.keys(MEASURES).length ? MEASURES : null,
     updatedAt: serverTimestamp()
