@@ -12,7 +12,7 @@
 
   <!-- CSS -->
   <link rel="stylesheet" href="./css/admin.css?v=2025-09-01">
-  <link rel="stylesheet" href="./css/food-items.css?v=2025-09-01"><!-- ستايل تبويب الأصناف -->
+  <link rel="stylesheet" href="./css/food-items.css?v=2025-09-01">
 </head>
 <body>
   <header class="topbar">
@@ -44,78 +44,86 @@
       </div>
     </section>
 
-    <!-- تبويب الأصناف (الافتراضي) -->
+    <!-- تبويب الأصناف -->
     <section id="tab-foods" class="tab active">
       <div class="card">
         <h2>مكتبة الأصناف العامة</h2>
 
-        <!-- محتوى تبويب الأصناف (انسخي عناصر صفحتك هنا) -->
-        <div id="foods-section">
-          <div class="toolbar">
-            <button id="btnNew" class="primary">➕ إضافة صنف</button>
-            <input id="q" type="text" placeholder="بحث عن صنف..." />
-          </div>
-
-          <div id="grid" class="grid"></div>
-
-          <!-- نافذة النموذج -->
-          <dialog id="dlg">
-            <form id="form" method="dialog">
-              <div class="form-grid">
-                <label>الاسم *</label>
-                <input id="name" type="text" required />
-
-                <label>الفئة</label>
-                <input id="category" type="text" placeholder="مثل: خضار، ألبان…" />
-
-                <label>البراند</label>
-                <input id="brand" type="text" />
-
-                <label>كارب/100جم</label>
-                <input id="carbs" type="number" step="any" />
-
-                <label>ألياف/100جم</label>
-                <input id="fiber" type="number" step="any" />
-
-                <label>بروتين/100جم</label>
-                <input id="prot" type="number" step="any" />
-
-                <label>دهون/100جم</label>
-                <input id="fat" type="number" step="any" />
-
-                <label>سعرات/100جم</label>
-                <input id="cal" type="number" step="any" />
-
-                <label>GI</label>
-                <input id="gi" type="number" step="any" />
-              </div>
-
-              <!-- المقادير البيتية -->
-              <div class="measures-block">
-                <div id="measList" class="meas-list"></div>
-                <div class="meas-add">
-                  <input id="measName" type="text" placeholder="مثال: كوب" />
-                  <input id="measGrams" type="number" step="any" placeholder="جرام" />
-                  <button id="btnAddMeas" type="button" class="secondary">إضافة مقياس</button>
-                </div>
-              </div>
-
-              <div class="actions">
-                <button id="btnSave" class="primary" type="submit">حفظ</button>
-                <button id="btnReset" type="button">إلغاء</button>
-                <button id="btnDelete" type="button" class="danger">حذف</button>
-              </div>
-            </form>
-          </dialog>
+        <!-- أدوات -->
+        <div class="toolbar">
+          <button id="btnNew" class="primary">➕ إضافة صنف</button>
+          <input id="q" type="text" placeholder="بحث عن صنف..." />
         </div>
+
+        <!-- شبكة العرض -->
+        <div id="grid" class="grid"></div>
+
+        <!-- نافذة النموذج -->
+        <dialog id="dlg">
+          <form id="form" method="dialog">
+            <!-- صورة المنتج -->
+            <div class="image-block" style="display:flex;align-items:center;gap:12px;margin:8px 0 14px;">
+              <img id="img" src="" alt="صورة الصنف" style="width:120px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #e5e8ef;cursor:pointer;" />
+              <input id="file" type="file" accept="image/*" style="display:none;" />
+              <div class="muted">انقري على الصورة لاختيار صورة (اختياري)</div>
+            </div>
+
+            <!-- بيانات التغذية -->
+            <div class="form-grid">
+              <label>الاسم *</label>
+              <input id="name" type="text" required />
+
+              <label>الفئة</label>
+              <input id="category" type="text" placeholder="مثل: خضار، ألبان…" />
+
+              <label>البراند</label>
+              <input id="brand" type="text" />
+
+              <label>كارب/100جم</label>
+              <input id="carbs" type="number" step="any" />
+
+              <label>ألياف/100جم</label>
+              <input id="fiber" type="number" step="any" />
+
+              <label>بروتين/100جم</label>
+              <input id="prot" type="number" step="any" />
+
+              <label>دهون/100جم</label>
+              <input id="fat" type="number" step="any" />
+
+              <label>سعرات/100جم</label>
+              <input id="cal" type="number" step="any" />
+
+              <label>GI</label>
+              <input id="gi" type="number" step="any" />
+            </div>
+
+            <!-- المقادير البيتية -->
+            <div class="measures-block">
+              <div id="measList" class="meas-list"></div>
+              <div class="meas-add">
+                <input id="measName" type="text" placeholder="مثال: كوب" />
+                <input id="measGrams" type="number" step="any" placeholder="جرام" />
+                <button id="btnAddMeas" type="button" class="secondary">إضافة مقياس</button>
+              </div>
+            </div>
+
+            <!-- أزرار التحكم -->
+            <div class="actions">
+              <button id="btnSave" class="primary" type="submit">حفظ</button>
+              <button id="btnReset" type="button">إلغاء</button>
+              <button id="btnDelete" type="button" class="danger">حذف</button>
+            </div>
+          </form>
+        </dialog>
       </div>
     </section>
   </main>
 
-  <!-- سكربت التحكم في التابات (لا يحتاج فيربيز) -->
+  <!-- سكربت التحكم في التابات -->
   <script type="module" src="./js/admin.js?v=2025-09-01"></script>
 
-  <!-- سكربت الأصناف: يستورد firebase-config.js داخليًا -->
+  <!-- سكربت الأصناف -->
   <script type="module" src="./js/food-items.js?v=2025-09-01"></script>
 </body>
 </html>
