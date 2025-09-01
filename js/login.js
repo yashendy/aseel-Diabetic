@@ -1,7 +1,7 @@
 // js/login.js (بديل كامل)
 import { auth, db } from './firebase-config.js';
 import {
-  onAuthStateChanged, signInWithEmailAndPassword
+ // onAuthStateChanged, signInWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
