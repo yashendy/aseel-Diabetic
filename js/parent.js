@@ -1,9 +1,8 @@
-<!-- js/parent.js -->
-<script type="module">
+// js/parent.js
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, getDocs, query, orderBy, doc, getDoc, updateDoc, writeBatch
+  collection, getDocs, query, orderBy, doc, getDoc, writeBatch
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const kidsGrid = document.getElementById('kidsGrid');
@@ -33,7 +32,6 @@ const GEMINI_MODEL   = "gemini-1.5-flash";
 let currentUser, kids = [], filtered = [];
 const aiState = { child:null, chatSession:null };
 
-const pad=n=>String(n).padStart(2,'0');
 function calcAge(bd){if(!bd)return '-';const b=new Date(bd),t=new Date();let a=t.getFullYear()-b.getFullYear();const m=t.getMonth()-b.getMonth();if(m<0||(m===0&&t.getDate()<b.getDate()))a--;return a;}
 function avatarColor(i){const c=['#42A5F5','#7E57C2','#66BB6A','#FFA726','#26C6DA','#EC407A','#8D6E63'];return c[i%c.length]}
 function esc(s){return (s||'').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;")}
@@ -72,6 +70,11 @@ function render(){
 
   filtered.forEach((k,idx)=>{
     const linked = !!k.assignedDoctor;
+    const consent = (k.sharingConsent===true) || (k.sharingConsent && k.sharingConsent.doctor===true);
+    const badge = linked
+      ? `<span class="badge ${consent?'ok':'warn'}">${consent?'مرتبط بطبيب (موافقة فعّالة)':'مرتبط بطبيب (الموافقة موقوفة)'}</span>`
+      : `<span class="badge">غير مرتبط بطبيب</span>`;
+
     const card=document.createElement('div');
     card.className='kid card';
     card.innerHTML=`
@@ -80,7 +83,7 @@ function render(){
         <div>
           <div class="name">${esc(k.name||'طفل')}</div>
           <div class="meta">${esc(k.gender||'-')} • العمر: ${calcAge(k.birthDate)} سنة</div>
-          ${linked ? `<span class="badge ok">مرتبط بطبيب</span>` : `<span class="badge">غير مرتبط بطبيب</span>`}
+          ${badge}
         </div>
       </div>
 
@@ -94,8 +97,17 @@ function render(){
         <button class="btn kid-ai" data-id="${k.id}">🤖 مساعد هذا الطفل</button>
       </div>
     `;
-    card.querySelector('.kid-open').onclick = e=>{ e.stopPropagation(); location.href = `child.html?child=${encodeURIComponent(k.id)}`; };
-    card.querySelector('.kid-ai').onclick   = e=>{ e.stopPropagation(); openAIForChild(k); };
+
+    card.querySelector('.kid-open').onclick = e=>{
+      e.stopPropagation();
+      location.href = `child.html?child=${encodeURIComponent(k.id)}`;
+    };
+
+    card.querySelector('.kid-ai').onclick = e=>{
+      e.stopPropagation();
+      openAIForChild(k);
+    };
+
     kidsGrid.appendChild(card);
   });
 }
@@ -118,14 +130,17 @@ async function linkDoctor(){
     if(d.used){ linkMsg.textContent='الكود مستخدم بالفعل.'; loader(false); return; }
 
     const doctorId = d.doctorId;
-    // عيّني الطبيب على جميع أطفال هذا الوليّ
+    // عيّني الطبيب على جميع أطفال هذا الوليّ + تفعيل الموافقة للطبيب
     const ref=collection(db,`parents/${currentUser.uid}/children`);
     const snap=await getDocs(ref);
     const batch = writeBatch(db);
     snap.forEach(docu=>{
-      batch.update(docu.ref, { assignedDoctor: doctorId, assignedDoctorInfo:{uid: doctorId} });
+      batch.update(docu.ref, {
+        assignedDoctor: doctorId,
+        assignedDoctorInfo:{uid: doctorId},
+        sharingConsent: { doctor: true }
+      });
     });
-    // حدّث الكود كمستخدم
     batch.update(codeRef, { used:true, parentId: currentUser.uid });
     await batch.commit();
 
@@ -140,11 +155,18 @@ async function linkDoctor(){
   }
 }
 
-/* ====== المساعد الذكي (كما كان) ====== */
+/* ====== المساعد الذكي ====== */
 function openAIWidget(){ aiWidget.classList.remove('hidden'); aiWidget.dataset.minimized='0'; }
 function closeAIWidget(){ aiWidget.classList.add('hidden'); aiMessages.innerHTML=''; aiState.child=null; aiState.chatSession=null; aiContext.textContent='بدون سياق طفل'; }
 function appendMsg(role,text){const d=document.createElement('div');d.className=role==='assistant'?'msg assistant':(role==='system'?'msg sys':'msg user');d.textContent=text;aiMessages.appendChild(d);aiMessages.scrollTop=aiMessages.scrollHeight;}
-function openAIForChild(child){ aiState.child=child; aiState.chatSession=null; openAIWidget(); aiContext.textContent=`سياق: ${child.name||'طفل'}`; appendMsg('system',`تم فتح المساعد لسياق ${child.name||'هذا الطفل'}.`); }
+
+function openAIForChild(child){
+  aiState.child=child; aiState.chatSession=null;
+  openAIWidget();
+  aiContext.textContent=`سياق: ${child.name||'طفل'}`;
+  appendMsg('system',`تم فتح المساعد لسياق ${child.name||'هذا الطفل'}.`);
+}
+
 async function callGemini(systemText,userText){
   if(!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY غير معرف.');
   const { GoogleGenerativeAI } = window;
@@ -163,10 +185,10 @@ async function sendAI(){
   try{const reply=await callGemini("مساعد صحي", text);waitEl.remove();appendMsg('assistant',reply);}
   catch(e){waitEl.remove();appendMsg('assistant','تعذّر الاتصال.');console.error(e);}
 }
+
 aiFab?.addEventListener('click', ()=>openAIForChild({name:""}));
 aiClose?.addEventListener('click', closeAIWidget);
 aiMin?.addEventListener('click', ()=>aiWidget.classList.toggle('minimized'));
 aiSend?.addEventListener('click', sendAI);
 aiInput?.addEventListener('keydown', e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendAI();}});
 quickBtns.forEach(b=>b.addEventListener('click',()=>{ aiInput.value=b.dataset.q||''; aiInput.focus(); }));
-</script>
