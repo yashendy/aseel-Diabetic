@@ -1,3 +1,4 @@
+<script type="module">
 // js/meals.js
 // ————————————————————————————————————————————————
 // يعمل مع meals.html الحالي كما هو:
@@ -272,21 +273,107 @@ async function repeatLast(){
   renderItems(); recalcAll(); toast('تم جلب آخر وجبة ✅','success');
 }
 
-/* ===== الوصول للهدف بتكبير الكميات ===== */
+/* ===== أدوات مساعدة لضبط الكميات ===== */
+const STEP_GRAMS = 1;          // أقرب 1 جم
+const STEP_HOUSE = 0.25;       // أقرب 0.25 من الوحدة البيتية
+function roundByStep(val, step){ return Math.round(val/step)*step; }
+function clampMinUsed(val, step){
+  // منع الصفر إذا كان الصنف مستخدمًا أصلاً
+  return (val<=0)?step:val;
+}
+function isZeroCarb(item){
+  return (toNum(item.per100?.carbs)===0);
+}
+function recalcRow(r){
+  // تحديث الجرامات والماكروز بعد أي تغيير كمية
+  if(r.unit==='grams'){ r.grams=toNum(r.qty); }
+  else{
+    const m=r.measures.find(x=>x.name===r.measure);
+    r.grams=toNum(r.qty)*(m?.grams||0);
+  }
+  r.calc.carbs=r.per100.carbs*(r.grams/100);
+  r.calc.fiber=r.per100.fiber*(r.grams/100);
+  r.calc.cal  =r.per100.cal  *(r.grams/100);
+  r.calc.prot =r.per100.prot *(r.grams/100);
+  r.calc.fat  =r.per100.fat  *(r.grams/100);
+}
+function currentCarbs(){
+  const totalC=items.reduce((a,r)=>a+r.calc.carbs,0);
+  const totalF=items.reduce((a,r)=>a+r.calc.fiber,0);
+  return useNetCarbsEl?.checked ? Math.max(0,totalC-totalF) : totalC;
+}
+function glDensity(r){
+  // كثافة GL لكل جرام — نستخدم GI إن وجد وإلا 50%
+  const gi = (typeof r.gi==='number') ? r.gi : 50;
+  const netPerGram = Math.max(0, (r.per100.carbs - r.per100.fiber) / 100);
+  return netPerGram * (gi/100);
+}
+
+/* ===== الوصول للهدف — بتحسين تدريجي مع التقريب ===== */
 function reachTarget(){
   const min=Number(goalMinEl.textContent)||0, max=Number(goalMaxEl.textContent)||0;
   if(!min&&!max){ toast('لا يوجد هدف محدد','info'); return; }
   const target=max||min;
-  const current=useNetCarbsEl?.checked?Math.max(0,items.reduce((a,r)=>a+r.calc.carbs-r.calc.fiber,0)):items.reduce((a,r)=>a+r.calc.carbs,0);
-  if(current<=0||items.length===0){ toast('أضف عناصر أولاً','info'); return; }
-  const scale=target/current;
-  items.forEach(r=>{
-    if(r.unit==='grams'){ r.qty=round1(toNum(r.qty)*scale); r.grams=r.qty; }
-    else{ r.qty=round1(toNum(r.qty)*scale); const m=r.measures.find(x=>x.name===r.measure); r.grams=r.qty*(m?.grams||0); }
-    r.calc.carbs=r.per100.carbs*(r.grams/100); r.calc.fiber=r.per100.fiber*(r.grams/100);
-    r.calc.cal=r.per100.cal*(r.grams/100); r.calc.prot=r.per100.prot*(r.grams/100); r.calc.fat=r.per100.fat*(r.grams/100);
-  });
-  renderItems(); recalcAll(); toast('تم ضبط الكميات على الهدف 🎯','success');
+
+  if(items.length===0){ toast('أضف عناصر أولاً','info'); return; }
+
+  // استبعاد أصناف صفر كارب من أي تعديل
+  const adjustable = items.filter(r=>!isZeroCarb(r));
+  if(adjustable.length===0){ toast('كل الأصناف صفر كارب — لا تعديل','info'); return; }
+
+  // ترتيب حسب الكثافة الجلايسيمية الأعلى أولًا
+  adjustable.sort((a,b)=>glDensity(b)-glDensity(a));
+
+  let cur = currentCarbs();
+  if(cur===0){ toast('اضبطي كميات مبدئية أولاً ثم استخدمي الضبط','info'); return; }
+
+  // إذا أقل من الهدف: نزوّد تدريجيًا، وإذا أعلى: نقلّل تدريجيًا
+  const increasing = cur < target;
+  let safety = 20000; // حماية من الحلقات
+
+  while(safety-- > 0){
+    cur = currentCarbs();
+    if(increasing){
+      if(cur >= target - 0.01) break; // وصلنا قريبًا بدون تجاوز
+      // نرفع الأعلى GL أولًا
+      let changed=false;
+      for(const r of adjustable){
+        const step = (r.unit==='grams') ? STEP_GRAMS : STEP_HOUSE;
+        r.qty = roundByStep(clampMinUsed((toNum(r.qty)||0)+step, step), step);
+        recalcRow(r);
+        const after = currentCarbs();
+        if(after > target){ // لا نتجاوز الحد — تراجع عن آخر حركة
+          // جرّبي ربع الخطوة في التقدير البيتي، أو 1جم لا أقل
+          if(r.unit==='household'){
+            const trySmall = roundByStep((toNum(r.qty)-STEP_HOUSE/2), STEP_HOUSE);
+            if(trySmall>0){
+              r.qty = trySmall; recalcRow(r);
+            }
+          }
+        }else{
+          changed=true;
+        }
+        if(changed) break;
+      }
+      if(!changed) break; // ماقدرناش نزود أكثر بدون تجاوز
+    }else{
+      // تقليل حتى ندخل تحت/داخل الحد
+      if(cur <= target + 0.01) break;
+      let changed=false;
+      for(const r of adjustable){
+        const step = (r.unit==='grams') ? STEP_GRAMS : STEP_HOUSE;
+        const next = roundByStep(Math.max(step, toNum(r.qty)-step), step); // لا ننزل تحت الحد الأدنى
+        if(next !== toNum(r.qty)){
+          r.qty = next; recalcRow(r);
+          changed=true; break;
+        }
+      }
+      if(!changed) break; // لا مزيد من التخفيض المسموح
+    }
+  }
+
+  renderItems(); recalcAll();
+  toast('تم ضبط الكميات على الهدف 🎯','success');
 }
 
 /* ===== حفظ/إعادة/طباعة ===== */
@@ -446,3 +533,4 @@ onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.replace('index.html'); return; }
   try{ await boot(user); } catch(e){ console.error(e); toast('حدث خطأ غير متوقع','error'); }
 });
+</script>
