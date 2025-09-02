@@ -20,6 +20,7 @@
           <input type="text" id="search" placeholder="مثال: سارة" />
         </div>
         <a class="add-btn" href="add-child.html">➕ إضافة طفل</a>
+        <button id="openLinkDlg" class="add-btn" type="button">🔗 ربط دكتور</button>
       </div>
     </header>
 
@@ -27,10 +28,25 @@
     <div id="empty" class="empty hidden">لا يوجد أطفال بعد… ابدئي بإضافة طفل جديد.</div>
   </div>
 
-  <!-- زر المساعد العائم -->
-  <button class="ai-fab" id="aiFab" title="مساعد ذكي">🤖</button>
+  <!-- حوار إدخال كود الربط -->
+  <dialog id="linkDlg">
+    <form method="dialog" style="min-width:min(92vw,480px)">
+      <h3>ربط دكتور</h3>
+      <p class="muted">أدخلي الكود الذي أرسله لكِ الطبيب.</p>
+      <div class="field">
+        <label for="linkCodeInput">الكود</label>
+        <input id="linkCodeInput" type="text" placeholder="ABC1234" />
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+        <button id="linkCancel" type="button">إلغاء</button>
+        <button id="linkSubmit" class="btn primary" type="button">ربط</button>
+      </div>
+      <div id="linkMsg" class="muted" style="margin-top:8px"></div>
+    </form>
+  </dialog>
 
-  <!-- ويدجت المساعد -->
+  <!-- زر المساعد العائم + الويدجت كما لديك -->
+  <button class="ai-fab" id="aiFab" title="مساعد ذكي">🤖</button>
   <div class="ai-widget hidden" id="aiWidget">
     <div class="ai-header">
       <div class="ai-title">
@@ -58,15 +74,13 @@
 
   <div id="loader" class="loader hidden">جارٍ تحميل البيانات…</div>
 
-  <!-- مفتاح API (لو بتستخدمي المساعد الذكي من نفس الصفحة) -->
   <script> window.GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"; </script>
 
-  <!-- سكربت الصفحة -->
   <script type="module" src="js/firebase-config.js"></script>
   <script type="module">
     import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
     window.GoogleGenerativeAI = GoogleGenerativeAI;
-    import "./js/parent.js?v=2";
+    import "./js/parent.js?v=3";
   </script>
 </body>
 </html>
