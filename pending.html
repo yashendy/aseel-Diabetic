@@ -9,8 +9,32 @@
 <body>
   <div class="container card" style="margin-top:40px;max-width:720px">
     <h2>حسابك كـ دكتور قيد المراجعة ✅</h2>
-    <p>سيوافق الأدمن قريبًا. بعد الموافقة سيتم تحويلك تلقائيًا لصفحة الدكتور عند تسجيل الدخول.</p>
+    <p>سيوافق الأدمن قريبًا. سنحوّلك تلقائيًا بعد الاعتماد.</p>
     <a href="index.html" class="secondary">⬅️ العودة لصفحة الدخول</a>
+    <div id="hint" class="muted" style="margin-top:10px"></div>
   </div>
+
+  <script type="module">
+    import { auth, db } from './js/firebase-config.js';
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+    import { doc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+    onAuthStateChanged(auth, async (u)=>{
+      if(!u) return location.href='index.html';
+      const userRef = doc(db,'users',u.uid);
+      const docRef  = doc(db,'doctors',u.uid);
+
+      // راقب كلا المستندين
+      onSnapshot(userRef, (s)=>{
+        const role = s.exists()? (s.data().role||'') : '';
+        if(role==='doctor') location.href='doctor-dashboard.html';
+      });
+      onSnapshot(docRef, (s)=>{
+        const st = s.exists()? (s.data().status||'') : '';
+        if(st==='approved') location.href='doctor-dashboard.html';
+        if(st==='rejected')  document.getElementById('hint').textContent='تم رفض الطلب. يمكنك تعديل بياناتك وإعادة الإرسال.';
+      });
+    });
+  </script>
 </body>
 </html>
