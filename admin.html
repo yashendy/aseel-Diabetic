@@ -23,7 +23,6 @@
   </header>
 
   <main class="container">
-    <!-- تبويب الطلبات -->
     <section id="tab-requests" class="tab active">
       <div class="card">
         <div class="head">
@@ -31,9 +30,7 @@
             <h1>طلبات اعتماد الأطباء</h1>
             <div class="muted">راجع الأطباء بحالة "pending"</div>
           </div>
-          <div class="right">
-            <button id="refresh" class="btn">تحديث</button>
-          </div>
+          <div class="right"><button id="refresh" class="btn">تحديث</button></div>
         </div>
         <div id="stats" class="stat tiny muted"></div>
         <div id="grid" class="grid"></div>
@@ -41,7 +38,6 @@
       </div>
     </section>
 
-    <!-- تبويب الربط -->
     <section id="tab-links" class="tab">
       <div class="card">
         <h2>أكواد الربط</h2>
@@ -57,7 +53,6 @@
       </div>
     </section>
 
-    <!-- تبويب الأصناف -->
     <section id="tab-foods" class="tab">
       <div class="card">
         <h2>مكتبة الأصناف العامة</h2>
@@ -66,16 +61,14 @@
           <input id="q" type="text" placeholder="بحث عن صنف..." />
         </div>
         <div id="foodsGrid" class="grid"></div>
-        <dialog id="dlg"><!-- … كما لديك … --></dialog>
+        <dialog id="dlg"><!-- النموذج كما عندك داخل food-items.js يولده/يتعامل معه --></dialog>
       </div>
     </section>
   </main>
 
   <div id="toast" class="toast hidden"></div>
 
-  <!-- سكربت إدارة التابات + اعتماد الأطباء + البحث في الأكواد -->
   <script type="module" src="./js/admin.js?v=1"></script>
-  <!-- سكربت الأصناف كما لديك -->
   <script type="module" src="./js/food-items.js?v=2025-09-01"></script>
 </body>
 </html>
