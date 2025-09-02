@@ -1,25 +1,22 @@
-<!-- js/admin.js -->
-<script type="module">
+// js/admin.js
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, query, where, getDocs, doc, updateDoc, getDoc, orderBy, limit, startAt, endAt
+  collection, query, where, getDocs, doc, updateDoc, getDoc, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-const $=s=>document.querySelector(s);
-const $$=s=>document.querySelectorAll(s);
+const $ = s=>document.querySelector(s);
+const $$= s=>document.querySelectorAll(s);
 const toast=(t)=>{ const el=$('#toast'); el.textContent=t; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),1500); };
 
 onAuthStateChanged(auth, async(u)=>{
   if(!u){ location.href='index.html'; return; }
-  // تحقّق أنه أدمن
   const us = await getDoc(doc(db,'users',u.uid));
   if(!us.exists() || us.data().role!=='admin'){ alert('صلاحية الأدمن مطلوبة'); location.href='index.html'; return; }
   boot();
 });
 
 function boot(){
-  // تبويب بسيط
   $$('.tab-btn').forEach(b=>{
     b.onclick=()=>{
       $$('.tab-btn').forEach(x=>x.classList.remove('active'));
@@ -31,7 +28,6 @@ function boot(){
 
   loadPendingDoctors();
   $('#refresh').onclick = loadPendingDoctors;
-
   $('#codeFind').onclick = findCode;
 }
 
@@ -77,7 +73,7 @@ async function rejectDoctor(uid){
 }
 
 async function findCode(){
-  const v = ($('#codeQ').value||'').trim();
+  const v = ($('#codeQ').value||'').trim().toUpperCase();
   if(!v){ $('#codeList').innerHTML=''; $('#codeEmpty').style.display='block'; return; }
   const qy = query(collection(db,'linkCodes'), where('__name__','>=',v), where('__name__','<=',v+'\uf8ff'), limit(10));
   const snap = await getDocs(qy);
@@ -89,8 +85,10 @@ async function findCode(){
     el.className='cardItem';
     el.innerHTML=`
       <div class="row">
-        <div><div class="name">الكود: <b>${esc(s.id)}</b></div>
-        <div class="meta">دكتور: ${esc(d.doctorId||'-')} • مستخدم: ${esc(d.used?'نعم':'لا')} • وليّ: ${esc(d.parentId||'-')}</div></div>
+        <div>
+          <div class="name">الكود: <b>${esc(s.id)}</b></div>
+          <div class="meta">دكتور: ${esc(d.doctorId||'-')} • مستخدم: ${d.used?'نعم':'لا'} • وليّ: ${esc(d.parentId||'-')}</div>
+        </div>
       </div>
     `;
     $('#codeList').appendChild(el);
@@ -99,4 +97,3 @@ async function findCode(){
 }
 
 function esc(s){return (s??'').toString().replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));}
-</script>
