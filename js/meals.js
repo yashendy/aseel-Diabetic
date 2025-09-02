@@ -524,4 +524,3 @@ onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.replace('index.html'); return; }
   try{ await boot(user); } catch(e){ console.error(e); toast('حدث خطأ غير متوقع','error'); }
 });
-</script>
