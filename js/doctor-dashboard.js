@@ -1,5 +1,4 @@
-<!-- js/doctor-dashboard.js -->
-<script type="module">
+// js/doctor-dashboard.js (Module)
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
@@ -12,8 +11,6 @@ let allChildren = [];
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href='index.html'; return; }
 
-  // لو مش معتمد، امنعه
-  // (اختياري: جلب users/{uid} role… لكن نفترض أنه دخل بعد الموافقة)
   const qy = query(collectionGroup(db,'children'), where('assignedDoctor','==', user.uid));
   const snap = await getDocs(qy);
   allChildren = [];
@@ -69,7 +66,7 @@ async function generateLinkCode(doctorId){
     doctorId, used:false, parentId:null, createdAt: serverTimestamp()
   });
   $('linkCode').textContent = code;
-  document.getElementById('genWrap').classList.remove('hidden');
+  $('genWrap').classList.remove('hidden');
 }
 function copyCode(){
   const v = $('linkCode').textContent.trim();
@@ -77,4 +74,3 @@ function copyCode(){
   navigator.clipboard.writeText(v);
   alert('تم نسخ الكود');
 }
-</script>
