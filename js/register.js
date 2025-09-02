@@ -1,5 +1,4 @@
-<!-- js/register.js -->
-<script type="module">
+// js/register.js (Module, بدون تعليقات HTML)
 import { auth, db } from './firebase-config.js';
 import {
   createUserWithEmailAndPassword, updateProfile, onAuthStateChanged
@@ -7,7 +6,7 @@ import {
 import { doc, setDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const ROUTES = {
-  parent:  'parent.html',          // ← لوحتك الحالية لولي الأمر
+  parent:  'parent.html',
   doctor:  'doctor-dashboard.html',
   admin:   'admin.html',
   pending: 'pending.html'
@@ -56,18 +55,16 @@ f.addEventListener('submit', async (e)=>{
     const cred = await createUserWithEmailAndPassword(auth, emailEl.value.trim(), passEl.value);
     await updateProfile(cred.user, { displayName: nameEl.value.trim() });
 
-    // users/{uid}
     await setDoc(doc(db,'users', cred.user.uid), {
       uid: cred.user.uid,
       displayName: nameEl.value.trim(),
       email: emailEl.value.trim(),
-      role, // parent | doctor-pending
+      role,
       specialty: role==='doctor-pending' ? specialty : null,
       clinic:    role==='doctor-pending' ? clinic    : null,
       createdAt: serverTimestamp()
     }, { merge:true });
 
-    // parents/{uid} — فقط لو Parent
     if (role === 'parent'){
       await setDoc(doc(db, `parents/${cred.user.uid}`), {
         ownerUid: cred.user.uid,
@@ -77,7 +74,6 @@ f.addEventListener('submit', async (e)=>{
       }, { merge:true });
     }
 
-    // doctors/{uid} — فقط لو Doctor (بحالة pending)
     if (role === 'doctor-pending'){
       await setDoc(doc(db, `doctors/${cred.user.uid}`), {
         uid: cred.user.uid,
@@ -95,4 +91,3 @@ f.addEventListener('submit', async (e)=>{
     say(err.message || 'تعذّر إنشاء الحساب');
   }
 });
-</script>
