@@ -99,7 +99,7 @@ document.getElementById("childForm").addEventListener("submit", async (e) => {
     const childrenRef = collection(db, `parents/${currentUser.uid}/children`);
     await addDoc(childrenRef, childData);
     alert("✅ تم حفظ بيانات الطفل بنجاح!");
-    window.location.href = "dashboard.html";
+    window.location.href = "parent.html";
   } catch (error) {
     alert("❌ حدث خطأ أثناء الحفظ:\n" + error.message);
   }
