@@ -1,6 +1,4 @@
 // js/meals.js
- ————————————————————————————————————————————————
-
 import { auth, db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs, addDoc,
