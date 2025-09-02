@@ -5,29 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>لوحة الدكتور</title>
   <link rel="stylesheet" href="css/meals.css" />
-  <style>
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
-    .cardx{border:1px solid #e6eef7;border-radius:12px;padding:12px}
-    .child-card{display:flex;gap:10px;align-items:center;justify-content:space-between}
-    .muted{color:#667}
-    .search{margin:8px 0}
-  </style>
+  <link rel="stylesheet" href="css/doctor-dashboard.css" />
 </head>
 <body>
   <div class="container">
     <div class="card">
-      <h2>لوحة الدكتور</h2>
-      <div class="search">
-        <input id="q" placeholder="ابحث بالاسم…" />
+      <div class="top">
+        <h1>لوحة الدكتور</h1>
+        <div class="tools">
+          <button id="genCode" class="chipBtn">🔗 توليد كود ربط</button>
+          <input id="q" placeholder="ابحث بالاسم…" />
+        </div>
+      </div>
+      <div id="genWrap" class="code hidden">
+        <div class="v" id="linkCode"></div>
+        <div class="kit">
+          <button id="copyCode" class="btn">نسخ</button>
+        </div>
       </div>
     </div>
 
     <section class="card" id="listWrap">
-      <div id="childList"></div>
-      <div id="empty" class="muted" style="display:none">لا يوجد أطفال معيّنون لك حتى الآن.</div>
+      <div id="childList" class="grid"></div>
+      <div id="empty" class="empty">لا يوجد أطفال معيّنون لك حتى الآن.</div>
     </section>
   </div>
 
-  <script type="module" src="js/doctor-dashboard.js"></script>
+  <script type="module" src="js/doctor-dashboard.js?v=2"></script>
 </body>
 </html>
