@@ -17,14 +17,13 @@
   <script type="module">
     import { auth, db } from './js/firebase-config.js';
     import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-    import { doc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+    import { doc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
     onAuthStateChanged(auth, async (u)=>{
       if(!u) return location.href='index.html';
       const userRef = doc(db,'users',u.uid);
       const docRef  = doc(db,'doctors',u.uid);
 
-      // راقب كلا المستندين
       onSnapshot(userRef, (s)=>{
         const role = s.exists()? (s.data().role||'') : '';
         if(role==='doctor') location.href='doctor-dashboard.html';
