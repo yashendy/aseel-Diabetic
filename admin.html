@@ -5,12 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>لوحة الأدمن</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- خطوط وأستايلاتك الأساسية (اتركيها كما هي عندك) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="./css/admin.css?v=2025-09-01">
-  <link rel="stylesheet" href="./css/food-items.css?v=2025-09-01">
-  <link rel="stylesheet" href="./css/admin-doctors.css?v=1">
+  <!-- CSS الحالية كما هي -->
+  <link rel="stylesheet" href="./css/admin.css">
+  <link rel="stylesheet" href="./css/admin-doctors.css">
+  <link rel="stylesheet" href="./css/food-items.css">
 </head>
 <body>
   <header class="topbar">
@@ -23,6 +26,7 @@
   </header>
 
   <main class="container">
+    <!-- تبويب الطلبات -->
     <section id="tab-requests" class="tab active">
       <div class="card">
         <div class="head">
@@ -38,6 +42,7 @@
       </div>
     </section>
 
+    <!-- تبويب الربط -->
     <section id="tab-links" class="tab">
       <div class="card">
         <h2>أكواد الربط</h2>
@@ -53,22 +58,30 @@
       </div>
     </section>
 
+    <!-- تبويب الأصناف -->
     <section id="tab-foods" class="tab">
       <div class="card">
-        <h2>مكتبة الأصناف العامة</h2>
-        <div class="toolbar">
-          <button id="btnNew" class="primary">➕ إضافة صنف</button>
-          <input id="q" type="text" placeholder="بحث عن صنف..." />
+        <div class="head" style="align-items:center;justify-content:space-between">
+          <h2>مكتبة الأصناف العامة</h2>
+          <div class="tools" style="display:flex;gap:10px;align-items:center">
+            <input id="q" type="text" placeholder="بحث عن صنف..." />
+            <button id="btnNew" class="btn primary">إضافة صنف ➕</button>
+          </div>
         </div>
         <div id="foodsGrid" class="grid"></div>
-        <dialog id="dlg"><!-- النموذج كما عندك داخل food-items.js يولده/يتعامل معه --></dialog>
+        <!-- الـ dialog فاضي: يتم بناؤه ديناميكياً من السكربت -->
+        <dialog id="dlg"></dialog>
       </div>
     </section>
   </main>
 
   <div id="toast" class="toast hidden"></div>
 
-  <script type="module" src="./js/admin.js?v=1"></script>
-  <script type="module" src="./js/food-items.js?v=2025-09-01"></script>
+  <!-- Firebase config -->
+  <script type="module" src="./js/firebase-config.js"></script>
+  <!-- منطق الأدمن العام (طلبات + أكواد ربط + التبويب) -->
+  <script type="module" src="./js/admin.js"></script>
+  <!-- إدارة الأصناف (CRUD) — يعمل فقط داخل تبويب الأصناف -->
+  <script type="module" src="./js/food-items.js"></script>
 </body>
 </html>
