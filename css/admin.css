@@ -26,3 +26,24 @@ h2{margin:0 0 12px;font-size:20px}
 .primary{background:var(--primary);color:#fff;border:none;padding:8px 12px;border-radius:10px;cursor:pointer}
 .secondary{background:#fff;color:var(--text);border:1px solid var(--border);padding:8px 12px;border-radius:10px;cursor:pointer}
 .danger{background:#fff;color:#b42318;border:1px solid #ffdedb;padding:8px 12px;border-radius:10px;cursor:pointer}
+/* بطاقات عامة (لا تتعارض مع .card الحالية) */
+.card-item{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px;
+  margin-bottom:10px;
+}
+.card-item .row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.card-item .name{ font-weight:700; }
+.card-item .meta{ color:var(--muted); font-size:12px; }
+.card-item .kit{ display:flex; gap:8px; }
+.btn{ cursor:pointer; }
