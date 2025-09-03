@@ -17,6 +17,8 @@
           <input id="q" placeholder="ابحث بالاسم…" />
         </div>
       </div>
+
+      <!-- نفس كتلة إظهار الكود المتولِّد -->
       <div id="genWrap" class="code hidden" style="margin-top:8px;display:flex;gap:10px;align-items:center">
         <div class="v" id="linkCode" style="font-weight:800"></div>
         <div class="kit">
@@ -25,12 +27,38 @@
       </div>
     </div>
 
+    <!-- قائمة الأطفال (كما هي) -->
     <section class="card" id="listWrap">
       <div id="childList" class="grid"></div>
       <div id="empty" class="empty">لا يوجد أطفال معيّنون لك حتى الآن.</div>
     </section>
+
+    <!-- [GPT5 PATCH START] إدارة أكواد الربط -->
+    <section class="card" id="codesCard">
+      <div class="top" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <h2 style="margin:0">أكواد الربط النشطة</h2>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="muted">النشطة: <b id="activeCount">0</b>/<span id="maxActive">—</span></span>
+          <button id="refreshCodes" class="secondary">تحديث</button>
+        </div>
+      </div>
+
+      <div id="codesList" class="grid" style="margin-top:10px"></div>
+      <div id="codesEmpty" class="empty">لا توجد أكواد نشطة حاليًا.</div>
+
+      <div class="hint muted" style="margin-top:10px;font-size:12px">
+        صلاحية كل كود: <b id="ttlHours">—</b> ساعة من وقت إنشائه. عند الوصول إلى الحد الأقصى، يتم تعطيل زر توليد كود جديد مؤقتًا.
+      </div>
+    </section>
+    <!-- [GPT5 PATCH END] -->
   </div>
 
-  <script type="module" src="js/doctor-dashboard.js?v=2"></script>
+  <!-- [GPT5 PATCH START] Toast -->
+  <div id="toast" class="toast hidden" style="position:fixed;inset-inline:0;bottom:18px;margin:auto;max-width:280px;background:#111;color:#fff;padding:10px 14px;border-radius:10px;text-align:center;opacity:.95;z-index:9999">
+    تم
+  </div>
+  <!-- [GPT5 PATCH END] -->
+
+  <script type="module" src="js/doctor-dashboard.js?v=3"></script>
 </body>
 </html>
