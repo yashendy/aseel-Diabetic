@@ -1,4 +1,4 @@
-// js/admin.js — بدون تعليقات HTML
+// js/admin.js
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
@@ -7,7 +7,7 @@ import {
 
 const $ = (s)=>document.querySelector(s);
 const $$= (s)=>document.querySelectorAll(s);
-
+const esc=(s)=>(s??'').toString().replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 const toastEl = $('#toast');
 function toast(t, type='info'){
   if(!toastEl) return;
@@ -17,7 +17,7 @@ function toast(t, type='info'){
   setTimeout(()=>toastEl.classList.add('hidden'),1600);
 }
 
-// تبويب
+/* تبويبات */
 function wireTabs(){
   $$('.tab-btn').forEach(b=>{
     b.addEventListener('click', ()=>{
@@ -29,12 +29,12 @@ function wireTabs(){
   });
 }
 
-// تحميل طلبات الأطباء pending
+/* طلبات الأطباء pending */
 async function loadPendingDoctors(){
   const grid = $('#grid'), empty = $('#empty'), stats = $('#stats');
   if(!grid) return;
-
   grid.innerHTML=''; empty.style.display='block'; stats.textContent='';
+
   const qy = query(collection(db,'doctors'), where('status','==','pending'));
   const snap = await getDocs(qy);
   let n=0;
@@ -63,7 +63,6 @@ async function loadPendingDoctors(){
   empty.style.display = n? 'none' : 'block';
   stats.textContent = `الطلبات المعلّقة: ${n}`;
 }
-
 async function approveDoctor(uid){
   await updateDoc(doc(db,'doctors',uid), { status:'approved' });
   await updateDoc(doc(db,'users',uid),   { role:'doctor' });
@@ -77,12 +76,17 @@ async function rejectDoctor(uid){
   loadPendingDoctors();
 }
 
-// أكواد الربط: بحث بالكود
+/* أكواد الربط */
 async function findCode(){
   const v = ($('#codeQ')?.value||'').trim().toUpperCase();
   const list = $('#codeList'), empty = $('#codeEmpty');
   if(!v){ list.innerHTML=''; empty.style.display='block'; return; }
-  const qy = query(collection(db,'linkCodes'), where('__name__','>=',v), where('__name__','<=',v+'\uf8ff'), limit(20));
+  const qy = query(
+    collection(db,'linkCodes'),
+    where('__name__','>=',v),
+    where('__name__','<=',v+'\uf8ff'),
+    limit(20)
+  );
   const snap = await getDocs(qy);
   let c=0; list.innerHTML='';
   snap.forEach(s=>{
@@ -94,7 +98,11 @@ async function findCode(){
       <div class="row">
         <div>
           <div class="name">الكود: <b>${esc(s.id)}</b></div>
-          <div class="meta tiny">دكتور: ${esc(d.doctorId||'-')} • مستخدم: ${d.used?'نعم':'لا'} • وليّ: ${esc(d.parentId||'-')} ${d.childId?`• طفل: ${esc(d.childId)}`:''}</div>
+          <div class="meta tiny">
+            دكتور: ${esc(d.doctorId||d.doctorUid||'-')} • مستخدم: ${d.used?'نعم':'لا'}
+            ${d.parentId?`• وليّ: ${esc(d.parentId)}`:''}
+            ${d.childId?`• طفل: ${esc(d.childId)}`:''}
+          </div>
         </div>
       </div>`;
     list.appendChild(el);
@@ -102,8 +110,7 @@ async function findCode(){
   empty.style.display = c? 'none':'block';
 }
 
-function esc(s){return (s??'').toString().replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));}
-
+/* Auth & boot */
 onAuthStateChanged(auth, async(u)=>{
   if(!u){ location.href='index.html'; return; }
   const us = await getDoc(doc(db,'users',u.uid));
@@ -111,10 +118,8 @@ onAuthStateChanged(auth, async(u)=>{
 
   wireTabs();
 
-  // تبويب الطلبات
   if($('#refresh')) $('#refresh').onclick = loadPendingDoctors;
   await loadPendingDoctors();
 
-  // تبويب أكواد الربط
   if($('#codeFind')) $('#codeFind').onclick = findCode;
 });
