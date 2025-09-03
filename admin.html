@@ -23,31 +23,55 @@
       <span class="title">لوحة الأدمن</span>
     </div>
     <nav class="tabs">
-      <button class="tab-btn" data-tab="requests">طلبات</button>
+      <button class="tab-btn active" data-tab="requests">طلبات</button>
       <button class="tab-btn" data-tab="links">ربط</button>
-      <button class="tab-btn active" data-tab="foods">الأصناف</button>
+      <button class="tab-btn" data-tab="foods">الأصناف</button>
     </nav>
   </header>
 
   <main class="container">
-    <!-- تبويب الطلبات -->
-    <section id="tab-requests" class="tab">
+    <!-- ========================= -->
+    <!-- [GPT5 PATCH START] تبويب الطلبات -->
+    <!-- ========================= -->
+    <section id="tab-requests" class="tab active">
       <div class="card">
-        <h2>طلبات الأطباء/الأهالي</h2>
-        <p class="muted">هنا هيظهر جدول الطلبات…</p>
+        <h2>طلبات الأطباء (قيد الاعتماد)</h2>
+
+        <div class="toolbar" style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+          <button id="refresh" class="secondary">تحديث</button>
+          <span id="stats" class="muted">—</span>
+        </div>
+
+        <div id="grid"></div>
+        <div id="empty" class="muted" style="margin-top:8px;display:none">لا توجد طلبات معلّقة حاليًا.</div>
       </div>
     </section>
+    <!-- ========================= -->
+    <!-- [GPT5 PATCH END] -->
+    <!-- ========================= -->
 
-    <!-- تبويب الربط -->
+    <!-- ========================= -->
+    <!-- [GPT5 PATCH START] تبويب الربط -->
+    <!-- ========================= -->
     <section id="tab-links" class="tab">
       <div class="card">
         <h2>إدارة أكواد الربط</h2>
-        <p class="muted">هنا هتظهر أكواد الربط…</p>
+
+        <div class="toolbar" style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+          <input id="codeQ" type="text" placeholder="ابحث برقم/حروف الكود…" style="flex:1">
+          <button id="codeFind" class="secondary">بحث</button>
+        </div>
+
+        <div id="codeList"></div>
+        <div id="codeEmpty" class="muted" style="margin-top:8px;display:none">لا توجد نتائج مطابقة.</div>
       </div>
     </section>
+    <!-- ========================= -->
+    <!-- [GPT5 PATCH END] -->
+    <!-- ========================= -->
 
-    <!-- تبويب الأصناف (افتراضي) -->
-    <section id="tab-foods" class="tab active">
+    <!-- تبويب الأصناف (محفوظ كما هو) -->
+    <section id="tab-foods" class="tab">
       <div class="card">
         <h2>مكتبة الأصناف العامة</h2>
 
@@ -126,9 +150,16 @@
     </section>
   </main>
 
-  <!-- سكربت التابات -->
+  <!-- Toast عام (لو مش موجود في CSS، هيظهر/يختفي ببساطة) -->
+  <!-- [GPT5 PATCH START] -->
+  <div id="toast" class="toast hidden" style="position:fixed;inset-inline:0;bottom:20px;margin:auto;max-width:260px;background:#111;color:#fff;padding:10px 14px;border-radius:10px;text-align:center;opacity:.95;z-index:9999">
+    تم
+  </div>
+  <!-- [GPT5 PATCH END] -->
+
+  <!-- سكربت التابات + الأدمن -->
   <script type="module" src="./js/admin.js?v=2025-09-01"></script>
-  <!-- سكربت الأصناف -->
+  <!-- سكربت الأصناف (محفوظ كما هو) -->
   <script type="module" src="./js/food-items.js?v=2025-09-01"></script>
 </body>
 </html>
