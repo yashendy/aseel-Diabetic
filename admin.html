@@ -72,4 +72,20 @@
             <button id="btnNew" class="btn primary">إضافة صنف ➕</button>
           </div>
         </div>
-        <div id="foods
+        <div id="foodsGrid" class="grid"></div>
+        <!-- dialog فاضي: السكربت يبني محتواه ديناميكيًا -->
+        <dialog id="dlg"></dialog>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Firebase -->
+  <script type="module" src="./js/firebase-config.js"></script>
+  <!-- منطق التبويبات + الأطباء + أكواد الربط -->
+  <script type="module" src="./js/admin.js"></script>
+  <!-- إدارة الأصناف (CRUD) -->
+  <script type="module" src="./js/food-items.js"></script>
+</body>
+</html>
