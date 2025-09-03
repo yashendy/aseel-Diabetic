@@ -43,7 +43,7 @@ onAuthStateChanged(auth, async (u) => {
 
 /* ---------- Boot ---------- */
 function boot(){
-  // تبويبات عامة (لو موجودة في الصفحة)
+  // تبويبات عامة (لو موجودة)
   if ($$('.tab-btn').length) {
     $$('.tab-btn').forEach(b=>{
       b.onclick=()=>{
@@ -55,21 +55,21 @@ function boot(){
     });
   }
 
-  // زر التحديث/البحث (لو موجودين على صفحة إدارة الطلبات/الأكواد)
+  // تبويب الطلبات (IDs خاصة به — مختلفة عن تبويب الأصناف)
   const r = $('#refresh');   if (r)  r.onclick  = loadPendingDoctors;
-  const cf= $('#codeFind');  if (cf) cf.onclick = findCode;
-
-  // تحميل الطلبات المعلقة فقط لو عناصرها موجودة (لتجنب التضارب مع صفحة الأصناف)
   if ($('#grid') && $('#empty') && $('#stats')) {
-    // ملاحظة: هذه العناصر تخص صفحة إدارة الطلبات القديمة.
-    // في صفحات أخرى مثل "الأصناف" عندك grid مختلف وستايل مختلف؛ لن يتم النداء هنا.
+    // ملاحظة: هذه العناصر تخص تبويب "الطلبات".
+    // في تبويب الأصناف فيه #grid تاني، لكن مفيهوش #empty و#stats، لذلك مش هندخل هنا.
     loadPendingDoctors();
   }
+
+  // تبويب إدارة أكواد الربط (لو موجود)
+  const cf= $('#codeFind');  if (cf) cf.onclick = findCode;
 }
 
 /* ---------- Pending Doctors ---------- */
 async function loadPendingDoctors(){
-  // هذه العناصر تخص صفحة إدارة الطلبات فقط
+  // عناصر تبويب الطلبات فقط
   const grid  = $('#grid');
   const empty = $('#empty');
   const stats = $('#stats');
@@ -80,6 +80,7 @@ async function loadPendingDoctors(){
   stats.textContent = '';
 
   try {
+    // نقرأ من doctors حيث status == 'pending'
     const qy = query(collection(db, 'doctors'), where('status','==','pending'));
     const snap = await getDocs(qy);
     let n = 0;
@@ -121,7 +122,7 @@ async function loadPendingDoctors(){
 async function approveDoctor(uid){
   try {
     const batch = writeBatch(db);
-    batch.update(doc(db,'doctors',uid), { status:'approved' });
+    batch.update(doc(db,'doctors',uid), { status:'approved', approvedAt: new Date() });
     batch.update(doc(db,'users',uid),   { role:'doctor' });
     await batch.commit();
     toast('تم الاعتماد');
@@ -135,7 +136,7 @@ async function approveDoctor(uid){
 async function rejectDoctor(uid){
   try {
     const batch = writeBatch(db);
-    batch.update(doc(db,'doctors',uid), { status:'rejected' });
+    batch.update(doc(db,'doctors',uid), { status:'rejected', rejectedAt: new Date() });
     batch.update(doc(db,'users',uid),   { role:'doctor-rejected' });
     await batch.commit();
     toast('تم الرفض');
@@ -146,7 +147,7 @@ async function rejectDoctor(uid){
   }
 }
 
-/* ---------- Link Codes Search ---------- */
+/* ---------- Link Codes Search (تبويب الربط) ---------- */
 async function findCode(){
   const list  = $('#codeList');
   const empty = $('#codeEmpty');
