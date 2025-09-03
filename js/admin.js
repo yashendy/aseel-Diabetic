@@ -1,99 +1,108 @@
-// js/admin.js
-import { auth, db } from './firebase-config.js';
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+// js/food-items.js
+import { db } from './firebase-config.js';
 import {
-  collection, query, where, getDocs, doc, updateDoc, getDoc, limit
+  collection, getDocs, deleteDoc, doc
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-const $ = s=>document.querySelector(s);
-const $$= s=>document.querySelectorAll(s);
-const toast=(t)=>{ const el=$('#toast'); el.textContent=t; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),1500); };
+/* ---------- Config ---------- */
+const FOOD_COLL = 'foodItems'; // <-- غيّره لو اسم المجموعة مختلف
 
-onAuthStateChanged(auth, async(u)=>{
-  if(!u){ location.href='index.html'; return; }
-  const us = await getDoc(doc(db,'users',u.uid));
-  if(!us.exists() || us.data().role!=='admin'){ alert('صلاحية الأدمن مطلوبة'); location.href='index.html'; return; }
-  boot();
-});
+/* ---------- Helpers ---------- */
+const $  = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const esc = (s)=> (s ?? '').toString().replace(/[&<>"']/g, m=>({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
+}[m]));
 
-function boot(){
-  $$('.tab-btn').forEach(b=>{
-    b.onclick=()=>{
-      $$('.tab-btn').forEach(x=>x.classList.remove('active'));
-      b.classList.add('active');
-      const t=b.dataset.tab;
-      $$('.tab').forEach(s=>s.classList.toggle('active', s.id===`tab-${t}`));
-    };
-  });
+const toast = (t)=>{
+  const el = $('#toast');
+  if (!el) { console.log('[toast]', t); return; }
+  el.textContent = t;
+  el.classList.remove('hidden');
+  setTimeout(()=>el.classList.add('hidden'),1500);
+};
 
-  loadPendingDoctors();
-  $('#refresh').onclick = loadPendingDoctors;
-  $('#codeFind').onclick = findCode;
-}
+/* ---------- UI Render ---------- */
+async function loadItems(){
+  const grid  = $('#food-grid');
+  const empty = $('#food-empty');
+  const stats = $('#food-stats');
 
-async function loadPendingDoctors(){
-  $('#grid').innerHTML=''; $('#empty').style.display='block'; $('#stats').textContent='';
-  const qy = query(collection(db,'doctors'), where('status','==','pending'));
-  const snap = await getDocs(qy);
-  let n=0;
-  snap.forEach(d=>{
-    n++;
-    const v=d.data();
-    const card=document.createElement('div');
-    card.className='cardItem';
-    card.innerHTML=`
-      <div class="row">
-        <div><div class="name">${esc(v.name||'-')}</div><div class="meta">${v.email||''}</div></div>
-        <div class="kit">
-          <button class="btn primary approve">اعتماد</button>
-          <button class="btn danger reject">رفض</button>
+  if (!grid || !empty || !stats) return; // مش صفحة الأصناف
+
+  grid.innerHTML = '';
+  empty.style.display = 'block';
+  stats.textContent = '';
+
+  try {
+    const snap = await getDocs(collection(db, FOOD_COLL));
+    let n = 0;
+    snap.forEach(d=>{
+      n++;
+      const v = d.data();
+      const card = document.createElement('div');
+      card.className = 'cardItem';
+      card.dataset.id = d.id;
+      card.innerHTML = `
+        <div class="row">
+          <div>
+            <div class="name">${esc(v.name || '-')}</div>
+            <div class="meta">${esc(v.category || '')}</div>
+          </div>
+          <div class="kit">
+            <button class="btn primary edit">تعديل</button>
+            <button class="btn danger delete">حذف</button>
+          </div>
         </div>
-      </div>
-      <div class="meta">تخصص: ${esc(v.specialty||'-')} • جهة: ${esc(v.clinic||'-')}</div>
-    `;
-    card.querySelector('.approve').onclick = ()=> approveDoctor(d.id);
-    card.querySelector('.reject').onclick  = ()=> rejectDoctor(d.id);
-    $('#grid').appendChild(card);
-  });
-  $('#empty').style.display = n? 'none':'block';
-  $('#stats').textContent = `الطلبات المعلّقة: ${n}`;
+      `;
+      const editBtn = card.querySelector('.edit');
+      const delBtn  = card.querySelector('.delete');
+
+      if (editBtn) editBtn.addEventListener('click', () => openEdit(d.id));
+      if (delBtn)  delBtn.addEventListener('click', () => removeItem(d.id));
+
+      grid.appendChild(card);
+    });
+
+    empty.style.display = n ? 'none' : 'block';
+    stats.textContent = `عدد الأصناف: ${n}`;
+  } catch (e) {
+    console.error(e);
+    toast('تعذّر تحميل الأصناف');
+  }
 }
 
-async function approveDoctor(uid){
-  await updateDoc(doc(db,'doctors',uid), { status:'approved' });
-  await updateDoc(doc(db,'users',uid),   { role:'doctor' });
-  toast('تم الاعتماد');
-  loadPendingDoctors();
-}
-async function rejectDoctor(uid){
-  await updateDoc(doc(db,'doctors',uid), { status:'rejected' });
-  await updateDoc(doc(db,'users',uid),   { role:'doctor-rejected' });
-  toast('تم الرفض');
-  loadPendingDoctors();
+/* ---------- Actions ---------- */
+function openEdit(id){
+  // افتح مودال/نموذج التعديل حسب تطبيقك
+  console.log('edit item', id);
+  toast('فتح التعديل');
 }
 
-async function findCode(){
-  const v = ($('#codeQ').value||'').trim().toUpperCase();
-  if(!v){ $('#codeList').innerHTML=''; $('#codeEmpty').style.display='block'; return; }
-  const qy = query(collection(db,'linkCodes'), where('__name__','>=',v), where('__name__','<=',v+'\uf8ff'), limit(10));
-  const snap = await getDocs(qy);
-  let c=0; $('#codeList').innerHTML='';
-  snap.forEach(s=>{
-    c++;
-    const d=s.data();
-    const el=document.createElement('div');
-    el.className='cardItem';
-    el.innerHTML=`
-      <div class="row">
-        <div>
-          <div class="name">الكود: <b>${esc(s.id)}</b></div>
-          <div class="meta">دكتور: ${esc(d.doctorId||'-')} • مستخدم: ${d.used?'نعم':'لا'} • وليّ: ${esc(d.parentId||'-')}</div>
-        </div>
-      </div>
-    `;
-    $('#codeList').appendChild(el);
-  });
-  $('#codeEmpty').style.display = c? 'none':'block';
+export async function removeItem(id){
+  if (!id) return;
+  if (!confirm('هل تريد حذف الصنف نهائيًا؟')) return;
+
+  try {
+    await deleteDoc(doc(db, FOOD_COLL, id));
+    // شيل الكارت من الـDOM لو موجود
+    const card = $(`.cardItem[data-id="${id}"]`);
+    if (card && card.parentElement) card.parentElement.removeChild(card);
+    toast('تم حذف الصنف');
+    // تحديث الإحصائيات البسيطة
+    const grid = $('#food-grid');
+    const stats = $('#food-stats');
+    const empty = $('#food-empty');
+    if (grid && stats && empty) {
+      const count = grid.querySelectorAll('.cardItem').length;
+      stats.textContent = `عدد الأصناف: ${count}`;
+      empty.style.display = count ? 'none' : 'block';
+    }
+  } catch (e) {
+    console.error(e);
+    toast('تعذّر حذف الصنف');
+  }
 }
 
-function esc(s){return (s??'').toString().replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));}
+/* ---------- Init ---------- */
+document.addEventListener('DOMContentLoaded', loadItems);
