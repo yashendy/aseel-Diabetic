@@ -5,87 +5,128 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>لوحة الأدمن</title>
 
+  <!-- خطوط -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
 
-  <!-- حافظت على ملفات التنسيق عندك -->
-  <link rel="stylesheet" href="./css/style.css">
-  <link rel="stylesheet" href="./css/admin.css">
-  <link rel="stylesheet" href="./css/admin-doctors.css">
+  <!-- CSS -->
+  <link rel="stylesheet" href="./css/admin.css?v=2025-09-01">
+  <link rel="stylesheet" href="./css/food-items.css?v=2025-09-01">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
       <span class="logo">A</span>
-      <span class="title">لوحة الإدمن</span>
+      <span class="title">لوحة الأدمن</span>
     </div>
     <nav class="tabs">
-      <button class="tab-btn active" data-tab="requests">طلبات</button>
+      <button class="tab-btn" data-tab="requests">طلبات</button>
       <button class="tab-btn" data-tab="links">ربط</button>
-      <button class="tab-btn" data-tab="foods">الأصناف</button>
+      <button class="tab-btn active" data-tab="foods">الأصناف</button>
     </nav>
   </header>
 
   <main class="container">
-    <!-- تبويب: طلبات اعتماد الأطباء -->
-    <section id="tab-requests" class="tab active">
+    <!-- تبويب الطلبات -->
+    <section id="tab-requests" class="tab">
       <div class="card">
-        <div class="head">
-          <div>
-            <h1>طلبات اعتماد الأطباء</h1>
-            <div class="muted">راجع الأطباء بحالة "pending"</div>
-          </div>
-          <div class="right">
-            <button id="refresh" class="btn">تحديث</button>
-          </div>
-        </div>
-        <div id="stats" class="stat tiny muted"></div>
-        <div id="grid" class="grid"></div>
-        <div id="empty" class="empty">لا توجد طلبات الآن.</div>
+        <h2>طلبات الأطباء/الأهالي</h2>
+        <p class="muted">هنا هيظهر جدول الطلبات…</p>
       </div>
     </section>
 
-    <!-- تبويب: أكواد الربط -->
+    <!-- تبويب الربط -->
     <section id="tab-links" class="tab">
       <div class="card">
-        <h2>أكواد الربط</h2>
-        <div class="tools">
-          <div class="field">
-            <label>بحث بالكود</label>
-            <input id="codeQ" placeholder="ABC123…" />
-          </div>
-          <button id="codeFind" class="btn">بحث</button>
-        </div>
-        <div id="codeList" class="grid"></div>
-        <div id="codeEmpty" class="empty">لا نتائج.</div>
+        <h2>إدارة أكواد الربط</h2>
+        <p class="muted">هنا هتظهر أكواد الربط…</p>
       </div>
     </section>
 
-    <!-- تبويب: مكتبة الأصناف العامة -->
-    <section id="tab-foods" class="tab">
+    <!-- تبويب الأصناف (افتراضي) -->
+    <section id="tab-foods" class="tab active">
       <div class="card">
-        <div class="head" style="align-items:center;justify-content:space-between">
-          <h2>مكتبة الأصناف العامة</h2>
-          <div class="tools" style="display:flex;gap:10px;align-items:center">
-            <input id="q" type="text" placeholder="بحث عن صنف..." />
-            <button id="btnNew" class="btn primary">إضافة صنف ➕</button>
-          </div>
+        <h2>مكتبة الأصناف العامة</h2>
+
+        <div class="toolbar">
+          <button id="btnNew" class="primary">➕ إضافة صنف</button>
+          <input id="q" type="text" placeholder="بحث عن صنف..." />
         </div>
-        <div id="foodsGrid" class="grid"></div>
-        <!-- dialog فاضي: السكربت يبني محتواه ديناميكيًا -->
-        <dialog id="dlg"></dialog>
+
+        <div id="grid" class="grid"></div>
+
+        <!-- نافذة النموذج -->
+        <dialog id="dlg">
+          <form id="form" method="dialog">
+            <!-- صورة المنتج عبر الرابط + معاينة -->
+            <div class="image-block" style="display:flex;align-items:center;gap:12px;margin:8px 0 14px;">
+              <img id="img" src="" alt="معاينة الصورة"
+                   style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #e5e8ef;" />
+              <input id="imageUrl" type="url" placeholder="رابط الصورة (https://...)"
+                     style="flex:1;border:1px solid #e5e8ef;border-radius:10px;padding:8px;" />
+              <button id="btnPreview" type="button" class="secondary">معاينة</button>
+            </div>
+            <div class="hint" style="margin:-6px 0 10px;color:#6b7a8a;">
+              ضعي رابط صورة مباشر. (لن يتم رفع ملفات — فقط استخدام الرابط كما هو)
+            </div>
+
+            <!-- بيانات التغذية -->
+            <div class="form-grid">
+              <label for="name">الاسم *</label>
+              <input id="name" type="text" required />
+
+              <label for="category">الفئة</label>
+              <input id="category" type="text" placeholder="مثل: خضار، ألبان…" />
+
+              <label for="brand">البراند</label>
+              <input id="brand" type="text" />
+
+              <label for="carbs">كارب/100جم</label>
+              <input id="carbs" type="number" step="any" />
+
+              <label for="fiber">ألياف/100جم</label>
+              <input id="fiber" type="number" step="any" />
+
+              <label for="prot">بروتين/100جم</label>
+              <input id="prot" type="number" step="any" />
+
+              <label for="fat">دهون/100جم</label>
+              <input id="fat" type="number" step="any" />
+
+              <label for="cal">سعرات/100جم</label>
+              <input id="cal" type="number" step="any" />
+
+              <label for="gi">GI</label>
+              <input id="gi" type="number" step="any" />
+            </div>
+
+            <!-- المقادير البيتية -->
+            <div class="measures-block">
+              <div id="measList" class="meas-list"></div>
+              <div class="meas-add">
+                <input id="measName" type="text" placeholder="مثال: كوب" />
+                <input id="measGrams" type="number" step="any" placeholder="جرام" />
+                <button id="btnAddMeas" type="button" class="secondary">إضافة مقياس</button>
+              </div>
+            </div>
+
+            <!-- أزرار التحكم -->
+            <div class="actions">
+              <button id="btnSave"   class="primary"   type="button">💾 حفظ جديد</button>
+              <button id="btnUpdate" class="secondary" type="button" style="display:none;">✏️ تعديل</button>
+              <button id="btnReset"  type="button">إلغاء</button>
+              <button id="btnDelete" type="button" class="danger" style="display:none;">🗑️ حذف</button>
+            </div>
+          </form>
+        </dialog>
       </div>
     </section>
   </main>
 
-  <div id="toast" class="toast hidden"></div>
-
-  <!-- Firebase -->
-  <script type="module" src="./js/firebase-config.js"></script>
-  <!-- منطق التبويبات + الأطباء + أكواد الربط -->
-  <script type="module" src="./js/admin.js"></script>
-  <!-- إدارة الأصناف (CRUD) -->
-  <script type="module" src="./js/food-items.js"></script>
+  <!-- سكربت التابات -->
+  <script type="module" src="./js/admin.js?v=2025-09-01"></script>
+  <!-- سكربت الأصناف -->
+  <script type="module" src="./js/food-items.js?v=2025-09-01"></script>
 </body>
 </html>
