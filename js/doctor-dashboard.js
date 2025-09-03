@@ -1,4 +1,4 @@
-// js/doctor-dashboard.js (Module)
+// js/doctor-dashboard.js
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
@@ -8,16 +8,17 @@ import {
 
 // ثوابت المشروع
 import {
-  LINK_CODE_TTL_HOURS, MAX_ACTIVE_LINK_CODES,
-  COL_LINK_CODES
+  LINK_CODE_TTL_HOURS, MAX_ACTIVE_LINK_CODES, COL_LINK_CODES
 } from './app-consts.js';
 
 const $ = (id)=>document.getElementById(id);
-let allChildren = [];
+
+// حالة الصفحة
 let currentUser = null;
+let allChildren = [];
 let activeCodes = [];
 
-/* ========== Toast ========== */
+/* ===================== Toast ===================== */
 function toast(msg, type='info'){
   const el = $('toast');
   if(!el){ alert(msg); return; }
@@ -28,7 +29,7 @@ function toast(msg, type='info'){
   el._hid = setTimeout(()=> el.classList.add('hidden'), 2200);
 }
 
-/* ========== Utils ========== */
+/* ===================== Utils ===================== */
 function calcAge(bd){ const b = new Date(bd), t = new Date(); let a=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth(); if(m<0||(m===0&&t.getDate()<b.getDate())) a--; return a; }
 function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); }
 function pad2(n){ return n<10?`0${n}`:String(n); }
@@ -49,7 +50,7 @@ function remainingLabel(expiresAt){
   return rmins ? `${hrs} س ${rmins} د` : `${hrs} ساعة`;
 }
 
-/* ========== Children (كما هي مع تحسينات طفيفة) ========== */
+/* ===================== الأطفال ===================== */
 function renderChildren(list){
   const wrap = $('childList'); if(!wrap) return;
   wrap.innerHTML='';
@@ -71,18 +72,70 @@ function renderChildren(list){
   });
 }
 
-/* ========== Codes: UI Helpers ========== */
+/** تحميل الأطفال مع مراعاة القواعد:
+ *  - hasDoctorConsent = assignedDoctor == auth.uid && sharingConsent.doctor == true
+ *  - بعض الوثائق القديمة قد يكون فيها sharingConsent = true (Boolean) وليس Map
+ *  => نجرّي استعلامين ونجمع النتائج.
+ */
+async function loadChildren(){
+  allChildren = [];
+  try {
+    // 1) استعلام على الموافقة داخل خريطة: sharingConsent.doctor == true
+    const q1 = query(
+      collectionGroup(db,'children'),
+      where('assignedDoctor','==', currentUser.uid),
+      where('sharingConsent.doctor','==', true)
+    );
+    const s1 = await getDocs(q1);
+    s1.forEach(s=>{
+      const path = s.ref.path.split('/');
+      allChildren.push({ parentId: path[1], childId: path[3], ...s.data() });
+    });
+  } catch (err) {
+    // قد يطلب فهرس مركّب؛ أو ليس هناك صلاحية لبعض العناصر — نتجاهل ونكمّل.
+    console.warn('[children:consent.map] ', err?.message || err);
+  }
+
+  try {
+    // 2) استعلام على الموافقة كبولين: sharingConsent == true
+    const q2 = query(
+      collectionGroup(db,'children'),
+      where('assignedDoctor','==', currentUser.uid),
+      where('sharingConsent','==', true)
+    );
+    const s2 = await getDocs(q2);
+    s2.forEach(s=>{
+      const path = s.ref.path.split('/');
+      const obj = { parentId: path[1], childId: path[3], ...s.data() };
+      // دمج بدون تكرار
+      if(!allChildren.find(x=>x.parentId===obj.parentId && x.childId===obj.childId)){
+        allChildren.push(obj);
+      }
+    });
+  } catch (err) {
+    console.warn('[children:consent.bool] ', err?.message || err);
+  }
+
+  renderChildren(allChildren);
+}
+
+/* ===================== أكواد الربط ===================== */
 function updateCounts(){
   $('activeCount') && ($('activeCount').textContent = String(activeCodes.length));
   $('maxActive') && ($('maxActive').textContent = String(MAX_ACTIVE_LINK_CODES));
   const disable = activeCodes.length >= MAX_ACTIVE_LINK_CODES;
   $('genCode') && ($('genCode').disabled = disable);
 }
-function setTTLLabel(){
-  $('ttlHours') && ($('ttlHours').textContent = String(LINK_CODE_TTL_HOURS));
+function setTTLLabel(){ $('ttlHours') && ($('ttlHours').textContent = String(LINK_CODE_TTL_HOURS)); }
+
+function codeColl(){ return collection(db, COL_LINK_CODES); }
+
+function genCodeStr(){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s=''; for(let i=0;i<7;i++) s+=chars[Math.floor(Math.random()*chars.length)];
+  return s;
 }
 
-/* ========== Codes: Render List ========== */
 function renderCodes(){
   const listEl = $('codesList'); const emptyEl = $('codesEmpty');
   if(!listEl || !emptyEl) return;
@@ -125,33 +178,30 @@ function renderCodes(){
   updateCounts();
 }
 
-/* ========== Codes: Data Ops ========== */
-function codeColl(){ return collection(db, COL_LINK_CODES); }
-
-function genCodeStr(){
-  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let s=''; for(let i=0;i<7;i++) s+=chars[Math.floor(Math.random()*chars.length)];
-  return s;
-}
-
 async function loadActiveCodes(){
   if(!currentUser) return;
-  // نعرض الأكواد غير المستخدمة والتابعة لهذا الدكتور
-  // ملاحظة: قد يتطلب هذا الاستعلام فهرسًا مركبًا في بعض المشاريع.
-  const qy = query(codeColl(), where('doctorId','==', currentUser.uid), where('used','==', false), orderBy('createdAt','desc'));
-  const snap = await getDocs(qy);
-  activeCodes = [];
-  snap.forEach(s=>{
-    activeCodes.push({ id:s.id, ...s.data() });
-  });
-  renderCodes();
+  try{
+    // الأكواد غير المستخدمة التابعة للدكتور
+    const qy = query(
+      codeColl(),
+      where('doctorId','==', currentUser.uid),
+      where('used','==', false),
+      orderBy('createdAt','desc')
+    );
+    const snap = await getDocs(qy);
+    activeCodes = [];
+    snap.forEach(s=> activeCodes.push({ id:s.id, ...s.data() }) );
+    renderCodes();
+  }catch(err){
+    console.warn('[codes] ', err?.message || err);
+  }
 }
 
 async function generateLinkCode(){
   if(!currentUser) return;
-  await loadActiveCodes(); // تأكيد العدّ قبل التوليد
+  await loadActiveCodes(); // تأكيد العد قبل الإنشاء
   if(activeCodes.length >= MAX_ACTIVE_LINK_CODES){
-    toast(`وصلت للحد الأقصى من الأكواد (${MAX_ACTIVE_LINK_CODES}). ألغِ كود أو انتظر انتهاء واحد.`, 'error');
+    toast(`وصلتِ للحد الأقصى (${MAX_ACTIVE_LINK_CODES}). ألغِ كودًا أو انتظري انتهاء واحد.`, 'error');
     return;
   }
 
@@ -159,20 +209,23 @@ async function generateLinkCode(){
   const now  = new Date();
   const exp  = new Date(now.getTime() + LINK_CODE_TTL_HOURS*60*60*1000);
 
-  await setDoc(doc(db, COL_LINK_CODES, code), {
-    doctorId: currentUser.uid,
-    used: false,
-    parentId: null,
-    childId: null,
-    createdAt: serverTimestamp(),
-    expiresAt: exp
-  });
-
-  $('linkCode') && ($('linkCode').textContent = code);
-  $('genWrap') && ($('genWrap').classList.remove('hidden'));
-  toast('تم توليد الكود ✅','success');
-
-  await loadActiveCodes(); // تحديث القائمة والعدّاد
+  try{
+    await setDoc(doc(db, COL_LINK_CODES, code), {
+      doctorId: currentUser.uid,
+      used: false,
+      parentId: null,
+      childId: null,
+      createdAt: serverTimestamp(),
+      expiresAt: exp
+    });
+    if ($('linkCode')) $('linkCode').textContent = code;
+    if ($('genWrap')) $('genWrap').classList.remove('hidden');
+    toast('تم توليد الكود ✅','success');
+    await loadActiveCodes();
+  }catch(err){
+    console.error(err);
+    toast('تعذّر توليد الكود: صلاحيات أو اتصال', 'error');
+  }
 }
 
 async function revokeCode(codeId){
@@ -192,46 +245,38 @@ async function copyCodeString(codeStr){
     await navigator.clipboard.writeText(codeStr);
     toast('تم نسخ الكود ✔️','success');
   }catch{
-    toast('تعذّر النسخ تلقائيًا — انسخه يدويًا','error');
+    toast('تعذّر النسخ تلقائيًا — انسخي يدويًا','error');
   }
 }
 
-/* ========== Search ========== */
+/* ===================== البحث في الأطفال ===================== */
 $('q')?.addEventListener('input', ()=>{
   const t = ($('q').value||'').trim().toLowerCase();
   const f = allChildren.filter(c=> (c.name||'').toLowerCase().includes(t));
   renderChildren(f);
 });
 
-/* ========== Auth & Boot ========== */
+/* ===================== Auth & Boot ===================== */
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href='index.html'; return; }
   currentUser = user;
 
-  // إعداد الملصقات
-  setTTLLabel();
+  // إعداد الملصقات والعدادات
+  $('ttlHours') && ($('ttlHours').textContent = String(LINK_CODE_TTL_HOURS));
+  $('maxActive') && ($('maxActive').textContent = String(MAX_ACTIVE_LINK_CODES));
   updateCounts();
 
-  // تحميل الأطفال المعيّنين
-  const qy = query(collectionGroup(db,'children'), where('assignedDoctor','==', user.uid));
-  const snap = await getDocs(qy);
-  allChildren = [];
-  snap.forEach(s=>{
-    const path = s.ref.path.split('/');
-    const parentId = path[1];
-    const childId  = path[3];
-    allChildren.push({ parentId, childId, ...s.data() });
-  });
-  renderChildren(allChildren);
-
-  // تحميل الأكواد النشطة
+  // 1) الأول: إدارة الأكواد (تعمل مهما كان وضع الأطفال)
   await loadActiveCodes();
 
+  // 2) بعد كده: محاولة تحميل الأطفال (مع مراعاة القواعد)
+  await loadChildren();
+
   // ربط الأزرار
-  $('genCode') && $('genCode').addEventListener('click', generateLinkCode);
-  $('copyCode') && $('copyCode').addEventListener('click', ()=>{
+  $('genCode')       && $('genCode').addEventListener('click', generateLinkCode);
+  $('copyCode')      && $('copyCode').addEventListener('click', ()=>{
     const v = ($('linkCode')?.textContent||'').trim();
     if(v) copyCodeString(v);
   });
-  $('refreshCodes') && $('refreshCodes').addEventListener('click', loadActiveCodes);
+  $('refreshCodes')  && $('refreshCodes').addEventListener('click', loadActiveCodes);
 });
