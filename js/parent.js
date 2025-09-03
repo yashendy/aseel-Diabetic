@@ -2,7 +2,7 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, getDocs, query, orderBy, doc, getDoc, writeBatch
+  collection, getDocs, query, orderBy, doc, getDoc, writeBatch, updateDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const kidsGrid = document.getElementById('kidsGrid');
@@ -19,6 +19,7 @@ const aiInput    = document.getElementById('aiInput');
 const aiSend     = document.getElementById('aiSend');
 const aiContext  = document.getElementById('aiContext');
 const quickBtns  = document.querySelectorAll('.ai-quick-btn');
+const aiKeyWarn  = document.getElementById('aiKeyWarn');
 
 const linkDlg    = document.getElementById('linkDlg');
 const linkOpen   = document.getElementById('openLinkDlg');
@@ -29,6 +30,7 @@ const linkMsg    = document.getElementById('linkMsg');
 
 const GEMINI_API_KEY = window.GEMINI_API_KEY || "";
 const GEMINI_MODEL   = "gemini-1.5-flash";
+
 let currentUser, kids = [], filtered = [];
 const aiState = { child:null, chatSession:null };
 
@@ -112,10 +114,25 @@ function render(){
   });
 }
 
-/* ====== ربط الطبيب عبر الكود ====== */
+/* ====================== ربط الطبيب عبر الكود ====================== */
 linkOpen?.addEventListener('click', ()=>{ linkMsg.textContent=''; linkInput.value=''; linkDlg.showModal(); });
 linkCancel?.addEventListener('click', ()=> linkDlg.close());
 linkSubmit?.addEventListener('click', linkDoctor);
+
+// جلب بيانات الطبيب لتعبئة assignedDoctorInfo
+async function fetchDoctorInfo(doctorUid){
+  const d1 = await getDoc(doc(db, `doctors/${doctorUid}`));
+  if (d1.exists()){
+    const x = d1.data();
+    return { uid: doctorUid, name: x.name||null, specialty: x.specialty||null, clinic: x.clinic||null, phone: x.phone||null };
+  }
+  const d2 = await getDoc(doc(db, `users/${doctorUid}`));
+  if (d2.exists()){
+    const x = d2.data();
+    return { uid: doctorUid, name: x.displayName||null, specialty: x.specialty||null, clinic: x.clinic||null, phone: x.phone||null };
+  }
+  return { uid: doctorUid };
+}
 
 async function linkDoctor(){
   const code = (linkInput.value||'').trim().toUpperCase();
@@ -130,18 +147,25 @@ async function linkDoctor(){
     if(d.used){ linkMsg.textContent='الكود مستخدم بالفعل.'; loader(false); return; }
 
     const doctorId = d.doctorId;
-    // عيّني الطبيب على جميع أطفال هذا الوليّ + تفعيل الموافقة للطبيب
-    const ref=collection(db,`parents/${currentUser.uid}/children`);
-    const snap=await getDocs(ref);
+    const info     = await fetchDoctorInfo(doctorId);
+
+    // ربط جميع أطفال هذا الوليّ (حسب رغبتك). لو عايزة طفل محدد نعدّل لاحقًا.
+    const ref = collection(db,`parents/${currentUser.uid}/children`);
+    const snap = await getDocs(ref);
     const batch = writeBatch(db);
     snap.forEach(docu=>{
       batch.update(docu.ref, {
         assignedDoctor: doctorId,
-        assignedDoctorInfo:{uid: doctorId},
+        assignedDoctorInfo: {
+          uid: info.uid, name: info.name||null, specialty: info.specialty||null,
+          clinic: info.clinic||null, phone: info.phone||null, linkedAt: serverTimestamp()
+        },
         sharingConsent: { doctor: true }
       });
     });
-    batch.update(codeRef, { used:true, parentId: currentUser.uid });
+
+    // تعليم الكود مستخدمًا (وفق القاعدة: لا نغيّر doctorId)
+    batch.update(codeRef, { used:true, parentId: currentUser.uid, usedAt: serverTimestamp(), doctorId: d.doctorId });
     await batch.commit();
 
     linkMsg.textContent='تم الربط بنجاح ✅';
@@ -149,13 +173,13 @@ async function linkDoctor(){
     setTimeout(()=>linkDlg.close(), 700);
   }catch(e){
     console.error(e);
-    linkMsg.textContent='تعذّر الربط. حاولي لاحقًا.';
+    linkMsg.textContent='تعذّر الربط. تحقّقي من الاتصال والصلاحيات.';
   }finally{
     loader(false);
   }
 }
 
-/* ====== المساعد الذكي ====== */
+/* ======================== المساعد الذكي ======================== */
 function openAIWidget(){ aiWidget.classList.remove('hidden'); aiWidget.dataset.minimized='0'; }
 function closeAIWidget(){ aiWidget.classList.add('hidden'); aiMessages.innerHTML=''; aiState.child=null; aiState.chatSession=null; aiContext.textContent='بدون سياق طفل'; }
 function appendMsg(role,text){const d=document.createElement('div');d.className=role==='assistant'?'msg assistant':(role==='system'?'msg sys':'msg user');d.textContent=text;aiMessages.appendChild(d);aiMessages.scrollTop=aiMessages.scrollHeight;}
@@ -165,11 +189,19 @@ function openAIForChild(child){
   openAIWidget();
   aiContext.textContent=`سياق: ${child.name||'طفل'}`;
   appendMsg('system',`تم فتح المساعد لسياق ${child.name||'هذا الطفل'}.`);
+  if(!GEMINI_API_KEY || GEMINI_API_KEY==="YOUR_GEMINI_API_KEY"){
+    aiKeyWarn && (aiKeyWarn.style.display='block');
+  }else{
+    aiKeyWarn && (aiKeyWarn.style.display='none');
+  }
 }
 
 async function callGemini(systemText,userText){
-  if(!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY غير معرف.');
+  if(!GEMINI_API_KEY || GEMINI_API_KEY==="YOUR_GEMINI_API_KEY"){
+    throw new Error('GEMINI_API_KEY غير مضبوط. خزّنيه في localStorage أو حدّثه في الصفحة.');
+  }
   const { GoogleGenerativeAI } = window;
+  if(!GoogleGenerativeAI) throw new Error('SDK غير محمّل');
   if(!aiState.chatSession){
     const genAI=new GoogleGenerativeAI(GEMINI_API_KEY);
     const model=genAI.getGenerativeModel({ model:GEMINI_MODEL, systemInstruction:systemText });
@@ -182,8 +214,15 @@ async function sendAI(){
   const text=aiInput.value.trim(); if(!text) return;
   aiInput.value=''; appendMsg('user',text);
   const waitEl=document.createElement('div'); waitEl.className='msg assistant'; waitEl.textContent='… جارٍ التفكير'; aiMessages.appendChild(waitEl);
-  try{const reply=await callGemini("مساعد صحي", text);waitEl.remove();appendMsg('assistant',reply);}
-  catch(e){waitEl.remove();appendMsg('assistant','تعذّر الاتصال.');console.error(e);}
+  try{
+    const reply=await callGemini("مساعد صحي مختص بمرض السكري عند الأطفال. أجب بإيجاز وبنص عربي واضح.", text);
+    waitEl.remove(); appendMsg('assistant',reply);
+  }catch(e){
+    waitEl.remove();
+    appendMsg('assistant','تعذّر الاتصال بالمساعد. تأكدي من المفتاح أو أعيدي المحاولة.');
+    console.error(e);
+    aiKeyWarn && (aiKeyWarn.style.display='block');
+  }
 }
 
 aiFab?.addEventListener('click', ()=>openAIForChild({name:""}));
