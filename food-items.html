@@ -1,76 +1,114 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>📋 إدارة الأصناف</title>
-  <link rel="stylesheet" href="food-items.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>مكتبة الأصناف العامة</title>
+
+  <style>
+    :root{--bg:#0b1020;--panel:#121832;--muted:#99a3b3;--text:#e7ecf7;--accent:#4f76ff;--danger:#ff5468}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;background:linear-gradient(180deg,#0b1020 0%,#0e1430 100%);
+      color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Noto Sans Arabic",Tahoma,sans-serif
+    }
+    .container{max-width:1160px;margin-inline:auto;padding:28px}
+    .header{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .title{font-size:clamp(20px,3.6vw,28px);font-weight:800;letter-spacing:.3px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{
+      border:0;cursor:pointer;border-radius:14px;padding:10px 16px;
+      background:linear-gradient(180deg,var(--accent),#345dff);
+      color:#fff;font-weight:700;box-shadow:0 8px 22px rgba(79,118,255,.35);transition:transform .12s ease,filter .12s ease
+    }
+    .btn:hover{transform:translateY(-1px);filter:brightness(1.04)}
+    .btn.secondary{background:#1a2142;box-shadow:inset 0 0 0 1px #2a3160;color:var(--text);font-weight:600}
+    .btn.ghost{background:transparent;border:1px solid #2b396b}
+    .btn.small{padding:6px 10px;border-radius:10px;font-size:12px;box-shadow:none}
+    .btn.danger{background:linear-gradient(180deg,var(--danger),#ff3651)}
+    .panel{background:rgba(18,24,50,.65);border:1px solid #1e2a5d;border-radius:18px;padding:16px;backdrop-filter:blur(6px)}
+    .filters{display:grid;grid-template-columns:1fr 220px;gap:12px;margin-bottom:14px}
+    .field{position:relative}
+    .field input,.field select{
+      width:100%;height:44px;border-radius:12px;background:#0f1531;border:1px solid #263064;
+      color:var(--text);padding:0 14px;font-size:14px;outline:none
+    }
+    .field input::placeholder{color:#8e98b3}
+    .table-wrap{overflow:auto;border-radius:12px;border:1px solid #223066}
+    table{width:100%;border-collapse:collapse;background:#0f1531}
+    thead th{
+      position:sticky;top:0;background:#111944;border-bottom:1px solid #223066;
+      font-weight:700;color:#cfd7ee;padding:12px 10px;text-align:right
+    }
+    tbody td{padding:12px 10px;border-bottom:1px solid #19224c;color:#dee6ff;vertical-align:middle}
+    tbody tr:hover{background:#10183a}
+    .thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid #293768;background:#0b0f24}
+    .meta{display:flex;flex-direction:column;gap:2px}
+    .muted{color:var(--muted);font-size:12px}
+    .chip{
+      display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;
+      font-size:12px;background:#122055;border:1px solid #2642a8;color:#d7e2ff
+    }
+    .empty{text-align:center;padding:36px 14px;color:#97a4c7}
+
+    dialog{border:0;border-radius:18px;background:#0f1531;color:var(--text);width:min(720px,92vw);box-shadow:0 20px 70px rgba(0,0,0,.45)}
+    dialog::backdrop{background:rgba(0,0,0,.55)}
+    .modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #223066}
+    .modal-body{padding:16px 18px;display:grid;gap:12px}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .modal-actions{display:flex;gap:10px;justify-content:flex-start;padding:14px 18px;border-top:1px solid #223066}
+    .note{font-size:12px;color:#8ea1cf}
+    .danger{color:#ff5468}
+    /* إخفاء عمود الإجراءات لغير الأدمن (يُضاف/يُزال كلاس بالـJS) */
+    .no-admin .col-actions,
+    .no-admin td.actions-cell {display:none}
+  </style>
 </head>
-<body>
-  <div class="topbar">
-    <h1>📋 إدارة الأصناف</h1>
-    <input type="text" id="searchInput" placeholder="🔍 بحث بالاسم أو الفئة أو العلامة" />
-    <select id="categoryFilter">
-      <option value="">كل الفئات</option>
-    </select>
-    <button id="addBtn">➕ إضافة صنف</button>
-  </div>
-
+<body class="no-admin">
   <div class="container">
-    <div class="card">
-      <h2 id="formTitle">إضافة صنف</h2>
-      <form id="itemForm">
-        <div class="grid">
-          <label>الاسم* <input type="text" id="name" required /></label>
-          <label>الفئة <input type="text" id="category" /></label>
-          <label>العلامة التجارية <input type="text" id="brand" /></label>
-          <label>الوحدة
-            <select id="unit">
-              <option value="جرام">جرام</option>
-              <option value="مللي">مللي</option>
-              <option value="حبة">حبة</option>
-            </select>
-          </label>
-          <label>كارب (لكل 100جم) <input type="number" id="carb" step="0.1" /></label>
-          <label>ألياف (لكل 100جم) <input type="number" id="fiber" step="0.1" /></label>
-          <label>بروتين (لكل 100جم) <input type="number" id="protein" step="0.1" /></label>
-          <label>دهون (لكل 100جم) <input type="number" id="fat" step="0.1" /></label>
-          <label>سعرات (لكل 100جم) <input type="number" id="calories" step="1" /></label>
-          <label>GI (اختياري) <input type="number" id="gi" min="0" max="110" /></label>
-        </div>
-        <div>
-          <label>المقادير (نص حر)
-            <textarea id="measuresText"></textarea>
-          </label>
-          <div class="measureBox">
-            <input type="text" id="measureName" placeholder="اسم المقدار" />
-            <input type="number" id="measureWeight" placeholder="وزن (جم)" />
-            <button type="button" id="addMeasure">➕ إضافة مقدار</button>
-          </div>
-          <div id="measuresList" class="chipBox"></div>
-        </div>
-        <div>
-          <label>الصورة
-            <input type="file" id="imageInput" accept="image/*" />
-            <progress id="imgProg" class="hidden" value="0" max="100"></progress>
-            <div id="imgPreview"></div>
-            <button type="button" id="deleteImage">🗑️ حذف الصورة</button>
-          </label>
-        </div>
-        <div class="buttons">
-          <button type="submit">💾 حفظ</button>
-          <button type="reset" id="clearBtn">تفريغ</button>
-          <button type="button" id="deleteBtn">🗑️ حذف</button>
-        </div>
-      </form>
+    <div class="header">
+      <div class="title">مكتبة الأصناف العامة</div>
+      <div class="actions">
+        <button id="btnRefresh" class="btn secondary" type="button">تحديث القائمة</button>
+        <button id="btnAdd" class="btn" type="button" style="display:none">إضافة صنف</button>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>الأصناف</h2>
-      <div id="itemsGrid" class="grid-container"></div>
+    <div class="panel">
+      <div class="filters">
+        <div class="field">
+          <input id="searchInput" type="search" placeholder="ابحث بالاسم أو البراند…" />
+        </div>
+        <div class="field">
+          <select id="categoryFilter">
+            <option value="__ALL__">كل الفئات</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:72px">الصورة</th>
+              <th>الاسم</th>
+              <th>البراند</th>
+              <th>الفئة</th>
+              <th>قياس افتراضي</th>
+              <th>معرّف</th>
+              <th class="col-actions" style="width:150px">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="itemsTbody">
+            <tr><td colspan="7" class="empty">جارِ التحميل…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
-  <script type="module" src="food-items.js"></script>
+  <!-- صفحة HTML نظيفة: لا تهيئة Firebase هنا -->
+  <script type="module" src="./js/food-items.js"></script>
 </body>
 </html>
