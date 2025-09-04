@@ -1,243 +1,310 @@
-// إدارة مكتبة الأصناف (إضافة/تعديل/حذف + عرض)
-// - لا يوجد رفع صور: نستخدم imageUrl مباشرةً ونعاينها
-// - زرارين: حفظ جديد / تعديل
-// - يدعم measures كـ Array أو التحويل من measureQty (Map)
-
-import { auth, db } from './firebase-config.js';
+// js/food-items.js
+// يستورد تهيئة Firebase (db, auth)
+import { db, auth } from "./firebase-config.js";
 import {
-  collection, query, orderBy, getDocs, getDoc, doc,
-  setDoc, updateDoc, deleteDoc, serverTimestamp
+  collection, getDocs, query, orderBy, addDoc,
+  doc, getDoc, updateDoc, deleteDoc
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* ====== DOM ====== */
-const $ = (id)=>document.getElementById(id);
-const qEl=$('q'), grid=$('grid'), dlg=$('dlg'), form=$('form');
-const btnNew=$('btnNew'), btnSave=$('btnSave'), btnUpdate=$('btnUpdate'), btnDelete=$('btnDelete'), btnAddMeas=$('btnAddMeas'), btnPreview=$('btnPreview');
+// عناصر الواجهة
+const searchInput = document.getElementById("searchInput");
+const categorySel = document.getElementById("categoryFilter");
+const tbody       = document.getElementById("itemsTbody");
+const btnRefresh  = document.getElementById("btnRefresh");
+const btnAdd      = document.getElementById("btnAdd");
 
-const nameEl=$('name'), brandEl=$('brand'), categoryEl=$('category'), imgEl=$('img'), imageUrlEl=$('imageUrl');
-const carbsEl=$('carbs'), fiberEl=$('fiber'), protEl=$('prot'), fatEl=$('fat'), calEl=$('cal'), giEl=$('gi');
-const measList=$('measList'), measNameEl=$('measName'), measGramsEl=$('measGrams');
+// نافذة الإضافة/التعديل — ديناميكية
+const dialog = document.createElement("dialog");
+dialog.id = "itemDialog";
+dialog.innerHTML = `
+  <div class="modal-head">
+    <strong id="dlgTitle">إضافة صنف</strong>
+    <button id="btnCloseDlg" class="btn ghost" type="button">إغلاق</button>
+  </div>
+  <form id="itemForm" class="modal-body">
+    <input type="hidden" id="docId" />
+    <div class="grid-2">
+      <div class="field"><input id="fName" required placeholder="اسم الصنف (إلزامي)" /></div>
+      <div class="field"><input id="fBrand" placeholder="البراند (اختياري)" /></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><input id="fCategory" placeholder="الفئة (مثل: مشروبات، ألبان…)" /></div>
+      <div class="field"><input id="fImage" placeholder="رابط صورة مصغّرة (اختياري)" /></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><input id="fMeasureName" placeholder="اسم القياس (مثال: كوب، قطعة…)" /></div>
+      <div class="field"><input id="fMeasureQty" type="number" step="any" placeholder="الكمية (مثال: 160)" /></div>
+    </div>
+    <p class="note">
+      الحفظ في <code>admin/global/foodItems</code>. حسب القواعد، الكتابة للأدمن فقط.
+    </p>
+    <div class="modal-actions">
+      <button class="btn" type="submit">حفظ</button>
+      <button class="btn ghost" type="reset">تفريغ الحقول</button>
+    </div>
+  </form>
+`;
+document.body.appendChild(dialog);
 
-let ITEMS=[], MEASURES={};
+const btnCloseDlg  = dialog.querySelector("#btnCloseDlg");
+const itemForm     = dialog.querySelector("#itemForm");
+const dlgTitle     = dialog.querySelector("#dlgTitle");
+const docIdEl      = dialog.querySelector("#docId");
+const fName        = dialog.querySelector("#fName");
+const fBrand       = dialog.querySelector("#fBrand");
+const fCategory    = dialog.querySelector("#fCategory");
+const fImage       = dialog.querySelector("#fImage");
+const fMeasureName = dialog.querySelector("#fMeasureName");
+const fMeasureQty  = dialog.querySelector("#fMeasureQty");
 
-/* ====== Helpers ====== */
-const ADMIN_ITEMS = ()=> collection(db,'admin','global','foodItems');
-const esc=(s)=> (s??'').toString().replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-const nn=(v)=>{ const n=Number(v); return Number.isFinite(n)?n:null; };
+// حالة الصفحة
+let allItems = [];
+let currentFilter = { q: "", cat: "__ALL__" };
+let isAdmin = false; // تُضبط بعد التحقق من users/{uid}
 
-function autoImg(name='صنف'){
-  const hue=(Array.from(name).reduce((a,c)=>a+c.charCodeAt(0),0)%360);
-  return 'data:image/svg+xml;utf8,'+encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160">
-      <defs><linearGradient id="g" x1="0" x2="1">
-        <stop offset="0" stop-color="hsl(${hue},70%,90%)"/><stop offset="1" stop-color="hsl(${(hue+40)%360},70%,85%)"/>
-      </linearGradient></defs>
-      <rect width="100%" height="100%" fill="url(#g)"/>
-      <text x="50%" y="54%" font-family="Segoe UI,Tahoma" font-size="26" text-anchor="middle" fill="#18303d">${esc(name)}</text>
-    </svg>`
-  );
+const FOOD_PATH = "admin/global/foodItems";
+
+// --- أدوات مساعدة ---
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
+}
+function asMeasurePreview(it){
+  let measureText = "—";
+  if (Array.isArray(it.measures) && it.measures.length > 0) {
+    const m0 = it.measures[0];
+    const name = m0?.name ?? "";
+    const qty  = m0?.grams ?? m0?.gi ?? m0?.measureQty ?? "";
+    measureText = [name, qty].filter(Boolean).join(" / ");
+  }
+  return measureText;
 }
 
-/* ====== Measures ====== */
-function normalizeMeasures(d){
-  if (Array.isArray(d?.measures)){
-    return d.measures
-      .filter(m=>m && m.name && Number(m.grams)>0)
-      .map(m=>({name:m.name, grams:Number(m.grams)}));
+// --- تحميل البيانات (مع fallback) ---
+async function fetchAllFood() {
+  try {
+    const q1 = query(collection(db, FOOD_PATH), orderBy("name"));
+    const snap = await getDocs(q1);
+    return snap.docs.map(s => ({ id: s.id, ...s.data() }));
+  } catch {
+    const snap = await getDocs(collection(db, FOOD_PATH));
+    return snap.docs.map(s => ({ id: s.id, ...s.data() }));
   }
-  if (d?.measureQty && typeof d.measureQty==='object'){
-    return Object.entries(d.measureQty)
-      .filter(([n,g])=>n && Number(g)>0)
-      .map(([n,g])=>({name:n, grams:Number(g)}));
-  }
-  if (Array.isArray(d?.householdUnits)){
-    return d.householdUnits
-      .filter(m=>m && m.name && Number(m.grams)>0)
-      .map(m=>({name:m.name, grams:Number(m.grams)}));
-  }
-  return [];
 }
 
-/* ====== Load Grid ====== */
-async function loadGrid(){
-  grid.innerHTML='<div class="muted">⏳ جاري التحميل…</div>';
-  let snap;
-  try{ snap = await getDocs(query(ADMIN_ITEMS(), orderBy('name'))); }
-  catch{ snap = await getDocs(ADMIN_ITEMS()); }
+// --- رسم الجدول ---
+function render() {
+  const q = (currentFilter.q || "").trim().toLowerCase();
+  const cat = currentFilter.cat;
 
-  ITEMS=[]; const parts=[];
-  snap.forEach(s=>{
-    const d = { id:s.id, ...s.data() };
-    ITEMS.push(d);
-    const tags = normalizeMeasures(d).map(m=>`<span class="badge">${esc(m.name)} (${m.grams}جم)</span>`).join(' ');
-    parts.push(`
-      <div class="card-item" data-id="${esc(d.id)}">
-        <img src="${esc(d.imageUrl || autoImg(d.name||'صنف'))}" alt="">
-        <div class="title">${esc(d.name||'-')}</div>
-        ${d.brand?`<div class="brand">${esc(d.brand)}</div>`:''}
-        <div>${tags || '<span class="muted">لا تقديرات بيتية</span>'}</div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button class="secondary btnEdit">تعديل</button>
-          <button class="danger btnRemove">حذف</button>
-        </div>
-      </div>
-    `);
+  const filtered = allItems.filter(it => {
+    const inCat = cat === "__ALL__" || (it.category || "").toLowerCase() === cat.toLowerCase();
+    const inTxt = !q ||
+      (it.name && it.name.toLowerCase().includes(q)) ||
+      (it.brand && it.brand.toLowerCase().includes(q));
+    return inCat && inTxt;
   });
-  grid.innerHTML = parts.join('') || '<div class="muted">لا توجد أصناف بعد</div>';
-  grid.querySelectorAll('.btnEdit').forEach(b=> b.addEventListener('click', ()=> openEdit(b.closest('.card-item').dataset.id)));
-  grid.querySelectorAll('.btnRemove').forEach(b=> b.addEventListener('click', ()=> removeItem(b.closest('.card-item').dataset.id)));
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td class="empty" colspan="7">لا توجد أصناف مطابقة.</td></tr>`;
+    return;
+  }
+
+  const rows = filtered.map(it => {
+    const img = it.imageUrl ? it.imageUrl : "";
+    const brand = it.brand || "—";
+    const catText = it.category || "—";
+    const measureText = asMeasurePreview(it);
+
+    const actions = isAdmin
+      ? `<td class="actions-cell">
+           <button class="btn small secondary act-edit" data-id="${it.id}">تعديل</button>
+           <button class="btn small danger act-del" data-id="${it.id}">حذف</button>
+         </td>`
+      : `<td class="actions-cell"></td>`;
+
+    return `
+      <tr data-id="${it.id}">
+        <td><img class="thumb" src="${img}" alt="" loading="lazy" /></td>
+        <td>
+          <div class="meta">
+            <strong>${escapeHtml(it.name || "بدون اسم")}</strong>
+            ${it.nutPer100g ? `<span class="muted">س.غذائي/100g متوفر</span>` : ``}
+          </div>
+        </td>
+        <td class="muted">${escapeHtml(brand)}</td>
+        <td><span class="chip">${escapeHtml(catText)}</span></td>
+        <td class="muted">${escapeHtml(String(measureText))}</td>
+        <td class="muted">${it.id}</td>
+        ${actions}
+      </tr>
+    `;
+  }).join("");
+
+  tbody.innerHTML = rows;
 }
 
-/* ====== Render Measures Pills ====== */
-function renderMeasures(){
-  const entries = Object.entries(MEASURES);
-  measList.innerHTML = entries.length
-    ? entries.map(([n,g])=>`
-        <div class="pill">
-          <span>${esc(n)} = ${g} جم</span>
-          <button type="button" class="x" data-k="${esc(n)}">×</button>
-        </div>
-      `).join('')
-    : '<div class="muted">أضِف تقديرات بيتية (مثال: كوب = 200 جم)</div>';
-  measList.querySelectorAll('.x').forEach(b=>{
-    b.addEventListener('click', ()=>{ delete MEASURES[b.dataset.k]; renderMeasures(); });
-  });
+// --- تعبئة فئات الفلتر ---
+function populateCategories() {
+  const set = new Set();
+  allItems.forEach(it => { if (it.category) set.add(it.category); });
+
+  const current = categorySel.value || "__ALL__";
+  categorySel.innerHTML = `<option value="__ALL__">كل الفئات</option>` +
+    Array.from(set).sort((a,b)=>a.localeCompare(b,"ar")).map(c =>
+      `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+
+  if ([...set].some(c => c === current)) categorySel.value = current;
+  else categorySel.value = "__ALL__";
 }
 
-/* ====== Collect Form Data ====== */
-function collectFormData(){
-  const nutrPer100g = {
-    carbs_g:  nn(carbsEl.value) ?? 0,
-    fiber_g:  nn(fiberEl.value) ?? 0,
-    protein_g:nn(protEl.value) ?? 0,
-    fat_g:    nn(fatEl.value) ?? 0,
-    cal_kcal: nn(calEl.value) ?? 0
+// --- تشغيل أولي ---
+async function boot() {
+  tbody.innerHTML = `<tr><td class="empty" colspan="7">جارِ التحميل…</td></tr>`;
+  allItems = await fetchAllFood();
+  populateCategories();
+  render();
+}
+
+// --- أحداث الواجهة ---
+searchInput.addEventListener("input", (e) => {
+  currentFilter.q = e.currentTarget.value || "";
+  render();
+});
+
+categorySel.addEventListener("change", (e) => {
+  currentFilter.cat = e.currentTarget.value || "__ALL__";
+  render();
+});
+
+btnRefresh.addEventListener("click", async () => {
+  tbody.innerHTML = `<tr><td class="empty" colspan="7">جارِ التحديث…</td></tr>`;
+  allItems = await fetchAllFood();
+  populateCategories();
+  render();
+});
+
+btnAdd.addEventListener("click", () => {
+  dlgTitle.textContent = "إضافة صنف";
+  docIdEl.value = "";
+  itemForm.reset();
+  dialog.showModal();
+});
+
+btnCloseDlg.addEventListener("click", () => dialog.close());
+
+// حفظ (إنشاء أو تعديل) — قواعدك ستسمح للأدمن فقط
+itemForm.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+
+  const id = (docIdEl.value || "").trim();
+  const data = {
+    name: (fName.value || "").trim(),
+    brand: (fBrand.value || "").trim() || null,
+    category: (fCategory.value || "").trim() || null,
+    imageUrl: (fImage.value || "").trim() || null,
+    measures: [],
   };
-  const measureQty = Object.fromEntries(
-    Object.entries(MEASURES)
-      .filter(([n,g])=>n && Number(g)>0)
-      .map(([n,g])=>[n, Number(g)])
-  );
-  const measures = Object.entries(measureQty).map(([n,g])=>({name:n, grams:g}));
 
-  // خذي الرابط كما هو (أو null لو فاضي)
-  const imageUrl = (imageUrlEl.value || '').trim() || null;
+  const mName = (fMeasureName.value || "").trim();
+  const mQty  = (fMeasureQty.value || "").trim();
+  if (mName || mQty) {
+    const qtyNum = Number(mQty);
+    const m = { name: mName || "قياس", grams: isFinite(qtyNum) && qtyNum>0 ? qtyNum : undefined };
+    data.measures.push(m);
+  }
 
-  return {
-    name: (nameEl.value||'').trim(),
-    brand: (brandEl.value||'').trim() || null,
-    category: (categoryEl.value||'').trim() || null,
-    nutrPer100g,
-    gi: nn(giEl.value),
-    measureQty,
-    measures,
-    imageUrl,
-    updatedAt: serverTimestamp()
-  };
+  if (!data.name) { alert("الاسم إلزامي"); return; }
+
+  try {
+    if (id) {
+      // تعديل
+      await updateDoc(doc(db, FOOD_PATH, id), data);
+    } else {
+      // إضافة
+      data.createdAt = new Date().toISOString();
+      await addDoc(collection(db, FOOD_PATH), data);
+    }
+    dialog.close();
+    await refreshAndRender();
+    alert("تم الحفظ بنجاح ✅");
+  } catch (err) {
+    console.error(err);
+    alert("تعذّر الحفظ (غالبًا ليست لديك صلاحية الأدمن).");
+  }
+});
+
+// تفويض أحداث للجدول (تعديل/حذف)
+tbody.addEventListener("click", async (e) => {
+  const target = e.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  // تعديل
+  if (target.classList.contains("act-edit")) {
+    const id = target.dataset.id;
+    const item = allItems.find(x => x.id === id);
+    if (!item) return;
+
+    dlgTitle.textContent = "تعديل صنف";
+    docIdEl.value = item.id;
+    fName.value = item.name || "";
+    fBrand.value = item.brand || "";
+    fCategory.value = item.category || "";
+    fImage.value = item.imageUrl || "";
+    const m0 = Array.isArray(item.measures) && item.measures[0] ? item.measures[0] : {};
+    fMeasureName.value = m0.name || "";
+    fMeasureQty.value  = m0.grams ?? m0.gi ?? m0.measureQty ?? "";
+    dialog.showModal();
+  }
+
+  // حذف
+  if (target.classList.contains("act-del")) {
+    const id = target.dataset.id;
+    const item = allItems.find(x => x.id === id);
+    if (!item) return;
+
+    if (!confirm(`هل تريدين حذف الصنف:\n${item.name || id}?`)) return;
+
+    try {
+      await deleteDoc(doc(db, FOOD_PATH, id));
+      await refreshAndRender();
+      alert("تم حذف الصنف 🗑️");
+    } catch (err) {
+      console.error(err);
+      alert("تعذّر الحذف (غالبًا ليست لديك صلاحية الأدمن).");
+    }
+  }
+});
+
+async function refreshAndRender(){
+  allItems = await fetchAllFood();
+  populateCategories();
+  render();
 }
 
-/* ====== Preview from URL ====== */
-btnPreview.addEventListener('click', ()=>{
-  const url = (imageUrlEl.value||'').trim();
-  imgEl.src = url || autoImg(nameEl.value || 'صنف');
+// --- كشف دور المستخدم لإظهار الأزرار حسب القواعد ---
+// users/{uid}.role === "admin" => عرض الأزرار + عمود الإجراءات
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    isAdmin = false;
+    btnAdd.style.display = "none";
+    document.body.classList.add("no-admin");
+    render();
+    return;
+  }
+  try {
+    const uref = doc(db, "users", user.uid);
+    const usnap = await getDoc(uref); // قواعدك تسمح للمالك بقراءة وثيقته
+    isAdmin = usnap.exists() && usnap.data()?.role === "admin";
+  } catch {
+    isAdmin = false;
+  }
+  btnAdd.style.display = isAdmin ? "inline-flex" : "none";
+  document.body.classList.toggle("no-admin", !isAdmin);
+  render(); // لإظهار/إخفاء عمود الإجراءات فورًا
 });
 
-/* ====== New Item ====== */
-btnNew.addEventListener('click', ()=>{
-  form.reset(); MEASURES={}; renderMeasures();
-  imgEl.src = autoImg('صنف');
-  imageUrlEl.value = '';
-  delete form.dataset.id;
-  btnSave.style.display='inline-block';
-  btnUpdate.style.display='none';
-  btnDelete.style.display='none';
-  dlg.showModal();
-});
-
-/* ====== Add measure ====== */
-btnAddMeas.addEventListener('click', ()=>{
-  const n=(measNameEl.value||'').trim(); const g=nn(measGramsEl.value);
-  if(!n || !g || g<=0) return;
-  MEASURES[n]=g; measNameEl.value=''; measGramsEl.value=''; renderMeasures();
-});
-
-/* ====== Save New ====== */
-btnSave.addEventListener('click', async (e)=>{
-  e.preventDefault();
-  if(!nameEl.value.trim()){ alert('اكتبي اسم الصنف'); return; }
-
-  const toSave = collectFormData();
-  await setDoc(doc(ADMIN_ITEMS(), crypto.randomUUID()), {
-    ...toSave,
-    createdAt: serverTimestamp()
-  });
-
-  delete form.dataset.id;
-  dlg.close(); loadGrid();
-});
-
-/* ====== Update Existing ====== */
-btnUpdate.addEventListener('click', async (e)=>{
-  e.preventDefault();
-  const id=form.dataset.id;
-  if(!id){ alert('لا يوجد صنف محدد للتعديل'); return; }
-
-  const toSave = collectFormData();
-  await updateDoc(doc(ADMIN_ITEMS(), id), toSave);
-
-  delete form.dataset.id;
-  dlg.close(); loadGrid();
-});
-
-/* ====== Delete ====== */
-btnDelete.addEventListener('click', async ()=>{
-  const id=form.dataset.id;
-  if(!id) return;
-  if(!confirm('حذف هذا الصنف؟')) return;
-  await deleteDoc(doc(ADMIN_ITEMS(), id));
-  delete form.dataset.id;
-  dlg.close(); loadGrid();
-});
-
-/* ====== Open Edit ====== */
-async function openEdit(id){
-  const s=await getDoc(doc(ADMIN_ITEMS(), id)); if(!s.exists()) return;
-  const d=s.data();
-
-  form.reset(); MEASURES={};
-  nameEl.value=d.name||''; brandEl.value=d.brand||''; categoryEl.value=d.category||'';
-  carbsEl.value=d?.nutrPer100g?.carbs_g ?? d?.carbs_100g ?? '';
-  fiberEl.value=d?.nutrPer100g?.fiber_g ?? d?.fiber_100g ?? '';
-  protEl.value =d?.nutrPer100g?.protein_g ?? d?.protein_100g ?? '';
-  fatEl.value  =d?.nutrPer100g?.fat_g ?? d?.fat_100g ?? '';
-  calEl.value  =d?.nutrPer100g?.cal_kcal ?? d?.calories_100g ?? '';
-  giEl.value   =d?.gi ?? '';
-
-  // مقاييس
-  normalizeMeasures(d).forEach(m=>{ MEASURES[m.name]=m.grams; });
-  renderMeasures();
-
-  // صورة من الرابط
-  imageUrlEl.value = d.imageUrl || '';
-  imgEl.src = d.imageUrl || autoImg(d.name||'صنف');
-
-  form.dataset.id = s.id;
-  btnSave.style.display='none';
-  btnUpdate.style.display='inline-block';
-  btnDelete.style.display='inline-block';
-
-  dlg.showModal();
-}
-
-/* ====== Quick filter ====== */
-qEl.addEventListener('input', ()=>{
-  const q=(qEl.value||'').trim();
-  grid.querySelectorAll('.card-item').forEach(c=>{
-    const name=c.querySelector('.title').textContent;
-    const brand=c.querySelector('.brand')?.textContent || '';
-    c.style.display = (!q || name.includes(q) || brand.includes(q)) ? '' : 'none';
-  });
-});
-
-/* ====== Init ====== */
-loadGrid().catch(console.error);
+// انطلاق
+boot();
