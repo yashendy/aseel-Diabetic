@@ -198,8 +198,6 @@ function initFoodItemsPage() {
     itemForm.reset();
     dialog.showModal();
   });
-
-  const btnCloseDlg  = dialog.querySelector("#btnCloseDlg");
   btnCloseDlg.addEventListener("click", () => dialog.close());
 
   // حفظ (إنشاء/تعديل) — القواعد ستفرض الأدمن
