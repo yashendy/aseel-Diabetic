@@ -9,19 +9,12 @@
     :root{--bg:#0b1020;--panel:#121832;--muted:#99a3b3;--text:#e7ecf7;--accent:#4f76ff;--danger:#ff5468}
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{
-      margin:0;background:linear-gradient(180deg,#0b1020 0%,#0e1430 100%);
-      color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Noto Sans Arabic",Tahoma,sans-serif
-    }
+    body{margin:0;background:linear-gradient(180deg,#0b1020 0%,#0e1430 100%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Noto Sans Arabic",Tahoma,sans-serif}
     .container{max-width:1160px;margin-inline:auto;padding:28px}
     .header{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:16px}
     .title{font-size:clamp(20px,3.6vw,28px);font-weight:800;letter-spacing:.3px}
     .actions{display:flex;gap:10px;flex-wrap:wrap}
-    .btn{
-      border:0;cursor:pointer;border-radius:14px;padding:10px 16px;
-      background:linear-gradient(180deg,var(--accent),#345dff);
-      color:#fff;font-weight:700;box-shadow:0 8px 22px rgba(79,118,255,.35);transition:transform .12s ease,filter .12s ease
-    }
+    .btn{border:0;cursor:pointer;border-radius:14px;padding:10px 16px;background:linear-gradient(180deg,var(--accent),#345dff);color:#fff;font-weight:700;box-shadow:0 8px 22px rgba(79,118,255,.35);transition:transform .12s ease,filter .12s ease}
     .btn:hover{transform:translateY(-1px);filter:brightness(1.04)}
     .btn.secondary{background:#1a2142;box-shadow:inset 0 0 0 1px #2a3160;color:var(--text);font-weight:600}
     .btn.ghost{background:transparent;border:1px solid #2b396b}
@@ -30,28 +23,18 @@
     .panel{background:rgba(18,24,50,.65);border:1px solid #1e2a5d;border-radius:18px;padding:16px;backdrop-filter:blur(6px)}
     .filters{display:grid;grid-template-columns:1fr 220px;gap:12px;margin-bottom:14px}
     .field{position:relative}
-    .field input,.field select{
-      width:100%;height:44px;border-radius:12px;background:#0f1531;border:1px solid #263064;
-      color:var(--text);padding:0 14px;font-size:14px;outline:none
-    }
+    .field input,.field select{width:100%;height:44px;border-radius:12px;background:#0f1531;border:1px solid #263064;color:var(--text);padding:0 14px;font-size:14px;outline:none}
     .field input::placeholder{color:#8e98b3}
     .table-wrap{overflow:auto;border-radius:12px;border:1px solid #223066}
     table{width:100%;border-collapse:collapse;background:#0f1531}
-    thead th{
-      position:sticky;top:0;background:#111944;border-bottom:1px solid #223066;
-      font-weight:700;color:#cfd7ee;padding:12px 10px;text-align:right
-    }
+    thead th{position:sticky;top:0;background:#111944;border-bottom:1px solid #223066;font-weight:700;color:#cfd7ee;padding:12px 10px;text-align:right}
     tbody td{padding:12px 10px;border-bottom:1px solid #19224c;color:#dee6ff;vertical-align:middle}
     tbody tr:hover{background:#10183a}
     .thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid #293768;background:#0b0f24}
     .meta{display:flex;flex-direction:column;gap:2px}
     .muted{color:var(--muted);font-size:12px}
-    .chip{
-      display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;
-      font-size:12px;background:#122055;border:1px solid #2642a8;color:#d7e2ff
-    }
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:12px;background:#122055;border:1px solid #2642a8;color:#d7e2ff}
     .empty{text-align:center;padding:36px 14px;color:#97a4c7}
-
     dialog{border:0;border-radius:18px;background:#0f1531;color:var(--text);width:min(720px,92vw);box-shadow:0 20px 70px rgba(0,0,0,.45)}
     dialog::backdrop{background:rgba(0,0,0,.55)}
     .modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #223066}
@@ -60,13 +43,11 @@
     .modal-actions{display:flex;gap:10px;justify-content:flex-start;padding:14px 18px;border-top:1px solid #223066}
     .note{font-size:12px;color:#8ea1cf}
     .danger{color:#ff5468}
-    /* إخفاء عمود الإجراءات لغير الأدمن (يُضاف/يُزال كلاس بالـJS) */
-    .no-admin .col-actions,
-    .no-admin td.actions-cell {display:none}
+    .no-admin .col-actions,.no-admin td.actions-cell{display:none}
   </style>
 </head>
 <body class="no-admin">
-  <div class="container">
+  <div class="container" id="foodItemsPage">
     <div class="header">
       <div class="title">مكتبة الأصناف العامة</div>
       <div class="actions">
@@ -77,13 +58,9 @@
 
     <div class="panel">
       <div class="filters">
+        <div class="field"><input id="searchInput" type="search" placeholder="ابحث بالاسم أو البراند…" /></div>
         <div class="field">
-          <input id="searchInput" type="search" placeholder="ابحث بالاسم أو البراند…" />
-        </div>
-        <div class="field">
-          <select id="categoryFilter">
-            <option value="__ALL__">كل الفئات</option>
-          </select>
+          <select id="categoryFilter"><option value="__ALL__">كل الفئات</option></select>
         </div>
       </div>
 
@@ -108,7 +85,6 @@
     </div>
   </div>
 
-  <!-- صفحة HTML نظيفة: لا تهيئة Firebase هنا -->
   <script type="module" src="./js/food-items.js"></script>
 </body>
 </html>
