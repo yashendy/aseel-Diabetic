@@ -3,9 +3,56 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>لوحة وليّ الأمر</title>
-  <link rel="icon" type="image/png" href="images/favicon-32.png" />
-  <link rel="stylesheet" href="css/parent.css?v=2" />
+  <title>أطفالك</title>
+
+  <!-- فافيكون محلي -->
+  <link rel="icon" href="./favicon.ico">
+  <link rel="icon" type="image/png" href="./favicon.png">
+
+  <!-- تنسيقات بسيطة (اختياري) -->
+  <style>
+    :root{--p:#4b4ded;--g:#09a27d;--muted:#777}
+    body{font-family:system-ui,Segoe UI,Tahoma,Arial; background:#f6f9ff; margin:0}
+    .container{max-width:1100px;margin:24px auto;padding:0 12px}
+    .card{background:#fff;border-radius:14px;box-shadow:0 6px 18px rgba(20,20,60,.06);padding:18px;margin-bottom:16px}
+    .top .head h1{margin:0 0 4px}
+    .muted{color:var(--muted)}
+    .tools{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+    .field{display:flex;flex-direction:column;gap:6px}
+    input[type=text], textarea, select{border:1px solid #e5e7ef;border-radius:10px;padding:10px 12px;font:inherit;background:#fff}
+    .add-btn,.btn{border:0;border-radius:10px;padding:10px 14px;background:var(--p);color:#fff;cursor:pointer}
+    .btn.secondary{background:#e9ecff;color:#2b2f7a}
+    .btn.danger{background:#e53935}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+    .kid.card{display:flex;flex-direction:column;gap:10px}
+    .kid-head{display:flex;gap:12px;align-items:center}
+    .avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+    .name{font-weight:700}
+    .meta{font-size:.9rem;color:var(--muted)}
+    .badge{display:inline-block;background:#eef3ff;color:#3843b6;border-radius:20px;padding:4px 10px;margin-top:6px;font-size:.78rem}
+    .badge.ok{background:#e9fbf6;color:#0f7a61}
+    .badge.warn{background:#fff4e5;color:#b26b00}
+    .chips{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{background:#f2f4fb;border:1px solid #e9ebf5;border-radius:12px;padding:4px 8px;font-size:.82rem}
+    .kid-actions{display:flex;gap:8px;margin-top:6px}
+    dialog::backdrop{background:rgba(0,0,0,.25)}
+    dialog{border:0;border-radius:16px;padding:0}
+    dialog form{padding:18px}
+    .ai-fab{position:fixed;right:20px;bottom:20px;background:var(--p);border-radius:50%;width:58px;height:58px;color:#fff;border:0;font-size:26px;cursor:pointer;box-shadow:0 10px 22px rgba(60,60,150,.25)}
+    .ai-widget{position:fixed;right:20px;bottom:90px;width:min(420px,90vw);background:#fff;border-radius:14px;box-shadow:0 18px 40px rgba(20,20,60,.18);display:flex;flex-direction:column;overflow:hidden}
+    .ai-widget.hidden{display:none}
+    .ai-header{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #eee}
+    .ai-messages{padding:12px;height:300px;overflow:auto;display:flex;flex-direction:column;gap:8px;background:#fafbff}
+    .msg{padding:10px 12px;border-radius:12px;max-width:85%}
+    .msg.user{align-self:flex-end;background:#e9ecff}
+    .msg.assistant{align-self:flex-start;background:#eafaf5}
+    .ai-input{padding:10px;border-top:1px solid #eee}
+    .ai-row{display:flex;gap:8px}
+    .ai-quick{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+    .ai-quick .chip{cursor:pointer}
+    .loader{position:fixed;bottom:20px;left:20px;background:#1f234f;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 18px rgba(10,10,30,.25)}
+    .hidden{display:none}
+  </style>
 </head>
 <body>
   <div class="container">
@@ -25,7 +72,7 @@
     </header>
 
     <section id="kidsGrid" class="grid"></section>
-    <div id="empty" class="empty hidden">لا يوجد أطفال بعد… ابدئي بإضافة طفل جديد.</div>
+    <div id="empty" class="card muted hidden">لا يوجد أطفال بعد… ابدئي بإضافة طفل جديد.</div>
   </div>
 
   <!-- حوار إدخال كود الربط -->
@@ -39,59 +86,53 @@
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
         <button id="linkCancel" type="button">إلغاء</button>
-        <button id="linkSubmit" class="btn primary" type="button">ربط</button>
+        <button id="linkSubmit" class="btn" type="button">ربط</button>
       </div>
       <div id="linkMsg" class="muted" style="margin-top:8px"></div>
     </form>
   </dialog>
 
-  <!-- زر المساعد العائم + الويدجت كما هو -->
-  <button class="ai-fab" id="aiFab" title="مساعد ذكي">🤖</button>
+  <!-- زر المساعد + الويدجت -->
+  <button class="ai-fab" id="aiFab" title="مساعد">🤖</button>
   <div class="ai-widget hidden" id="aiWidget">
     <div class="ai-header">
-      <div class="ai-title">
-        <strong>مساعدك الغذائي</strong>
-        <small id="aiContext">بدون سياق طفل</small>
-      </div>
+      <div><strong>مساعدك الغذائي</strong> · <small id="aiContext" class="muted">بدون سياق طفل</small></div>
       <div>
-        <button class="icon-btn" id="aiMin" title="تصغير">➖</button>
-        <button class="icon-btn" id="aiClose" title="إغلاق">❌</button>
+        <button class="btn secondary" id="aiMin" type="button">تصغير</button>
+        <button class="btn danger" id="aiClose" type="button">إغلاق</button>
       </div>
     </div>
     <div class="ai-messages" id="aiMessages"></div>
     <div class="ai-input">
       <div class="ai-quick">
         <span class="chip ai-quick-btn" data-q="كيف أحسب جرعة الوجبة؟">حساب جرعة الوجبة؟</span>
-        <span class="chip ai-quick-btn" data-q="ما الفرق بين CR و CF؟">ما هو CR و CF؟</span>
-        <span class="chip ai-quick-btn" data-q="لطفًا لخص لي يوم الطفل.">ملخص اليوم</span>
+        <span class="chip ai-quick-btn" data-q="ما هو CR و CF؟">ما هو CR و CF؟</span>
+        <span class="chip ai-quick-btn" data-q="لخص يوم الطفل.">ملخص اليوم</span>
       </div>
       <div class="ai-row">
-        <textarea id="aiInput" placeholder="اكتبي سؤالك هنا…"></textarea>
-        <button class="btn primary" id="aiSend">إرسال</button>
+        <textarea id="aiInput" placeholder="اكتبي سؤالك هنا…" rows="2" style="flex:1"></textarea>
+        <button class="btn" id="aiSend" type="button">إرسال</button>
       </div>
       <div id="aiKeyWarn" class="muted" style="display:none;margin-top:6px">
-        المفتاح غير مضبوط. افتحي <a href="gemini-key-check.html" target="_blank">اختبار المفتاح</a> ثم خزّنيه في المتصفح.
+        المفتاح غير مضبوط. افتحي صفحة اختبار المفتاح ثم خزّنيه في المتصفح.
       </div>
     </div>
   </div>
 
   <div id="loader" class="loader hidden">جارٍ تحميل البيانات…</div>
 
-  <!-- 🔑 قراءة المفتاح من localStorage أولاً، ثم من المتغير (للتوافق مع السابق) -->
-  <script>
-    window.GEMINI_API_KEY = localStorage.getItem('GEMINI_API_KEY') || window.GEMINI_API_KEY || "YOUR_GEMINI_API_KEY";
-  </script>
-
-  <!-- Firebase config -->
+  <!-- Firebase -->
   <script type="module" src="js/firebase-config.js"></script>
 
-  <!-- Google Generative AI (متصفح) -->
+  <!-- Google Generative AI SDK (للعمل عبر المتصفح لو استخدمتي المفتاح محليًا) -->
   <script type="module">
     import { GoogleGenerativeAI } from "https://cdn.jsdelivr.net/npm/@google/generative-ai/dist/index.min.mjs";
     window.GoogleGenerativeAI = GoogleGenerativeAI;
+    // قراءة مفتاح محليًا إن وجد (للاستخدام الشخصي فقط)
+    window.GEMINI_API_KEY = localStorage.getItem('GEMINI_API_KEY') || window.GEMINI_API_KEY || "YOUR_GEMINI_API_KEY";
   </script>
 
   <!-- منطق الصفحة -->
-  <script type="module" src="./js/parent.js?v=5"></script>
+  <script type="module" src="js/parent.js?v=7"></script>
 </body>
 </html>
