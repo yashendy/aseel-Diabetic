@@ -1,14 +1,15 @@
 :root{
-  --bg:#f7fbff;
+  --bg:#f9fbff;
   --panel:#ffffff;
   --text:#1a2540;
   --muted:#6e7b96;
-  --border:#e6ecf7;
-  --primary:#5fa7ff;
-  --primary-2:#417dff;
+  --border:#e7eef9;
+  --primary:#6aa9ff;
+  --primary-2:#4b8bff;
   --good:#22c55e;
   --danger:#ef4444;
   --chip:#eef4ff;
+  --head:#f3f7ff;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -28,12 +29,14 @@ body{
 .btn{
   border:0;cursor:pointer;border-radius:12px;padding:10px 14px;
   background:linear-gradient(180deg,var(--primary),var(--primary-2));
-  color:#fff;font-weight:800;box-shadow:0 10px 24px rgba(65,125,255,.25);
+  color:#fff;font-weight:800;box-shadow:0 10px 24px rgba(65,125,255,.22);
   transition:transform .12s ease,filter .12s ease;
 }
 .btn:hover{transform:translateY(-1px);filter:brightness(1.04)}
 .btn.secondary{background:#fff;color:var(--text);border:1px solid var(--border);box-shadow:none}
 .btn.good{background:linear-gradient(180deg,var(--good),#16a34a)}
+.btn.danger{background:linear-gradient(180deg,var(--danger),#dc2626)}
+.btn.small{padding:6px 10px;border-radius:10px;font-size:12px}
 
 .card{
   background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:14px;margin-bottom:14px
@@ -59,12 +62,10 @@ body{
 .table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}
 table{width:100%;border-collapse:collapse;background:#fff}
 thead th{
-  position:sticky;top:0;background:#f3f6ff;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--head);border-bottom:1px solid var(--border);
   font-weight:800;color:#2a3770;padding:10px;text-align:right
 }
 tbody td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle}
 tbody tr:hover{background:#fbfdff}
 .muted{color:var(--muted);font-size:12px}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.btn.small{padding:6px 10px;border-radius:10px;font-size:12px}
-.btn.danger{background:linear-gradient(180deg,var(--danger),#dc2626)}
