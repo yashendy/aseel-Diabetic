@@ -44,7 +44,7 @@ function copy(text){
   });
 }
 
-/* ملاحظة: تقدري تغيّري الصفحات دي لاحقًا بدون ما تغيّري أي شيء آخر */
+/* روابط صفحات الطفل (بدّلي الأسماء لو حبيتي لاحقًا) */
 function urlMeasurements(parentId, childId){
   return `child-measurements.html?parent=${encodeURIComponent(parentId)}&child=${encodeURIComponent(childId)}`;
 }
@@ -111,6 +111,7 @@ function renderCodes(){
         <strong class="mono">${escapeHtml(c.id)}</strong>
         <span class="muted">Used: ${c.used ? "✅" : "❌"}</span>
         ${c.parentId ? `<span class="muted">by: ${escapeHtml(c.parentId)}</span>` : ""}
+        ${c.childId  ? `<span class="muted">child: ${escapeHtml(c.childId)}</span>` : ""}
       </div>
       <div class="actions">
         <button class="btn secondary btn-copy" data-id="${c.id}">نسخ</button>
@@ -151,31 +152,35 @@ btnReloadCodes?.addEventListener("click", loadCodes);
 /* ===== الأطفال المرتبطين بالطبيب ===== */
 async function loadChildren(){
   childrenTbody.innerHTML = `<tr><td class="empty" colspan="6">جارِ التحميل…</td></tr>`;
-  let rows = [];
-  try{
-    // الاستعلام المُفضّل (قد يطلب Index مركّب)
-    const q1 = query(
+  const rows = new Map(); // key = path "parents/{p}/children/{c}"
+
+  // استعلام يغطي المخطط الجديد (Map)
+  try {
+    const qMap = query(
       collectionGroup(db, "children"),
       where("assignedDoctor","==", currentDoctor.uid),
       where("sharingConsent.doctor","==", true)
     );
-    const snap = await getDocs(q1);
-    rows = snap.docs.map(mapChildDoc);
-  }catch(e){
-    // Fallback: assignedDoctor فقط ثم فلترة مشاركة محليًا
-    try{
-      const q2 = query(
-        collectionGroup(db, "children"),
-        where("assignedDoctor","==", currentDoctor.uid)
-      );
-      const snap2 = await getDocs(q2);
-      rows = snap2.docs.map(mapChildDoc).filter(r => r.sharingOk);
-    }catch(err){
-      console.error(err);
-      rows = [];
-    }
+    const snap = await getDocs(qMap);
+    for (const d of snap.docs) rows.set(d.ref.path, mapChildDoc(d));
+  } catch (e) {
+    console.warn("map-consent query:", e?.message||e);
   }
-  childrenRows = rows;
+
+  // استعلام يغطي المخطط القديم (Boolean) - لو فيه بيانات قديمة
+  try {
+    const qBool = query(
+      collectionGroup(db, "children"),
+      where("assignedDoctor","==", currentDoctor.uid),
+      where("sharingConsent","==", true)
+    );
+    const snap2 = await getDocs(qBool);
+    for (const d of snap2.docs) rows.set(d.ref.path, mapChildDoc(d));
+  } catch (e) {
+    console.warn("bool-consent query:", e?.message||e);
+  }
+
+  childrenRows = Array.from(rows.values());
   renderChildren();
 }
 
@@ -185,16 +190,13 @@ function mapChildDoc(d){
   const parentId = parts[1];
   const childId  = parts[3];
   const v = d.data() || {};
-  const consent = (v.sharingConsent === true) ||
-                  (typeof v.sharingConsent === "object" && v.sharingConsent?.doctor === true);
   return {
     parentId, childId,
     name: v.name || "—",
     gender: v.gender || "—",
     birthDate: v.birthDate || "",
     age: ageFrom(v.birthDate),
-    glucoseUnit: v.glucoseUnit || "—",
-    sharingOk: consent
+    glucoseUnit: v.glucoseUnit || v.unitType || "—"
   };
 }
 
