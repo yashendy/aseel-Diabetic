@@ -1,131 +1,244 @@
 // js/doctor-dashboard.js
-import { auth, db } from './firebase-config.js';
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { db, auth } from "./firebase-config.js";
 import {
-  collectionGroup, query, where, getDocs,
-  doc, getDoc
+  collection, query, where, orderBy, limit, getDocs,
+  setDoc, doc, getDoc, serverTimestamp,
+  collectionGroup
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* ================== أدوات صغيرة ================== */
-const $  = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
-const esc = s => (s ?? '').toString()
-  .replaceAll('&','&amp;').replaceAll('<','&lt;')
-  .replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
-const age = bd => { if(!bd) return '—'; const b=new Date(bd),t=new Date();
-  let a=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth();
-  if(m<0||(m===0&&t.getDate()<b.getDate())) a--; return a; };
-function setText(sel, text){ const el=$(sel); if(el) el.textContent=text; }
+/* عناصر */
+const doctorNameEl   = document.getElementById("doctorName");
+const btnRefresh     = document.getElementById("btnRefresh");
 
-/* ================== الإقلاع ================== */
-onAuthStateChanged(auth, async (u)=>{
-  if(!u){ location.href='index.html'; return; }
-  // (اختياري) تأكيد الدور من users/{uid} إن لزم
-  await loadDoctorChildren();
-  bindUI(); // ربط الأزرار بشكل آمن
+const btnCreateCode  = document.getElementById("btnCreateCode");
+const btnReloadCodes = document.getElementById("btnReloadCodes");
+const codesList      = document.getElementById("codesList");
+
+const childSearch    = document.getElementById("childSearch");
+const childrenCount  = document.getElementById("childrenCount");
+const childrenTbody  = document.getElementById("childrenTbody");
+
+/* حالة */
+let currentDoctor = { uid: null, name: "" };
+let linkCodes = [];
+let childrenRows = [];
+let filterText = "";
+
+/* أدوات */
+const escapeHtml = (s)=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+const ageFrom = (iso)=> {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(+d)) return "—";
+  const today = new Date();
+  let years = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) years--;
+  return `${years} س`;
+};
+function copy(text){
+  navigator.clipboard?.writeText(text).catch(()=>{
+    const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy"); ta.remove();
+  });
+}
+function buildChildUrl(parentId, childId){
+  // هنقدر نغيرها لاحقًا لأي صفحة تحبيها
+  return `child.html?parent=${encodeURIComponent(parentId)}&child=${encodeURIComponent(childId)}`;
+}
+
+/* بداية */
+onAuthStateChanged(auth, async (user)=>{
+  if (!user) {
+    document.body.innerHTML = `
+      <div style="max-width:720px;margin:40px auto;padding:24px;border:1px solid #e6ecf7;border-radius:16px;background:#fff">
+        <h2>تسجيل الدخول مطلوب</h2>
+        <p>يرجى تسجيل الدخول بحساب الطبيب للوصول إلى هذه الصفحة.</p>
+      </div>`;
+    return;
+  }
+  currentDoctor.uid = user.uid;
+
+  // اسم الدكتور من users/{uid}
+  try {
+    const us = await getDoc(doc(db, "users", user.uid));
+    currentDoctor.name = (us.exists() && (us.data().displayName || us.data().name)) || user.email || "—";
+  } catch {
+    currentDoctor.name = user.email || "—";
+  }
+  doctorNameEl.textContent = currentDoctor.name;
+
+  await Promise.all([loadCodes(), loadChildren()]);
 });
 
-/* ========== جلب الأطفال المعيّنين للدكتور مع الموافقة ==========
-   يتطلب فهارس مركبة (Composite Indexes) لمجموعة children:
-   1) assignedDoctor ASC + sharingConsent ASC
-   2) assignedDoctor ASC + sharingConsent.doctor ASC
-=============================================================== */
-async function fetchLinkedChildren(doctorUid){
-  const bag = new Map();
+/* ===== أكواد الربط للدكتور ===== */
+function genCode(n=6){
+  const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s=""; for(let i=0;i<n;i++) s+=chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
 
-  // 1) sharingConsent.doctor == true
+async function loadCodes(){
   try{
+    const qCodes = query(
+      collection(db, "linkCodes"),
+      where("doctorId","==", currentDoctor.uid),
+      orderBy("createdAt","desc"),
+      limit(20)
+    );
+    const snap = await getDocs(qCodes);
+    linkCodes = snap.docs.map(s=>({ id:s.id, ...s.data() }));
+  }catch(e){
+    console.warn("codes fetch:", e?.message||e);
+    linkCodes = [];
+  }
+  renderCodes();
+}
+
+function renderCodes(){
+  if (!linkCodes.length) {
+    codesList.innerHTML = `<div class="empty">لا توجد أكواد بعد.</div>`;
+    return;
+  }
+  codesList.innerHTML = linkCodes.map(c=>`
+    <div class="row" data-id="${c.id}">
+      <div class="meta">
+        <strong class="mono">${escapeHtml(c.id)}</strong>
+        <span class="muted">Used: ${c.used ? "✅" : "❌"}</span>
+        ${c.parentId ? `<span class="muted">by: ${escapeHtml(c.parentId)}</span>` : ""}
+      </div>
+      <div class="actions">
+        <button class="btn secondary btn-copy" data-id="${c.id}">نسخ</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+btnCreateCode?.addEventListener("click", async ()=>{
+  if (!currentDoctor.uid) return;
+  const id = genCode();
+  try{
+    await setDoc(doc(db,"linkCodes", id), {
+      doctorId: currentDoctor.uid,
+      used: false,
+      parentId: null,
+      createdAt: serverTimestamp()
+    });
+    await loadCodes();
+    copy(id);
+    alert(`تم إنشاء الكود ونسخه: ${id}`);
+  }catch(e){
+    console.error(e);
+    alert("تعذّر إنشاء الكود.");
+  }
+});
+
+codesList?.addEventListener("click",(e)=>{
+  const t=e.target;
+  if (!(t instanceof HTMLElement)) return;
+  if (t.classList.contains("btn-copy")) {
+    copy(t.dataset.id);
+  }
+});
+btnReloadCodes?.addEventListener("click", loadCodes);
+
+/* ===== الأطفال المرتبطين بالطبيب ===== */
+async function loadChildren(){
+  childrenTbody.innerHTML = `<tr><td class="empty" colspan="6">جارِ التحميل…</td></tr>`;
+  let rows = [];
+  try{
+    // أفضلية: نحاول شرطين (قد يتطلب فهرس مركّب)
     const q1 = query(
-      collectionGroup(db, 'children'),
-      where('assignedDoctor','==', doctorUid),
-      where('sharingConsent.doctor','==', true)
+      collectionGroup(db, "children"),
+      where("assignedDoctor","==", currentDoctor.uid),
+      where("sharingConsent.doctor","==", true)
     );
-    const s1 = await getDocs(q1);
-    s1.forEach(d=> bag.set(d.ref.path, { id: d.id, ...d.data(), _path:d.ref.path }));
-  }catch(err){
-    console.warn('[children:consent.map] Missing index or permission.', err?.message || err);
-  }
-
-  // 2) sharingConsent == true
-  try{
-    const q2 = query(
-      collectionGroup(db, 'children'),
-      where('assignedDoctor','==', doctorUid),
-      where('sharingConsent','==', true)
-    );
-    const s2 = await getDocs(q2);
-    s2.forEach(d=> bag.set(d.ref.path, { id: d.id, ...d.data(), _path:d.ref.path }));
-  }catch(err){
-    console.warn('[children:consent.bool] Missing index or permission.', err?.message || err);
-  }
-
-  return [...bag.values()];
-}
-
-/* ================== تحميل وعرض ================== */
-async function loadDoctorChildren(){
-  try{
-    setText('#childrenStatus', 'جارٍ التحميل…');
-    const uid = auth.currentUser.uid;
-    const children = await fetchLinkedChildren(uid);
-
-    // لو عندك دالة قديمة للرندر، استخدميها
-    if (typeof window.renderChildren === 'function'){
-      window.renderChildren(children);
-    } else {
-      // رندر بسيط غير مخرّب
-      const wrap = $('#childrenList') || $('#grid') || $('#kids') || document.querySelector('.children-list');
-      if (wrap){
-        wrap.innerHTML = '';
-        if (!children.length){
-          setText('#childrenStatus', 'لا يوجد أطفال معيّنون لك حتى الآن.');
-        } else {
-          children.forEach((c)=>{
-            const card = document.createElement('div');
-            card.className = 'cardItem' in window ? 'cardItem' : 'card';
-            card.innerHTML = `
-              <div class="row" style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-                <div>
-                  <div class="name">${esc(c.name||'طفل')}</div>
-                  <div class="meta">العمر: ${age(c.birthDate)} • الوالد: ${esc(c.parentId||'-')}</div>
-                </div>
-                <div class="kit">
-                  <a class="btn primary" href="child.html?child=${encodeURIComponent(c.id)}">فتح لوحة الطفل</a>
-                </div>
-              </div>
-            `;
-            wrap.appendChild(card);
-          });
-        }
-      }
+    const snap = await getDocs(q1);
+    rows = snap.docs.map(mapChildDoc);
+  }catch(e){
+    // fallback: assignedDoctor فقط ثم نصفي محليًا حسب consent
+    try{
+      const q2 = query(
+        collectionGroup(db, "children"),
+        where("assignedDoctor","==", currentDoctor.uid)
+      );
+      const snap2 = await getDocs(q2);
+      rows = snap2.docs
+        .map(mapChildDoc)
+        .filter(r => r.sharingOk);
+    }catch(err){
+      console.error(err);
+      rows = [];
     }
-
-    setText('#childrenStatus', children.length ? `الأطفال المعيّنون: ${children.length}` : 'لا يوجد أطفال معيّنون لك حتى الآن.');
-  }catch(err){
-    console.error(err);
-    setText('#childrenStatus', 'تعذّر تحميل الأطفال (صلاحيات أو فهارس).');
   }
+  childrenRows = rows;
+  renderChildren();
 }
 
-/* ================== ربط الأزرار بشكل آمن ================== */
-function safe(fn){ return (typeof fn === 'function') ? fn : ()=>{}; }
-
-function bindUI(){
-  // أزرار الأطفال
-  const r = document.querySelector('#refreshChildren');
-  if (r) r.addEventListener('click', loadDoctorChildren);
-
-  // أزرار أكواد الربط (لو موجودة في الصفحة الحالية)
-  const genBtn = document.querySelector('#genCode');
-  const copyBtn = document.querySelector('#copyCode');
-  const refBtn  = document.querySelector('#refreshCodes');
-
-  if (genBtn)  genBtn.addEventListener('click',  safe(window.generateLinkCode));
-  if (copyBtn) copyBtn.addEventListener('click', ()=>{
-    const v = (document.querySelector('#linkCode')||{}).textContent || '';
-    if (v) navigator.clipboard.writeText(v);
-  });
-  if (refBtn)  refBtn.addEventListener('click',  safe(window.loadActiveCodes));
+function mapChildDoc(d){
+  const path = d.ref.path;                 // parents/{parentId}/children/{childId}
+  const parts = path.split("/");
+  const parentId = parts[1];
+  const childId  = parts[3];
+  const v = d.data() || {};
+  const consent = (v.sharingConsent === true) ||
+                  (typeof v.sharingConsent === "object" && v.sharingConsent?.doctor === true);
+  return {
+    parentId, childId,
+    name: v.name || "—",
+    gender: v.gender || "—",
+    birthDate: v.birthDate || "",
+    age: ageFrom(v.birthDate),
+    glucoseUnit: v.glucoseUnit || "—",
+    sharingOk: consent
+  };
 }
 
-/* ================== انتهى ================== */
+function renderChildren(){
+  const q = (filterText||"").trim().toLowerCase();
+  const list = childrenRows.filter(r => !q || (r.name||"").toLowerCase().includes(q));
+
+  childrenCount.textContent = String(list.length);
+
+  if (!list.length){
+    childrenTbody.innerHTML = `<tr><td class="empty" colspan="6">لا توجد نتائج.</td></tr>`;
+    return;
+  }
+
+  childrenTbody.innerHTML = list.map(r=>`
+    <tr data-parent="${r.parentId}" data-child="${r.childId}">
+      <td>${escapeHtml(r.name)}</td>
+      <td class="muted">${escapeHtml(r.gender)}</td>
+      <td class="muted">${escapeHtml(r.birthDate || "—")}</td>
+      <td class="muted">${escapeHtml(r.age)}</td>
+      <td class="muted">${escapeHtml(r.glucoseUnit)}</td>
+      <td>
+        <button class="btn small open-file" type="button">فتح الملف</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+childSearch?.addEventListener("input",(e)=>{
+  filterText = e.currentTarget.value || "";
+  renderChildren();
+});
+
+childrenTbody?.addEventListener("click",(e)=>{
+  const t = e.target;
+  if (!(t instanceof HTMLElement)) return;
+  if (!t.classList.contains("open-file")) return;
+  const tr = t.closest("tr");
+  const parentId = tr?.dataset.parent;
+  const childId  = tr?.dataset.child;
+  if (!parentId || !childId) return;
+  const url = buildChildUrl(parentId, childId);
+  // ممكن نستبدل location.href لاحقًا بصفحة مختلفة بدون ما نغيّر أي حاجة تانية
+  location.href = url;
+});
+
+/* تحديث شامل */
+btnRefresh?.addEventListener("click", async ()=>{
+  await Promise.all([loadCodes(), loadChildren()]);
+});
