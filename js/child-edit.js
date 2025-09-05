@@ -1,191 +1,185 @@
-// js/child-edit.js v3 — يحمّل بيانات الطفل ويحدّثها لتتوافق مع صفحة الوجبات
-// - يحفظ carbTargets (breakfast/lunch/dinner/snack)
-// - يحفظ glucoseUnit (mgdl|mmol)
-// - يحافظ على باقي الحقول الموجودة سلفًا
-
-import { auth, db } from './firebase-config.js';
+// js/child-edit.js
+import { auth, db } from "./firebase-config.js";
 import {
-  doc, getDoc, updateDoc, deleteDoc
+  doc, getDoc, updateDoc, serverTimestamp,
+  writeBatch, collection, getDocs
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* عناصر */
-const params = new URLSearchParams(location.search);
-const childId = params.get('child');
+const cNameEl   = document.getElementById("cName");
+const cGenderEl = document.getElementById("cGender");
+const cBirthEl  = document.getElementById("cBirth");
+const cUnitEl   = document.getElementById("cUnit");
+const childIdBadge = document.getElementById("childIdBadge");
 
-const form = document.getElementById('form');
-const childLabel = document.getElementById('childLabel');
-const loader = document.getElementById('loader');
-const toastEl = document.getElementById('toast');
-
-const nameEl = document.getElementById('name');
-const genderEl = document.getElementById('gender');
-const birthDateEl = document.getElementById('birthDate');
-const weightKgEl = document.getElementById('weightKg');
-const heightCmEl = document.getElementById('heightCm');
-
-const rangeMinEl = document.getElementById('rangeMin');
-const rangeMaxEl = document.getElementById('rangeMax');
-const carbRatioEl = document.getElementById('carbRatio');
-const correctionFactorEl = document.getElementById('correctionFactor');
-const severeLowEl = document.getElementById('severeLow');
-const severeHighEl = document.getElementById('severeHigh');
-
-const deviceNameEl = document.getElementById('deviceName');
-const basalTypeEl = document.getElementById('basalType');
-const bolusTypeEl = document.getElementById('bolusType');
-
-const brMinEl = document.getElementById('brMin'); const brMaxEl = document.getElementById('brMax');
-const luMinEl = document.getElementById('luMin'); const luMaxEl = document.getElementById('luMax');
-const diMinEl = document.getElementById('diMin'); const diMaxEl = document.getElementById('diMax');
-const snMinEl = document.getElementById('snMin'); const snMaxEl = document.getElementById('snMax');
-
-const unitRadios = document.querySelectorAll('input[name="unit"]');
-
-const useNetCarbsEl = document.getElementById('useNetCarbs');
-const netCarbRuleEl = document.getElementById('netCarbRule');
-
-const deleteBtn = document.getElementById('deleteBtn');
+const doctorState = document.getElementById("doctorState");
+const codeInput   = document.getElementById("codeInput");
+const btnLink     = document.getElementById("btnLink");
+const btnUnlink   = document.getElementById("btnUnlink");
+const btnRefresh  = document.getElementById("btnRefresh");
+const linkStatus  = document.getElementById("linkStatus");
 
 /* حالة */
-let currentUser, childRef, childData;
+let currentParent = null;
+let parentId = null;
+let childId  = null;
+let childDocPath = null;
+let childData = null;
 
-function showToast(msg){
-  toastEl.innerHTML = `<div class="msg">${escapeHTML(msg)}</div>`;
-  toastEl.classList.remove('hidden');
-  setTimeout(()=> toastEl.classList.add('hidden'), 2200);
+/* أدوات */
+function qs(key){
+  const u = new URLSearchParams(location.search);
+  return u.get(key) || "";
 }
-function escapeHTML(s){ return (s||'').toString()
-  .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
-  .replaceAll('"','&quot;').replaceAll("'","&#039;"); }
-function busy(b){ loader.classList.toggle('hidden', !b); }
+function setStatus(msg, ok=false){
+  linkStatus.textContent = msg;
+  linkStatus.className = "status " + (ok ? "ok" : "err");
+}
+function clearStatus(){ linkStatus.textContent = ""; linkStatus.className = "status"; }
+function setDoctorBadge(uid, name){
+  if (uid) {
+    doctorState.textContent = name ? `مرتبط: ${name}` : `مرتبط (${uid})`;
+  } else {
+    doctorState.textContent = "غير مرتبط";
+  }
+}
 
-/* جلسة */
-onAuthStateChanged(auth, async (user)=>{
-  if(!user){ location.href='index.html'; return; }
-  if(!childId){ alert('لا يوجد معرف طفل'); history.back(); return; }
-  currentUser = user;
-  childRef = doc(db, `parents/${user.uid}/children/${childId}`);
-  busy(true);
+/* قراءة اسم مستخدم من users/{uid} */
+async function fetchUserName(uid){
   try{
-    const snap = await getDoc(childRef);
-    if (!snap.exists()){ alert('لم يتم العثور على الطفل'); history.back(); return; }
+    const s = await getDoc(doc(db,"users",uid));
+    if (s.exists()) return s.data()?.displayName || s.data()?.name || uid;
+  }catch{}
+  return uid;
+}
+
+async function loadChild(){
+  clearStatus();
+
+  if (!parentId || !childId){
+    setStatus("رابط الصفحة غير صحيح: مفقود parent أو child.", false);
+    return;
+  }
+  childDocPath = `parents/${parentId}/children/${childId}`;
+  try{
+    const snap = await getDoc(doc(db, childDocPath));
+    if (!snap.exists()){
+      setStatus("وثيقة الطفل غير موجودة.", false);
+      return;
+    }
     childData = snap.data();
-    fillForm(childData);
+
+    childIdBadge.textContent = childId;
+    cNameEl.textContent   = childData.name || "—";
+    cGenderEl.textContent = childData.gender || "—";
+    cBirthEl.textContent  = childData.birthDate || "—";
+    cUnitEl.textContent   = childData.glucoseUnit || "—";
+
+    // حالة الربط
+    const did = childData.assignedDoctor || null;
+    if (did) {
+      const dname = await fetchUserName(did);
+      setDoctorBadge(did, dname);
+    } else {
+      setDoctorBadge(null, null);
+    }
   }catch(e){
-    console.error(e); alert('تعذر تحميل البيانات');
-  }finally{
-    busy(false);
+    console.error(e);
+    setStatus("تعذّر تحميل بيانات الطفل (تحقق من الصلاحيات).", false);
   }
-});
-
-/* تعبئة النموذج */
-function fillForm(d){
-  childLabel.textContent = d?.name ? `(${d.name})` : '—';
-
-  nameEl.value = d?.name || '';
-  genderEl.value = d?.gender || '';
-  birthDateEl.value = d?.birthDate || '';
-  weightKgEl.value = valOrEmpty(d?.weightKg);
-  heightCmEl.value = valOrEmpty(d?.heightCm);
-
-  rangeMinEl.value = valOrEmpty(d?.normalRange?.min);
-  rangeMaxEl.value = valOrEmpty(d?.normalRange?.max);
-  carbRatioEl.value = valOrEmpty(d?.carbRatio);
-  correctionFactorEl.value = valOrEmpty(d?.correctionFactor);
-  severeLowEl.value = valOrEmpty(d?.severeLow);
-  severeHighEl.value = valOrEmpty(d?.severeHigh);
-
-  deviceNameEl.value = d?.deviceName || '';
-  basalTypeEl.value = d?.basalType || '';
-  bolusTypeEl.value = d?.bolusType || '';
-
-  const t = d?.carbTargets || {};
-  brMinEl.value = valOrEmpty(t.breakfast?.min); brMaxEl.value = valOrEmpty(t.breakfast?.max);
-  luMinEl.value = valOrEmpty(t.lunch?.min);     luMaxEl.value = valOrEmpty(t.lunch?.max);
-  diMinEl.value = valOrEmpty(t.dinner?.min);    diMaxEl.value = valOrEmpty(t.dinner?.max);
-  snMinEl.value = valOrEmpty(t.snack?.min);     snMaxEl.value = valOrEmpty(t.snack?.max);
-
-  const unit = d?.glucoseUnit || 'mgdl';
-  unitRadios.forEach(r=> r.checked = (r.value===unit));
-
-  useNetCarbsEl.checked = !!d?.useNetCarbs;
-  netCarbRuleEl.value = d?.netCarbRule || 'fullFiber';
 }
 
-function valOrEmpty(x){ return (x===0 || x) ? x : ''; }
-function toNum(x){ const n = Number(String(x||'').replace(',','.')); return isNaN(n)? null : n; }
-function clampMin0(n){ return (n==null || n<0) ? 0 : n; }
+async function linkWithCode(){
+  clearStatus();
+  const code = (codeInput.value || "").trim().toUpperCase();
+  if (!code){ setStatus("أدخل كودًا صحيحًا.", false); return; }
+  if (!parentId || !childId){ setStatus("رابط الصفحة غير صحيح.", false); return; }
 
-/* حفظ */
-form.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const payload = {
-    name: nameEl.value?.trim() || null,
-    gender: genderEl.value || null,
-    birthDate: birthDateEl.value || null,
-    weightKg: toNum(weightKgEl.value),
-    heightCm: toNum(heightCmEl.value),
-
-    normalRange: {
-      min: toNum(rangeMinEl.value),
-      max: toNum(rangeMaxEl.value)
-    },
-    carbRatio: toNum(carbRatioEl.value),
-    correctionFactor: toNum(correctionFactorEl.value),
-    severeLow: toNum(severeLowEl.value),
-    severeHigh: toNum(severeHighEl.value),
-
-    deviceName: deviceNameEl.value?.trim() || null,
-    basalType: basalTypeEl.value?.trim() || null,
-    bolusType: bolusTypeEl.value?.trim() || null,
-
-    carbTargets: {
-      breakfast: rangeObj(brMinEl.value, brMaxEl.value),
-      lunch:     rangeObj(luMinEl.value, luMaxEl.value),
-      dinner:    rangeObj(diMinEl.value, diMaxEl.value),
-      snack:     rangeObj(snMinEl.value, snMaxEl.value)
-    },
-    glucoseUnit: (Array.from(unitRadios).find(r=>r.checked)?.value) || 'mgdl',
-
-    useNetCarbs: !!useNetCarbsEl.checked,
-    netCarbRule: netCarbRuleEl.value || 'fullFiber'
-  };
-
-  // نظّف بعض القيم: حوّل null/undefined لأصفار حيث يلزم
-  if (payload.carbTargets.breakfast) { payload.carbTargets.breakfast.min = clampMin0(payload.carbTargets.breakfast.min); payload.carbTargets.breakfast.max = clampMin0(payload.carbTargets.breakfast.max); }
-  if (payload.carbTargets.lunch)     { payload.carbTargets.lunch.min     = clampMin0(payload.carbTargets.lunch.min);     payload.carbTargets.lunch.max     = clampMin0(payload.carbTargets.lunch.max); }
-  if (payload.carbTargets.dinner)    { payload.carbTargets.dinner.min    = clampMin0(payload.carbTargets.dinner.min);    payload.carbTargets.dinner.max    = clampMin0(payload.carbTargets.dinner.max); }
-  if (payload.carbTargets.snack)     { payload.carbTargets.snack.min     = clampMin0(payload.carbTargets.snack.min);     payload.carbTargets.snack.max     = clampMin0(payload.carbTargets.snack.max); }
-
-  busy(true);
   try{
-    await updateDoc(childRef, payload);
-    showToast('✅ تم حفظ التعديلات');
-  }catch(e){
-    console.error(e); alert('تعذر حفظ التعديلات');
-  }finally{
-    busy(false);
-  }
-});
+    // 1) إحضار الكود
+    const codeSnap = await getDoc(doc(db, "linkCodes", code));
+    if (!codeSnap.exists()){ setStatus("الكود غير صحيح.", false); return; }
+    const c = codeSnap.data();
+    if (c.used){ setStatus("هذا الكود مستخدم بالفعل.", false); return; }
+    if (!c.doctorId){ setStatus("الكود غير صالح (لا يحتوي على doctorId).", false); return; }
 
-function rangeObj(min,max){
-  const a = toNum(min), b = toNum(max);
-  if (a==null && b==null) return null;
-  return { min: a==null? 0 : a, max: b==null? 0 : b };
+    const doctorUid = c.doctorId;
+
+    // 2) Batch: تحديث الطفل + تحديث الكود
+    const batch = writeBatch(db);
+    const childRef = doc(db, `parents/${parentId}/children/${childId}`);
+    const codeRef  = doc(db, `linkCodes/${code}`);
+
+    batch.update(childRef, {
+      assignedDoctor: doctorUid,
+      sharingConsent: { doctor: true },
+      assignedDoctorInfo: { uid: doctorUid }
+    });
+
+    batch.update(codeRef, {
+      used: true,
+      parentId: parentId,
+      childId: childId,
+      usedAt: serverTimestamp()
+    });
+
+    await batch.commit();
+
+    const dname = await fetchUserName(doctorUid);
+    setDoctorBadge(doctorUid, dname);
+    setStatus(`تم الربط مع الدكتور: ${dname} ✅`, true);
+    codeInput.value = "";
+
+  }catch(e){
+    console.error(e);
+    // أخطاء شائعة: الصلاحيات أو السباق (الكود اتستخدم قبل لحظات)
+    setStatus("تعذّر الربط. تأكّد من أنّك مسجّل بحساب وليّ الأمر وأن الكود صالح.", false);
+  }
 }
 
-/* حذف الطفل */
-deleteBtn?.addEventListener('click', async ()=>{
-  if (!confirm('هل تريدين حذف هذا الطفل؟ لا يمكن التراجع.')) return;
-  busy(true);
-  try{
-    await deleteDoc(childRef);
-    showToast('🗑️ تم حذف الطفل');
-    setTimeout(()=> location.href='index.html', 1200);
-  }catch(e){
-    console.error(e); alert('تعذر حذف الطفل');
-  }finally{
-    busy(false);
+async function unlinkDoctor(){
+  clearStatus();
+  if (!parentId || !childId){ setStatus("رابط الصفحة غير صحيح.", false); return; }
+  if (!childData?.assignedDoctor){
+    setStatus("لا يوجد ربط لإزالته.", false); return;
   }
+  if (!confirm("تأكيد إلغاء الربط مع الطبيب؟")) return;
+
+  try{
+    const childRef = doc(db, `parents/${parentId}/children/${childId}`);
+    await updateDoc(childRef, {
+      assignedDoctor: null,
+      sharingConsent: { doctor: false },
+      assignedDoctorInfo: { uid: null }
+    });
+    setDoctorBadge(null, null);
+    setStatus("تم إلغاء الربط.", true);
+  }catch(e){
+    console.error(e);
+    setStatus("تعذّر إلغاء الربط.", false);
+  }
+}
+
+/* تشغيل */
+onAuthStateChanged(auth, async (user)=>{
+  if (!user){
+    document.body.innerHTML = `
+      <div style="max-width:720px;margin:40px auto;padding:24px;border:1px solid #1f2b5b;border-radius:16px;background:#0f1531;color:#e8edfb">
+        <h2>تسجيل الدخول مطلوب</h2>
+        <p>يرجى تسجيل الدخول بحساب وليّ الأمر للوصول لهذه الصفحة.</p>
+      </div>`;
+    return;
+  }
+  currentParent = user;
+  parentId = user.uid;        // وليّ الأمر الحالي هو المالك
+  childId  = qs("child") || "";  // من رابط الصفحة: ?child=XXX
+  // ملاحظة: يجوز إضافة ?parent=... لاحقًا لو أردتِ تحرير طفل ليس المالك الحالي.
+
+  await loadChild();
 });
+
+/* أحداث */
+btnRefresh?.addEventListener("click", loadChild);
+btnLink?.addEventListener("click", linkWithCode);
+btnUnlink?.addEventListener("click", unlinkDoctor);
