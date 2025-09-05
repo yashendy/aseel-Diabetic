@@ -1,64 +1,68 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>لوحة الدكتور</title>
-  <link rel="stylesheet" href="css/meals.css" />
-  <link rel="stylesheet" href="css/doctor-dashboard.css" />
+  <link rel="stylesheet" href="./css/doctor-dashboard.css" />
 </head>
 <body>
-  <div class="container">
-    <div class="card">
-      <div class="top">
-        <h1>لوحة الدكتور</h1>
-        <div class="tools">
-          <button id="genCode" class="chipBtn">🔗 توليد كود ربط</button>
-          <input id="q" placeholder="ابحث بالاسم…" />
+  <div class="container" id="doctorDashboard">
+    <header class="header">
+      <h1 class="title">
+        <span>أهلاً دكتور</span>
+        <span id="doctorName">—</span> 👋
+      </h1>
+      <div class="actions">
+        <button id="btnRefresh" class="btn secondary" type="button">تحديث</button>
+      </div>
+    </header>
+
+    <!-- أكواد الربط -->
+    <section class="card">
+      <div class="section-head">
+        <h2>أكواد الربط</h2>
+        <div class="inline">
+          <button id="btnCreateCode" class="btn good" type="button">إنشاء كود ربط</button>
+          <button id="btnReloadCodes" class="btn secondary" type="button">تحديث الأكواد</button>
         </div>
       </div>
-
-      <!-- نفس كتلة إظهار الكود المتولِّد -->
-      <div id="genWrap" class="code hidden" style="margin-top:8px;display:flex;gap:10px;align-items:center">
-        <div class="v" id="linkCode" style="font-weight:800"></div>
-        <div class="kit">
-          <button id="copyCode" class="btn">نسخ</button>
-        </div>
+      <p class="muted">يمكنك إنشاء كود ليربطك بوليّ الأمر. التفعيل يتم بواسطة وليّ الأمر (أو الأدمن) حسب القواعد.</p>
+      <div id="codesList" class="list">
+        <div class="empty">لا توجد أكواد بعد.</div>
       </div>
-    </div>
-
-    <!-- قائمة الأطفال (كما هي) -->
-    <section class="card" id="listWrap">
-      <div id="childList" class="grid"></div>
-      <div id="empty" class="empty">لا يوجد أطفال معيّنون لك حتى الآن.</div>
     </section>
 
-    <!-- [GPT5 PATCH START] إدارة أكواد الربط -->
-    <section class="card" id="codesCard">
-      <div class="top" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <h2 style="margin:0">أكواد الربط النشطة</h2>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span class="muted">النشطة: <b id="activeCount">0</b>/<span id="maxActive">—</span></span>
-          <button id="refreshCodes" class="secondary">تحديث</button>
+    <!-- الأطفال المرتبطين -->
+    <section class="card">
+      <div class="section-head">
+        <h2>أطفالي</h2>
+        <div class="inline">
+          <input id="childSearch" class="input" type="search" placeholder="ابحث باسم الطفل…" />
+          <span class="badge" id="childrenCount">—</span>
         </div>
       </div>
 
-      <div id="codesList" class="grid" style="margin-top:10px"></div>
-      <div id="codesEmpty" class="empty">لا توجد أكواد نشطة حاليًا.</div>
-
-      <div class="hint muted" style="margin-top:10px;font-size:12px">
-        صلاحية كل كود: <b id="ttlHours">—</b> ساعة من وقت إنشائه. عند الوصول إلى الحد الأقصى، يتم تعطيل زر توليد كود جديد مؤقتًا.
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>الاسم</th>
+              <th>الجنس</th>
+              <th>تاريخ الميلاد</th>
+              <th>العمر</th>
+              <th>وحدة الجلوكوز</th>
+              <th style="width:140px">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="childrenTbody">
+            <tr><td class="empty" colspan="6">جارِ التحميل…</td></tr>
+          </tbody>
+        </table>
       </div>
     </section>
-    <!-- [GPT5 PATCH END] -->
   </div>
 
-  <!-- [GPT5 PATCH START] Toast -->
-  <div id="toast" class="toast hidden" style="position:fixed;inset-inline:0;bottom:18px;margin:auto;max-width:280px;background:#111;color:#fff;padding:10px 14px;border-radius:10px;text-align:center;opacity:.95;z-index:9999">
-    تم
-  </div>
-  <!-- [GPT5 PATCH END] -->
-
-  <script type="module" src="js/doctor-dashboard.js?v=3"></script>
+  <script type="module" src="./js/doctor-dashboard.js"></script>
 </body>
 </html>
