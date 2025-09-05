@@ -1,191 +1,86 @@
-// js/admin.js
-import { auth, db } from './firebase-config.js';
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import {
-  collection, query, where, getDocs, doc, updateDoc, getDoc, limit, writeBatch
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>لوحة الأدمن</title>
+  <style>
+    :root{--bg:#0b1020;--panel:#121832;--muted:#9aa6bf;--text:#e8edfb;--accent:#4f76ff;--good:#22c55e;--warn:#f59e0b;--danger:#ef4444}
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0b1020 0%,#0e1430 100%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Noto Sans Arabic",Tahoma,sans-serif}
+    .container{max-width:1100px;margin-inline:auto;padding:22px}
+    header{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:18px}
+    .title{font-weight:800;font-size:clamp(18px,3.6vw,26px)}
+    nav{display:flex;gap:8px;flex-wrap:wrap}
+    .btn{border:0;cursor:pointer;border-radius:12px;padding:10px 14px;font-weight:700;color:#fff;background:linear-gradient(180deg,var(--accent),#345dff);box-shadow:0 8px 22px rgba(79,118,255,.35)}
+    .btn.secondary{background:#1b2350;border:1px solid #2a3a83}
+    .btn.good{background:linear-gradient(180deg,var(--good),#16a34a)}
+    .btn.warn{background:linear-gradient(180deg,var(--warn),#d97706)}
+    .btn.danger{background:linear-gradient(180deg,var(--danger),#dc2626)}
+    .card{background:rgba(18,24,50,.65);border:1px solid #1e2a5d;border-radius:16px;padding:14px;backdrop-filter:blur(6px)}
+    .grid{display:grid;gap:14px}
+    .grid-2{grid-template-columns:1fr 1fr}
+    .muted{color:var(--muted)}
+    .section-title{display:flex;align-items:center;justify-content:space-between;margin:2px 4px 10px 4px}
+    .list{display:grid;gap:10px}
+    .row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:#0e1538;border:1px solid #223066;border-radius:12px;padding:10px}
+    .row .meta{display:flex;flex-direction:column;gap:2px}
+    .row .actions{display:flex;gap:8px}
+    .empty{padding:22px;text-align:center;color:var(--muted)}
+    input,select{height:42px;border-radius:10px;border:1px solid #2a3a83;background:#0f1531;color:#e8edfb;padding:0 12px;outline:none;width:100%}
+    .form{display:grid;gap:10px}
+    .form-3{grid-template-columns:1fr 1fr auto}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+    .hint{font-size:12px;color:#9fb0d2;margin-top:6px}
+    .badge{display:inline-block;background:#122055;border:1px solid #2642a8;padding:4px 8px;border-radius:999px;font-size:12px;color:#d7e2ff}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="title">لوحة الأدمن</div>
+      <nav>
+        <!-- يفتح صفحة الأصناف المستقلة -->
+        <a class="btn" href="./food-items.html">الأصناف</a>
+        <button id="btnRefreshAll" class="btn secondary" type="button">تحديث</button>
+      </nav>
+    </header>
 
-/* ---------- Helpers ---------- */
-const $  = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
-
-function esc(s){
-  return (s ?? '').toString().replace(/[&<>"']/g, m => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
-  }[m]));
-}
-
-const toast = (t) => {
-  const el = $('#toast');
-  if (!el) { console.log('[toast]', t); return; }
-  el.textContent = t;
-  el.classList.remove('hidden');
-  setTimeout(() => el.classList.add('hidden'), 1500);
-};
-
-/* ---------- Auth Gate ---------- */
-onAuthStateChanged(auth, async (u) => {
-  if (!u) { location.href = 'index.html'; return; }
-  try {
-    const us = await getDoc(doc(db, 'users', u.uid));
-    if (!us.exists() || us.data().role !== 'admin') {
-      alert('صلاحية الأدمن مطلوبة');
-      location.href = 'index.html';
-      return;
-    }
-    boot();
-  } catch (e) {
-    console.error(e);
-    alert('تعذر التحقق من الصلاحيات');
-    location.href = 'index.html';
-  }
-});
-
-/* ---------- Boot ---------- */
-function boot(){
-  // تبويبات عامة (لو موجودة)
-  if ($$('.tab-btn').length) {
-    $$('.tab-btn').forEach(b=>{
-      b.onclick=()=>{
-        $$('.tab-btn').forEach(x=>x.classList.remove('active'));
-        b.classList.add('active');
-        const t=b.dataset.tab;
-        $$('.tab').forEach(s=>s.classList.toggle('active', s.id===`tab-${t}`));
-      };
-    });
-  }
-
-  // تبويب الطلبات (IDs خاصة به — مختلفة عن تبويب الأصناف)
-  const r = $('#refresh');   if (r)  r.onclick  = loadPendingDoctors;
-  if ($('#grid') && $('#empty') && $('#stats')) {
-    // ملاحظة: هذه العناصر تخص تبويب "الطلبات".
-    // في تبويب الأصناف فيه #grid تاني، لكن مفيهوش #empty و#stats، لذلك مش هندخل هنا.
-    loadPendingDoctors();
-  }
-
-  // تبويب إدارة أكواد الربط (لو موجود)
-  const cf= $('#codeFind');  if (cf) cf.onclick = findCode;
-}
-
-/* ---------- Pending Doctors ---------- */
-async function loadPendingDoctors(){
-  // عناصر تبويب الطلبات فقط
-  const grid  = $('#grid');
-  const empty = $('#empty');
-  const stats = $('#stats');
-  if (!grid || !empty || !stats) return;
-
-  grid.innerHTML = '';
-  empty.style.display = 'block';
-  stats.textContent = '';
-
-  try {
-    // نقرأ من doctors حيث status == 'pending'
-    const qy = query(collection(db, 'doctors'), where('status','==','pending'));
-    const snap = await getDocs(qy);
-    let n = 0;
-
-    snap.forEach(d=>{
-      n++;
-      const v = d.data();
-      const card = document.createElement('div');
-      card.className = 'card-item';
-      card.dataset.id = d.id;
-      card.innerHTML = `
-        <div class="row">
-          <div>
-            <div class="name">${esc(v.name||'-')}</div>
-            <div class="meta">${esc(v.email||'')}</div>
-          </div>
-          <div class="kit">
-            <button class="btn primary approve">اعتماد</button>
-            <button class="btn danger reject">رفض</button>
-          </div>
+    <div class="grid grid-2">
+      <!-- طلبات اعتماد الأطباء -->
+      <section class="card">
+        <div class="section-title">
+          <h3>طلبات الأطباء (قيد الاعتماد)</h3>
+          <span id="pendingCount" class="badge">—</span>
         </div>
-        <div class="meta">تخصص: ${esc(v.specialty||'-')} • جهة: ${esc(v.clinic||'-')}</div>
-      `;
-      const approveBtn = card.querySelector('.approve');
-      const rejectBtn  = card.querySelector('.reject');
-      if (approveBtn) approveBtn.onclick = () => approveDoctor(d.id);
-      if (rejectBtn)  rejectBtn.onclick  = () => rejectDoctor(d.id);
-      grid.appendChild(card);
-    });
-
-    empty.style.display = n ? 'none' : 'block';
-    stats.textContent = `الطلبات المعلّقة: ${n}`;
-  } catch (e) {
-    console.error(e);
-    toast('حدث خطأ أثناء التحميل');
-  }
-}
-
-async function approveDoctor(uid){
-  try {
-    const batch = writeBatch(db);
-    batch.update(doc(db,'doctors',uid), { status:'approved', approvedAt: new Date() });
-    batch.update(doc(db,'users',uid),   { role:'doctor' });
-    await batch.commit();
-    toast('تم الاعتماد');
-    await loadPendingDoctors();
-  } catch (e) {
-    console.error(e);
-    toast('تعذّر اعتماد الطلب');
-  }
-}
-
-async function rejectDoctor(uid){
-  try {
-    const batch = writeBatch(db);
-    batch.update(doc(db,'doctors',uid), { status:'rejected', rejectedAt: new Date() });
-    batch.update(doc(db,'users',uid),   { role:'doctor-rejected' });
-    await batch.commit();
-    toast('تم الرفض');
-    await loadPendingDoctors();
-  } catch (e) {
-    console.error(e);
-    toast('تعذّر رفض الطلب');
-  }
-}
-
-/* ---------- Link Codes Search (تبويب الربط) ---------- */
-async function findCode(){
-  const list  = $('#codeList');
-  const empty = $('#codeEmpty');
-  const input = $('#codeQ');
-  if (!list || !empty || !input) return;
-
-  const v = (input.value||'').trim().toUpperCase();
-  if(!v){ list.innerHTML=''; empty.style.display='block'; return; }
-
-  try {
-    const qy = query(
-      collection(db,'linkCodes'),
-      where('__name__','>=',v),
-      where('__name__','<=',v+'\uf8ff'),
-      limit(10)
-    );
-    const snap = await getDocs(qy);
-
-    let c=0; list.innerHTML='';
-    snap.forEach(s=>{
-      c++;
-      const d=s.data();
-      const el=document.createElement('div');
-      el.className='card-item';
-      el.dataset.id = s.id;
-      el.innerHTML=`
-        <div class="row">
-          <div>
-            <div class="name">الكود: <b>${esc(s.id)}</b></div>
-            <div class="meta">دكتور: ${esc(d.doctorId||'-')} • مستخدم: ${d.used?'نعم':'لا'} • وليّ: ${esc(d.parentId||'-')}</div>
-          </div>
+        <div id="pendingDoctors" class="list">
+          <div class="empty">لا توجد طلبات معلّقة حاليًا.</div>
         </div>
-      `;
-      list.appendChild(el);
-    });
-    empty.style.display = c? 'none':'block';
-  } catch (e) {
-    console.error(e);
-    toast('تعذّر البحث عن الأكواد');
-  }
-}
+      </section>
+
+      <!-- أكواد الربط -->
+      <section class="card">
+        <div class="section-title"><h3>أكواد الربط</h3></div>
+
+        <div class="form form-3" style="margin-bottom:8px">
+          <input id="doctorIdInput" placeholder="معرّف الطبيب (uid)" />
+          <input id="customCodeInput" placeholder="كود مخصص (اختياري)" />
+          <button id="btnCreateCode" class="btn good" type="button">إنشاء كود</button>
+        </div>
+        <div class="hint">الإنشاء للأدمن فقط حسب القواعد. القراءة مسموحة للمستخدمين المسجَّلين.</div>
+
+        <div class="section-title" style="margin-top:14px">
+          <strong>آخر الأكواد</strong>
+          <button id="btnReloadCodes" class="btn secondary" type="button">تحديث الأكواد</button>
+        </div>
+        <div id="codesList" class="list">
+          <div class="empty">لا توجد أكواد بعد.</div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- يستورد سكربت الداشبورد (يتضمن استيراد firebase-config.js داخليًا) -->
+  <script type="module" src="./js/admin-dashboard.js"></script>
+</body>
+</html>
