@@ -3,81 +3,93 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>إنشاء حساب — منصّة متابعة سكر الأطفال</title>
-  <link rel="icon" href="images/favicon-32.png">
+  <title>إنشاء حساب / تسجيل الدخول</title>
+  <link rel="stylesheet" href="./css/register.css" />
   <style>
-    :root{--bg:#f6f8fb;--card:#fff;--text:#1f2937;--muted:#6b7280;--brand:#4f46e5;--danger:#dc2626}
-    body{margin:0;background:var(--bg);font-family:"Segoe UI",Tahoma,Arial,sans-serif;color:var(--text)}
-    .wrap{min-height:100vh;display:grid;place-items:center;padding:24px}
-    .card{width:min(520px,92vw);background:#fff;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.06);padding:24px}
-    h1{margin:0 0 10px;font-size:20px}
-    p.muted{color:var(--muted);margin:0 0 16px}
-    label{display:block;margin:10px 0 6px}
-    input,select{width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px}
-    .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
-    .actions{margin-top:16px;display:flex;gap:10px;align-items:center}
-    .btn{padding:12px 14px;border-radius:10px;border:0;background:var(--brand);color:#fff;cursor:pointer}
-    #msg{font-size:14px}
-    .err{color:var(--danger)}
-    .muted small{color:#6b7280}
+    :root{--bg:#f7fbff;--panel:#ffffff;--text:#1a2540;--muted:#6e7b96;--border:#e6ecf7;--primary:#5fa7ff;--primary-2:#417dff}
+    *{box-sizing:border-box}
+    body{margin:0;background:
+      radial-gradient(900px 600px at -180px 100%, #e9fbff 0%, transparent 55%),
+      radial-gradient(1100px 700px at 100% -200px, #ffe9f6 0%, transparent 55%),
+      var(--bg);
+      color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Noto Sans Arabic",Tahoma,sans-serif}
+    .wrap{max-width:920px;margin-inline:auto;padding:28px}
+    header{margin-bottom:16px}
+    h1{font-size:clamp(20px,3.4vw,30px);margin:0 0 8px 0}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px}
+    .title{font-weight:800;margin:0 0 10px 0}
+    .field{display:grid;gap:6px;margin-bottom:10px}
+    .field label{font-size:12px;color:var(--muted)}
+    .field input{height:44px;border:1px solid var(--border);border-radius:10px;background:#fff;padding:0 12px}
+    .type-row{display:flex;gap:10px;align-items:center;margin:6px 0 12px 0}
+    .btn{border:0;cursor:pointer;border-radius:12px;padding:10px 14px;background:linear-gradient(180deg,var(--primary),var(--primary-2));color:#fff;font-weight:800}
+    .btn.secondary{background:#fff;color:var(--text);border:1px solid var(--border)}
+    .muted{color:var(--muted)}
+    .hint{font-size:12px;color:#8aa0c5;margin-top:6px}
+    .err{background:#fff2f2;border:1px solid #ffd4d4;color:#b01414;border-radius:10px;padding:8px 10px;display:none;margin-bottom:10px}
+    .ok{background:#f0fff6;border:1px solid #bfead1;color:#116e3b;border-radius:10px;padding:8px 10px;display:none;margin-bottom:10px}
+    @media (max-width:800px){.grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <h1>إنشاء حساب جديد</h1>
-      <p class="muted">اختر نوع الحساب: <small>وليّ أمر أو دكتور</small></p>
+  <div class="wrap" id="registerPage">
+    <header>
+      <h1>مرحبًا 👋</h1>
+      <p class="muted">أنشئ حسابًا جديدًا أو سجّل دخولك. اختر نوع الحساب قبل إنشاء الحساب.</p>
+    </header>
 
-      <form id="registerForm" novalidate>
-        <div class="row">
-          <div>
-            <label for="reg-name">الاسم</label>
-            <input id="reg-name" type="text" placeholder="الاسم الكامل" required />
-          </div>
-          <div>
-            <label for="reg-email">البريد الإلكتروني</label>
-            <input id="reg-email" type="email" placeholder="example@mail.com" required />
-          </div>
+    <div class="grid">
+      <!-- إنشاء حساب -->
+      <section class="card">
+        <h2 class="title">إنشاء حساب جديد</h2>
+
+        <div id="signupErr" class="err"></div>
+        <div id="signupOk" class="ok"></div>
+
+        <div class="type-row">
+          <label><input type="radio" name="acctType" value="parent" checked /> وليّ أمر</label>
+          <label><input type="radio" name="acctType" value="doctor" /> دكتور</label>
         </div>
 
-        <div class="row">
-          <div>
-            <label for="reg-pass">كلمة المرور</label>
-            <input id="reg-pass" type="password" placeholder="••••••••" required />
-          </div>
-          <div>
-            <label for="reg-pass2">تأكيد كلمة المرور</label>
-            <input id="reg-pass2" type="password" placeholder="أعد كتابة كلمة المرور" required />
-          </div>
+        <div class="field">
+          <label>الاسم</label>
+          <input id="suName" placeholder="اسمك الكامل" />
         </div>
+        <div class="field">
+          <label>البريد الإلكتروني</label>
+          <input id="suEmail" type="email" placeholder="you@example.com" />
+        </div>
+        <div class="field">
+          <label>كلمة المرور</label>
+          <input id="suPass" type="password" placeholder="••••••••" />
+        </div>
+        <button id="btnSignup" class="btn" type="button">إنشاء الحساب</button>
+        <p class="hint">لو اخترت “دكتور” سيتم توجيهك لصفحة انتظار الاعتماد.</p>
+      </section>
 
-        <label>نوع الحساب</label>
-        <div>
-          <label><input type="radio" name="role" value="parent" checked> وليّ أمر</label>
-          <label style="margin-inline-start:16px"><input type="radio" name="role" value="doctor"> دكتور</label>
-        </div>
-        <p id="pendingNote" class="muted" style="display:none;margin-top:6px">لو اخترت “دكتور” سيتم إنشاء الحساب بحالة <b>قيد المراجعة</b> حتى يوافق الأدمن.</p>
+      <!-- تسجيل الدخول -->
+      <section class="card">
+        <h2 class="title">تسجيل الدخول</h2>
 
-        <div id="doctorFields" class="row" style="display:none;margin-top:8px">
-          <div>
-            <label for="reg-specialty">التخصص</label>
-            <input id="reg-specialty" type="text" placeholder="مثال: غدد صماء" />
-          </div>
-          <div>
-            <label for="reg-clinic">العيادة/المستشفى</label>
-            <input id="reg-clinic" type="text" />
-          </div>
-        </div>
+        <div id="signinErr" class="err"></div>
 
-        <div class="actions">
-          <button class="btn" id="btnRegister" type="submit">تسجيل</button>
-          <span id="msg"></span>
+        <div class="field">
+          <label>البريد الإلكتروني</label>
+          <input id="siEmail" type="email" placeholder="you@example.com" />
         </div>
-        <p class="muted" style="margin-top:14px">لديك حساب؟ <a href="index.html">العودة للدخول</a></p>
-      </form>
+        <div class="field">
+          <label>كلمة المرور</label>
+          <input id="siPass" type="password" placeholder="••••••••" />
+        </div>
+        <button id="btnSignin" class="btn" type="button">دخول</button>
+        <button id="btnDemoLogout" class="btn secondary" type="button" style="margin-inline-start:8px">تسجيل خروج</button>
+
+        <p class="hint">سيتم توجيهك تلقائيًا لصفحة مناسبة حسب نوع حسابك.</p>
+      </section>
     </div>
   </div>
 
-  <script type="module" src="js/register.js"></script>
+  <script type="module" src="./js/register.js"></script>
 </body>
 </html>
