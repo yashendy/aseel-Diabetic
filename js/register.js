@@ -1,100 +1,140 @@
-import { auth, db } from './firebase-config.js';
+// js/register.js
+import { auth, db } from "./firebase-config.js";
 import {
-  createUserWithEmailAndPassword, updateProfile, onAuthStateChanged
+  onAuthStateChanged, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, updateProfile, signOut
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { doc, setDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import {
+  doc, setDoc, getDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-const ROUTES = {
-  parent:  'parent-dashboard.html',
-  doctor:  'doctor-dashboard.html',
-  admin:   'admin.html',
-  pending: 'pending.html'
-};
+/* عناصر */
+const suName  = document.getElementById("suName");
+const suEmail = document.getElementById("suEmail");
+const suPass  = document.getElementById("suPass");
+const btnSignup = document.getElementById("btnSignup");
 
-const f = document.getElementById('registerForm');
-const nameEl = document.getElementById('reg-name');
-const emailEl= document.getElementById('reg-email');
-const passEl = document.getElementById('reg-pass');
-const pass2El= document.getElementById('reg-pass2');
-const msg    = document.getElementById('msg');
+const siEmail = document.getElementById("siEmail");
+const siPass  = document.getElementById("siPass");
+const btnSignin = document.getElementById("btnSignin");
+const btnDemoLogout = document.getElementById("btnDemoLogout");
 
-function say(t, ok=false){ msg.textContent=t; msg.className = ok? 'ok' : 'err'; }
+const signupErr = document.getElementById("signupErr");
+const signupOk  = document.getElementById("signupOk");
+const signinErr = document.getElementById("signinErr");
 
-document.querySelectorAll('input[name="role"]').forEach(r=>{
-  r.addEventListener('change', ()=>{
-    const isDoc = document.querySelector('input[name="role"]:checked').value === 'doctor';
-    document.getElementById('doctorFields').style.display = isDoc ? 'grid' : 'none';
-    document.getElementById('pendingNote').style.display  = isDoc ? 'block' : 'none';
-  });
-});
-
-onAuthStateChanged(auth, async (u)=>{
-  if(!u) return;
-  // لو داخل بالفعل، وجّهه حسب دوره الحالي
-  const snap = await getDoc(doc(db,'users', u.uid));
-  const role = snap.exists()? (snap.data().role || 'parent') : 'parent';
-  if (role==='admin') location.href = ROUTES.admin;
-  else if (role==='doctor') location.href = ROUTES.doctor;
-  else if (role==='doctor-pending') location.href = ROUTES.pending;
-  else location.href = ROUTES.parent;
-});
-
-f.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  msg.textContent='';
-
-  if(!nameEl.value.trim()){ say('الاسم مطلوب'); return; }
-  if(passEl.value !== pass2El.value){ say('تأكيد كلمة المرور لا يطابق'); return; }
-
-  const picked = document.querySelector('input[name="role"]:checked').value; // parent | doctor
-  const role   = (picked === 'doctor') ? 'doctor-pending' : 'parent';
-
+/* أدوات */
+function show(el, msg){ if(!el) return; el.textContent = msg; el.style.display = "block"; }
+function hide(el){ if(!el) return; el.style.display = "none"; el.textContent=""; }
+function roleToDest(role){
+  switch(role){
+    case "admin": return "admin.html";
+    case "doctor": return "doctor-dashboard.html";
+    case "doctor-pending": return "pending.html";
+    case "parent": return "parent-dashboard.html";
+    default: return "register.html"; // ابقَ هنا
+  }
+}
+async function fetchUserRole(uid){
   try{
-    const cred = await createUserWithEmailAndPassword(auth, emailEl.value.trim(), passEl.value);
-    await updateProfile(cred.user, { displayName: nameEl.value.trim() });
+    const snap = await getDoc(doc(db,"users",uid));
+    if (snap.exists()) return snap.data()?.role || null;
+  }catch{}
+  return null;
+}
 
-    // users/{uid}
-    await setDoc(doc(db,'users', cred.user.uid), {
-      uid: cred.user.uid,
-      displayName: nameEl.value.trim(),
-      email: emailEl.value.trim(),
-      role, // parent | doctor-pending
-      specialty: role==='doctor-pending' ? (document.getElementById('reg-specialty').value.trim() || null) : null,
-      clinic:    role==='doctor-pending' ? (document.getElementById('reg-clinic').value.trim() || null) : null,
-      createdAt: serverTimestamp()
-    }, { merge:true });
+/* توجيه مركزي عند وجود جلسة */
+onAuthStateChanged(auth, async (user)=>{
+  if (!user) return; // خلي المستخدم يقرر يسجّل أو ينشئ
 
-    // ===== [GPT5 PATCH START] إنشاء ملف الطبيب في doctors/{uid} بحالة pending =====
-    if (role === 'doctor-pending') {
-      const specialty = (document.getElementById('reg-specialty')?.value || '').trim() || null;
-      const clinic    = (document.getElementById('reg-clinic')?.value || '').trim() || null;
-      await setDoc(doc(db, 'doctors', cred.user.uid), {
-        uid: cred.user.uid,
-        name: nameEl.value.trim(),
-        email: emailEl.value.trim(),
-        specialty,
-        clinic,
-        status: 'pending',
-        createdAt: serverTimestamp()
-      }, { merge: true });
-    }
-    // ===== [GPT5 PATCH END] =====
+  // جيب الدور من users/{uid}; لو مش موجود لا نوجّه الآن
+  const role = await fetchUserRole(user.uid);
 
-    // parents/{uid} — فقط لو Parent
-    if (role === 'parent'){
-      await setDoc(doc(db, `parents/${cred.user.uid}`), {
-        ownerUid: cred.user.uid,
-        name: nameEl.value.trim(),
-        email: emailEl.value.trim(),
-        createdAt: serverTimestamp()
-      }, { merge:true });
-    }
-
-    say('تم إنشاء الحساب ✅', true);
-    // التحويل حسب الدور
-    if (role === 'doctor-pending') location.href = ROUTES.pending;
-    else location.href = ROUTES.parent;
-  }catch(err){
-    say(err.message || 'تعذّر إنشاء الحساب');
+  if (!role){
+    // مستخدم بلا وثيقة users (حالة نادرة) — نرجعه لصفحة التسجيل
+    return;
+  }
+  const dest = roleToDest(role);
+  if (dest && dest !== "register.html") {
+    location.replace(dest);
   }
 });
+
+/* إنشاء حساب جديد */
+btnSignup?.addEventListener("click", async ()=>{
+  hide(signupErr); hide(signupOk);
+
+  const name  = (suName.value || "").trim();
+  const email = (suEmail.value || "").trim();
+  const pass  = (suPass.value || "").trim();
+  const acct  = /** @type {HTMLInputElement} */(document.querySelector('input[name="acctType"]:checked'))?.value || "parent";
+
+  if (!email || !pass) { show(signupErr, "أدخل البريد وكلمة المرور."); return; }
+  if (!name) { show(signupErr, "أدخل الاسم."); return; }
+  if (!["parent","doctor"].includes(acct)) { show(signupErr, "اختر نوع الحساب."); return; }
+
+  try{
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    if (auth.currentUser && name) {
+      await updateProfile(auth.currentUser, { displayName: name });
+    }
+
+    // حددي الدور بدقة: parent أو doctor-pending
+    const role = (acct === "doctor") ? "doctor-pending" : "parent";
+
+    await setDoc(doc(db, "users", cred.user.uid), {
+      uid: cred.user.uid,
+      email,
+      name,
+      displayName: name,
+      role,
+      createdAt: serverTimestamp()
+    }, { merge: true });
+
+    show(signupOk, "تم إنشاء الحساب، سيتم تحويلك الآن…");
+
+    const dest = roleToDest(role);
+    // نستخدم replace حتى لا يعود زر الرجوع لهذه الصفحة
+    setTimeout(()=> location.replace(dest), 400);
+
+  }catch(err){
+    console.error(err);
+    show(signupErr, niceAuthError(err));
+  }
+});
+
+/* تسجيل الدخول */
+btnSignin?.addEventListener("click", async ()=>{
+  hide(signinErr);
+  const email = (siEmail.value || "").trim();
+  const pass  = (siPass.value || "").trim();
+  if (!email || !pass){ show(signinErr,"أدخل البريد وكلمة المرور."); return; }
+
+  try{
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+    // onAuthStateChanged سيتولى توجيه المستخدم حسب الدور
+  }catch(err){
+    console.error(err);
+    show(signinErr, niceAuthError(err));
+  }
+});
+
+/* تسجيل خروج (للتجربة) */
+btnDemoLogout?.addEventListener("click", async ()=>{
+  await signOut(auth);
+  // ابقَ هنا
+});
+
+/* رسائل أخطاء ودّية */
+function niceAuthError(e){
+  const code = e?.code || "";
+  const map = {
+    "auth/email-already-in-use": "هذا البريد مستخدم بالفعل.",
+    "auth/invalid-email": "بريد غير صالح.",
+    "auth/weak-password": "كلمة المرور ضعيفة.",
+    "auth/user-not-found": "المستخدم غير موجود.",
+    "auth/wrong-password": "كلمة المرور غير صحيحة.",
+    "auth/too-many-requests": "محاولات كثيرة. جرّب لاحقًا."
+  };
+  return map[code] || "تعذّر تنفيذ العملية. حاول مرة أخرى.";
+}
