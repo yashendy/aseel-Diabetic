@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- الهيدر القديم كما هو (نعرض الاسم/الميتا إن وُجدت العناصر) -->
+  <!-- الهيدر القديم (نعرض الاسم/الميتا فقط) -->
   <div id="childBanner" class="card child-info" style="display:none">
     <div class="head">
       <h1 id="bannerName">—</h1>
@@ -16,7 +16,7 @@
     </div>
   </div>
 
-  <!-- شريط تنقّل (روابط مبنية على childId) -->
+  <!-- تنقّل -->
   <div class="card">
     <div class="row" id="childNav"></div>
   </div>
@@ -46,23 +46,36 @@
           <input id="to" type="date">
         </div>
       </div>
+
+      <label class="toggle-notes">
+        <input id="toggleNotes" type="checkbox" checked>
+        <span>إظهار الملاحظات/الجرعات</span>
+      </label>
     </div>
 
     <div class="actions">
-      <a id="lnkHome" class="btn back">رجوع</a>
-      <a id="btnReportPrintPage" class="btn" target="_blank" rel="noopener">صفحة طباعة التقرير</a>
-      <a id="btnAnalyticsPage" class="btn" target="_blank" rel="noopener">التحاليل</a>
-      <button id="btnBlank" class="btn">ورقة فارغة (7 أيام)</button>
-      <button id="btnPrint" class="btn">طباعة</button>
+      <a id="lnkHome" class="btn gray">رجوع</a>
+      <a id="btnReportPrintPage" class="btn warning" target="_blank" rel="noopener">صفحة طباعة التقرير</a>
+      <a id="btnAnalyticsPage" class="btn success" target="_blank" rel="noopener">التحاليل</a>
+      <button id="btnBlank" class="btn gray">ورقة فارغة (7 أيام)</button>
+      <button id="btnPrint" class="btn danger">طباعة</button>
       <button id="run" class="btn primary">عرض</button>
     </div>
   </div>
 
   <!-- وصف الفترة -->
-  <div id="meta" class="container muted small">—</div>
+  <div id="meta" class="container small muted">—</div>
 
-  <!-- الجدول بالشكل القديم -->
+  <!-- الجدول القديم -->
   <section class="card table" id="tableSection">
+    <div class="legend small">
+      <span class="badge b-sevlow">هبوط شديد</span>
+      <span class="badge b-low">هبوط</span>
+      <span class="badge b-ok">طبيعي</span>
+      <span class="badge b-high">ارتفاع</span>
+      <span class="badge b-sevhigh">ارتفاع شديد</span>
+    </div>
+
     <div class="table-wrap">
       <table id="rep" aria-label="جدول التقارير">
         <thead>
