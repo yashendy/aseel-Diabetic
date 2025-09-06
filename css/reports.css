@@ -1,67 +1,44 @@
 :root{
   --bg:#f7f8fb; --card:#fff; --ink:#111827; --muted:#6b7280;
-  --line:#e5e7eb; --brand:#4f46e5; --ok:#10b981; --warn:#ef4444; --blue:#2563eb;
+  --line:#e5e7eb; --brand:#4f46e5;
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,Arial,sans-serif}
 .container{max-width:1120px;margin:16px auto;padding:0 12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:14px auto;max-width:1120px}
-
-.hidden{display:none !important}
 .small{font-size:12px}
-.ic{opacity:.6}
-.muted{color:var(--muted);margin:0}
+.muted{color:var(--muted)}
 .center{text-align:center}
+.hidden{display:none!important}
 
-/* بنر الطفل */
-.child-info{display:grid;gap:10px}
+.child-info{display:grid;gap:8px}
 .head h1{margin:0 0 4px}
 
-/* أزرار/تحكم */
 .controls{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between}
 .range{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
-.actions{display:flex;gap:8px;flex-wrap:wrap}
+.dates{display:flex;gap:12px;flex-wrap:wrap}
 .filter label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
 .filter input,.filter select{min-width:160px;padding:8px;border:1px solid var(--line);border-radius:10px;background:#fff}
+
+.actions{display:flex;gap:8px;flex-wrap:wrap}
 .btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer;text-decoration:none;color:inherit}
 .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
 .btn.back{margin-inline-end:auto}
 
-/* جدول */
-.table h2{margin:6px 0 10px}
 .table-wrap{max-width:100%;overflow:auto;border-radius:10px;border:1px solid var(--line)}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{border:1px solid var(--line);padding:8px 10px;vertical-align:top;text-align:right}
 thead th{background:#fafafa;position:sticky;top:0;z-index:1}
 td.date{background:#fbfdff;white-space:nowrap;font-weight:800}
-td.reading{white-space:nowrap}
-.notes{white-space:pre-wrap}
+.note{color:var(--muted);white-space:pre-wrap}
 
-/* ألوان حالة الصف (اختياري إن أردت إبراز يوم كامل) */
-tr.state-high{border-inline-start:6px solid var(--warn);background:rgba(239,68,68,.05)}
-tr.state-low{ border-inline-start:6px solid var(--blue);background:rgba(37,99,235,.05)}
-tr.state-ok{  border-inline-start:6px solid var(--ok);background:rgba(16,185,129,.06)}
-
-/* كثافة تلقائية */
-body.dense table{font-size:13px}
-body.very-dense table{font-size:12px}
-#densityHint{margin-top:8px}
-
-/* إخفاء عمود الملاحظات لو حبيت لاحقًا */
-body.notes-hidden .col-notes,
-body.notes-hidden td.col-notes{display:none}
-
-/* لودر سفلي */
 .loader{
   position:fixed;inset-inline:0;bottom:14px;margin:auto;width:230px;text-align:center;
   background:#111827;color:#fff;padding:10px 12px;border-radius:10px;opacity:.92;z-index:9999
 }
 
-/* طباعة */
 @media print{
-  .controls,.actions,.btn,#densityHint{display:none !important}
+  .controls,.actions{display:none!important}
   .card{box-shadow:none;border:none;margin:0 0 8mm}
   table{font-size:12px}
-  body.dense table{font-size:11px}
-  body.very-dense table{font-size:10px}
 }
