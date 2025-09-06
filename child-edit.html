@@ -15,108 +15,87 @@
       <button id="btnRefresh" class="btn ghost" type="button">تحديث ↻</button>
     </div>
 
-    <!-- بطاقة تعريف -->
     <section class="card">
-      <div class="section-head">
-        <h2>بطاقة الطفل</h2>
-        <span class="muted small">عرض عام</span>
-      </div>
-      <div class="row-1">
+      <h2>البيانات العامة</h2>
+      <div class="grid-2">
         <div>
-          <label>الاسم</label>
-          <input id="f_name" placeholder="الاسم (اختياري)" />
+          <label for="f_name">اسم الطفل</label>
+          <input id="f_name" type="text" placeholder="اسم الطفل" />
         </div>
         <div>
-          <label>الجنس</label>
+          <label for="f_gender">النوع</label>
           <select id="f_gender">
             <option value="">—</option>
-            <option value="ذكر">ذكر</option>
-            <option value="أنثى">أنثى</option>
+            <option value="male">ذكر</option>
+            <option value="female">أنثى</option>
           </select>
         </div>
         <div>
-          <label>تاريخ الميلاد</label>
+          <label for="f_birthDate">تاريخ الميلاد</label>
           <input id="f_birthDate" type="date" />
         </div>
         <div>
-          <label>الوحدة الافتراضية</label>
+          <label for="f_unit">وحدة القياس</label>
           <select id="f_unit">
-            <option value="mmol">mmol/L</option>
+            <option value="">—</option>
+            <option value="mmol">mmol</option>
             <option value="mgdl">mg/dL</option>
           </select>
         </div>
         <div>
-          <label>اسم الجهاز</label>
-          <input id="f_deviceName" placeholder="مثلاً: Glucodr" />
+          <label for="f_deviceName">اسم الجهاز</label>
+          <input id="f_deviceName" type="text" placeholder="Dexcom / Libre ..." />
         </div>
-      </div>
-    </section>
-
-    <!-- المقاييس الأساسية -->
-    <section class="card">
-      <div class="section-head">
-        <h2>المقاييس الأساسية</h2>
-      </div>
-      <div class="row-1">
         <div>
-          <label>الوزن (كجم)</label>
+          <label for="f_weightKg">الوزن (كجم)</label>
           <input id="f_weightKg" type="number" step="0.1" />
         </div>
         <div>
-          <label>الطول (سم)</label>
+          <label for="f_heightCm">الطول (سم)</label>
           <input id="f_heightCm" type="number" step="0.1" />
         </div>
       </div>
     </section>
 
-    <!-- الأنسولين -->
     <section class="card">
-      <div class="section-head">
-        <h2>الأنسولين</h2>
-      </div>
-      <div class="row-1">
+      <h2>الأنسولين</h2>
+      <div class="grid-2">
         <div>
-          <label>نوع القاعدي (Basal)</label>
-          <input id="f_basalType" placeholder="مثلاً: لانتوس / تريسيبا" />
+          <label for="f_basalType">نوع الجرعة القاعدية</label>
+          <input id="f_basalType" type="text" placeholder="Lantus / Tresiba ..." />
         </div>
         <div>
-          <label>نوع الوجبات/السريع (Bolus)</label>
-          <input id="f_bolusType" placeholder="مثلاً: نوفورابيد" />
+          <label for="f_bolusType">نوع الجرعة السريعة</label>
+          <input id="f_bolusType" type="text" placeholder="NovoRapid / Humalog ..." />
         </div>
-      </div>
-      <fieldset>
-        <legend>جرعة طويل المفعول</legend>
-        <div class="row-1">
-          <div>
-            <label>الأنسولين</label>
-            <input id="f_longInsulin" placeholder="اسم الأنسولين" />
-          </div>
-          <div>
-            <label>الوقت (HH:MM)</label>
-            <input id="f_longTime" type="time" />
-          </div>
-          <div>
-            <label>الوحدات</label>
-            <input id="f_longUnits" type="number" step="0.1" />
-          </div>
-        </div>
-      </fieldset>
-    </section>
 
-    <!-- الكارب والإعدادات -->
-    <section class="card">
-      <div class="section-head">
-        <h2>الكارب والإعدادات</h2>
-      </div>
-      <div class="row-1">
         <div>
-          <label>Carb Ratio (جرام كارب لكل 1U)</label>
+          <label for="f_longInsulin">الأنسولين طويل المفعول</label>
+          <input id="f_longInsulin" type="text" />
+        </div>
+        <div>
+          <label for="f_longTime">وقت الجرعة</label>
+          <input id="f_longTime" type="time" />
+        </div>
+        <div>
+          <label for="f_longUnits">الجرعة (وحدة)</label>
+          <input id="f_longUnits" type="number" step="0.1" />
+        </div>
+
+        <div>
+          <label for="f_carbRatio">Carb Ratio</label>
           <input id="f_carbRatio" type="number" step="0.1" />
         </div>
         <div>
-          <label>معامل التصحيح (Correction Factor)</label>
+          <label for="f_correctionFactor">Correction Factor</label>
           <input id="f_correctionFactor" type="number" step="0.1" />
         </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>صافي الكارب</h2>
+      <div class="grid-2">
         <div>
           <label>تفعيل صافي الكارب</label>
           <div class="row-switch">
@@ -131,124 +110,92 @@
           <label>قاعدة صافي الكارب</label>
           <select id="f_netCarbRule">
             <option value="">—</option>
-            <option value="fullFiber">استبعاد الألياف بالكامل</option>
-            <option value="halfFiber">استبعاد نصف الألياف</option>
-            <option value="none">بدون استبعاد</option>
+            <option value="fiber-only">خصم الألياف فقط</option>
+            <option value="fiber-sugar-alcohol">خصم الألياف وكحولات السكر</option>
           </select>
         </div>
       </div>
     </section>
 
-    <!-- نطاقات الكارب للوجبات -->
     <section class="card">
-      <div class="section-head"><h2>نطاقات الكارب للوجبات (جرام)</h2></div>
-      <div class="targets-grid">
-        <div class="meal-col">
-          <h4>فطور</h4>
-          <div class="unit-row">
-            <div>
-              <label>Min</label>
-              <input id="f_carb_b_min" type="number" step="0.1" />
-            </div>
-            <div>
-              <label>Max</label>
-              <input id="f_carb_b_max" type="number" step="0.1" />
-            </div>
-          </div>
-        </div>
-        <div class="meal-col">
-          <h4>غداء</h4>
-          <div class="unit-row">
-            <div>
-              <label>Min</label>
-              <input id="f_carb_l_min" type="number" step="0.1" />
-            </div>
-            <div>
-              <label>Max</label>
-              <input id="f_carb_l_max" type="number" step="0.1" />
-            </div>
-          </div>
-        </div>
-        <div class="meal-col">
-          <h4>عشاء</h4>
-          <div class="unit-row">
-            <div>
-              <label>Min</label>
-              <input id="f_carb_d_min" type="number" step="0.1" />
-            </div>
-            <div>
-              <label>Max</label>
-              <input id="f_carb_d_max" type="number" step="0.1" />
-            </div>
-          </div>
-        </div>
-        <div class="meal-col">
-          <h4>سناك</h4>
-          <div class="unit-row">
-            <div>
-              <label>Min</label>
-              <input id="f_carb_s_min" type="number" step="0.1" />
-            </div>
-            <div>
-              <label>Max</label>
-              <input id="f_carb_s_max" type="number" step="0.1" />
-            </div>
-          </div>
-        </div>
-      </div>
-      <p class="hint">هذا النطاق هو كمية الكارب المقترحة لكل وجبة (جرام) — وليس توقيت الوجبة.</p>
-    </section>
-
-    <!-- مستويات السكر والحدود -->
-    <section class="card">
-      <div class="section-head"><h2>مستويات السكر والحدود</h2></div>
-      <fieldset>
-        <legend>النطاق الطبيعي</legend>
-        <div class="unit-row">
-          <div>
-            <label>Min</label>
-            <input id="f_norm_min" type="number" step="0.1" />
-          </div>
-          <div>
-            <label>Max</label>
-            <input id="f_norm_max" type="number" step="0.1" />
-          </div>
-        </div>
-      </fieldset>
-      <div class="row-1">
-        <div>
-          <label>Low (hypo)</label>
-          <input id="f_hypo" type="number" step="0.1" />
-        </div>
-        <div>
-          <label>High (hyper)</label>
-          <input id="f_hyper" type="number" step="0.1" />
-        </div>
-        <div>
-          <label>Severe Low</label>
-          <input id="f_severeLow" type="number" step="0.1" />
-        </div>
-        <div>
-          <label>Severe High</label>
-          <input id="f_severeHigh" type="number" step="0.1" />
-        </div>
-      </div>
-    </section>
-
-    <!-- ربط الطفل بدكتور -->
-    <section class="card">
-      <div class="section-head">
-        <h2>الطبيب والخصوصية</h2>
-        <span id="doctorState" class="badge">غير مرتبط</span>
-      </div>
+      <h2>مستهدفات الكارب</h2>
       <div class="grid-2">
-        <div class="field">
-          <label>كود الربط</label>
-          <input id="codeInput" placeholder="أدخل كود الربط" />
+        <div>
+          <label for="f_carb_b_min">فطور Min</label>
+          <input id="f_carb_b_min" type="number" />
         </div>
-        <div class="inline-end">
-          <button id="btnLink" class="btn good" type="button">ربط مع دكتور</button>
-          <button id="btnUnlink" class="btn danger" type="button">إلغاء الربط</button>
+        <div>
+          <label for="f_carb_b_max">فطور Max</label>
+          <input id="f_carb_b_max" type="number" />
+        </div>
+
+        <div>
+          <label for="f_carb_l_min">غداء Min</label>
+          <input id="f_carb_l_min" type="number" />
+        </div>
+        <div>
+          <label for="f_carb_l_max">غداء Max</label>
+          <input id="f_carb_l_max" type="number" />
+        </div>
+
+        <div>
+          <label for="f_carb_d_min">عشاء Min</label>
+          <input id="f_carb_d_min" type="number" />
+        </div>
+        <div>
+          <label for="f_carb_d_max">عشاء Max</label>
+          <input id="f_carb_d_max" type="number" />
+        </div>
+
+        <div>
+          <label for="f_carb_s_min">سناك Min</label>
+          <input id="f_carb_s_min" type="number" />
+        </div>
+        <div>
+          <label for="f_carb_s_max">سناك Max</label>
+          <input id="f_carb_s_max" type="number" />
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>نطاقات السكر</h2>
+      <div class="grid-2">
+        <div>
+          <label for="f_norm_min">النطاق الطبيعي Min</label>
+          <input id="f_norm_min" type="number" />
+        </div>
+        <div>
+          <label for="f_norm_max">النطاق الطبيعي Max</label>
+          <input id="f_norm_max" type="number" />
+        </div>
+        <div>
+          <label for="f_hypo">Hypo</label>
+          <input id="f_hypo" type="number" />
+        </div>
+        <div>
+          <label for="f_hyper">Hyper</label>
+          <input id="f_hyper" type="number" />
+        </div>
+        <div>
+          <label for="f_severeLow">Severe Low</label>
+          <input id="f_severeLow" type="number" />
+        </div>
+        <div>
+          <label for="f_severeHigh">Severe High</label>
+          <input id="f_severeHigh" type="number" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="doctor">
+          <div class="muted small">حالة الربط بالطبيب</div>
+          <div id="doctorState" class="badge">—</div>
+        </div>
+        <div class="grow"></div>
+        <div class="buttons">
+          <button id="btnLinkDoctor"  class="btn ghost" type="button">ربط الطبيب</button>
+          <button id="btnUnlinkDoctor" class="btn ghost" type="button">إلغاء الربط</button>
         </div>
       </div>
 
