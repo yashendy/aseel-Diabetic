@@ -1,4 +1,4 @@
-// js/reports.js — v3.2 (fix extra paren + stable load)
+// js/reports.js — التلوين والحساب على hypo/hyper (بدون تغيير DOM/CSS)
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { collection, query, where, orderBy, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
@@ -68,142 +68,62 @@ const KEY2AR_SHORT = {
 /* Arabic input → canonical */
 const AR2KEY = {
   'الاستيقاظ':'wake',
-  'ق.الفطار':'pre_bf','ق الفطار':'pre_bf','قبل الافطار':'pre_bf','قبل الإفطار':'pre_bf',
-  'ب.الفطار':'post_bf','ب الفطار':'post_bf','بعد الافطار':'post_bf','بعد الإفطار':'post_bf',
-  'ق.الغداء':'pre_ln','ق الغداء':'pre_ln','قبل الغداء':'pre_ln',
-  'ب.الغداء':'post_ln','ب الغداء':'post_ln','بعد الغداء':'post_ln',
-  'ق.العشاء':'pre_dn','ق العشاء':'pre_dn','قبل العشاء':'pre_dn',
-  'ب.العشاء':'post_dn','ب العشاء':'post_dn','بعد العشاء':'post_dn',
-  'ق.النوم':'pre_sleep','ق النوم':'pre_sleep','قبل النوم':'pre_sleep',
-  'أثناء النوم':'during_sleep','اثناء النوم':'during_sleep',
+  'ق. الفطار':'pre_bf', 'ب. الفطار':'post_bf',
+  'ق. الغداء':'pre_ln', 'ب. الغداء':'post_ln',
+  'ق. العشاء':'pre_dn', 'ب. العشاء':'post_dn',
   'سناك':'snack',
-  'ق.الرياضة':'pre_sport','ق الرياضة':'pre_sport','قبل الرياضة':'pre_sport',
-  'ب.الرياضة':'post_sport','ب الرياضة':'post_sport','بعد الرياضة':'post_sport'
+  'ق. النوم':'pre_sleep', 'أثناء النوم':'during_sleep',
+  'ق. الرياضة':'pre_sport', 'ب. الرياضة':'post_sport'
 };
-/* English aliases → canonical */
-const EN2KEY = {
-  'prebreakfast':'pre_bf', 'postbreakfast':'post_bf',
-  'pre_lunch':'pre_ln',    'prelunch':'pre_ln',  'post_lunch':'post_ln', 'postlunch':'post_ln',
-  'pre_dinner':'pre_dn',   'predinner':'pre_dn', 'post_dinner':'post_dn','postdinner':'post_dn',
-  'wake':'wake','wakeup':'wake','morningwake':'wake',
-  'pre_sleep':'pre_sleep','presleep':'pre_sleep',
-  'during_sleep':'during_sleep','sleep':'during_sleep',
-  'snack':'snack',
-  'pre_sport':'pre_sport','presport':'pre_sport','preexercise':'pre_sport',
-  'post_sport':'post_sport','postsport':'post_sport','postexercise':'post_sport'
-};
-function normalizeSlot(raw){
-  if(!raw) return '';
-  let s = String(raw).trim();
-
-  // Arabic tolerant
-  const sAR = s.replace(/\./g,'').replace(/ـ/g,'').replace(/\s+/g,' ').trim();
-  if(AR2KEY[sAR]) return AR2KEY[sAR];
-
-  // English shapes
-  const en1 = s.toLowerCase().replace(/ /g,'').replace(/-/g,'_');
-  if(EN2KEY[en1]) return EN2KEY[en1];
-
-  const en2 = s.toLowerCase();
-  if(EN2KEY[en2]) return EN2KEY[en2];
-
-  const en3 = en2.replace(/[-_]/g,'');
-  if(EN2KEY[en3]) return EN2KEY[en3];
-
-  return s; // fallback
-}
-
-/* Dates / age */
-function normalizeDateStr(any){
-  if(!any) return '';
-  if(typeof any==='string'){
-    if(/^\d{4}-\d{2}-\d{2}$/.test(any)) return any;
-    const d = new Date(any);
-    if(!isNaN(d)) return todayStr(d);
-    return any;
-  }
-  const d=(any && any.toDate && typeof any.toDate==='function')? any.toDate(): new Date(any);
-  if(!isNaN(d)) return todayStr(d);
-  return '';
-}
-function calcAge(bd){
-  if(!bd) return '—';
-  const b=new Date(bd), t=new Date();
-  let a=t.getFullYear()-b.getFullYear();
-  const m=t.getMonth()-b.getMonth();
-  if(m<0 || (m===0 && t.getDate()<b.getDate())) a--;
-  return `${a} سنة`;
-}
-const toMgdl = mmol => Math.round(Number(mmol)*18);
 
 /* ===== State ===== */
 const params = new URLSearchParams(location.search);
-let childId = params.get('child') || localStorage.getItem('lastChildId');
-let normalMin = 4, normalMax = 7;
-let rowsCache = [];           // raw rows for period
-let viewRowsCache = [];       // filtered/sorted view
-let notesVisible = true;
-let visibleCount = 10;
-const pageSize = 10;
+const childId = params.get('child');
+let normalMin=4.5, normalMax=7.0;
+let hypoLevel=4.0, hyperLevel=11.0;
 
-/* Slots order */
+let rowsCache = [];
+let viewRowsCache = [];
+let visibleCount = 50;
+const pageSize = 50;
+
 const SLOT_ORDER = ['wake','pre_bf','post_bf','pre_ln','post_ln','pre_dn','post_dn','snack','pre_sleep','during_sleep','pre_sport','post_sport'];
 const SLOT_ORDER_MAP = new Map(SLOT_ORDER.map((k,i)=>[k,i]));
-const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 
-/* ===== Boot ===== */
+/* ===== Session ===== */
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href='index.html'; return; }
-  if(!childId){ alert('لا يوجد معرف طفل'); location.href='parent.html?pickChild=1'; return; }
-  localStorage.setItem('lastChildId', childId);
+  if(!childId){ alert('لا يوجد معرف طفل'); history.back(); return; }
 
-  // Header child info
-  try{
-    const cref = doc(db, `parents/${user.uid}/children/${childId}`);
-    const csnap = await getDoc(cref);
-    if(csnap.exists()){
-      const c = csnap.data();
-      childNameEl.textContent = c.name || 'طفل';
-      childMetaEl.textContent = `${c.gender || '—'} • العمر: ${calcAge(c.birthDate)}`;
-      normalMin = Number(c.normalRange && c.normalRange.min != null ? c.normalRange.min : 4);
-      normalMax = Number(c.normalRange && c.normalRange.max != null ? c.normalRange.max : 7);
-      chipRangeEl.textContent = `النطاق: ${normalMin}–${normalMax} mmol/L`;
-      chipCREl.textContent    = `CR: ${c.carbRatio != null ? c.carbRatio : '—'} g/U`;
-      chipCFEl.textContent    = `CF: ${c.correctionFactor != null ? c.correctionFactor : '—'} mmol/L/U`;
-      localStorage.setItem('lastChildName', c.name || 'طفل');
-    }else{
-      const cached = localStorage.getItem('lastChildName');
-      if (cached) childNameEl.textContent = cached;
-    }
-  }catch(e){
-    console.error('child load error', e);
-  }
+  // افتراض الفتره: أسبوع
+  toEl.value   = todayStr();
+  fromEl.value = addDays(toEl.value, -6);
 
-  // default dates (last 7 days)
-  const today = todayStr();
-  if(!toEl.value)   toEl.value   = today;
-  if(!fromEl.value) fromEl.value = addDays(today,-7);
+  // تحميل الطفل لقراءة الحدود
+  const s = await getDoc(doc(db, `parents/${user.uid}/children/${childId}`));
+  if(!s.exists()){ alert('الطفل غير موجود'); history.back(); return; }
+  const c = s.data();
 
-  // Events
-  fromEl.addEventListener('change', loadRange);
-  toEl.addEventListener('change', loadRange);
-  outUnitEl.addEventListener('change', ()=> { renderAll(); });
+  normalMin = Number(c?.normalRange?.min ?? 4.5);
+  normalMax = Number(c?.normalRange?.max ?? 7.0);
 
-  toggleNotesBtn.addEventListener('click', ()=>{
-    notesVisible = !notesVisible;
-    document.body.classList.toggle('notes-hidden', !notesVisible);
-    toggleNotesBtn.textContent = notesVisible ? 'إخفاء الملاحظات' : 'إظهار الملاحظات';
-  });
+  // حدود التلوين الجديدة
+  hypoLevel  = Number(c?.hypoLevel  ?? normalMin);
+  hyperLevel = Number(c?.hyperLevel ?? normalMax);
 
-  csvBtn.addEventListener('click', downloadCSV);
+  childNameEl.textContent = c.name || 'طفل';
+  const age = (()=>{ if(!c.birthDate) return '—'; const b=new Date(c.birthDate), t=new Date(); let a=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth(); if(m<0||(m===0&&t.getDate()<b.getDate())) a--; return `${a} سنة`})();
+  childMetaEl.textContent = `${c.gender||'—'} • ${age}`;
+  chipRangeEl.textContent = `النطاق: ${normalMin}–${normalMax} mmol/L`;
+  chipCREl.textContent    = `CR: ${c.carbRatio ?? '—'} g/U`;
+  chipCFEl.textContent    = `CF: ${c.correctionFactor ?? '—'} mmol/L/U`;
 
+  /* روابط */
   openAnalytics && openAnalytics.addEventListener('click', ()=>{
     const href = new URL('analytics.html', location.href);
     href.searchParams.set('child', childId);
-    href.searchParams.set('range', '14d');
     location.href = href.toString();
   });
-
   openPrint && openPrint.addEventListener('click', ()=>{
     const href = new URL('reports-print.html', location.href);
     href.searchParams.set('child', childId);
@@ -212,7 +132,6 @@ onAuthStateChanged(auth, async (user)=>{
     href.searchParams.set('unit', outUnitEl.value);
     location.href = href.toString();
   });
-
   openBlank && openBlank.addEventListener('click', ()=>{
     const blankUrl = new URL('reports-print.html', location.href);
     blankUrl.searchParams.set('child', childId);
@@ -230,21 +149,27 @@ onAuthStateChanged(auth, async (user)=>{
     renderTable(viewRowsCache);
   });
 
-  // Chat assistant events
-  chatToggleBtn && chatToggleBtn.addEventListener('click', ()=> toggleChat(true));
-  chatCloseBtn  && chatCloseBtn.addEventListener('click', ()=> toggleChat(false));
-  chatSend      && chatSend.addEventListener('click', sendChat);
-  chatQ         && chatQ.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); sendChat(); } });
-
-  // Load first time
   await loadRange();
 });
 
 /* ===== Data flow ===== */
 function getState(mmol){
-  if(mmol < normalMin) return 'low';
-  if(mmol > normalMax) return 'high';
+  if(mmol < hypoLevel) return 'low';
+  if(mmol > hyperLevel) return 'high';
   return 'ok';
+}
+
+function normalizeDateStr(s){
+  if(!s) return '';
+  const d = new Date(s);
+  if(Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+function normalizeSlot(slot){
+  if(!slot) return '';
+  const k = (AR2KEY[slot] || String(slot).toLowerCase()).trim();
+  return SLOT_ORDER.includes(k) ? k : k;
 }
 
 /* Load range with server-side filtering + order */
@@ -268,7 +193,7 @@ async function loadRange(){
       if(!date) return;
 
       let slot = String(r.slotKey || r.slot || r.timeLabel || '').trim();
-      slot = normalizeSlot(slot); // normalize English/Arabic forms
+      slot = normalizeSlot(slot);
 
       let mmol = null;
       if(typeof r.value_mmol === 'number') mmol = Number(r.value_mmol);
@@ -277,17 +202,15 @@ async function loadRange(){
       else if (r.unit === 'mg/dL' && typeof r.value === 'number') mmol = Number(r.value)/18;
       if(mmol==null || !isFinite(mmol)) return;
 
-      const mgdl = (typeof r.value_mgdl === 'number') ? Number(r.value_mgdl) : toMgdl(mmol);
-
-      const notes = r.notes || (r.input && r.input.notes) || '';
-      const corr  = (r.correctionDose != null ? r.correctionDose : (r.input && r.input.correctionDose)) ?? '';
-      const hypo  = (r.hypoTreatment  != null ? r.hypoTreatment  : (r.input && r.input.raisedWith))    ?? '';
-
+      const mgdl = (typeof r.value_mgdl === 'number') ? Number(r.value_mgdl) : Math.round(mmol*18);
+      const corr = r.correctionDose ?? '';
+      const hypo = r.hypoTreatment ?? '';
+      const notes= r.notes ?? '';
       const state = getState(mmol);
       rows.push({date, slot, mmol, mgdl, state, corr, hypo, notes});
     });
 
-    // Order by date then slot within day
+    // Order by date then slot
     rows.sort((a,b)=> a.date!==b.date ? (a.date<b.date?-1:1) : ((SLOT_ORDER_MAP.get(a.slot)||999) - (SLOT_ORDER_MAP.get(b.slot)||999)));
 
     rowsCache = rows;
@@ -345,33 +268,23 @@ function applyFiltersSort(){
   if(notesF==='with') arr = arr.filter(r => r.notes && String(r.notes).trim());
   if(notesF==='without') arr = arr.filter(r => !(r.notes && String(r.notes).trim()));
 
-  if(sortBy==='date_desc') arr.sort((a,b)=> (a.date===b.date ? 0 : (a.date>b.date?-1:1)));
-  if(sortBy==='date_asc')  arr.sort((a,b)=> (a.date===b.date ? 0 : (a.date<b.date?-1:1)));
-  if(sortBy==='read_asc')  arr.sort((a,b)=> a.mmol-b.mmol);
-  if(sortBy==='read_desc') arr.sort((a,b)=> b.mmol-a.mmol);
+  // sort
+  if(sortBy==='date_asc') arr.sort((a,b)=> a.date.localeCompare(b.date));
+  if(sortBy==='date_desc') arr.sort((a,b)=> b.date.localeCompare(a.date));
+  if(sortBy==='high_first') arr.sort((a,b)=> (b.state==='high') - (a.state==='high'));
+  if(sortBy==='low_first')  arr.sort((a,b)=> (b.state==='low')  - (a.state==='low'));
 
   viewRowsCache = arr;
 }
-
-/* ===== Render ===== */
 function renderAll(){
   renderTable(viewRowsCache);
-  const stats = computeStats(viewRowsCache);
-  const patterns = detectPatterns(viewRowsCache);
-  renderInsights(stats, patterns);
-  renderHeatmap(viewRowsCache);
-  renderHistogram(viewRowsCache);
+}
+
+/* ===== Render table ===== */
+function toTxt(r){
+  return outUnitEl.value==='mgdl' ? `${Math.round(r.mgdl)} mg/dL` : `${r.mmol.toFixed(1)} mmol/L`;
 }
 function renderTable(rows){
-  if(!rows.length){
-    tbody.innerHTML = `<tr><td colspan="7" class="muted center">لا يوجد قياسات للفترة المحددة.</td></tr>`;
-    if(visibleInfoEl) visibleInfoEl.textContent = '—';
-    if(showMoreBtn) showMoreBtn.classList.add('hidden');
-    return;
-  }
-  const unit = outUnitEl.value;
-  const toTxt = r => unit==='mgdl' ? `${Math.round(r.mgdl)} mg/dL` : `${r.mmol.toFixed(1)} mmol/L`;
-
   const slice = rows.slice(0, visibleCount);
   const html = slice.map(r=>{
     const arrow  = r.state==='low'?'↓': r.state==='high'?'↑':'↔';
@@ -395,7 +308,13 @@ function renderTable(rows){
   }
 }
 
-/* ===== CSV (all rows of period) ===== */
+/* ===== CSV ===== */
+function csvCell(x){
+  if(x==null) return '';
+  const s=String(x);
+  if(/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+  return s;
+}
 async function downloadCSV(){
   const start = normalizeDateStr(fromEl.value);
   const end   = normalizeDateStr(toEl.value);
@@ -423,199 +342,5 @@ async function downloadCSV(){
   URL.revokeObjectURL(a.href);
 }
 
-/* ===== AI: Stats & Patterns (local) ===== */
-function computeStats(rows){
-  const n = rows.length;
-  if(!n) return {n:0, avg:0, med:0, sd:0, tir:0, nLow:0, nHigh:0};
-
-  const arr = rows.map(r=>r.mmol).sort((a,b)=>a-b);
-  const sum = arr.reduce((a,b)=>a+b,0);
-  const avg = sum/n;
-  const med = n%2? arr[(n-1)/2] : (arr[n/2-1]+arr[n/2])/2;
-  const sd  = Math.sqrt(arr.reduce((a,x)=>a+(x-avg)**2,0)/n);
-  const nLow  = rows.filter(r=>r.state==='low').length;
-  const nHigh = rows.filter(r=>r.state==='high').length;
-  const tir   = Math.round(((n - nLow - nHigh) / n) * 100);
-
-  return {n, avg, med, sd, tir, nLow, nHigh};
-}
-function detectPatterns(rows){
-  const map = new Map();
-  rows.forEach(r=>{
-    const m = map.get(r.slot) || {total:0,low:0,ok:0,high:0};
-    m.total++; m[r.state]++; map.set(r.slot,m);
-  });
-
-  const findings = [];
-  const minCount = 3;
-
-  map.forEach((m,slot)=>{
-    if(m.total >= minCount){
-      if(m.high/m.total >= 0.6) findings.push(`ارتفاعات متكررة في ${KEY2AR_SHORT[slot]||slot}`);
-      if(m.low/m.total >= 0.6)  findings.push(`هبوطات متكررة في ${KEY2AR_SHORT[slot]||slot}`);
-    }
-  });
-
-  const w = map.get('wake');
-  if(w && w.total>=minCount && w.high/w.total>=0.5) findings.push('ارتفاعات صباحية بعد الاستيقاظ');
-
-  ['post_bf','post_ln','post_dn'].forEach(k=>{
-    const m = map.get(k);
-    if(m && m.total>=minCount && m.high/m.total>=0.5)
-      findings.push(`ارتفاع بعد ${KEY2AR_SHORT[k].replace('ب. ','')}`);
-  });
-
-  return {bySlot:map, findings};
-}
-function renderInsights(stats, patterns){
-  const unit = outUnitEl.value;
-  const fmt = (v)=> unit==='mgdl' ? `${Math.round(v*18)} mg/dL` : `${v.toFixed(1)} mmol/L`;
-  const kpi = (label, val)=> `<div class="k"><div class="t small muted">${label}</div><div class="v">${val}</div></div>`;
-
-  insightsKPIs.innerHTML = [
-    kpi('عدد القياسات', stats.n),
-    kpi('المتوسط', fmt(stats.avg||0)),
-    kpi('الوسيط', fmt(stats.med||0)),
-    kpi('الانحراف المعياري', unit==='mgdl' ? Math.round(stats.sd*18) : stats.sd.toFixed(2)),
-    kpi('داخل النطاق (TIR)', `${stats.tir}%`),
-    kpi('هبوط / ارتفاع', `${stats.nLow} / ${stats.nHigh}`)
-  ].join('');
-
-  const list = (patterns.findings && patterns.findings.length)
-    ? `<ul>${patterns.findings.map(f=>`<li>${escapeHTML(f)}</li>`).join('')}</ul>`
-    : `<p class="muted">لا توجد أنماط غير اعتيادية بارزة في هذه الفترة.</p>`;
-  insightsFindings.innerHTML = list;
-}
-
-/* ===== Mini Analytics ===== */
-function renderHeatmap(rows){
-  if(!heatmapEl) return;
-  const grid = [];
-  grid.push(`<div class="hm-head">—</div>`);
-  for(let d=0; d<7; d++) grid.push(`<div class="hm-head">${DAYS_AR[d].slice(0,3)}</div>`);
-
-  const agg = {}; // slot|day -> counts
-  rows.forEach(r=>{
-    const day = (new Date(r.date)).getDay();
-    const key = `${r.slot}|${day}`;
-    const obj = agg[key] || {total:0,low:0,ok:0,high:0};
-    obj.total++; obj[r.state]++; agg[key]=obj;
-  });
-
-  SLOT_ORDER.forEach(slot=>{
-    grid.push(`<div class="hm-head">${escapeHTML(KEY2AR_SHORT[slot]||slot)}</div>`);
-    for(let d=0; d<7; d++){
-      const key = `${slot}|${d}`;
-      const m = agg[key];
-      if(!m) { grid.push(`<div class="hm-cell hm-empty" title="لا قياسات"></div>`); continue; }
-      let cls='hm-ok';
-      if(m.high>=m.low && m.high>=m.ok) cls='hm-high';
-      else if(m.low>=m.high && m.low>=m.ok) cls='hm-low';
-      const intensity = clamp(m.total/8, 0.18, 0.95);
-      grid.push(`<div class="hm-cell ${cls}" style="opacity:${intensity.toFixed(2)}" title="${DAYS_AR[d]} • ${KEY2AR_SHORT[slot]} • ${m.total} قراءات"></div>`);
-    }
-  });
-
-  heatmapEl.innerHTML = grid.join('');
-}
-function renderHistogram(rows){
-  if(!histogramEl) return;
-  if(!rows.length){ histogramEl.innerHTML=''; return; }
-  const unit = outUnitEl.value;
-  const values = unit==='mgdl' ? rows.map(r=>r.mgdl) : rows.map(r=>r.mmol);
-  const min = Math.min(...values), max = Math.max(...values);
-  const bins = 12;
-  const step = (max-min || 1)/bins;
-
-  const counts = new Array(bins).fill(0);
-  values.forEach(v=>{
-    let idx = Math.floor((v-min)/step);
-    if(idx>=bins) idx=bins-1;
-    counts[idx]++;
-  });
-  const maxC = Math.max(...counts) || 1;
-
-  const bars = counts.map((c,i)=>{
-    const h = Math.round((c/maxC)*100);
-    const from = (min + i*step);
-    const to   = (min + (i+1)*step);
-    const label = unit==='mgdl'
-      ? `${Math.round(from)}–${Math.round(to)}`
-      : `${from.toFixed(1)}–${to.toFixed(1)}`;
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center">
-      <div class="bar" style="height:${h}%;" title="${label} • ${c} قياسات"></div>
-      <div class="tick">${escapeHTML(label)}</div>
-    </div>`;
-  }).join('');
-
-  histogramEl.innerHTML = bars;
-}
-
-/* ===== Assistant (local) ===== */
-function toggleChat(v){
-  if(!chatPanel) return;
-  chatPanel.classList.toggle('hidden', !v);
-  chatPanel.setAttribute('aria-hidden', String(!v));
-  if(v && chatQ) chatQ.focus();
-}
-function sendChat(){
-  if(!chatQ) return;
-  const q = (chatQ.value||'').trim();
-  if(!q) return;
-  addMsg(q, true);
-  chatQ.value='';
-  const a = askAssistant(q);
-  addMsg(a, false);
-  if(chatBody) chatBody.scrollTop = chatBody.scrollHeight;
-}
-function addMsg(text, me=false){
-  if(!chatBody) return;
-  const div = document.createElement('div');
-  div.className = 'msg'+(me?' me':'');
-  div.innerHTML = escapeHTML(text);
-  chatBody.appendChild(div);
-}
-function askAssistant(q){
-  const lower = q.toLowerCase();
-  if(/بدل|غيّر|غير/.test(q) && /وحدة|unit/.test(q)){
-    outUnitEl.value = (outUnitEl.value==='mmol'?'mgdl':'mmol');
-    renderAll();
-    return 'تم تغيير الوحدة.';
-  }
-  if(/اخف|إخف|اظه|إظه/.test(q) && /ملاحظ/.test(q)){
-    toggleNotesBtn.click();
-    return notesVisible ? 'تم إظهار الملاحظات.' : 'تم إخفاء الملاحظات.';
-  }
-  if(/لخص|خلاصة|ملخص|summary/.test(lower)){
-    const s = computeStats(viewRowsCache);
-    return `عدد القياسات ${s.n}، متوسط ${fmtUnit(s.avg)}, وسيط ${fmtUnit(s.med)}, TIR ${s.tir}%. هبوط ${s.nLow} وارتفاع ${s.nHigh}.`;
-  }
-  const numMatch = q.match(/(\d+(\.\d+)?)/);
-  if(numMatch){
-    const num = Number(numMatch[1]);
-    if(!isNaN(num)){
-      let mmol = num;
-      if(num>30 || /mg|دل|mg\/dl/i.test(q)) mmol = num/18;
-      const state = getState(mmol);
-      const stateAr = state==='low'?'هبوط':state==='high'?'ارتفاع':'طبيعي';
-      return `القراءة تعادل ${fmtUnit(mmol)} وهي حالة ${stateAr} بالنسبة لنطاقك ${normalMin}–${normalMax} mmol/L.`;
-    }
-  }
-  if(/ليه|لماذا|سبب|why/.test(lower)){
-    const p = detectPatterns(viewRowsCache);
-    if(p.findings.length){
-      return `الأنماط الملحوظة: • ${p.findings.join(' • ')}. (تنبيه عام — ليست نصيحة طبية)`;
-    }else{
-      return 'لا توجد أنماط بارزة في هذه الفترة. جرّبي توسيع المدة أو إزالة بعض الفلاتر.';
-    }
-  }
-  return 'جرّبي: "لخّص الأسبوع"، "ماذا تعني 250؟"، أو "بدّل الوحدة".';
-}
-function fmtUnit(mmol){ return (outUnitEl.value==='mgdl') ? `${Math.round(mmol*18)} mg/dL` : `${mmol.toFixed(1)} mmol/L`; }
-
-/* ===== Helpers ===== */
-function escapeHTML(s){ return String(s)
-  .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-  .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-  .replace(/'/g,'&#039;'); }
-function csvCell(s){ return `"${String(s==null?'':s).replace(/"/g,'""')}"`; }
+/* ===== Events ===== */
+csvBtn && csvBtn.addEventListener('click', downloadCSV);
