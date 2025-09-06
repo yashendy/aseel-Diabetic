@@ -1,7 +1,7 @@
-// js/reports-print.js (v5) — يدعم: نموذج فارغ، إخفاء/إظهار الملاحظات، أسبوعي، وملاحظات أعلى التقرير.
+// js/reports-print.js — تلوين الطباعة low/ok/high على hypo/hyper، دون تغيير الـCSS/DOM
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
-import { collection, query, where, orderBy, getDocs } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
+import { collection, query, where, orderBy, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 
 /* عناصر */
 const params       = new URLSearchParams(location.search);
@@ -28,7 +28,7 @@ const notesText    = document.getElementById('notesText');
 const tbody        = document.getElementById('tbody');
 const emptyEl      = document.getElementById('empty');
 
-const maskTreat    = document.getElementById('maskTreat');  // إخفاء/إظهار ملاحظات الخلايا
+const maskTreat    = document.getElementById('maskTreat');
 const colorize     = document.getElementById('colorize');
 const weeklyMode   = document.getElementById('weeklyMode');
 const manualMode   = document.getElementById('manualMode');
@@ -44,16 +44,6 @@ const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate(
 const todayStr = ()=> fmtDate(new Date());
 const addDays = (d,delta)=> { const x=new Date(d); x.setDate(x.getDate()+delta); return x; };
 function calcAge(bd){ if(!bd) return '—'; const b=new Date(bd), t=new Date(); let a=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth(); if(m<0||(m===0&&t.getDate()<b.getDate())) a--; return `${a} سنة`; }
-
-/* الأعمدة */
-const SLOT_MAP = {
-  'WAKE':'الاستيقاظ','WAKEUP':'الاستيقاظ',
-  'PRE_BREAKFAST':'ق.الفطار','POST_BREAKFAST':'ب.الفطار',
-  'PRE_LUNCH':'ق.الغدا','POST_LUNCH':'ب.الغدا',
-  'PRE_DINNER':'ق.العشا','POST_DINNER':'ب.العشا',
-  'SNACKS':'سناك','SLEEP':'أثناء النوم','NIGHT':'أثناء النوم'
-};
-const TABLE_COLS = ['الاستيقاظ','ق.الفطار','ب.الفطار','ق.الغدا','ب.الغدا','ق.العشا','ب.العشا','سناك','أثناء النوم'];
 
 /* حالة */
 let currentUser, childData;
@@ -80,7 +70,6 @@ onAuthStateChanged(auth, async (user)=>{
 
 /* رأس التقرير */
 async function loadChild(){
-  const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js');
   const dref = doc(db, `parents/${currentUser.uid}/children/${childId}`);
   const snap = await getDoc(dref);
   if(!snap.exists()){ alert('لم يتم العثور على الطفل'); return; }
@@ -91,9 +80,30 @@ async function loadChild(){
   childRangeEl.textContent= `${childData?.normalRange?.min ?? '—'}–${childData?.normalRange?.max ?? '—'} mmol/L`;
   childCREl.textContent   = `${childData?.carbRatio ?? '—'} g/U`;
   childCFEl.textContent   = `${childData?.correctionFactor ?? '—'} mmol/L/U`;
+
+  // حدود اللون للطباعة
+  childData._hypo  = Number(childData.hypoLevel  ?? childData?.normalRange?.min ?? 4.5);
+  childData._hyper = Number(childData.hyperLevel ?? childData?.normalRange?.max ?? 11);
 }
 
 /* تحميل القياسات */
+async function refreshData(){
+  const manual = (params.get('mode')==='blank') || manualMode.checked;
+
+  tbody.innerHTML = '';
+  emptyEl.classList.add('hidden');
+
+  if (manual){
+    renderTable(true);
+    return;
+  }
+
+  await loadMeasurements();
+  if(!cachedRows.length){
+    emptyEl.classList.remove('hidden');
+  }
+  renderTable(false);
+}
 async function loadMeasurements(){
   const from = fromDateEl.value || todayStr();
   const to   = toDateEl.value   || todayStr();
@@ -106,80 +116,65 @@ async function loadMeasurements(){
   const qy  = query(ref, where('date','>=', from), where('date','<=', to), orderBy('date','asc'));
   const snap= await getDocs(qy);
 
-  const byDate = new Map();
+  const byDate = new Map(); // date -> {cols:{colName:[]}}
+  const TABLE_COLS = ['wake','pre_bf','post_bf','pre_ln','post_ln','pre_dn','post_dn','snack','pre_sleep','during_sleep','pre_sport','post_sport'];
+
+  const mapSlot = (s)=>{
+    const x = String(s || '').toLowerCase();
+    const m = {
+      'wake':'wake',
+      'pre_breakfast':'pre_bf', 'pre_bf':'pre_bf', 'ق. الفطار':'pre_bf',
+      'post_breakfast':'post_bf','post_bf':'post_bf','ب. الفطار':'post_bf',
+      'pre_lunch':'pre_ln','pre_ln':'pre_ln','ق. الغداء':'pre_ln',
+      'post_lunch':'post_ln','post_ln':'post_ln','ب. الغداء':'post_ln',
+      'pre_dinner':'pre_dn','pre_dn':'pre_dn','ق. العشاء':'pre_dn',
+      'post_dinner':'post_dn','post_dn':'post_dn','ب. العشاء':'post_dn',
+      'snack':'snack','سناك':'snack',
+      'pre_sleep':'pre_sleep','ق. النوم':'pre_sleep',
+      'during_sleep':'during_sleep','أثناء النوم':'during_sleep',
+      'pre_sport':'pre_sport','ق. الرياضة':'pre_sport',
+      'post_sport':'post_sport','ب. الرياضة':'post_sport'
+    };
+    return m[x] || x;
+  };
+
   snap.forEach(d=>{
     const m = d.data();
+    const date = m.date;
+    if (!byDate.has(date)) byDate.set(date, {date, cols:Object.fromEntries(TABLE_COLS.map(c=>[c,[]]))});
 
-    let mmol = null, mgdl = null;
-    if (typeof m.value_mmol === 'number') mmol = m.value_mmol;
-    if (typeof m.value_mgdl === 'number') mgdl = m.value_mgdl;
-    if (mmol==null && mgdl!=null) mmol = mgdl/18;
-    if (mgdl==null && mmol!=null) mgdl = Math.round(mmol*18);
+    // تحويل القيمة
+    let mmol=null, mgdl=null;
+    if(typeof m.value_mmol === 'number'){ mmol=Number(m.value_mmol); mgdl=Math.round(mmol*18); }
+    else if (typeof m.value_mgdl === 'number'){ mgdl=Number(m.value_mgdl); mmol=mgdl/18; }
+    else if (m.unit==='mmol/L' && typeof m.value==='number'){ mmol=Number(m.value); mgdl=Math.round(mmol*18); }
+    else if (m.unit==='mg/dL' && typeof m.value==='number'){ mgdl=Number(m.value); mmol=mgdl/18; }
+    if(mmol==null || !isFinite(mmol)) return;
 
-    const colName = SLOT_MAP[String(m.slotKey||'').toUpperCase()];
-    if(!colName) return;
+    // الحالة حسب hypo/hyper
+    const st = (mmol < childData._hypo) ? 'low' : (mmol > childData._hyper) ? 'high' : 'ok';
 
-    const date = m.date || (m.when?.toDate ? fmtDate(m.when.toDate()) : null);
-    if(!date) return;
+    const unit = unitSelect.value==='mmol'?'mmol/L':'mg/dL';
+    const value = unit==='mmol/L' ? Number(mmol.toFixed(1)) : Math.round(mgdl);
 
-    if(!byDate.has(date)){
-      const cols={}; TABLE_COLS.forEach(c=> cols[c]=[]);
-      byDate.set(date, { date, cols });
-    }
-
-    const showUnit = unitSelect.value;
-    const value = showUnit==='mmol' ? +(+mmol).toFixed(1) : Math.round(mgdl);
-
-    byDate.get(date).cols[colName].push({
+    const slot = mapSlot(m.slotKey || m.slot || m.timeLabel || 'random');
+    byDate.get(date).cols[slot].push({
       value,
-      unit: showUnit==='mmol'?'mmol/L':'mg/dL',
-      state: m.state || 'normal',
+      unit,
+      state: m.state || st,
       bolus: m.bolusDose ?? null,
       corr:  m.correctionDose ?? null,
       notes: m.notes || ''
     });
   });
 
-  cachedRows = Array.from(byDate.values()).sort((a,b)=> a.date.localeCompare(b.date));
-
-  // أسبوعي: آخر 7 أيام فقط
-  if (weeklyMode.checked) cachedRows = cachedRows.slice(-7);
-}
-
-/* إنشاء صفوف فارغة قابلة للتحرير */
-function buildBlankRows(){
-  const from = new Date(fromDateEl.value || todayStr());
-  const to   = new Date(toDateEl.value   || todayStr());
-
-  periodFrom.textContent = fmtDate(from);
-  periodTo.textContent   = fmtDate(to);
-  periodUnit.textContent = unitSelect.value==='mmol'?'mmol/L':'mg/dL';
-
-  const rows=[];
-  for(let d=new Date(from); d<=to; d.setDate(d.getDate()+1)){
-    const cols={}; TABLE_COLS.forEach(c=> cols[c]=[]);
-    rows.push({ date: fmtDate(d), cols });
-  }
-  // أسبوعي في الوضع اليدوي: آخر 7 تواريخ فقط
-  cachedRows = weeklyMode.checked ? rows.slice(-7) : rows;
-}
-
-/* تحديث حسب الوضع */
-async function refreshData(){
-  updateTopNotes();
-  if (manualMode.checked){
-    buildBlankRows();
-    renderTable(true);
-  }else{
-    await loadMeasurements();
-    renderTable(false);
-  }
+  cachedRows = Array.from(byDate.values());
 }
 
 /* رسم الجدول */
-function renderTable(isManual=false){
-  tbody.innerHTML='';
-  emptyEl.classList.toggle('hidden', cachedRows.length>0);
+function renderTable(isManual){
+  tbody.innerHTML = '';
+  const TABLE_COLS = ['wake','pre_bf','post_bf','pre_ln','post_ln','pre_dn','post_dn','snack','pre_sleep','during_sleep','pre_sport','post_sport'];
 
   const colorizeOn   = !isManual && colorize.checked;
   const hideAllNotes = maskTreat.checked;
@@ -260,6 +255,7 @@ function updateTopNotes(){
 function renderQR(){
   try{
     const canvas=document.getElementById('qr');
+    // eslint-disable-next-line no-undef
     QRCode.toCanvas(canvas, location.href, { width:128, margin:1 }, ()=>{});
   }catch{}
 }
