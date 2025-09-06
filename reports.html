@@ -1,117 +1,210 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>التقارير</title>
-  <link rel="stylesheet" href="./css/reports.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>تقارير الطفل</title>
+  <link rel="stylesheet" href="styles.css">
   <style>
-    /* أساسيات وتنسيق سريع */
-    :root { --radius: 14px; }
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, "Segoe UI", Tahoma, Arial; background:#f7f9fc; color:#111; margin:0; }
-    .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
-    h1 { font-size: 22px; margin: 0 0 14px; }
+    @media print { @page{ size: A4 landscape; margin: 8mm } .no-print{display:none!important} }
 
-    .filters { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 12px; }
-    .filters .field { display:flex; flex-direction:column; gap:6px; }
-    .filters label { font-size: 12px; color:#555; }
-    .filters input[type="date"]{ padding:8px 10px; border:1px solid #d8e1ef; border-radius: 10px; background:#fff; }
-    .filters .unit { padding:8px 10px; border:1px dashed #d8e1ef; border-radius: 10px; background:#fff; color:#333; }
-    .btn { padding:10px 14px; border-radius: 12px; border:0; cursor:pointer; }
-    .btn.primary { background:#2563eb; color:#fff; }
-    .muted { color:#6b7280; }
-    .legend { display:flex; gap:8px; align-items:center; margin: 10px 0 14px; }
-    .chip { font-size:12px; padding:4px 8px; border-radius:999px; background:#eef2ff; color:#3730a3; }
-    .chip.ok { background:#e8fff1; color:#047857; }
-    .chip.warn { background:#fff7ed; color:#9a3412; }
-    .chip.danger { background:#ffe4e6; color:#9f1239; }
-
-    .table-wrap { overflow:auto; background:#fff; border:1px solid #e5e7eb; border-radius: var(--radius); }
-    table { border-collapse: separate; border-spacing:0; width:100%; min-width: 960px; }
-    thead th { position:sticky; top:0; background:#f3f4f6; color:#111827; font-weight:600; font-size:13px; text-align:center; padding:10px; border-bottom:1px solid #e5e7eb; }
-    tbody td, tbody th { padding:8px 10px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
-    tbody th { background:#fafafa; white-space:nowrap; }
-
-    .cell { display:grid; grid-template-rows: repeat(4, auto); gap:4px; min-width:150px; }
-    .line { display:flex; align-items:center; gap:8px; font-size:12px; color:#111; }
-    .line .label { color:#6b7280; min-width:64px; white-space:nowrap; }
-    .value { font-weight:600; }
-    .notes-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px; }
-    [title].notes-text { cursor:help; }
-
-    .badge { font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid transparent; }
-    .b-normal { background:#e8fff1; color:#065f46; border-color:#b7f4cd; }
-    .b-low { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
-    .b-high { background:#fff7ed; color:#9a3412; border-color:#fed7aa; }
-    .b-sevlow { background:#dbeafe; color:#1e3a8a; border-color:#bfdbfe; }
-    .b-sevhigh{ background:#ffe4e6; color:#9f1239; border-color:#fecdd3; }
-
-    .trend { display:inline-flex; align-items:center; gap:4px; }
-    .trend svg { width:14px; height:14px; }
-    .trend .dot { fill:#111827; opacity:.75; }
-    .trend .arrow { stroke:#111827; stroke-width:2; fill:none; }
-
-    .empty { color:#9ca3af; }
-    .loader { display:none; }
-    .loader.show { display:block; margin:6px 0; }
-    .footer { display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:12px; color:#6b7280; }
-    @media (max-width: 720px){
-      .filters { grid-template-columns: 1fr 1fr; }
-      .cell { min-width: 200px; }
-    }
+    /* مؤشّر النقطة بجانب السهم عند الارتفاع/الهبوط */
+    .dot{font-weight:900;margin-inline:4px}
+    .dot.high{color:var(--high)}
+    .dot.low{color:var(--low)}
+    .note{color:var(--muted)}
+    .table{width:100%;border-collapse:separate;border-spacing:0}
+    .table thead th{background:#f8fafc;font-weight:800;text-align:right}
+    .table td,.table th{border:1px solid var(--line);padding:8px;vertical-align:top;text-align:right}
+    .table td.date{background:#fbfdff;white-space:nowrap;font-weight:800}
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>التقارير</h1>
 
-    <div class="filters">
-      <div class="field">
-        <label>من</label>
-        <input id="f_from" type="date">
-      </div>
-      <div class="field">
-        <label>إلى</label>
-        <input id="f_to" type="date">
-      </div>
-      <div class="field">
-        <label>الوحدة</label>
-        <div id="unitBadge" class="unit muted">—</div>
-      </div>
-      <div>
-        <button id="btnLoad" class="btn primary">عرض</button>
-      </div>
-    </div>
+  <!-- ✅ بنر الطفل -->
+  <div id="childBanner" style="text-align:center; padding:12px 8px; display:none">
+    <img id="bannerAvatar" class="avatar" style="width:84px;height:84px" src="images/avatar-default.png" alt="صورة الطفل">
+    <div style="margin-top:6px;font-weight:800" id="bannerName">—</div>
+    <div class="note" id="bannerMeta">—</div>
+  </div>
 
-    <div class="legend">
-      <span class="chip ok">طبيعي</span>
-      <span class="chip">هبوط</span>
-      <span class="chip warn">ارتفاع</span>
-      <span class="chip danger">شديد</span>
-    </div>
-
-    <div id="loader" class="loader">… جاري التحميل</div>
-
-    <div class="table-wrap">
-      <table id="repTable" aria-label="جدول التقرير">
-        <thead>
-          <tr id="repHead">
-            <!-- يُملأ برمجيًا -->
-          </tr>
-        </thead>
-        <tbody id="repBody">
-          <!-- يُملأ برمجيًا -->
-        </tbody>
-      </table>
-    </div>
-
-    <div class="footer">
-      <div>يتم اعتماد حدود اللون من إعدادات الطفل.</div>
-      <div id="rangeCaption" class="muted"></div>
+  <!-- ✅ Topbar (بدون تعديل) -->
+  <div class="topbar">
+    <div>📄 تقارير أسبوعية</div>
+    <div class="row">
+      <a id="lnkHome" class="btn gray">الرئيسية</a>
+      <button id="btnBlank" class="btn">ورقة فارغة (7 أيام)</button>
+      <button id="btnPrint" class="btn">طباعة PDF</button>
     </div>
   </div>
 
-  <script type="module" src="./js/reports.js"></script>
+  <main class="container">
+    <!-- ✅ Nav -->
+    <div class="card"><div class="row" id="childNav"></div></div>
+
+    <section class="card">
+      <!-- فلاتر الفترة مع قائمة منسدلة -->
+      <div class="grid g4 no-print">
+        <div><label>من</label><input id="from" type="date"></div>
+        <div><label>إلى</label><input id="to" type="date"></div>
+        <div>
+          <label>المدى السريع</label>
+          <select id="preset">
+            <option value="7">آخر 7 أيام</option>
+            <option value="30">آخر 30 يوم</option>
+            <option value="90">آخر 90 يوم</option>
+            <option value="custom">مخصّص</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:end"><button id="run" class="btn primary" style="width:100%">عرض</button></div>
+      </div>
+
+      <div id="meta" class="note" style="margin:6px 0">—</div>
+
+      <!-- الجدول بالهيئة المختصرة -->
+      <div class="card" style="margin-top:8px">
+        <table class="table" id="rep">
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>الاستيقاظ</th>
+              <th>ق. الفطار</th><th>ب. الفطار</th>
+              <th>ق. الغداء</th><th>ب. الغداء</th>
+              <th>ق. العشاء</th><th>ب. العشاء</th>
+              <th>قبل النوم</th><th>أثناء النوم</th>
+            </tr>
+          </thead>
+          <tbody id="rows"><tr><td colspan="10" class="center note">اختاري الفترة لعرض البيانات.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <div id="loader" class="loader"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+
+  <script type="module">
+    import { auth, db, ensureAuth, requireChildIdFromQuery, setChildAvatar, todayISO } from './firebase-init.js';
+    import { signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+    import { doc, getDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+    const toast=(m)=>{const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000)}
+    const showLoader=(on)=>{document.getElementById('loader').style.display=on?'flex':'none'}
+
+    /* عناوين الأعمدة المختصرة + الترتيب */
+    const labels={
+      uponWake:'الاستيقاظ',preBreakfast:'ق. الفطار',postBreakfast:'ب. الفطار',
+      preLunch:'ق. الغداء',postLunch:'ب. الغداء',
+      preDinner:'ق. العشاء',postDinner:'ب. العشاء',
+      beforeSleep:'قبل النوم',duringSleep:'أثناء النوم'
+    };
+    const order=['uponWake','preBreakfast','postBreakfast','preLunch','postLunch','preDinner','postDinner','beforeSleep','duringSleep'];
+
+    let uid=null, childId=null, child=null;
+
+    function buildNav(){
+      const row=document.getElementById('childNav'); row.innerHTML='';
+      [
+        ['child-dashboard.html','الرئيسية'],
+        ['measures.html','قياسات السكر'],
+        ['meals.html','الوجبات'],
+        ['reports.html','التقارير'],
+        ['analytics.html','الإحصاءات'],   // فتح صفحة الإحصاءات
+        ['visits.html','الزيارات الطبية']
+      ].forEach(([h,t])=>{
+        const a=document.createElement('a');
+        a.className='btn gray';
+        a.href=`${h}?child=${encodeURIComponent(childId)}`;
+        a.textContent=t;
+        row.appendChild(a);
+      });
+      document.getElementById('lnkHome').href=`child-dashboard.html?child=${encodeURIComponent(childId)}`;
+    }
+
+    async function loadChild(){
+      const s=await getDoc(doc(db,'users',uid,'children',childId));
+      child=s.data()||{};
+      setChildAvatar(document.getElementById('bannerAvatar'), child.name, child.photoURL);
+      bannerName.textContent=child.name||'—';
+      bannerMeta.textContent=`${child.gender||'—'} • ${child.weight||'—'} كجم • ${child.height||'—'} سم`;
+      childBanner.style.display='block';
+    }
+
+    const iso = (d)=> d.toISOString().slice(0,10);
+    const addDays = (date, n)=>{ const d=new Date(date); d.setDate(d.getDate()+n); return d; };
+    const rangeDays=(from,to)=>{ const out=[]; let d=new Date(from); const end=new Date(to); while(d<=end){ out.push(iso(d)); d.setDate(d.getDate()+1);} return out; };
+    const round1=(n)=>{ const v=Math.round(Number(n)*10)/10; return Number.isFinite(v)?v:null }
+    const stateIcon=(v,lo,hi)=>{ if(v==null) return ''; if(isFinite(lo)&&v<lo) return '⬇️'; if(isFinite(hi)&&v>hi) return '⬆️'; return '🟢'; }
+
+    async function buildReport(from, to){
+      showLoader(true);
+      const dates=rangeDays(from,to);
+      // ❗️قراءه بطريقة الملفات اليومية + كائن readings
+      const snaps=await Promise.all(dates.map(d=>getDoc(doc(db,'users',uid,'children',childId,'measurements',d)))); /* كما في الكود القديم */ 
+
+      const lo=Number(child?.lowThreshold), hi=Number(child?.highThreshold);
+
+      // فهرس الوجبات حسب اليوم (لإظهار 🍽️)
+      const mealsQ = await getDocs(query(collection(db,'users',uid,'children',childId,'meals'), where('time','>=', from), where('time','<=', addDays(to,1).toISOString())));
+      const mealMap = new Map();
+      mealsQ.forEach(s=>{
+        const m=s.data(); if(!m?.time) return;
+        const date=(new Date(m.time)).toISOString().slice(0,10);
+        mealMap.set(date, true);
+      });
+
+      const tbody=document.getElementById('rows'); let html='';
+      snaps.forEach((snap,i)=>{
+        const d=dates[i]; const data=snap.data()||{}; const r=data.readings||{};
+        let row=`<tr><td class="date">${d}</td>`;
+        order.forEach(slot=>{
+          const x=r[slot]; if(!x||x.valueMmol==null){ row+=`<td>—</td>`; return; }
+          const v=round1(x.valueMmol);
+          const arrow=stateIcon(v,lo,hi);
+          const dot = (v!=null && isFinite(hi) && v>hi) ? `<span class="dot high">•</span>` : (v!=null && isFinite(lo) && v<lo) ? `<span class="dot low">•</span>` : '';
+          const note=(x.note||x.raisedWith)? `<div class="note">${escapeHTML(x.note||x.raisedWith)}</div>`:'';
+          const mealMark = mealMap.has(d)? ' 🍽️' : '';
+          const doseTxt = [x.mealDose!=null?`جرعة: ${x.mealDose}U`: '', x.correctionGiven!=null?`تصحيح: ${x.correctionGiven}U`: ''].filter(Boolean).join(' • ');
+          row+=`<td><div><b>${v?.toFixed(1)||''} ${arrow}${dot}${mealMark}</b></div>${doseTxt?`<div class="note">${doseTxt}</div>`:''}${note}</td>`;
+        });
+        row+='</tr>';
+        html+=row;
+      });
+      tbody.innerHTML = html || `<tr><td colspan="10" class="center note">لا توجد بيانات.</td></tr>`;
+
+      meta.textContent = `الطفل: ${child?.name||'—'} • الفترة: ${from} → ${to} • حدود: منخفض < ${child?.lowThreshold??'—'} — مرتفع > ${child?.highThreshold??'—'}`;
+      showLoader(false);
+    }
+
+    function escapeHTML(s){return String(s||'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
+
+    // أحداث
+    btnPrint.addEventListener('click', ()=>window.print());
+    btnBlank.addEventListener('click', ()=>{
+      const today=new Date();
+      const dates=Array.from({length:7},(_,i)=>{const d=new Date(today); d.setDate(today.getDate()+i); return d.toISOString().slice(0,10);});
+      rows.innerHTML = dates.map(d=>`<tr><td class="date">${d}</td>${'<td>—</td>'.repeat(9)}</tr>`).join('');
+    });
+    preset.addEventListener('change', ()=>{
+      const val = preset.value;
+      if(val==='custom') return; // اتركي التاريخ يدوي
+      const days=Number(val)||7;
+      const t=new Date(); const f=new Date(); f.setDate(t.getDate()-days+1);
+      from.value = iso(f); to.value = iso(t);
+    });
+    run.addEventListener('click', ()=>{
+      if(!from.value||!to.value) return toast('اختاري الفترة');
+      buildReport(from.value, to.value);
+    });
+
+    // Boot
+    (async function(){
+      const {uid:U}=await ensureAuth(); uid=U; childId=requireChildIdFromQuery();
+      buildNav();
+      await loadChild();
+      // افتراضي: آخر 7 أيام (اليوم إلى اليوم)
+      from.value = todayISO(); to.value = todayISO();
+    })();
+  </script>
 </body>
 </html>
