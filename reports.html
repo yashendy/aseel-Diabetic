@@ -1,186 +1,117 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <!--
-    =========================  ملاحظات توثيقية مختصرة  =========================
-    هذه الصفحة تضيف:
-    - تسميات عربية مختصرة لوقت القياس (ق. الفطار / ب. الغداء / الاستيقاظ / ق. النوم…)
-    - عرض أول 10 صفوف + زر "عرض المزيد (10)"
-    - فلترة (الحالة/الوقت/وجود تصحيح/علاج هبوط/ملاحظات) + ترتيب (تاريخ/قراءة)
-    - ملخص ذكي أعلى الجدول (متوسط، وسيط، SD، TIR، عدد هبوط/ارتفاع، أنماط بارزة)
-    - Heatmap (أيام × فترات) + Histogram للتوزيع
-    - مساعد افتراضي (Chatbot) خفيف يعمل على البيانات المحلية (بدون إرسال خارجي)
-    ============================================================================
-  -->
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>التقارير</title>
+  <link rel="stylesheet" href="./css/reports.css" />
+  <style>
+    /* أساسيات وتنسيق سريع */
+    :root { --radius: 14px; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, "Segoe UI", Tahoma, Arial; background:#f7f9fc; color:#111; margin:0; }
+    .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 22px; margin: 0 0 14px; }
 
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/reports.css" />
+    .filters { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 12px; }
+    .filters .field { display:flex; flex-direction:column; gap:6px; }
+    .filters label { font-size: 12px; color:#555; }
+    .filters input[type="date"]{ padding:8px 10px; border:1px solid #d8e1ef; border-radius: 10px; background:#fff; }
+    .filters .unit { padding:8px 10px; border:1px dashed #d8e1ef; border-radius: 10px; background:#fff; color:#333; }
+    .btn { padding:10px 14px; border-radius: 12px; border:0; cursor:pointer; }
+    .btn.primary { background:#2563eb; color:#fff; }
+    .muted { color:#6b7280; }
+    .legend { display:flex; gap:8px; align-items:center; margin: 10px 0 14px; }
+    .chip { font-size:12px; padding:4px 8px; border-radius:999px; background:#eef2ff; color:#3730a3; }
+    .chip.ok { background:#e8fff1; color:#047857; }
+    .chip.warn { background:#fff7ed; color:#9a3412; }
+    .chip.danger { background:#ffe4e6; color:#9f1239; }
+
+    .table-wrap { overflow:auto; background:#fff; border:1px solid #e5e7eb; border-radius: var(--radius); }
+    table { border-collapse: separate; border-spacing:0; width:100%; min-width: 960px; }
+    thead th { position:sticky; top:0; background:#f3f4f6; color:#111827; font-weight:600; font-size:13px; text-align:center; padding:10px; border-bottom:1px solid #e5e7eb; }
+    tbody td, tbody th { padding:8px 10px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+    tbody th { background:#fafafa; white-space:nowrap; }
+
+    .cell { display:grid; grid-template-rows: repeat(4, auto); gap:4px; min-width:150px; }
+    .line { display:flex; align-items:center; gap:8px; font-size:12px; color:#111; }
+    .line .label { color:#6b7280; min-width:64px; white-space:nowrap; }
+    .value { font-weight:600; }
+    .notes-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px; }
+    [title].notes-text { cursor:help; }
+
+    .badge { font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid transparent; }
+    .b-normal { background:#e8fff1; color:#065f46; border-color:#b7f4cd; }
+    .b-low { background:#e0f2fe; color:#075985; border-color:#bae6fd; }
+    .b-high { background:#fff7ed; color:#9a3412; border-color:#fed7aa; }
+    .b-sevlow { background:#dbeafe; color:#1e3a8a; border-color:#bfdbfe; }
+    .b-sevhigh{ background:#ffe4e6; color:#9f1239; border-color:#fecdd3; }
+
+    .trend { display:inline-flex; align-items:center; gap:4px; }
+    .trend svg { width:14px; height:14px; }
+    .trend .dot { fill:#111827; opacity:.75; }
+    .trend .arrow { stroke:#111827; stroke-width:2; fill:none; }
+
+    .empty { color:#9ca3af; }
+    .loader { display:none; }
+    .loader.show { display:block; margin:6px 0; }
+    .footer { display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:12px; color:#6b7280; }
+    @media (max-width: 720px){
+      .filters { grid-template-columns: 1fr 1fr; }
+      .cell { min-width: 200px; }
+    }
+  </style>
 </head>
 <body>
   <div class="container">
-    <header class="card child-info">
-      <button class="btn back" onclick="history.back()">⬅ رجوع</button>
+    <h1>التقارير</h1>
 
-      <div class="head">
-        <h1>التقارير — <span id="childName">طفل</span> <span class="ic">🧾</span></h1>
-        <p class="muted" id="childMeta">—</p>
-        <div class="chips">
-          <span class="chip" id="chipRange">النطاق: —</span>
-          <span class="chip" id="chipCR">CR: —</span>
-          <span class="chip" id="chipCF">CF: —</span>
-        </div>
+    <div class="filters">
+      <div class="field">
+        <label>من</label>
+        <input id="f_from" type="date">
       </div>
-
-      <div class="controls">
-        <div class="range">
-          <label>من</label>
-          <input type="date" id="fromDate">
-          <label>إلى</label>
-          <input type="date" id="toDate">
-          <label>الوحدة</label>
-          <select id="outUnit">
-            <option value="mmol">mmol/L</option>
-            <option value="mgdl">mg/dL</option>
-          </select>
-        </div>
-
-        <div class="actions">
-          <button id="toggleNotes" class="btn">إخفاء الملاحظات</button>
-          <button id="csvBtn" class="btn">📥 تنزيل CSV</button>
-          <a id="openAnalytics" class="btn primary">تحليل القياسات</a>
-          <a id="openPrint" class="btn">مراجعة التقرير (مطبوع) 🖨️</a>
-          <a id="openBlank" class="btn">تفريغ ورق أسبوع 📄</a>
-        </div>
+      <div class="field">
+        <label>إلى</label>
+        <input id="f_to" type="date">
       </div>
-      <p id="densityHint" class="muted small">سيتم تفعيل عرض كثيف تلقائيًا عند تعدّي 150 صف.</p>
-    </header>
-
-    <!-- ملخص ذكي -->
-    <section class="card insights" id="insightsCard">
-      <h2>ملخص الفترة (AI)</h2>
-      <div id="insightsKPIs" class="kpis"></div>
-      <div id="insightsFindings" class="findings"></div>
-    </section>
-
-    <!-- شريط فلاتر وترتيب -->
-    <section class="card filters" id="filtersBar">
-      <div class="filters-row">
-        <div class="filter">
-          <label for="filterState">الحالة</label>
-          <select id="filterState">
-            <option value="all">الكل</option>
-            <option value="low">هبوط</option>
-            <option value="ok">طبيعي</option>
-            <option value="high">ارتفاع</option>
-          </select>
-        </div>
-        <div class="filter">
-          <label for="filterSlot">وقت القياس</label>
-          <select id="filterSlot">
-            <option value="all">الكل</option>
-            <!-- يُملأ تلقائيًا من JS لضمان نفس الترتيب -->
-          </select>
-        </div>
-        <div class="filter">
-          <label for="filterCorr">التصحيح</label>
-          <select id="filterCorr">
-            <option value="any">الكل</option>
-            <option value="with">بوجود تصحيح</option>
-            <option value="without">بدون تصحيح</option>
-          </select>
-        </div>
-        <div class="filter">
-          <label for="filterHypo">علاج الهبوط</label>
-          <select id="filterHypo">
-            <option value="any">الكل</option>
-            <option value="with">بوجود علاج</option>
-            <option value="without">بدون علاج</option>
-          </select>
-        </div>
-        <div class="filter">
-          <label for="filterNotes">ملاحظات</label>
-          <select id="filterNotes">
-            <option value="any">الكل</option>
-            <option value="with">بوجود ملاحظات</option>
-            <option value="without">بدون ملاحظات</option>
-          </select>
-        </div>
-        <div class="filter">
-          <label for="sortBy">ترتيب</label>
-          <select id="sortBy">
-            <option value="date_desc">الأحدث أولاً</option>
-            <option value="date_asc">الأقدم أولاً</option>
-            <option value="read_asc">القراءة تصاعدي</option>
-            <option value="read_desc">القراءة تنازلي</option>
-          </select>
-        </div>
+      <div class="field">
+        <label>الوحدة</label>
+        <div id="unitBadge" class="unit muted">—</div>
       </div>
-    </section>
-
-    <section class="card table" id="tableSection">
-      <h2>قياسات الفترة</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>التاريخ</th>
-              <th>الوقت</th>
-              <th>القراءة</th>
-              <th>الحالة</th>
-              <th>التصحيح</th>
-              <th>علاج الهبوط</th>
-              <th class="col-notes">ملاحظات</th>
-            </tr>
-          </thead>
-          <tbody id="tbody">
-            <tr><td colspan="7" class="muted center">—</td></tr>
-          </tbody>
-        </table>
+      <div>
+        <button id="btnLoad" class="btn primary">عرض</button>
       </div>
+    </div>
 
-      <!-- عرض المزيد -->
-      <div class="table-more">
-        <span id="visibleInfo" class="muted small">—</span>
-        <button id="showMore" class="btn">عرض المزيد (10)</button>
-      </div>
-    </section>
+    <div class="legend">
+      <span class="chip ok">طبيعي</span>
+      <span class="chip">هبوط</span>
+      <span class="chip warn">ارتفاع</span>
+      <span class="chip danger">شديد</span>
+    </div>
 
-    <!-- تحليلات مصغرة -->
-    <section class="card analytics" id="analyticsMini">
-      <h2>تحليلات مصغّرة</h2>
-      <div class="analytics-grid">
-        <div>
-          <h3 class="muted">Heatmap (أيام × فترات)</h3>
-          <div id="heatmap" class="heatmap"></div>
-          <p class="small muted">اللون الأزرق = هبوط غالب، الأخضر = طبيعي، الأحمر = ارتفاع.</p>
-        </div>
-        <div>
-          <h3 class="muted">Histogram (توزيع القراءات)</h3>
-          <div id="histogram" class="hist"></div>
-        </div>
-      </div>
-    </section>
+    <div id="loader" class="loader">… جاري التحميل</div>
+
+    <div class="table-wrap">
+      <table id="repTable" aria-label="جدول التقرير">
+        <thead>
+          <tr id="repHead">
+            <!-- يُملأ برمجيًا -->
+          </tr>
+        </thead>
+        <tbody id="repBody">
+          <!-- يُملأ برمجيًا -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      <div>يتم اعتماد حدود اللون من إعدادات الطفل.</div>
+      <div id="rangeCaption" class="muted"></div>
+    </div>
   </div>
 
-  <!-- زر المساعد ولوحته -->
-  <button id="chatToggle" class="fab" title="المساعد">💬</button>
-  <aside id="chatPanel" class="chat hidden" aria-hidden="true">
-    <header class="chat-head">
-      <strong>المساعد</strong>
-      <button id="chatClose" class="btn">✖</button>
-    </header>
-    <div id="chatBody" class="chat-body"></div>
-    <div class="chat-input">
-      <input id="chatQ" type="text" placeholder="اسألي: ماذا تعني 250؟ أو لخّص الأسبوع…">
-      <button id="chatSend" class="btn primary">إرسال</button>
-    </div>
-  </aside>
-
-  <div id="loader" class="loader hidden">جارِ التحميل…</div>
-
-  <script type="module" src="js/reports.js?v=3"></script>
+  <script type="module" src="./js/reports.js"></script>
 </body>
 </html>
