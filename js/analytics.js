@@ -1,4 +1,4 @@
-// js/analytics.js
+// js/analytics.js — KPIs على hypo/hyper، مع إبقاء عرض النطاق الطبيعي كما هو
 import { auth, db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy
@@ -92,245 +92,115 @@ rangeSel.addEventListener('change', ()=>{
 goBackBtn.addEventListener('click', ()=> history.back());
 printBtn.addEventListener('click', ()=> window.print());
 
+/* حساب فترة جاهزة */
+function computeRange(kind){
+  const today=new Date();
+  if(kind==='7d'){ const to=today; const from=addDays(to,-6); return {from, to}; }
+  if(kind==='14d'){ const to=today; const from=addDays(to,-13); return {from, to}; }
+  if(kind==='m'){ const from=startOfMonth(today), to=endOfMonth(today); return {from, to}; }
+  if(kind==='w'){ const from=startOfWeek(today), to=endOfWeek(today); return {from, to}; }
+  return {from: addDays(today,-13), to: today};
+}
+
 /* جلسة */
-onAuthStateChanged(auth, async user=>{
-  if(!user){ location.href='child.html'; return; }
-  if(!childId){ alert('لا يوجد معرف طفل في الرابط'); return; }
+onAuthStateChanged(auth, async (user)=>{
+  if(!user){ location.href='index.html'; return; }
+  if(!childId){ alert('لا يوجد معرف طفل'); history.back(); return; }
   currentUser = user;
 
-  await loadChild();
-  await reloadAll();
-});
-
-/* تحميل بيانات الطفل */
-async function loadChild(){
-  const ref = doc(db, `parents/${currentUser.uid}/children/${childId}`);
-  const snap= await getDoc(ref);
-  if(!snap.exists()){ alert('لم يتم العثور على الطفل'); return; }
+  // رأس الصفحة (اسم/عمر)
+  const snap = await getDoc(doc(db, `parents/${user.uid}/children/${childId}`));
+  if(!snap.exists()){ alert('الطفل غير موجود'); history.back(); return; }
   childData = snap.data();
 
   childNameEl.textContent = childData.name || 'طفل';
-  const min = childData?.normalRange?.min ?? 4.5;
-  const max = childData?.normalRange?.max ?? 11;
-  const cr  = childData?.carbRatio ?? '—';
-  const cf  = childData?.correctionFactor ?? '—';
-  childMetaEl.innerHTML = `النطاق: ${min}–${max} mmol/L • CR: ${cr} g/U • CF: ${cf} mmol/L/U`;
-}
+  const age = (()=>{ if(!childData.birthDate) return '—'; const b=new Date(childData.birthDate), t=new Date(); let a=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth(); if(m<0||(m===0&&t.getDate()<b.getDate())) a--; return `${a} سنة`})();
+  childMetaEl.textContent = `${childData.gender||'—'} • ${age}`;
 
-/* حساب المدى من الاختيار */
-function computeRange(key){
-  const now = new Date();
-  let from, to;
-  switch(key){
-    case '7d':   to=now; from=addDays(to,-6); break;
-    case '14d':  to=now; from=addDays(to,-13); break;
-    case '30d':  to=now; from=addDays(to,-29); break;
-    case '90d':  to=now; from=addDays(to,-89); break;
-    case '2w':   to=now; from=addDays(to,-13); break;
-    case '2m':   to=now; from=new Date(now.getFullYear(), now.getMonth()-1, 1); to=endOfMonth(now); break;
-    case 'this_w': from=startOfWeek(now); to=endOfWeek(now); break;
-    case 'prev_w': { const e=endOfWeek(addDays(now,-7)); to=e; from=addDays(e,-6); } break;
-    case 'this_m': from=startOfMonth(now); to=endOfMonth(now); break;
-    case 'prev_m': { const d=new Date(now.getFullYear(), now.getMonth()-1, 15); from=startOfMonth(d); to=endOfMonth(d); } break;
-    default:      to=now; from=addDays(to,-13);
-  }
-  from.setHours(0,0,0,0);
-  to.setHours(23,59,59,999);
-  return {from, to};
-}
+  await reloadAll();
+});
 
-/* تحميل القياسات لفترة معينة */
-async function fetchMeasurements(from, to){
-  const ref  = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
-  const qy   = query(ref, where('when','>=', from), where('when','<=', to), orderBy('when','asc'));
-  const snap = await getDocs(qy);
-  const rows = [];
-  snap.forEach(d=>{
-    const m = d.data();
-    const ts = m.when?.toDate ? m.when.toDate() : new Date(`${m.date}T00:00:00`);
-    const mmol = m.value_mmol ?? (m.value_mgdl ? (m.value_mgdl/18) : (m.value? m.value/18 : null));
-    if (mmol!=null) {
-      rows.push({
-        when: ts,
-        date: m.date || fmtDate(ts),
-        mmol: Number(mmol),
-        state: m.state || null,
-        slotKey: m.slotKey || null
-      });
-    }
-  });
-  return rows;
-}
-
-/* إعادة تحميل الفترة الحالية + السابقة لو مطلوبة */
+/* تحميل وتهيئة الرسوم/KPIs */
 async function reloadAll(){
-  let from = new Date(`${fromEl.value}T00:00:00`);
-  let to   = new Date(`${toEl.value}T23:59:59.999`);
-  allMeas  = await fetchMeasurements(from, to);
+  const from = new Date(fromEl.value), to=new Date(toEl.value);
+  const main = await fetchRange(from, to);
+  allMeas = main;
 
   if (compareChk.checked){
-    // فترة سابقة مساوية الطول
-    const days = Math.max(1, Math.ceil((to-from)/86400000)+1);
-    const prevTo   = addDays(from, -1);
-    const prevFrom = addDays(prevTo, -(days-1));
-    prevMeas = await fetchMeasurements(prevFrom, prevTo);
+    const prevFrom = addDays(from, -(to-from+1));
+    const prevTo   = addDays(to,   -(to-from+1));
+    prevMeas = await fetchRange(prevFrom, prevTo);
+    piePrevBox.classList.remove('hidden');
   } else {
     prevMeas = [];
+    piePrevBox.classList.add('hidden');
   }
 
   renderKPIsAndCharts();
 }
 
-/* KPIs لمصفوفة */
+/* قراءة القياسات للفترة */
+async function fetchRange(from, to){
+  const start = fmtDate(from), end = fmtDate(to);
+  const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
+  const qy  = query(ref, where('date','>=', start), where('date','<=', end), orderBy('date','asc'));
+  const snap= await getDocs(qy);
+  const arr=[];
+  snap.forEach(d=>{
+    const r=d.data();
+    let mmol=null;
+    if(typeof r.value_mmol === 'number') mmol = Number(r.value_mmol);
+    else if (typeof r.value_mgdl === 'number') mmol = Number(r.value_mgdl)/18;
+    else if (r.unit === 'mmol/L' && typeof r.value === 'number') mmol = Number(r.value);
+    else if (r.unit === 'mg/dL' && typeof r.value === 'number') mmol = Number(r.value)/18;
+    if(mmol==null || !isFinite(mmol)) return;
+    arr.push({date:r.date, mmol});
+  });
+  return arr;
+}
+
+/* KPIs على hypo/hyper */
 function computeKPIs(meas){
-  const min = childData?.normalRange?.min ?? 4.5;
-  const max = childData?.normalRange?.max ?? 11;
-  const vals = meas.map(m=> m.mmol);
+  const hypo  = Number(childData?.hypoLevel  ?? childData?.normalRange?.min ?? 4.5);
+  const hyper = Number(childData?.hyperLevel ?? childData?.normalRange?.max ?? 11);
+
+  const vals  = meas.map(m=> m.mmol);
   const count = vals.length;
   const mean  = count? (vals.reduce((a,b)=>a+b,0)/count) : 0;
   const sd    = count? Math.sqrt(vals.reduce((a,b)=>a+Math.pow(b-mean,2),0)/count) : 0;
-  const inRange = count? vals.filter(v=> v>=min && v<=max).length / count * 100 : 0;
-  const highs   = count? vals.filter(v=> v>max).length / count * 100 : 0;
-  const lows    = count? vals.filter(v=> v<min).length /  count * 100 : 0;
-  return {count, mean, sd, inRange, highs, lows, min, max};
+
+  const inRange = count? vals.filter(v=> v>=hypo && v<=hyper).length / count * 100 : 0;
+  const highs   = count? vals.filter(v=> v> hyper).length / count * 100 : 0;
+  const lows    = count? vals.filter(v=> v< hypo ).length /  count * 100 : 0;
+
+  return {count, mean, sd, inRange, highs, lows, min:hypo, max:hyper};
 }
 
-/* Legend مخصصة تعرض كل العناصر بالنِّسَب */
-function legendWithPercents(labels, colors, data){
-  return {
-    position: 'bottom',
-    labels: {
-      // لا تعتمد على المولّد الافتراضي
-      generateLabels(){
-        return labels.map((lab, i)=>({
-          text: `${lab} — ${Math.round(Number(data[i]||0))}%`,
-          fillStyle: colors[i],
-          strokeStyle: colors[i].replace('0.25','1').replace('0.18','1'), // تخشين الحد
-          lineWidth: 2,
-          hidden: false,
-          index: i
-        }));
-      }
-    }
-  };
-}
-
-/* رسم + ملخص */
+/* رسم/تحديث KPIs والرسوم */
 function renderKPIsAndCharts(){
-  const unit = unitSel.value;
-
-  // KPIs الحالية
+  const unit = unitSel.value; // mmol | mgdl
   const K = computeKPIs(allMeas);
-  // KPIs السابقة
-  const P = prevMeas.length ? computeKPIs(prevMeas) : null;
-
-  // تعبئة القيم
-  kpiCount.textContent = String(K.count);
+  kpiCount.textContent = K.count;
   kpiAvg.textContent   = unit==='mgdl' ? (K.mean*18).toFixed(1) : K.mean.toFixed(1);
-  kpiStd.textContent   = unit==='mgdl' ? (K.sd*18).toFixed(1) : K.sd.toFixed(1);
-  kpiTir.textContent   = `${Math.round(K.inRange)}%`;
-  kpiHigh.textContent  = `${Math.round(K.highs)}%`;
-  kpiLow.textContent   = `${Math.round(K.lows)}%`;
+  kpiStd.textContent   = unit==='mgdl' ? (K.sd*18).toFixed(1)  : K.sd.toFixed(1);
+  kpiTir.textContent   = Math.round(K.inRange) + '%';
+  kpiHigh.textContent  = Math.round(K.highs)   + '%';
+  kpiLow.textContent   = Math.round(K.lows)    + '%';
 
-  // دلتا مقارنة
-  setDelta(kpiCountDelta, P ? (K.count - P.count) : null, 'قراءة');
-  setDelta(kpiAvgDelta,   P ? ((unit==='mgdl'?K.mean*18:K.mean) - (unit==='mgdl'?P.mean*18:P.mean)) : null, unit==='mgdl'?'mg/dL':'mmol/L', true);
-  setDelta(kpiStdDelta,   P ? ((unit==='mgdl'?K.sd*18:K.sd) - (unit==='mgdl'?P.sd*18:P.sd)) : null, unit==='mgdl'?'mg/dL':'mmol/L', true);
-  setDelta(kpiTirDelta,   P ? (K.inRange - P.inRange) : null, '%', true);
-  setDelta(kpiHighDelta,  P ? (K.highs   - P.highs)   : null, '%', true, false);
-  setDelta(kpiLowDelta,   P ? (K.lows    - P.lows)    : null, '%', true, false);
-
-  // نقاط الرسم الخطي
-  const pointsNow = allMeas.map(m=> ({ x: m.when, y: toUnit(m.mmol, unit), slotKey: m.slotKey })).sort((a,b)=> a.x-b.x);
-  const pointsPrev= prevMeas.map(m=> ({ x: m.when, y: toUnit(m.mmol, unit), slotKey: m.slotKey })).sort((a,b)=> a.x-b.x);
-
-  emptyMsg.classList.toggle('hidden', pointsNow.length>0);
-
-  if (chart){ chart.destroy(); chart=null; }
-  if (pieNow){ pieNow.destroy(); pieNow=null; }
-  if (piePrev){ piePrev.destroy(); piePrev=null; }
-
-  // Line Chart
-  const ctx = document.getElementById('dayChart').getContext('2d');
-  const datasets = [{
-    label: unit==='mgdl' ? 'الجلوكوز (الحالي) mg/dL' : 'الجلوكوز (الحالي) mmol/L',
-    data: pointsNow,
-    borderColor: '#4F46E5',
-    backgroundColor: 'rgba(79,70,229,0.08)',
-    pointRadius: 2,
-    tension: .25,
-    fill: false,
-    spanGaps: true
-  }];
-  if (pointsPrev.length){
-    datasets.push({
-      label: unit==='mgdl' ? 'الفترة السابقة mg/dL' : 'الفترة السابقة mmol/L',
-      data: pointsPrev,
-      borderColor: '#0ea5e9',
-      borderDash: [6,4],
-      pointRadius: 0,
-      tension: .25,
-      fill: false,
-      spanGaps: true
-    });
-  }
-  chart = new Chart(ctx, {
-    type: 'line',
-    data: { datasets },
-    options: {
-      responsive: true,
-      interaction:{ mode:'nearest', intersect:false },
-      plugins:{
-        legend:{ position:'bottom' },
-        tooltip:{ callbacks:{
-          label:(c)=>{
-            const v = c.parsed.y;
-            const d = new Date(c.parsed.x);
-            const slotKey = c.raw?.slotKey;
-            const slotAr  = slotKey ? (SLOT_AR[slotKey] || slotKey) : '';
-            const timeStr = d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-            const dateStr = d.toLocaleDateString();
-            const value   = unit==='mgdl' ? `${Math.round(v)}` : `${Number(v).toFixed(1)}`;
-            return `${c.dataset.label}: ${value} @ ${dateStr} ${timeStr}${slotAr?` — ${slotAr}`:''}`;
-          }
-        }}
-      },
-      scales:{
-        x:{ type:'time', time:{ unit:'day', tooltipFormat:'yyyy-MM-dd HH:mm' }, title:{ display:true, text:'التاريخ' }},
-        y:{ title:{ display:true, text: unit==='mgdl' ? 'mg/dL' : 'mmol/L' }, suggestedMin: unit==='mgdl' ? 60 : 3, suggestedMax: unit==='mgdl' ? 250 : 15 }
-      }
-    }
-  });
-
-  // إعدادات بيانات الدوائر
-  const labels = ['داخل النطاق', 'ارتفاعات', 'هبوطات'];
-  const colorsNow = ['rgba(34,197,94,0.25)','rgba(239,68,68,0.25)','rgba(59,130,246,0.25)'];
-  const colorsPrev= ['rgba(34,197,94,0.18)','rgba(239,68,68,0.18)','rgba(59,130,246,0.18)'];
-  const dataNow  = [K.inRange.toFixed(1), K.highs.toFixed(1), K.lows.toFixed(1)];
-  const dataPrev = P ? [P.inRange.toFixed(1), P.highs.toFixed(1), P.lows.toFixed(1)] : [0,0,0];
-
-  // Doughnut الحالي
-  const pNow = document.getElementById('pieNow').getContext('2d');
-  pieNow = new Chart(pNow, {
-    type: 'doughnut',
-    data: { labels, datasets: [{ data: dataNow, backgroundColor: colorsNow, borderColor: ['#22c55e','#ef4444','#3b82f6'] }] },
-    options:{ plugins:{ legend: legendWithPercents(labels, colorsNow, dataNow) }, cutout: '65%' }
-  });
-
-  // Doughnut السابق
-  if (P){
-    piePrevBox.classList.remove('hidden');
-    const pPrev = document.getElementById('piePrev').getContext('2d');
-    piePrev = new Chart(pPrev, {
-      type: 'doughnut',
-      data: { labels, datasets: [{ data: dataPrev, backgroundColor: colorsPrev, borderColor: ['#16a34a','#dc2626','#2563eb'] }] },
-      options:{ plugins:{ legend: legendWithPercents(labels, colorsPrev, dataPrev) }, cutout: '65%' }
-    });
-  } else {
-    piePrevBox.classList.add('hidden');
+  // مقارنة (لو متاحة)
+  if (prevMeas.length){
+    const P = computeKPIs(prevMeas);
+    setDelta(kpiCountDelta, K.count - P.count);
+    setDelta(kpiAvgDelta,   K.mean  - P.mean,   unit==='mgdl'?'mg/dL':'mmol/L', true, false);
+    setDelta(kpiStdDelta,   K.sd    - P.sd,     unit==='mgdl'?'mg/dL':'mmol/L', true, false);
+    setDelta(kpiTirDelta,   K.inRange - P.inRange, '%', true, true);
+    setDelta(kpiHighDelta,  K.highs - P.highs, '%', true, false);
+    setDelta(kpiLowDelta,   K.lows  - P.lows,  '%', true, false);
+  }else{
+    [kpiCountDelta,kpiAvgDelta,kpiStdDelta,kpiTirDelta,kpiHighDelta,kpiLowDelta].forEach(el=> el.textContent='');
   }
 
-  renderAISummary({unit, K, pointsNow});
+  renderAISummary({unit, K, pointsNow: allMeas.map(m=> ({x:new Date(m.date), y:m.mmol}))});
 }
 
 /* إظهار الدلتا بشكل أنيق */
