@@ -91,7 +91,7 @@ function buildNav(){
     a.rel = (a.target==="_blank") ? "noopener" : "";
     navRow.appendChild(a);
   }
-  if(lnkHome) lnkHome.href=`child-dashboard.html?parent=${encodeURIComponent(parentId)}&child=${encodeURIComponent(childId)}`;
+  if(lnkHome) lnkHome.href=`child.html?&child=${encodeURIComponent(childId)}`;
   if(btnReportPrintPage){
     btnReportPrintPage.href=`reports-print.html?parent=${encodeURIComponent(parentId)}&child=${encodeURIComponent(childId)}`;
     btnReportPrintPage.target="_blank"; btnReportPrintPage.rel="noopener";
