@@ -14,7 +14,7 @@
       ⚠️ تنبيه شديد — رجاء التعامل فورًا حسب الخطة المتفق عليها
     </div>
 
-    <!-- الشيبس (تُملأ تلقائياً) -->
+    <!-- الشيبس -->
     <div id="chips" class="chips"></div>
 
     <!-- تاريخ القياس (بدون ساعة) -->
@@ -34,7 +34,7 @@
       <div id="convHint" class="muted">mg/dL ≈ 0</div>
     </div>
 
-    <!-- الوقت (Slot) -->
+    <!-- الوقت -->
     <div class="row">
       <label>الوقت</label>
       <select id="slotSelect" aria-label="وقت القياس">
@@ -54,7 +54,7 @@
       </select>
     </div>
 
-    <!-- رفعنا بإيه؟ (يظهر فقط عند Low) -->
+    <!-- رفعنا بإيه؟ (Low فقط) -->
     <div id="wrapTreatLow" class="row" hidden>
       <label>رفعنا بإيه؟</label>
       <input id="treatLowInput" type="text" placeholder="مثال: 10 جم جلوكوز/عصير" />
@@ -70,7 +70,7 @@
       </div>
     </div>
 
-    <!-- التصحيحي (يظهر فقط عند High) -->
+    <!-- التصحيحي (High فقط) -->
     <div id="wrapCorr" class="row" hidden>
       <div class="dose-group">
         <label>التصحيحي</label>
@@ -104,7 +104,7 @@
     </div>
   </section>
 
-  <!-- جدول قياسات نفس اليوم المُختار -->
+  <!-- جدول اليوم -->
   <section class="table-wrap">
     <table id="measTable" class="table" aria-label="جدول القياسات">
       <thead>
@@ -113,7 +113,7 @@
           <th>الوقت</th>
           <th>القيمة</th>
           <th>جرعة الوجبة</th>
-          <th>التصحيحي</th><!-- سيُخفى تلقائيًا لو كله فاضي -->
+          <th>التصحيحي</th> <!-- هيختفي تلقائيًا لو اليوم كله بدون تصحيح -->
           <th>ملاحظات</th>
           <th>إجراءات</th>
         </tr>
