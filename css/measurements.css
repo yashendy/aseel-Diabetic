@@ -41,7 +41,7 @@ body{
 .table th,.table td{border-bottom:1px solid var(--border);padding:10px;vertical-align:top}
 .table th{background:#f8fafc;font-weight:600}
 .row-actions button{border:none;background:transparent;cursor:pointer}
-.row-actions .edit{color:#0ea5e9}
+.row-actions .delete{color:#ef4444}
 
 /* تنبيه شديد */
 .severe-banner{
@@ -61,10 +61,9 @@ body{
   100%{transform:translateX(0)}
 }
 
-/* شريط وضع التعديل */
+/* شريط وضع التعديل (حُذف من الـHTML لكن نترك النمط إن احتاج لاحقًا) */
 .editbar{
-  display:flex;gap:10px;align-items:center;background:#f1f5f9;
-  border:1px dashed #cbd5e1;padding:6px 10px;border-radius:8px;margin:6px 0
+  display:none;
 }
 
 /* تلوين القيم */
