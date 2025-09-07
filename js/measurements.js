@@ -1,4 +1,5 @@
-// measurements.js — عرض/إخفاء حسب الحالة، تطبيع وتعريب الوقت، fallback عند تحميل الجدول، منع NaN، إخفاء عمود التصحيح تلقائيًا
+// js/measurements.js
+// عرض/إخفاء حسب الحالة، تطبيع وتعريب الوقت، fallback عند تحميل الجدول، منع NaN، إخفاء عمود التصحيح تلقائيًا
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -70,6 +71,14 @@ function normalizeSlot(k){ const up=(k||'').toUpperCase(); return SLOT_NORMALIZE
 function slotToAr(k){ return SLOT_AR[normalizeSlot(k)] || normalizeSlot(k); }
 
 /* ===== Helpers / Units ===== */
+function normUnit(u) {
+  const s = String(u || '').toLowerCase().replace(/\s/g,'');
+  if (s === 'mg/dl' || s === 'mgdl' || s === 'mg⁄dl') return 'mgdl';
+  if (s === 'mmol' || s === 'mmol/l') return 'mmol';
+  return s || 'mmol';
+}
+const toNum = (v)=>{ const n=Number(v); return Number.isFinite(n) ? n : null; };
+
 function toMmol(val, unit){
   if (val==null || val==='') return null;
   const n = Number(val);
@@ -86,6 +95,24 @@ function fmtVal(mmol, outUnit){
   return outUnit==='mgdl' ? Math.round(v).toString() : v.toFixed(1);
 }
 function roundDose(x){ return Math.round(Number(x)/ROUND_STEP)*ROUND_STEP; }
+
+/* استنتاج mmol من أي شكل مخزّن (قديم/جديد) */
+function deriveMmol(d) {
+  if (toNum(d?.mmol) != null) return toNum(d.mmol);
+  if (toNum(d?.value_mmol) != null) return toNum(d.value_mmol);
+
+  const unit = normUnit(d?.unit);
+  if (unit === 'mgdl') {
+    const mg = toNum(d?.value) ?? toNum(d?.value_mgdl) ?? toNum(d?.mgdl);
+    if (mg != null) return mg / 18;
+  } else {
+    const mm = toNum(d?.value) ?? toNum(d?.value_mmol);
+    if (mm != null) return mm;
+  }
+  return null;
+}
+function pickCorr(d){ return toNum(d?.correctionDose) ?? toNum(d?.correction_dose); }
+function pickTreatLow(d){ return (d?.treatLow ?? d?.hypoTreatment) || ''; }
 
 /* ===== Ranges ===== */
 function getRanges(){
@@ -179,13 +206,12 @@ function updatePreviewAndUI(){
     convHint.textContent = `${unit==='mgdl'?'mmol/L':'mg/dL'} ≈ 0`;
   }
 
-  // الحالة/التحذير
   const { severeLow, severeHigh, min, max } = getRanges();
   const c = classify(mmol);
   const severe = (mmol!=null) && (mmol<=severeLow || mmol>=severeHigh);
   setCardState(c, severe);
 
-  // إظهار/إخفاء الحقول حسب الحالة (بدون الاعتماد على CSS فقط)
+  // إظهار/إخفاء حسب الحالة
   const isHigh = mmol!=null && mmol > max;
   const isLow  = mmol!=null && mmol < min;
 
@@ -236,14 +262,15 @@ async function loadChild(){
   renderChips();
 }
 
-/* ===== Load table (date or when-range fallback) ===== */
+/* ===== Load table (date or when-range fallback + توافق الحقول القديمة) ===== */
 async function loadTableFor(dateKey){
   tbody.innerHTML = '';
   const col  = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
 
+  // 1) حسب date كسلسلة
   let snap = await getDocs(query(col, where('date','==', dateKey)));
 
-  // Fallback: مستندات قديمة بصيغة when فقط
+  // 2) لو مفيش نتائج: نطاق اليوم على when (Timestamp)
   if (snap.empty) {
     const start = new Date(`${dateKey}T00:00:00`);
     const end   = new Date(`${dateKey}T23:59:59.999`);
@@ -254,25 +281,21 @@ async function loadTableFor(dateKey){
     ));
   }
 
-  const toNum = (v)=>{ const n=Number(v); return Number.isFinite(n) ? n : null; };
-
   let rows = [];
   let anyCorr = false;
 
   snap.forEach(ds=>{
     const d = ds.data();
 
-    // قيمة آمنة: mmol أولاً، وإلا mgdl/18، وإلا null
-    let mmol = toNum(d.mmol);
-    if (mmol == null && toNum(d.mgdl) != null) mmol = toNum(d.mgdl) / 18;
-
-    const unit = (d.unit || (toNum(d.mgdl)!=null ? 'mgdl' : 'mmol')).toLowerCase();
+    const mmol = deriveMmol(d);
+    const unit = normUnit(d?.unit) || (toNum(d?.mgdl)!=null ? 'mgdl' : 'mmol');
     const valueOut = mmol == null ? '—' : (unit==='mgdl' ? Math.round(mmol*18) : mmol.toFixed(1));
 
-    const slotKey = normalizeSlot(d.slotKey || d.slot || 'RANDOM');
+    const rawSlot = d.slotKey || d.slot || 'RANDOM';
+    const slotKey = normalizeSlot(rawSlot);
     const slotAr  = slotToAr(slotKey);
 
-    const corr = toNum(d.correctionDose);
+    const corr = pickCorr(d);
     if (corr != null && corr !== 0) anyCorr = true;
 
     rows.push({
@@ -281,10 +304,10 @@ async function loadTableFor(dateKey){
       slotKey, slotAr,
       unit,
       mmol, valueOut,
-      bolusDose: toNum(d.bolusDose),
+      bolusDose: toNum(d.bolusDose) ?? toNum(d.bolus_dose),
       correctionDose: corr,
       notes: (d.notes || ''),
-      treatLow: (d.treatLow || ''),
+      treatLow: pickTreatLow(d),
       cls: mmol == null ? 'ok' : classify(mmol)
     });
   });
@@ -295,7 +318,7 @@ async function loadTableFor(dateKey){
   else if (sortBy === 'value-desc')rows.sort((a,b)=> (b.mmol??-Infinity) - (a.mmol??-Infinity));
   else                             rows.sort((a,b)=> (a.slotKey||'').localeCompare(b.slotKey||''));
 
-  // إخفاء عمود التصحيحي تلقائيًا
+  // إخفاء عمود التصحيحي تلقائيًا (العمود الخامس)
   if (anyCorr) table.classList.remove('hide-corr');
   else         table.classList.add('hide-corr');
 
@@ -318,7 +341,7 @@ async function loadTableFor(dateKey){
     const tdCorr  = document.createElement('td');  tdCorr.textContent  = d.correctionDose != null ? d.correctionDose : '—'; tr.appendChild(tdCorr);
 
     const tdNotes = document.createElement('td');
-    const extra   = d.treatLow ? ` • رفعنا بإيه: ${d.treatLow}` : '';
+    const extra = d.treatLow ? ` • رفعنا بإيه: ${d.treatLow}` : '';
     tdNotes.textContent = (d.notes || '—') + extra;
     tr.appendChild(tdNotes);
 
@@ -343,9 +366,9 @@ async function deleteMeasurement(id, dateKey){
   await loadTableFor(dateKey);
 }
 
-/* ===== Save new ===== */
+/* ===== Save new (يوحّد التخزين لتوافق كامل) ===== */
 async function saveNew(){
-  const unit = unitSel.value;
+  const unit = unitSel.value; // 'mmol' | 'mgdl'
   const mmol = toMmol(valueInput.value, unit);
   if (!Number.isFinite(mmol)) { alert('من فضلك أدخل قيمة صحيحة'); return; }
 
@@ -363,13 +386,20 @@ async function saveNew(){
   const isLow  = mmol < min;
 
   const payload = {
+    // وحدة موحّدة + نسخ متوافقة
     unit,
     mmol: Number(mmol),
     mgdl: Math.round(mmol*18),
+    value: unit==='mgdl' ? Math.round(mmol*18) : Number(mmol.toFixed(1)),
+    value_mgdl: Math.round(mmol*18),
+    value_mmol: Number(mmol.toFixed(2)),
+
     when, date: dateKey, slotKey,
+
     bolusDose:   bolusDose.value ? Number(bolusDose.value) : null,
     correctionDose: isHigh && corrDose.value ? Number(corrDose.value) : null,
     treatLow: isLow && treatLowInput.value ? treatLowInput.value.trim() : null,
+
     notes: (notesInput.value||'').trim(),
     createdAt: serverTimestamp()
   };
