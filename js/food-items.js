@@ -90,14 +90,14 @@ function initFoodItemsPage() {
       <fieldset class="nutr">
         <legend>القيم الغذائية لكل 100g (بدون تغيير أسماء المفاتيح)</legend>
         <div class="grid-4">
-          <div class="field small"><label>Calories (kcal)</label><input id="n_cal" type="number" step="any" /></div>
-          <div class="field small"><label>Carbs (g)</label><input id="n_carbs" type="number" step="any" /></div>
-          <div class="field small"><label>Fiber (g)</label><input id="n_fiber" type="number" step="any" /></div>
-          <div class="field small"><label>Protein (g)</label><input id="n_protein" type="number" step="any" /></div>
-          <div class="field small"><label>Fat (g)</label><input id="n_fat" type="number" step="any" /></div>
-          <div class="field small"><label>Sugars (g)</label><input id="n_sugar" type="number" step="any" /></div>
-          <div class="field small"><label>Saturated Fat (g)</label><input id="n_satFat" type="number" step="any" /></div>
-          <div class="field small"><label>Sodium (mg)</label><input id="n_sodium" type="number" step="any" /></div>
+          <div class="field small"><label>السعرات الحرارية (kcal)</label><input id="n_cal" type="number" step="any" /></div>
+          <div class="field small"><label>الكارب (g)</label><input id="n_carbs" type="number" step="any" /></div>
+          <div class="field small"><label>الألياف (g)</label><input id="n_fiber" type="number" step="any" /></div>
+          <div class="field small"><label>البروتين (g)</label><input id="n_protein" type="number" step="any" /></div>
+          <div class="field small"><label>الدهون (g)</label><input id="n_fat" type="number" step="any" /></div>
+          <div class="field small"><label>السكر (g)</label><input id="n_sugar" type="number" step="any" /></div>
+          <div class="field small"><label>الدهون المشبعة (g)</label><input id="n_satFat" type="number" step="any" /></div>
+          <div class="field small"><label>الصوديوم (mg)</label><input id="n_sodium" type="number" step="any" /></div>
         </div>
       </fieldset>
 
