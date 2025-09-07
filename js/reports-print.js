@@ -1,4 +1,4 @@
-// reports-print.js — تقرير الطباعة مع شريط/سطر البيانات الأساسية + تصنيف severe
+// reports-print.js — تقرير الطباعة (منع التكرار + وضع عرض القياس + تقرير فارغ أسبوعين)
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -6,7 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* ===================== Helpers ===================== */
+/* ============== Helpers ============== */
 const pick = (ids=[])=>{
   for (const id of ids){
     const el = document.getElementById(id);
@@ -26,20 +26,22 @@ const MS_DAY = 24*60*60*1000;
 const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0,0);
 const endOfDay   = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23,59,59,999);
 
-/* ===================== عناصر الصفحة ===================== */
+/* ============== عناصر الصفحة ============== */
 const params   = new URLSearchParams(location.search);
 const parentId = params.get('parent');
 const childId  = params.get('child');
 
-const unitSelect     = pick(['unitSelect','unitSel','unit']);
-const fromInput      = pick(['fromDate','from','dateFrom']);
-const toInput        = pick(['toDate','to','dateTo']);
-const colorizeChk    = pick(['colorizeChk','colorize','colorizePrint']);
-const hideNotesPrint = pick(['hideNotesPrint','hideNotes','hideNotesChk']);
-const applyBtn       = pick(['applyBtn','apply','run','filterApply']);
-const printBtn       = pick(['printBtn','print','btnPrint']);
-const childNameEl    = pick(['childName','name','titleChild']);
-const childMetaEl    = pick(['childMeta','metaChild','childAge']);
+const unitSelect      = pick(['unitSelect','unitSel','unit']);
+const fromInput       = pick(['fromDate','from','dateFrom']);
+const toInput         = pick(['toDate','to','dateTo']);
+const colorizeChk     = pick(['colorizeChk','colorize','colorizePrint']);
+const hideNotesPrint  = pick(['hideNotesPrint','hideNotes','hideNotesChk']);
+const applyBtn        = pick(['applyBtn','apply','run','filterApply']);
+const printBtn        = pick(['printBtn','print','btnPrint']);
+const childNameEl     = pick(['childName','name','titleChild']);
+const childMetaEl     = pick(['childMeta','metaChild','childAge']);
+const cellResolveSel  = pick(['cellResolveSel','cellMode','resolveMode']); // قائمة اختيار عرض الخلية
+const blankTemplateBtn= pick(['blankNowBtn','emptyTemplateBtn','blankTemplateBtn','makeBlank','emptyNowBtn']); // زر التقرير الفارغ
 
 // شريط وسطر وملاحظات أعلى التقرير
 const basicsHost    = pick(['basicsBar','childBasics','basics','chipsBar']);
@@ -53,7 +55,7 @@ if (!tableBody) {
 }
 const emptyMsg = pick(['emptyMsg','noData','msgEmpty']);
 
-/* ===================== نطاقات الطفل ===================== */
+/* ============== نطاقات الطفل ============== */
 let childData = null;
 function getRanges() {
   const r = childData?.normalRange || {};
@@ -66,23 +68,20 @@ function getRanges() {
   return { min: fallbackMin, max: fallbackMax, severeLow, severeHigh };
 }
 
-/* ===================== خانات الجدول ===================== */
+/* ============== خانات الجدول ============== */
 const SLOTS = [
   'FASTING','PRE_BREAKFAST','POST_BREAKFAST',
   'PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER',
   'BEDTIME','OVERNIGHT','RANDOM'
 ];
-// يرتّب الأعمدة من اليمين لليسار حسب رؤوسك
 const DISPLAY_ORDER = [
   'OVERNIGHT','FASTING','PRE_BREAKFAST','POST_BREAKFAST',
   'PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER',
   'BEDTIME','RANDOM'
 ];
-
 function mapSlotSafe(raw){
   const s = (raw||'').toString().trim().toUpperCase();
   if (SLOTS.includes(s)) return s;
-  // aliases مختصرة
   const aliases = {
     'FAST':'FASTING','AWAKE':'FASTING','استيقاظ':'FASTING',
     'PREBREAKFAST':'PRE_BREAKFAST','ق.الفطار':'PRE_BREAKFAST',
@@ -98,7 +97,7 @@ function mapSlotSafe(raw){
   return aliases[s] || 'RANDOM';
 }
 
-/* ===================== وحدات ===================== */
+/* ============== وحدات ============== */
 function toMmol(val, unit){
   if (val==null) return null;
   const n = Number(val); if (Number.isNaN(n)) return null;
@@ -111,18 +110,24 @@ function formatValue(mmol, outUnit){
   return (outUnit||'mmol').toLowerCase()==='mgdl' ? Math.round(v).toString() : v.toFixed(1);
 }
 
-/* ===================== Data Layer ===================== */
+/* ============== Data Layer ============== */
 function makeDayRow(dateKey){ const cols={}; SLOTS.forEach(s=>cols[s]=[]); return { dateKey, cols, notes:[] }; }
 
+// دمج النتائج بدون تكرار: مفتاح = doc.id
 async function loadSnapshot(uid, childId){
   const col = collection(db, `parents/${uid}/children/${childId}/measurements`);
   const qs = [ query(col, orderBy('when','asc')), query(col, orderBy('date','asc')) ];
   const results = await Promise.allSettled(qs.map(getDocs));
-  const docs = [];
+
+  const uniq = new Map();
   for (const r of results){
-    if (r.status==='fulfilled'){ r.value.forEach(d=> docs.push(d)); }
+    if (r.status==='fulfilled'){
+      r.value.forEach(docSnap=>{
+        if (!uniq.has(docSnap.id)) uniq.set(docSnap.id, docSnap);
+      });
+    }
   }
-  return docs;
+  return Array.from(uniq.values());
 }
 function normalizeDoc(dsnap){
   const m = dsnap.data?.() || dsnap.data || null;
@@ -155,7 +160,7 @@ function buildDaysMap(allDocs, fromD, toD){
   return Array.from(byDate.values()).sort((a,b)=> a.dateKey.localeCompare(b.dateKey));
 }
 
-/* ===================== التلوين/التصنيف ===================== */
+/* ============== التلوين/التصنيف ============== */
 function classify(mmol){
   const { severeLow, severeHigh } = getRanges();
   if (mmol < severeLow)  return 'low';   // هبوط
@@ -165,11 +170,37 @@ function classify(mmol){
 function spanValue(mmol, outUnit, colorize){
   const v = formatValue(mmol, outUnit);
   if (!colorize) return `<span>${v}</span>`;
-  const cls = classify(mmol); // low | in | high
+  const cls = classify(mmol);
   return `<span class="v-${cls}">${v}</span>`;
 }
 
-/* ===================== العرض في الجدول ===================== */
+/* ============== عرض الخلية (أول/أخر/متوسط/أدنى/أعلى/الكل) ============== */
+function summarizeCellValues(arr, mode){
+  if (!arr?.length) return [];
+  const sorted = [...arr].sort((a,b)=> a.t - b.t);
+  const mmols = sorted.map(x=> x.mmol);
+  const first = ()=> [sorted[0]];
+  const last  = ()=> [sorted[sorted.length-1]];
+  const avg   = ()=> [{ t: sorted[sorted.length-1].t, mmol: mmols.reduce((s,v)=>s+v,0)/mmols.length }];
+  const min   = ()=> [{ t: sorted[0].t, mmol: Math.min(...mmols) }];
+  const max   = ()=> [{ t: sorted[sorted.length-1].t, mmol: Math.max(...mmols) }];
+  switch ((mode||'last')) {
+    case 'first': return first();
+    case 'last':  return last();
+    case 'avg':   return avg();
+    case 'min':   return min();
+    case 'max':   return max();
+    case 'all':
+    default:      return sorted;
+  }
+}
+function renderCellHTML(arr, outUnit, colorize, mode){
+  const picked = summarizeCellValues(arr, mode);
+  if (!picked.length) return '<span class="muted">—</span>';
+  return picked.map(x => spanValue(x.mmol, outUnit, colorize)).join(' ');
+}
+
+/* ============== الجدول ============== */
 function ensureTableBody(){
   if (tableBody) return true;
   const host = pickQS(['#tableHost','.table-host','main','.container','.content']) || document.body;
@@ -195,24 +226,26 @@ function renderTable(days, outUnit){
   }
   emptyMsg && emptyMsg.classList.add('hidden');
 
+  const mode = (cellResolveSel?.value || 'last'); // الافتراضي: الأخير
+  const colorize = !!(colorizeChk && colorizeChk.checked);
+
   days.forEach(day=>{
     const tr = document.createElement('tr');
 
+    // عمود التاريخ (قد يكون فارغًا في نموذج فارغ)
     const tdDate = document.createElement('td');
-    tdDate.textContent = day.dateKey;
+    tdDate.textContent = day.dateKey || '';
     tr.appendChild(tdDate);
 
-    const colorize = !!(colorizeChk && colorizeChk.checked);
-
+    // أعمدة الخانات
     DISPLAY_ORDER.forEach(slot=>{
       const td = document.createElement('td');
       const arr = Array.isArray(day.cols?.[slot]) ? day.cols[slot] : [];
-      td.innerHTML = arr.length
-        ? arr.sort((a,b)=>a.t-b.t).map(x=> spanValue(x.mmol, (unitSelect?.value||'mmol').toLowerCase(), colorize)).join(' ')
-        : '<span class="muted">—</span>';
+      td.innerHTML = renderCellHTML(arr, (unitSelect?.value||'mmol').toLowerCase(), colorize, mode);
       tr.appendChild(td);
     });
 
+    // ملاحظات اليوم
     const tdNotes = document.createElement('td');
     const hideNotes = !!(hideNotesPrint && hideNotesPrint.checked);
     tdNotes.innerHTML = hideNotes ? '<span class="muted">—</span>'
@@ -223,13 +256,13 @@ function renderTable(days, outUnit){
   });
 }
 
-/* ===================== شريط/سطر البيانات الأساسية ===================== */
+/* ============== شريط/سطر البيانات الأساسية ============== */
 function renderBasicsChips() {
   if (!basicsHost) return;
   const unitOut = (unitSelect?.value || 'mmol').toLowerCase() === 'mgdl' ? 'mg/dL' : 'mmol/L';
   const { min, max, severeLow, severeHigh } = getRanges();
 
-  // العمر التقريبي
+  // العمر
   let ageTxt = '';
   const b = childData?.birthDate ? new Date(childData.birthDate) : null;
   if (b && !isNaN(b.getTime())) {
@@ -237,20 +270,18 @@ function renderBasicsChips() {
     ageTxt = `العمر: ${yrs} سنة`;
   }
 
-  // CF/CR (محاولة أكثر من اسم حقل)
-  const cf = childData?.cf ?? childData?.correctionFactor ?? null; // mmol/L لكل وحدة
-  const cr = childData?.cr ?? childData?.carbRatio ?? null;        // g لكل وحدة
+  const cf = childData?.cf ?? childData?.correctionFactor ?? null;
+  const cr = childData?.cr ?? childData?.carbRatio ?? null;
 
   basicsHost.innerHTML = [
     ageTxt && `<span class="chip"> ${ageTxt} </span>`,
     `<span class="chip">الوحدة: ${unitOut}</span>`,
-    `<span class="chip">طبيعي (تعريف التقرير): ${severeLow}–${severeHigh} mmol/L</span>`,
+    `<span class="chip">طبيعي (التقرير): ${severeLow}–${severeHigh} mmol/L</span>`,
     `<span class="chip muted">النطاق القياسي: ${min}–${max} mmol/L</span>`,
     (cf!=null) && `<span class="chip">CF: ${cf} mmol/L/U</span>`,
     (cr!=null) && `<span class="chip">CR: ${cr} g/U</span>`
   ].filter(Boolean).join('');
 
-  // ستايل للشيبس لو مش موجود
   if (!document.getElementById('chips-style')){
     const s = document.createElement('style');
     s.id = 'chips-style';
@@ -266,12 +297,9 @@ function renderBasicsChips() {
     document.head.appendChild(s);
   }
 }
-
-// يضيف سطر البيانات الأساسية أول الجدول (يطبع دائمًا)
 function injectBasicsRow() {
   if (!tableBody) return;
 
-  // تقدير عدد الأعمدة
   let cols = 1 + DISPLAY_ORDER.length + 1;
   const thead = tableBody.closest('table')?.querySelector('thead tr');
   if (thead) cols = thead.querySelectorAll('th').length || cols;
@@ -300,19 +328,14 @@ function injectBasicsRow() {
   td.innerHTML = parts.map(p=>`<span style="margin-inline-end:14px">${p}</span>`).join('');
   tr.appendChild(td);
 
-  // أضِف كسطر أول
   tableBody.prepend(tr);
 }
-
-// ملاحظات أعلى التقرير (تُعرض قبل الجدول)
 function renderTopNotes() {
   const txt = (topNotesInput && topNotesInput.value || '').trim();
   const host = topNotesOut || topNotesInput?.parentElement;
   if (!host) return;
-
   const old = host.querySelector('.top-notes-render');
   if (old) old.remove();
-
   if (txt) {
     const box = document.createElement('div');
     box.className = 'top-notes-render';
@@ -326,7 +349,26 @@ function renderTopNotes() {
   }
 }
 
-/* ===================== دورة الحياة ===================== */
+/* ============== نموذج فارغ أسبوعين (بدون تواريخ) ============== */
+// يبني 14 صفًا خالية تمامًا (التاريخ فارغ، كل الخانات فارغة) للطباعة
+function renderBlankTemplate(daysCount=14){
+  if (!ensureTableBody()) return;
+  clearTable();
+  emptyMsg && emptyMsg.classList.add('hidden');
+
+  const days = [];
+  for (let i=0;i<daysCount;i++){
+    const row = makeDayRow(''); // تاريخ فارغ
+    days.push(row);
+  }
+
+  // نُعرض الجدول كما لو أنه بيانات فعلية (خانات فارغة)
+  renderTable(days, (unitSelect?.value || 'mmol').toLowerCase());
+  // نضيف سطر البيانات الأساسية أعلى الجدول علشان يظهر في الطباعة
+  injectBasicsRow();
+}
+
+/* ============== دورة الحياة ============== */
 let currentUser = null;
 let __cache_days = [];
 
@@ -352,7 +394,6 @@ onAuthStateChanged(auth, async (user)=>{
   if (fromInput && !fromInput.value) fromInput.value = fmtDate(from);
   if (toInput && !toInput.value)     toInput.value   = fmtDate(today);
 
-  // عرض الشريط والملاحظات ثم تحميل البيانات
   renderBasicsChips();
   renderTopNotes();
   await refresh();
@@ -382,23 +423,26 @@ async function refresh(){
     }
   }
 }
-
 function renderCurrentCache(){
   const outUnit = (unitSelect?.value || 'mmol').toLowerCase();
   renderTable(__cache_days || [], outUnit);
   injectBasicsRow();
 }
 
-/* ===================== Events ===================== */
-applyBtn       && applyBtn.addEventListener('click', refresh);
-printBtn       && printBtn.addEventListener('click', ()=> window.print());
-unitSelect     && unitSelect.addEventListener('change', ()=>{ renderBasicsChips(); refresh(); });
-colorizeChk    && colorizeChk.addEventListener('change', renderCurrentCache);
-hideNotesPrint && hideNotesPrint.addEventListener('change', renderCurrentCache);
-topNotesInput  && topNotesInput.addEventListener('input',  renderTopNotes);
-topNotesInput  && topNotesInput.addEventListener('change', renderTopNotes);
+/* ============== Events ============== */
+applyBtn        && applyBtn.addEventListener('click', refresh);
+printBtn        && printBtn.addEventListener('click', ()=> window.print());
+unitSelect      && unitSelect.addEventListener('change', ()=>{ renderBasicsChips(); refresh(); });
+colorizeChk     && colorizeChk.addEventListener('change', renderCurrentCache);
+hideNotesPrint  && hideNotesPrint.addEventListener('change', renderCurrentCache);
+cellResolveSel  && cellResolveSel.addEventListener('change', renderCurrentCache);
+topNotesInput   && topNotesInput.addEventListener('input',  renderTopNotes);
+topNotesInput   && topNotesInput.addEventListener('change', renderTopNotes);
 
-/* ===================== ملاحظات CSS (إن لم تكن موجودة) ===================== */
+// زر “تقرير فارغ لأسبوعين” — بدون تواريخ
+blankTemplateBtn && blankTemplateBtn.addEventListener('click', ()=> renderBlankTemplate(14));
+
+/* ============== CSS مساعد إن لزم ============== */
 /*
 .muted{opacity:.5}
 .v-low{padding:2px 6px;border-radius:6px;background:#fee2e2}
