@@ -34,35 +34,35 @@
       <div id="convHint" class="muted">mg/dL ≈ 0</div>
     </div>
 
-    <!-- وقت القياس (Slot) -->
+    <!-- الوقت (Slot) -->
     <div class="row">
-      <label>وقت القياس</label>
+      <label>الوقت</label>
       <select id="slotSelect" aria-label="وقت القياس">
         <option value="FASTING">الاستيقاظ</option>
-        <option value="PRE_BREAKFAST">ق.الفطار</option>
-        <option value="POST_BREAKFAST">ب.الفطار</option>
-        <option value="PRE_LUNCH">ق.الغدا</option>
-        <option value="POST_LUNCH">ب.الغدا</option>
-        <option value="PRE_SPORT">ق.الرياضة</option>
-        <option value="POST_SPORT">ب.الرياضة</option>
+        <option value="PRE_BREAKFAST">قبل الفطار</option>
+        <option value="POST_BREAKFAST">بعد الفطار</option>
+        <option value="PRE_LUNCH">قبل الغداء</option>
+        <option value="POST_LUNCH">بعد الغداء</option>
+        <option value="PRE_SPORT">قبل الرياضة</option>
+        <option value="POST_SPORT">بعد الرياضة</option>
         <option value="SNACK">سناك</option>
-        <option value="PRE_DINNER">ق.العشا</option>
-        <option value="POST_DINNER">ب.العشا</option>
-        <option value="BEDTIME">ق.النوم</option>
+        <option value="PRE_DINNER">قبل العشاء</option>
+        <option value="POST_DINNER">بعد العشاء</option>
+        <option value="BEDTIME">قبل النوم</option>
         <option value="OVERNIGHT">أثناء النوم</option>
         <option value="RANDOM">عشوائي</option>
       </select>
     </div>
 
-    <!-- علاج هبوط (يظهر فقط عند Low) -->
+    <!-- رفعنا بإيه؟ (يظهر فقط عند Low) -->
     <div id="wrapTreatLow" class="row" hidden>
-      <label>صححنا بإيه؟</label>
+      <label>رفعنا بإيه؟</label>
       <input id="treatLowInput" type="text" placeholder="مثال: 10 جم جلوكوز/عصير" />
     </div>
 
-    <!-- حسابات الكارب/الوجبة (تظل كما هي للوجبات والسناك) -->
+    <!-- كارب/جرعة الوجبة (يظهر للوجبات والسناك) -->
     <div id="wrapBolus" class="row">
-      <label>رفعنا بإيه؟</label>
+      <label>كارب الوجبة</label>
       <input id="carbsInput" type="number" step="1" inputmode="numeric" placeholder="جرام الكارب (اختياري)" />
       <div class="dose-group">
         <label>جرعة الوجبة</label>
@@ -85,22 +85,35 @@
       <input id="notesInput" type="text" placeholder="اختياري…" />
     </div>
 
-    <!-- زر الحفظ فقط -->
+    <!-- أزرار -->
     <div class="actions">
+      <button id="printBtn" class="btn" type="button">طباعة / PDF</button>
       <button id="saveBtn" class="btn primary" type="button">حفظ</button>
+    </div>
+  </section>
+
+  <!-- أدوات الجدول -->
+  <section class="table-tools">
+    <div class="row">
+      <label>ترتيب الجدول</label>
+      <select id="sortSelect">
+        <option value="slot">حسب الوقت (افتراضي)</option>
+        <option value="value-asc">بالقيمة (تصاعدي)</option>
+        <option value="value-desc">بالقيمة (تنازلي)</option>
+      </select>
     </div>
   </section>
 
   <!-- جدول قياسات نفس اليوم المُختار -->
   <section class="table-wrap">
-    <table class="table" aria-label="جدول القياسات">
+    <table id="measTable" class="table" aria-label="جدول القياسات">
       <thead>
         <tr>
           <th>التاريخ</th>
           <th>الوقت</th>
           <th>القيمة</th>
           <th>جرعة الوجبة</th>
-          <th>التصحيحي</th>
+          <th>التصحيحي</th><!-- سيُخفى تلقائيًا لو كله فاضي -->
           <th>ملاحظات</th>
           <th>إجراءات</th>
         </tr>
