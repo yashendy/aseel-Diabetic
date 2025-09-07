@@ -143,8 +143,7 @@ function classify(value){
   if (L.hypo!=null      && v <  L.hypo)        return {cls:"b-low",     label:"هبوط"};
   if (L.severeHigh!=null && v >= L.severeHigh) return {cls:"b-sevhigh", label:"ارتفاع شديد"};
   if (L.hyper!=null      && v >  L.hyper)      return {cls:"b-high",    label:"ارتفاع"};
-  if (L.norm_min!=null && L.norm_max!=null && (v < L.norm_min || v > L.norm_max))
-                                                 return {cls:"b-high",    label:"خارج الطبيعي"};
+
   return {cls:"b-ok", label:"طبيعي"};
 }
 
