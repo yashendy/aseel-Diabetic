@@ -1,5 +1,6 @@
 // js/measurements.js
 // عرض/إخفاء حسب الحالة، تطبيع وتعريب الوقت، fallback عند تحميل الجدول، منع NaN، إخفاء عمود التصحيح تلقائيًا
+// + عرض الجدول حسب الوحدة المختارة (mmol/L أو mg/dL)
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -34,6 +35,7 @@ const saveBtn        = document.getElementById('saveBtn');
 const printBtn       = document.getElementById('printBtn');
 
 const sortSelect     = document.getElementById('sortSelect');
+const filterSelect   = document.getElementById('filterSelect');
 const table          = document.getElementById('measTable');
 const tbody          = document.getElementById('measTableBody');
 
@@ -41,6 +43,10 @@ const tbody          = document.getElementById('measTableBody');
 let currentUser = null;
 let childId     = null;
 let childData   = null;
+
+let currentSort   = 'value-desc'; // ترتيب افتراضي بالقيمة تنازلي
+let currentFilter = 'all';        // الكل
+let displayUnit   = 'mmol';       // 'mmol' | 'mgdl' — لعرض الجدول بنفس اختيار المستخدم
 
 /* ===== Consts ===== */
 const ALLOW_DUP_KEYS = new Set(['SNACK','PRE_SPORT','POST_SPORT']);
@@ -226,7 +232,7 @@ function updatePreviewAndUI(){
   wrapTreatLow.style.display = isLow ? '' : 'none';
   if (!isLow) { treatLowInput.value = ''; }
 
-  // كارب/جرعة الوجبة لخانات الوجبات والسناك
+  // كارب/جرعة الوجبة
   const showMeal = MEAL_SLOTS.has(normalizeSlot(slotSel.value));
   document.getElementById('wrapBolus').style.display = showMeal ? '' : 'none';
   const carbs = Number(carbsInput.value || 0);
@@ -262,7 +268,7 @@ async function loadChild(){
   renderChips();
 }
 
-/* ===== Load table (date or when-range fallback + توافق الحقول القديمة) ===== */
+/* ===== Load table (بدون عمود التاريخ) ===== */
 async function loadTableFor(dateKey){
   tbody.innerHTML = '';
   const col  = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
@@ -288,8 +294,9 @@ async function loadTableFor(dateKey){
     const d = ds.data();
 
     const mmol = deriveMmol(d);
-    const unit = normUnit(d?.unit) || (toNum(d?.mgdl)!=null ? 'mgdl' : 'mmol');
-    const valueOut = mmol == null ? '—' : (unit==='mgdl' ? Math.round(mmol*18) : mmol.toFixed(1));
+    const valueOut = mmol == null
+      ? '—'
+      : (displayUnit === 'mgdl' ? Math.round(mmol*18) : mmol.toFixed(1));
 
     const rawSlot = d.slotKey || d.slot || 'RANDOM';
     const slotKey = normalizeSlot(rawSlot);
@@ -300,9 +307,7 @@ async function loadTableFor(dateKey){
 
     rows.push({
       id: ds.id,
-      date: d.date || dateKey,
       slotKey, slotAr,
-      unit,
       mmol, valueOut,
       bolusDose: toNum(d.bolusDose) ?? toNum(d.bolus_dose),
       correctionDose: corr,
@@ -312,21 +317,25 @@ async function loadTableFor(dateKey){
     });
   });
 
-  // ترتيب حسب اختيار المستخدم
-  const sortBy = (sortSelect?.value || 'slot');
+  // فلترة حسب الحالة
+  if (currentFilter !== 'all') {
+    rows = rows.filter(r => r.cls === currentFilter);
+  }
+
+  // ترتيب
+  const sortBy = currentSort || 'value-desc';
   if (sortBy === 'value-asc')      rows.sort((a,b)=> (a.mmol??Infinity) - (b.mmol??Infinity));
   else if (sortBy === 'value-desc')rows.sort((a,b)=> (b.mmol??-Infinity) - (a.mmol??-Infinity));
   else                             rows.sort((a,b)=> (a.slotKey||'').localeCompare(b.slotKey||''));
 
-  // إخفاء عمود التصحيحي تلقائيًا (العمود الخامس)
+  // إخفاء عمود التصحيحي تلقائيًا (العمود الرابع الآن)
   if (anyCorr) table.classList.remove('hide-corr');
   else         table.classList.add('hide-corr');
 
-  // رسم الصفوف
+  // رسم الصفوف (بدون خلية التاريخ)
   rows.forEach(d=>{
     const tr = document.createElement('tr');
 
-    const tdDate = document.createElement('td'); tdDate.textContent = d.date; tr.appendChild(tdDate);
     const tdSlot = document.createElement('td'); tdSlot.textContent = d.slotAr; tr.appendChild(tdSlot);
 
     const tdVal = document.createElement('td');
@@ -334,7 +343,9 @@ async function loadTableFor(dateKey){
     span.className = `v-${d.cls==='low'?'low':d.cls==='high'?'high':'in'}`;
     span.textContent = d.valueOut;
     tdVal.appendChild(span);
-    tdVal.appendChild(document.createTextNode(d.valueOut==='—' ? '' : ` ${d.unit==='mgdl'?'mg/dL':'mmol/L'}`));
+    tdVal.appendChild(document.createTextNode(
+      d.valueOut==='—' ? '' : ` ${displayUnit==='mgdl'?'mg/dL':'mmol/L'}`
+    ));
     tr.appendChild(tdVal);
 
     const tdBolus = document.createElement('td'); tdBolus.textContent = d.bolusDose != null ? d.bolusDose : '—'; tr.appendChild(tdBolus);
@@ -386,7 +397,6 @@ async function saveNew(){
   const isLow  = mmol < min;
 
   const payload = {
-    // وحدة موحّدة + نسخ متوافقة
     unit,
     mmol: Number(mmol),
     mgdl: Math.round(mmol*18),
@@ -410,7 +420,12 @@ async function saveNew(){
 }
 
 /* ===== Events ===== */
-unitSel.addEventListener('change', ()=>{ renderChips(); updatePreviewAndUI(); });
+unitSel.addEventListener('change', async ()=>{
+  displayUnit = (unitSel.value === 'mgdl') ? 'mgdl' : 'mmol';
+  renderChips();
+  updatePreviewAndUI();
+  await loadTableFor(selectedDateKey()); // إعادة رسم الجدول بالوحدة المختارة
+});
 valueInput.addEventListener('input', updatePreviewAndUI);
 slotSel.addEventListener('change', updatePreviewAndUI);
 carbsInput.addEventListener('input', updatePreviewAndUI);
@@ -419,9 +434,27 @@ dateInput.addEventListener('change', async ()=>{
   renderChips();
   await loadTableFor(selectedDateKey());
 });
+
+// ترتيب واختصاراته
+sortSelect.value = currentSort;
+sortSelect.addEventListener('change', ()=>{
+  currentSort = sortSelect.value;
+  loadTableFor(selectedDateKey());
+});
+document.getElementById('thValue')?.addEventListener('click', ()=>{
+  currentSort = (currentSort === 'value-desc' ? 'value-asc' : 'value-desc');
+  const th = document.getElementById('thValue');
+  if (th) th.textContent = `القيمة ${currentSort==='value-desc'?'⬇':'⬆'}`;
+  sortSelect.value = currentSort;
+  loadTableFor(selectedDateKey());
+});
+filterSelect?.addEventListener('change', ()=>{
+  currentFilter = filterSelect.value; // all | low | ok | high
+  loadTableFor(selectedDateKey());
+});
+
 saveBtn.addEventListener('click', saveNew);
 printBtn.addEventListener('click', ()=> window.print());
-sortSelect.addEventListener('change', ()=> loadTableFor(selectedDateKey()));
 
 /* ===== Boot ===== */
 onAuthStateChanged(auth, async (user)=>{
@@ -429,9 +462,18 @@ onAuthStateChanged(auth, async (user)=>{
   currentUser = user;
   try{
     initDateDefault();
+    // اجعل عرض الجدول يطابق اختيار الوحدة الحالي
+    displayUnit = (unitSel.value === 'mgdl') ? 'mgdl' : 'mmol';
+
     const qs = new URLSearchParams(location.search);
     childId = qs.get('child');
     await loadChild();
+
+    // تجهيز عنوان عمود القيمة
+    const th = document.getElementById('thValue');
+    if (th) th.textContent = 'القيمة ⬇';
+    sortSelect.value = currentSort;
+
     updatePreviewAndUI();
     await loadTableFor(selectedDateKey());
   }catch(e){
