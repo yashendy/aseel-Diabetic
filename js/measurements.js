@@ -1,8 +1,8 @@
-// measurements.js — بدون ساعة، إظهار التصحيحي/علاج الهبوط حسب الحالة، وحذف من الجدول فقط
+// measurements.js — إخفاء عمود التصحيحي تلقائيًا، ترتيب، تنبيه صوتي، طباعة PDF
 
 import { auth, db } from './firebase-config.js';
 import {
-  collection, addDoc, updateDoc, deleteDoc, doc, getDoc, getDocs, query, where, serverTimestamp
+  collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
@@ -30,18 +30,40 @@ const treatLowInput  = document.getElementById('treatLowInput');
 const notesInput     = document.getElementById('notesInput');
 
 const saveBtn        = document.getElementById('saveBtn');
+const printBtn       = document.getElementById('printBtn');
 
+const sortSelect     = document.getElementById('sortSelect');
+const table          = document.getElementById('measTable');
 const tbody          = document.getElementById('measTableBody');
 
 /* ===== State ===== */
 let currentUser = null;
 let childId     = null;
 let childData   = null;
+let lastState   = 'ok'; // لتفادي تكرار الصوت كل حرف
 
 /* ===== Consts ===== */
 const ALLOW_DUP_KEYS = new Set(['SNACK','PRE_SPORT','POST_SPORT']);
 const MEAL_SLOTS = new Set(['PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK']);
 const ROUND_STEP = 0.5;
+
+/* ===== Slot names AR ===== */
+const SLOT_AR = {
+  FASTING: 'الاستيقاظ',
+  PRE_BREAKFAST: 'قبل الفطار',
+  POST_BREAKFAST: 'بعد الفطار',
+  PRE_LUNCH: 'قبل الغداء',
+  POST_LUNCH: 'بعد الغداء',
+  PRE_SPORT: 'قبل الرياضة',
+  POST_SPORT: 'بعد الرياضة',
+  SNACK: 'سناك',
+  PRE_DINNER: 'قبل العشاء',
+  POST_DINNER: 'بعد العشاء',
+  BEDTIME: 'قبل النوم',
+  OVERNIGHT: 'أثناء النوم',
+  RANDOM: 'عشوائي'
+};
+function slotToAr(k){ return SLOT_AR[k?.toUpperCase?.()] || k || '—'; }
 
 /* ===== Units ===== */
 function toMmol(val, unit){
@@ -82,7 +104,6 @@ function selectedDateKey(){
   return (dateInput?.value || new Date().toISOString().slice(0,10));
 }
 function selectedWhen(){
-  // نخزن when كـ تاريخ فقط (منتصف الليل) للسجل
   const dk = selectedDateKey();
   const dt = new Date(`${dk}T00:00:00`);
   return isNaN(dt.getTime()) ? new Date() : dt;
@@ -100,7 +121,7 @@ function renderChips(){
   ].join('');
 }
 
-/* ===== Card state / severe ===== */
+/* ===== Card state / severe + صوت ===== */
 function setCardState(state, severe=false){
   card.classList.remove('state-low','state-ok','state-high','severe');
   if (state==='low')  card.classList.add('state-low');
@@ -108,6 +129,14 @@ function setCardState(state, severe=false){
   if (state==='ok')   card.classList.add('state-ok');
   if (severe) card.classList.add('severe');
   severeBanner.hidden = !severe;
+
+  // تنبيه صوتي مرة واحدة عند تغيير الحالة
+  if (state!==lastState || severe){
+    if (severe) playBeep(3);           // شديد: 3 نغمات سريعة
+    else if (state==='low') playBeep(2);   // هبوط: نغمتان
+    else if (state==='high') playBeep(1);  // ارتفاع: نغمة واحدة
+    lastState = state;
+  }
 }
 function classify(mmol){
   const { hypoLevel, hyperLevel } = getRanges();
@@ -162,22 +191,25 @@ function updatePreviewAndUI(){
   const severe = (mmol!=null) && (mmol<=severeLow || mmol>=severeHigh);
   setCardState(c, severe);
 
-  // show/hide correction & treat-low (مخفية افتراضيًا)
+  // إظهار/إخفاء الحقول حسب الحالة
   const isHigh = mmol!=null && mmol > max;
   const isLow  = mmol!=null && mmol < min;
 
   wrapCorr.hidden      = !isHigh;
   wrapTreatLow.hidden  = !isLow;
 
-  // fill/clear controlled fields
   if (isHigh)  { corrDose.value = computeCorrection(mmol) || ''; }
   else         { corrDose.value = ''; }
 
   if (!isLow)  { treatLowInput.value = ''; }
 
-  // meal section visibility
+  // كارب/جرعة الوجبة تظهر فقط في خانات الوجبات والسناك
   const showMeal = MEAL_SLOTS.has((slotSel.value||'').toUpperCase());
   document.getElementById('wrapBolus').style.display = showMeal ? '' : 'none';
+
+  const carbs = Number(carbsInput.value || 0);
+  if (showMeal && carbs>0) bolusDose.value = computeMealBolus(carbs) || '';
+  else if (!showMeal){ bolusDose.value=''; carbsInput.value=''; }
 
   // chips
   renderChips();
@@ -215,50 +247,66 @@ async function loadTableFor(dateKey){
   const qy   = query(col, where('date','==', dateKey));
   const snap = await getDocs(qy);
 
-  const rows = [];
+  let rows = [];
+  let anyCorr = false;
+
   snap.forEach(ds=>{
     const d = ds.data();
-    const when = d.when?.toDate?.() || new Date(`${d.date}T00:00:00`);
-    rows.push({ id: ds.id, ...d, when });
+    const mmol = d.mmol!=null ? d.mmol : (d.mgdl/18);
+    const unit = (d.unit || (d.mgdl!=null?'mgdl':'mmol')).toLowerCase();
+    const cls  = classify(mmol);
+    const slot = (d.slotKey || d.slot || 'RANDOM').toUpperCase();
+    if (d.correctionDose!=null && d.correctionDose!==0) anyCorr = true;
+    rows.push({
+      id: ds.id,
+      date: d.date || dateKey,
+      slotKey: slot,
+      slotAr: slotToAr(slot),
+      unit,
+      mmol,
+      valueOut: unit==='mgdl' ? Math.round(fromMmol(mmol,'mgdl')) : mmol.toFixed(1),
+      bolusDose: d.bolusDose ?? null,
+      correctionDose: d.correctionDose ?? null,
+      notes: d.notes || '',
+      treatLow: d.treatLow || '',
+      cls
+    });
   });
 
-  // ترتيب بسيط
-  rows.sort((a,b)=> (a.slotKey||'').localeCompare(b.slotKey||''));
+  // ترتيب حسب الاختيار
+  const sortBy = (sortSelect?.value || 'slot');
+  if (sortBy === 'value-asc') {
+    rows.sort((a,b)=> Number(a.mmol) - Number(b.mmol));
+  } else if (sortBy === 'value-desc') {
+    rows.sort((a,b)=> Number(b.mmol) - Number(a.mmol));
+  } else {
+    rows.sort((a,b)=> (a.slotKey||'').localeCompare(b.slotKey||''));
+  }
 
+  // إخفاء عمود التصحيحي تلقائيًا إن كان كله فاضي
+  if (anyCorr) table.classList.remove('hide-corr');
+  else table.classList.add('hide-corr');
+
+  // رسم الصفوف
   rows.forEach(d=>{
-    const unit = (d.unit || (d.mgdl!=null?'mgdl':'mmol')).toLowerCase();
-    const mmol = d.mmol!=null ? d.mmol : (d.mgdl/18);
-    const cls  = classify(mmol);
-    const dateKeyOut = d.date || dateKey;
-
     const tr = document.createElement('tr');
 
-    const tdDate = document.createElement('td');
-    tdDate.textContent = dateKeyOut;
-    tr.appendChild(tdDate);
-
-    const tdSlot = document.createElement('td');
-    tdSlot.textContent = d.slotKey || d.slot || '—';
-    tr.appendChild(tdSlot);
+    const tdDate = document.createElement('td'); tdDate.textContent = d.date; tr.appendChild(tdDate);
+    const tdSlot = document.createElement('td'); tdSlot.textContent = d.slotAr; tr.appendChild(tdSlot);
 
     const tdVal = document.createElement('td');
     const span = document.createElement('span');
-    span.className = `v-${cls==='low'?'low':cls==='high'?'high':'in'}`;
-    span.textContent = unit==='mgdl' ? Math.round(fromMmol(mmol,'mgdl')) : mmol.toFixed(1);
+    span.className = `v-${d.cls==='low'?'low':d.cls==='high'?'high':'in'}`;
+    span.textContent = d.valueOut;
     tdVal.appendChild(span);
-    tdVal.appendChild(document.createTextNode(` ${unit==='mgdl'?'mg/dL':'mmol/L'}`));
+    tdVal.appendChild(document.createTextNode(` ${d.unit==='mgdl'?'mg/dL':'mmol/L'}`));
     tr.appendChild(tdVal);
 
-    const tdBolus = document.createElement('td');
-    tdBolus.textContent = d.bolusDose ?? '—';
-    tr.appendChild(tdBolus);
-
-    const tdCorr = document.createElement('td');
-    tdCorr.textContent = d.correctionDose ?? '—';
-    tr.appendChild(tdCorr);
+    const tdBolus = document.createElement('td'); tdBolus.textContent = d.bolusDose ?? '—'; tr.appendChild(tdBolus);
+    const tdCorr  = document.createElement('td'); tdCorr.textContent  = d.correctionDose ?? '—'; tr.appendChild(tdCorr);
 
     const tdNotes = document.createElement('td');
-    const extra = d.treatLow ? ` • صححنا بإيه: ${d.treatLow}` : '';
+    const extra = d.treatLow ? ` • رفعنا بإيه: ${d.treatLow}` : '';
     tdNotes.textContent = (d.notes || '—') + extra;
     tr.appendChild(tdNotes);
 
@@ -317,6 +365,26 @@ async function saveNew(){
   await loadTableFor(dateKey);
 }
 
+/* ===== تنبيه صوتي (Web Audio) ===== */
+function playBeep(times=1){
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    let t = ctx.currentTime;
+    for(let i=0;i<times;i++){
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = (times>=3? 1200 : times===2? 700 : 500);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.2, t+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+0.22);
+      o.connect(g).connect(ctx.destination);
+      o.start(t); o.stop(t+0.25);
+      t += 0.15;
+    }
+  }catch(e){ /* تجاهل أي أخطاء صوتية */ }
+}
+
 /* ===== Events ===== */
 unitSel.addEventListener('change', ()=>{ renderChips(); updatePreviewAndUI(); });
 valueInput.addEventListener('input', updatePreviewAndUI);
@@ -328,6 +396,8 @@ dateInput.addEventListener('change', async ()=>{
   await loadTableFor(selectedDateKey());
 });
 saveBtn.addEventListener('click', saveNew);
+printBtn.addEventListener('click', ()=> window.print());
+sortSelect.addEventListener('change', ()=> loadTableFor(selectedDateKey()));
 
 /* ===== Boot ===== */
 onAuthStateChanged(auth, async (user)=>{
@@ -339,7 +409,7 @@ onAuthStateChanged(auth, async (user)=>{
     childId = qs.get('child');
     await loadChild();
     updatePreviewAndUI();
-    await loadTableFor(selectedDateKey()); // يعرض قياسات نفس التاريخ المختار
+    await loadTableFor(selectedDateKey()); // قياسات اليوم المختار
   }catch(e){
     console.error(e);
     alert(e.message || 'خطأ أثناء التحميل');
