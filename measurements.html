@@ -17,7 +17,7 @@
     <!-- الشيبس -->
     <div id="chips" class="chips"></div>
 
-    <!-- تاريخ القياس (بدون ساعة) -->
+    <!-- تاريخ القياس (من فوق فقط) -->
     <div class="row">
       <label>تاريخ القياس</label>
       <input type="date" id="dateInput" />
@@ -60,7 +60,7 @@
       <input id="treatLowInput" type="text" placeholder="مثال: 10 جم جلوكوز/عصير" />
     </div>
 
-    <!-- كارب/جرعة الوجبة (لخانات الوجبات والسناك) -->
+    <!-- كارب/جرعة الوجبة (للوجبات والسناك) -->
     <div id="wrapBolus" class="row">
       <label>كارب الوجبة</label>
       <input id="carbsInput" type="number" step="1" inputmode="numeric" placeholder="جرام الكارب (اختياري)" />
@@ -97,23 +97,30 @@
     <div class="row">
       <label>ترتيب الجدول</label>
       <select id="sortSelect">
-        <option value="slot">حسب الوقت (افتراضي)</option>
+        <option value="value-desc" selected>بالقيمة (تنازلي)</option>
         <option value="value-asc">بالقيمة (تصاعدي)</option>
-        <option value="value-desc">بالقيمة (تنازلي)</option>
+        <option value="slot">حسب الوقت</option>
+      </select>
+
+      <label style="margin-inline-start:16px">فلترة</label>
+      <select id="filterSelect">
+        <option value="all" selected>الكل</option>
+        <option value="low">هبوط</option>
+        <option value="ok">طبيعي</option>
+        <option value="high">ارتفاع</option>
       </select>
     </div>
   </section>
 
-  <!-- جدول اليوم -->
+  <!-- جدول اليوم (بدون عمود التاريخ) -->
   <section class="table-wrap">
     <table id="measTable" class="table" aria-label="جدول القياسات">
       <thead>
         <tr>
-          <th>التاريخ</th>
           <th>الوقت</th>
-          <th>القيمة</th>
+          <th id="thValue" data-sort="value" style="cursor:pointer">القيمة ⬇</th>
           <th>جرعة الوجبة</th>
-          <th>التصحيحي</th> <!-- يختفي تلقائياً لو ما فيش تصحيحات -->
+          <th>التصحيحي</th> <!-- يختفي تلقائياً لو اليوم بلا تصحيحات -->
           <th>ملاحظات</th>
           <th>إجراءات</th>
         </tr>
