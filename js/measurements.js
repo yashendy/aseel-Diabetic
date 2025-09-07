@@ -1,4 +1,4 @@
-// measurements.js — إخفاء/إظهار الحقول حسب الحالة، تطبيع وتعريب الوقت، منع NaN، إخفاء عمود التصحيحي تلقائيًا
+// measurements.js — عرض/إخفاء حسب الحالة، تطبيع وتعريب الوقت، fallback عند تحميل الجدول، منع NaN، إخفاء عمود التصحيح تلقائيًا
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -46,7 +46,7 @@ const ALLOW_DUP_KEYS = new Set(['SNACK','PRE_SPORT','POST_SPORT']);
 const MEAL_SLOTS = new Set(['PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK']);
 const ROUND_STEP = 0.5;
 
-/* ===== Slot names: تطبيع + تعريب ===== */
+/* ===== Slot التطبيع + التعريب ===== */
 const SLOT_NORMALIZE = {
   DURING_SLEEP: 'OVERNIGHT',
   PRE_BED: 'BEDTIME',
@@ -66,13 +66,10 @@ const SLOT_AR = {
   BEDTIME:'قبل النوم', OVERNIGHT:'أثناء النوم',
   RANDOM:'عشوائي'
 };
-function normalizeSlot(k){
-  const up = (k||'').toUpperCase();
-  return SLOT_NORMALIZE[up] || up || 'RANDOM';
-}
+function normalizeSlot(k){ const up=(k||'').toUpperCase(); return SLOT_NORMALIZE[up] || up || 'RANDOM'; }
 function slotToAr(k){ return SLOT_AR[normalizeSlot(k)] || normalizeSlot(k); }
 
-/* ===== Units / helpers ===== */
+/* ===== Helpers / Units ===== */
 function toMmol(val, unit){
   if (val==null || val==='') return null;
   const n = Number(val);
@@ -107,9 +104,7 @@ function initDateDefault(){
   const now = new Date();
   dateInput.value = now.toISOString().slice(0,10);
 }
-function selectedDateKey(){
-  return (dateInput?.value || new Date().toISOString().slice(0,10));
-}
+function selectedDateKey(){ return (dateInput?.value || new Date().toISOString().slice(0,10)); }
 function selectedWhen(){
   const dk = selectedDateKey();
   const dt = new Date(`${dk}T00:00:00`);
@@ -175,7 +170,7 @@ function updatePreviewAndUI(){
   const unit = unitSel.value;
   const mmol = toMmol(valueInput.value, unit);
 
-  // التحويل الظاهر للمستخدم
+  // تحويل عرضي
   if (mmol!=null) {
     const other = unit==='mgdl' ? 'mmol/L' : 'mg/dL';
     const otherVal = fmtVal(mmol, unit==='mgdl'?'mmol':'mgdl');
@@ -184,30 +179,30 @@ function updatePreviewAndUI(){
     convHint.textContent = `${unit==='mgdl'?'mmol/L':'mg/dL'} ≈ 0`;
   }
 
-  // الحالة والتنبيه
+  // الحالة/التحذير
   const { severeLow, severeHigh, min, max } = getRanges();
   const c = classify(mmol);
   const severe = (mmol!=null) && (mmol<=severeLow || mmol>=severeHigh);
   setCardState(c, severe);
 
-  // إظهار/إخفاء حسب الحالة (بدون الاعتماد على CSS hidden فقط)
+  // إظهار/إخفاء الحقول حسب الحالة (بدون الاعتماد على CSS فقط)
   const isHigh = mmol!=null && mmol > max;
   const isLow  = mmol!=null && mmol < min;
 
+  // التصحيحي High فقط
   wrapCorr.hidden = !isHigh;
   wrapCorr.style.display = isHigh ? '' : 'none';
+  if (isHigh) { corrDose.value = computeCorrection(mmol) || ''; }
+  else { corrDose.value = ''; }
+
+  // رفعنا بإيه Low فقط
   wrapTreatLow.hidden = !isLow;
   wrapTreatLow.style.display = isLow ? '' : 'none';
+  if (!isLow) { treatLowInput.value = ''; }
 
-  if (isHigh)  { corrDose.value = computeCorrection(mmol) || ''; }
-  else         { corrDose.value = ''; }
-
-  if (!isLow)  { treatLowInput.value = ''; }
-
-  // كارب/جرعة الوجبة يظهر فقط لخانات الوجبات والسناك
+  // كارب/جرعة الوجبة لخانات الوجبات والسناك
   const showMeal = MEAL_SLOTS.has(normalizeSlot(slotSel.value));
   document.getElementById('wrapBolus').style.display = showMeal ? '' : 'none';
-
   const carbs = Number(carbsInput.value || 0);
   if (showMeal && carbs>0) bolusDose.value = computeMealBolus(carbs) || '';
   else if (!showMeal){ bolusDose.value=''; carbsInput.value=''; }
@@ -215,7 +210,7 @@ function updatePreviewAndUI(){
   renderChips();
 }
 
-/* ===== Form helpers ===== */
+/* ===== Form ===== */
 function clearForm(keepDate=true){
   const dk = selectedDateKey();
   valueInput.value = '';
@@ -229,7 +224,7 @@ function clearForm(keepDate=true){
   updatePreviewAndUI();
 }
 
-/* ===== Child + table ===== */
+/* ===== Load child ===== */
 async function loadChild(){
   const qs = new URLSearchParams(location.search);
   childId = qs.get('child');
@@ -241,11 +236,25 @@ async function loadChild(){
   renderChips();
 }
 
+/* ===== Load table (date or when-range fallback) ===== */
 async function loadTableFor(dateKey){
   tbody.innerHTML = '';
   const col  = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
-  const qy   = query(col, where('date','==', dateKey));
-  const snap = await getDocs(qy);
+
+  let snap = await getDocs(query(col, where('date','==', dateKey)));
+
+  // Fallback: مستندات قديمة بصيغة when فقط
+  if (snap.empty) {
+    const start = new Date(`${dateKey}T00:00:00`);
+    const end   = new Date(`${dateKey}T23:59:59.999`);
+    snap = await getDocs(query(
+      col,
+      where('when', '>=', start),
+      where('when', '<=', end)
+    ));
+  }
+
+  const toNum = (v)=>{ const n=Number(v); return Number.isFinite(n) ? n : null; };
 
   let rows = [];
   let anyCorr = false;
@@ -253,36 +262,37 @@ async function loadTableFor(dateKey){
   snap.forEach(ds=>{
     const d = ds.data();
 
-    // امنع NaN — استنتج mmol بغض النظر عن المخزن
-    let mmol = Number.isFinite(d?.mmol) ? Number(d.mmol)
-             : (Number.isFinite(d?.mgdl) ? Number(d.mgdl)/18 : NaN);
-    if (!Number.isFinite(mmol)) return; // تجاهل القياس الفاسد
+    // قيمة آمنة: mmol أولاً، وإلا mgdl/18، وإلا null
+    let mmol = toNum(d.mmol);
+    if (mmol == null && toNum(d.mgdl) != null) mmol = toNum(d.mgdl) / 18;
 
-    const unit = (d.unit || (d.mgdl!=null ? 'mgdl' : 'mmol')).toLowerCase();
+    const unit = (d.unit || (toNum(d.mgdl)!=null ? 'mgdl' : 'mmol')).toLowerCase();
+    const valueOut = mmol == null ? '—' : (unit==='mgdl' ? Math.round(mmol*18) : mmol.toFixed(1));
+
     const slotKey = normalizeSlot(d.slotKey || d.slot || 'RANDOM');
     const slotAr  = slotToAr(slotKey);
 
-    if (d.correctionDose!=null && d.correctionDose!==0) anyCorr = true;
+    const corr = toNum(d.correctionDose);
+    if (corr != null && corr !== 0) anyCorr = true;
 
     rows.push({
       id: ds.id,
       date: d.date || dateKey,
       slotKey, slotAr,
       unit,
-      mmol,
-      valueOut: unit==='mgdl' ? Math.round(fromMmol(mmol,'mgdl')) : mmol.toFixed(1),
-      bolusDose: d.bolusDose ?? null,
-      correctionDose: d.correctionDose ?? null,
-      notes: d.notes || '',
-      treatLow: d.treatLow || '',
-      cls: classify(mmol)
+      mmol, valueOut,
+      bolusDose: toNum(d.bolusDose),
+      correctionDose: corr,
+      notes: (d.notes || ''),
+      treatLow: (d.treatLow || ''),
+      cls: mmol == null ? 'ok' : classify(mmol)
     });
   });
 
   // ترتيب حسب اختيار المستخدم
   const sortBy = (sortSelect?.value || 'slot');
-  if (sortBy === 'value-asc')      rows.sort((a,b)=> a.mmol - b.mmol);
-  else if (sortBy === 'value-desc')rows.sort((a,b)=> b.mmol - a.mmol);
+  if (sortBy === 'value-asc')      rows.sort((a,b)=> (a.mmol??Infinity) - (b.mmol??Infinity));
+  else if (sortBy === 'value-desc')rows.sort((a,b)=> (b.mmol??-Infinity) - (a.mmol??-Infinity));
   else                             rows.sort((a,b)=> (a.slotKey||'').localeCompare(b.slotKey||''));
 
   // إخفاء عمود التصحيحي تلقائيًا
@@ -301,14 +311,14 @@ async function loadTableFor(dateKey){
     span.className = `v-${d.cls==='low'?'low':d.cls==='high'?'high':'in'}`;
     span.textContent = d.valueOut;
     tdVal.appendChild(span);
-    tdVal.appendChild(document.createTextNode(` ${d.unit==='mgdl'?'mg/dL':'mmol/L'}`));
+    tdVal.appendChild(document.createTextNode(d.valueOut==='—' ? '' : ` ${d.unit==='mgdl'?'mg/dL':'mmol/L'}`));
     tr.appendChild(tdVal);
 
-    const tdBolus = document.createElement('td'); tdBolus.textContent = d.bolusDose ?? '—'; tr.appendChild(tdBolus);
-    const tdCorr  = document.createElement('td');  tdCorr.textContent = d.correctionDose ?? '—'; tr.appendChild(tdCorr);
+    const tdBolus = document.createElement('td'); tdBolus.textContent = d.bolusDose != null ? d.bolusDose : '—'; tr.appendChild(tdBolus);
+    const tdCorr  = document.createElement('td');  tdCorr.textContent  = d.correctionDose != null ? d.correctionDose : '—'; tr.appendChild(tdCorr);
 
     const tdNotes = document.createElement('td');
-    const extra = d.treatLow ? ` • رفعنا بإيه: ${d.treatLow}` : '';
+    const extra   = d.treatLow ? ` • رفعنا بإيه: ${d.treatLow}` : '';
     tdNotes.textContent = (d.notes || '—') + extra;
     tr.appendChild(tdNotes);
 
@@ -357,7 +367,7 @@ async function saveNew(){
     mmol: Number(mmol),
     mgdl: Math.round(mmol*18),
     when, date: dateKey, slotKey,
-    bolusDose:   bolusDose.value? Number(bolusDose.value): null,
+    bolusDose:   bolusDose.value ? Number(bolusDose.value) : null,
     correctionDose: isHigh && corrDose.value ? Number(corrDose.value) : null,
     treatLow: isLow && treatLowInput.value ? treatLowInput.value.trim() : null,
     notes: (notesInput.value||'').trim(),
