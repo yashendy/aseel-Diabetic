@@ -1,15 +1,18 @@
-// measurements.js — إدخال/تعديل القياسات: بطاقة لطيفة + منع التكرار + تنبيه Severe + جرعات + تعديل
+// measurements.js — تاريخ/وقت القياس + جدول اليوم فقط + تعديل يملأ كل الحقول
 
 import { auth, db } from './firebase-config.js';
 import {
-  collection, addDoc, updateDoc, doc, getDoc, getDocs, query, where, orderBy, serverTimestamp
+  collection, addDoc, updateDoc, doc, getDoc, getDocs, query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* ======= عناصر DOM ======= */
+/* ===== DOM ===== */
 const card         = document.getElementById('measCard');
 const chipsHost    = document.getElementById('chips');
 const severeBanner = document.getElementById('severeBanner');
+
+const dateInput    = document.getElementById('dateInput');
+const timeInput    = document.getElementById('timeInput');
 
 const unitSel      = document.getElementById('unitSelect');
 const valueInput   = document.getElementById('valueInput');
@@ -28,26 +31,18 @@ const editBar      = document.getElementById('editBar');
 
 const tbody        = document.getElementById('measTableBody');
 
-/* ======= حالة عامة ======= */
+/* ===== State ===== */
 let currentUser = null;
-let childId     = null; // نقرأها من querystring
+let childId     = null;
 let childData   = null;
+let editMode    = null; // { id }
 
-let editMode = null; // { id, snapshot, loadedAt }
-
-/* ======= ثوابت ======= */
+/* ===== Consts ===== */
 const ALLOW_DUP_KEYS = new Set(['SNACK','PRE_SPORT','POST_SPORT']);
-const MEAL_SLOTS     = new Set([
-  'PRE_BREAKFAST','POST_BREAKFAST',
-  'PRE_LUNCH','POST_LUNCH',
-  'PRE_DINNER','POST_DINNER',
-  'SNACK'
-]);
+const MEAL_SLOTS = new Set(['PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK']);
+const ROUND_STEP = 0.5;
 
-const ROUND_STEP = 0.5; // تقريب الجرعات لأقرب نصف
-const TODAY = ()=> new Date();
-
-/* ======= أدوات وحدات ======= */
+/* ===== Utilities ===== */
 function toMmol(val, unit){
   if (val==null || val==='') return null;
   const n = Number(val);
@@ -63,40 +58,52 @@ function fmtVal(mmol, outUnit){
   if (v==null) return '';
   return outUnit==='mgdl' ? Math.round(v).toString() : v.toFixed(1);
 }
-function roundDose(x){
-  return Math.round(Number(x)/ROUND_STEP)*ROUND_STEP;
-}
+function roundDose(x){ return Math.round(Number(x)/ROUND_STEP)*ROUND_STEP; }
 
-/* ======= نطاقات الطفل ======= */
+/* ===== Ranges ===== */
 function getRanges(){
   const r = childData?.normalRange || {};
   const min = Number(r.min ?? 4.5);
   const max = Number(r.max ?? 7);
   const severeLow  = Number((r.severeLow  ?? r.severe_low  ?? min));
   const severeHigh = Number((r.severeHigh ?? r.severe_high ?? max));
-  // مستويات التلوين
-  const hypoLevel  = Number(r.hypo ?? severeLow);
+  const hypoLevel  = Number(r.hypo  ?? severeLow);
   const hyperLevel = Number(r.hyper ?? severeHigh);
   return { min, max, severeLow, severeHigh, hypoLevel, hyperLevel };
 }
 
-/* ======= Chips أعلى البطاقة ======= */
+/* ===== Selected date/time ===== */
+function initDateTimeDefaults(){
+  const now = new Date();
+  dateInput.value = now.toISOString().slice(0,10);
+  timeInput.value = now.toTimeString().slice(0,5); // HH:MM
+}
+function selectedWhen(){
+  const d = dateInput?.value || new Date().toISOString().slice(0,10);
+  const t = timeInput?.value || new Date().toTimeString().slice(0,5);
+  const dt = new Date(`${d}T${t}:00`);
+  return isNaN(dt.getTime()) ? new Date() : dt;
+}
+
+/* ===== Chips ===== */
 function renderChips(){
   if (!chipsHost || !childData) return;
   const { min, max, severeLow, severeHigh } = getRanges();
   const cf = childData?.cf ?? childData?.correctionFactor ?? null;
   const cr = childData?.cr ?? childData?.carbRatio ?? null;
+  const dtxt = (dateInput.value || '—') + ' ' + (timeInput.value || 'الآن');
 
   chipsHost.innerHTML = [
+    `<span class="chip">التاريخ: ${dtxt}</span>`,
     `<span class="chip">الوحدة: ${unitSel.value==='mgdl'?'mg/dL':'mmol/L'}</span>`,
     `<span class="chip">طبيعي (التقرير): ${severeLow}–${severeHigh} mmol/L</span>`,
     `<span class="chip">النطاق القياسي: ${min}–${max} mmol/L</span>`,
     cf!=null ? `<span class="chip">CF: ${cf} mmol/L/U</span>` : '',
-    cr!=null ? `<span class="chip">CR: ${cr} g/U</span>` : '',
+    cr!=null ? `<span class="chip">CR: ${cr} g/U</span>` : ''
   ].filter(Boolean).join('');
 }
 
-/* ======= تلوين البطاقة + تنبيه ======= */
+/* ===== Card state / severe ===== */
 function setCardState(state, severe=false){
   card.classList.remove('state-low','state-ok','state-high','severe');
   if (state==='low')  card.classList.add('state-low');
@@ -105,7 +112,6 @@ function setCardState(state, severe=false){
   if (severe) card.classList.add('severe');
   severeBanner.hidden = !severe;
 }
-
 function classify(mmol){
   const { hypoLevel, hyperLevel } = getRanges();
   if (mmol==null) return 'ok';
@@ -114,9 +120,8 @@ function classify(mmol){
   return 'ok';
 }
 
-/* ======= منع تكرار وقت القياس ======= */
+/* ===== Duplicate protection ===== */
 async function existsDuplicate(dateKey, slotKey, excludedId=null){
-  // نبحث في اليوم نفسه لنفس الخانة
   const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
   const qy  = query(col, where('date','==',dateKey), where('slotKey','==',slotKey));
   const snap= await getDocs(qy);
@@ -128,7 +133,7 @@ async function existsDuplicate(dateKey, slotKey, excludedId=null){
   return found;
 }
 
-/* ======= حسابات الجرعات ======= */
+/* ===== Doses ===== */
 function computeCorrection(mmol){
   const cf = childData?.cf ?? childData?.correctionFactor ?? null;
   const { max } = getRanges();
@@ -143,12 +148,12 @@ function computeMealBolus(carbs){
   return roundDose(Number(carbs) / Number(cr));
 }
 
-/* ======= معاينة/تحقق/تلوين أثناء الكتابة ======= */
+/* ===== UI updates ===== */
 function updatePreviewAndUI(){
   const unit = unitSel.value;
   const mmol = toMmol(valueInput.value, unit);
 
-  // تحويل وحدات تحت الحقل
+  // conversion
   if (mmol!=null) {
     const other = unit==='mgdl' ? 'mmol/L' : 'mg/dL';
     const otherVal = fmtVal(mmol, unit==='mgdl'?'mmol':'mgdl');
@@ -157,37 +162,33 @@ function updatePreviewAndUI(){
     convHint.textContent = `${unit==='mgdl'?'mmol/L':'mg/dL'} ≈ 0`;
   }
 
-  // تلوين البطاقة + التنبيه الشديد
+  // state / severe
   const { severeLow, severeHigh } = getRanges();
   const c = classify(mmol);
   const severe = (mmol!=null) && (mmol<=severeLow || mmol>=severeHigh);
   setCardState(c, severe);
 
-  // اقتراحات الجرعات
-  const showMeal = MEAL_SLOTS.has(slotSel.value);
+  // meal section visibility
+  const showMeal = MEAL_SLOTS.has((slotSel.value||'').toUpperCase());
   document.getElementById('wrapBolus').style.display = showMeal ? '' : 'none';
 
-  if (mmol!=null){
-    // التصحيحي بعد الطبيعي الأعلى
-    const corr = computeCorrection(mmol);
-    corrDose.value = corr ? String(corr) : '';
-  } else {
-    corrDose.value = '';
-  }
+  // correction
+  if (mmol!=null){ corrDose.value = computeCorrection(mmol) || ''; }
+  else { corrDose.value = ''; }
 
+  // meal bolus
   const carbs = Number(carbsInput.value || 0);
-  if (showMeal && carbs>0){
-    const md = computeMealBolus(carbs);
-    bolusDose.value = md ? String(md) : '';
-  } else if (!showMeal){
-    bolusDose.value = '';
-    carbsInput.value = '';
-  }
+  if (showMeal && carbs>0) bolusDose.value = computeMealBolus(carbs) || '';
+  else if (!showMeal){ bolusDose.value=''; carbsInput.value=''; }
+
+  // chips (date/time/unit)
+  renderChips();
 }
 
-/* ======= تعبئة/مسح البطاقة ======= */
+/* ===== Form helpers ===== */
 function clearForm(){
   editMode = null;
+  // لا نعيد تعيين التاريخ/الوقت حتى لا يزعج المستخدم
   valueInput.value = '';
   corrDose.value   = '';
   bolusDose.value  = '';
@@ -200,20 +201,26 @@ function clearForm(){
   updatePreviewAndUI();
 }
 function fillFormFromDoc(d){
+  // when → date/time
+  const when = d.when?.toDate?.() || (d.date ? new Date(d.date) : new Date());
+  dateInput.value = when.toISOString().slice(0,10);
+  timeInput.value = when.toTimeString().slice(0,5);
+
   const unit = (d.unit || (d.mgdl!=null?'mgdl':'mmol')).toLowerCase();
   unitSel.value = unit;
   if (d.mmol!=null) valueInput.value = fmtVal(d.mmol, unit);
   else if (d.mgdl!=null) valueInput.value = unit==='mgdl' ? d.mgdl : (d.mgdl/18).toFixed(1);
-  slotSel.value = d.slotKey || d.slot || 'RANDOM';
-  corrDose.value = d.correctionDose ?? '';
-  bolusDose.value= d.bolusDose ?? '';
+
+  slotSel.value   = d.slotKey || d.slot || 'RANDOM';
+  corrDose.value  = d.correctionDose ?? '';
+  bolusDose.value = d.bolusDose ?? '';
   notesInput.value= d.notes ?? '';
+
   updatePreviewAndUI();
 }
 
-/* ======= تحميل الطفل + جدول القياسات ======= */
+/* ===== Load child + today's table ===== */
 async function loadChild(){
-  // childId من الـ URL
   const qs = new URLSearchParams(location.search);
   childId = qs.get('child');
   if (!childId) throw new Error('لا يوجد child في الرابط');
@@ -224,28 +231,30 @@ async function loadChild(){
   renderChips();
 }
 
-async function loadTable(limitDays=14){
+async function loadTableToday(){
   tbody.innerHTML = '';
+  const todayKey = new Date().toISOString().slice(0,10);
   const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
-  // آخر أسبوعين بترتيب تنازلي حسب التاريخ/الوقت
-  const qy  = query(col, orderBy('when','desc'));
+
+  // نكتفي بالفلترة حسب التاريخ فقط، ثم نرتب محليًا بالوقت نزولاً (لتجنب إنشاء index)
+  const qy  = query(col, where('date','==', todayKey));
   const snap= await getDocs(qy);
 
   const rows = [];
-  const cutoff = Date.now() - (limitDays*24*60*60*1000);
   snap.forEach(ds=>{
     const d = ds.data();
     const when = d.when?.toDate?.() || (d.date? new Date(d.date): null);
-    if (!when || when.getTime()<cutoff) return;
     rows.push({ id: ds.id, ...d, when });
   });
 
-  rows.sort((a,b)=> b.when - a.when);
+  rows.sort((a,b)=> (b.when?.getTime?.()||0) - (a.when?.getTime?.()||0));
+
   rows.forEach(d=>{
     const unit = (d.unit || (d.mgdl!=null?'mgdl':'mmol')).toLowerCase();
     const mmol = d.mmol!=null ? d.mmol : (d.mgdl/18);
     const cls  = classify(mmol);
-    const dateKey = d.date || d.when.toISOString().slice(0,10);
+    const dateKey = d.date || d.when?.toISOString?.().slice(0,10) || todayKey;
+    const timeTxt = d.when ? new Date(d.when).toTimeString().slice(0,5) : (timeInput.value || '');
 
     const tr = document.createElement('tr');
 
@@ -262,7 +271,7 @@ async function loadTable(limitDays=14){
     span.className = `v-${cls==='low'?'low':cls==='high'?'high':'in'}`;
     span.textContent = unit==='mgdl' ? Math.round(fromMmol(mmol,'mgdl')) : mmol.toFixed(1);
     tdVal.appendChild(span);
-    tdVal.appendChild(document.createTextNode(` ${unit==='mgdl'?'mg/dL':'mmol/L'}`));
+    tdVal.appendChild(document.createTextNode(` ${unit==='mgdl'?'mg/dL':'mmol/L'} — ${timeTxt}`));
     tr.appendChild(tdVal);
 
     const tdBolus = document.createElement('td');
@@ -290,29 +299,26 @@ async function loadTable(limitDays=14){
   });
 }
 
-/* ======= وضع تعديل ======= */
+/* ===== Edit mode ===== */
 async function enterEditMode(id){
   const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/measurements/${id}`);
   const s   = await getDoc(ref);
   if (!s.exists()) return alert('القياس غير موجود');
-  const d = s.data();
-  fillFormFromDoc(d);
-  editMode = { id, snapshot: s, loadedAt: Date.now() };
+  fillFormFromDoc(s.data());
+  editMode = { id };
   saveBtn.hidden = true;
   saveEditBtn.hidden = false;
   editBar.hidden = false;
 }
-function cancelEdit(){
-  clearForm();
-}
+function cancelEdit(){ clearForm(); }
 
-/* ======= حفظ جديد ======= */
+/* ===== Save new ===== */
 async function saveNew(){
   const unit = unitSel.value;
   const mmol = toMmol(valueInput.value, unit);
   if (mmol==null) return alert('من فضلك أدخل قيمة صحيحة');
 
-  const when = TODAY();
+  const when = selectedWhen();
   const dateKey = when.toISOString().slice(0,10);
   const slotKey = (slotSel.value || 'RANDOM').toUpperCase();
 
@@ -325,28 +331,26 @@ async function saveNew(){
     mmol, unit,
     when, date: dateKey,
     slotKey,
-    bolusDose:  bolusDose.value? Number(bolusDose.value): null,
+    bolusDose:   bolusDose.value? Number(bolusDose.value): null,
     correctionDose: corrDose.value? Number(corrDose.value): null,
-    notes: notesInput.value || '',
+    notes: (notesInput.value||'').trim(),
     createdAt: serverTimestamp()
   };
-  if (unit==='mgdl'){
-    payload.mgdl = Number(valueInput.value);
-  }
+  if (unit==='mgdl'){ payload.mgdl = Number(valueInput.value); }
 
   await addDoc(collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`), payload);
   clearForm();
-  await loadTable();
+  await loadTableToday();
 }
 
-/* ======= حفظ تعديل ======= */
+/* ===== Save edit ===== */
 async function saveEdit(){
   if (!editMode?.id) return;
   const unit = unitSel.value;
   const mmol = toMmol(valueInput.value, unit);
   if (mmol==null) return alert('من فضلك أدخل قيمة صحيحة');
 
-  const when = TODAY(); // بإمكانك استبدالها بتاريخ محفوظ إن كنت تحفظ وقت محدد
+  const when = selectedWhen();
   const dateKey = when.toISOString().slice(0,10);
   const slotKey = (slotSel.value || 'RANDOM').toUpperCase();
 
@@ -360,41 +364,39 @@ async function saveEdit(){
     mmol, unit,
     when, date: dateKey,
     slotKey,
-    bolusDose:  bolusDose.value? Number(bolusDose.value): null,
+    bolusDose:   bolusDose.value? Number(bolusDose.value): null,
     correctionDose: corrDose.value? Number(corrDose.value): null,
-    notes: notesInput.value || '',
+    notes: (notesInput.value||'').trim(),
     updatedAt: serverTimestamp()
   };
-  if (unit==='mgdl'){
-    payload.mgdl = Number(valueInput.value);
-  } else {
-    payload.mgdl = Math.round(fromMmol(mmol,'mgdl'));
-  }
+  if (unit==='mgdl'){ payload.mgdl = Number(valueInput.value); }
+  else { payload.mgdl = Math.round(fromMmol(mmol,'mgdl')); }
 
   await updateDoc(ref, payload);
   clearForm();
-  await loadTable();
+  await loadTableToday();
 }
 
-/* ======= أحداث ======= */
+/* ===== Events ===== */
 unitSel.addEventListener('change', ()=>{ renderChips(); updatePreviewAndUI(); });
 valueInput.addEventListener('input', updatePreviewAndUI);
 slotSel.addEventListener('change', updatePreviewAndUI);
 carbsInput.addEventListener('input', updatePreviewAndUI);
-notesInput.addEventListener('input', ()=>{ /* لا شيء إضافي */ });
-
+dateInput.addEventListener('change', renderChips);
+timeInput.addEventListener('change', renderChips);
 saveBtn.addEventListener('click', saveNew);
 saveEditBtn.addEventListener('click', saveEdit);
 cancelEditBtn.addEventListener('click', cancelEdit);
 
-/* ======= جلسة المستخدم ======= */
+/* ===== Boot ===== */
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href='index.html'; return; }
   currentUser = user;
   try{
+    initDateTimeDefaults();
     await loadChild();
     updatePreviewAndUI();
-    await loadTable();
+    await loadTableToday(); // يعرض قياسات اليوم فقط
   }catch(e){
     console.error(e);
     alert(e.message || 'خطأ أثناء التحميل');
