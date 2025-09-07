@@ -1,371 +1,402 @@
-// js/measurements.js — يعتمد التلوين على hypo/hyper ويظهر التصحيحي فوق normalMax
+// measurements.js — إدخال/تعديل القياسات: بطاقة لطيفة + منع التكرار + تنبيه Severe + جرعات + تعديل
+
 import { auth, db } from './firebase-config.js';
 import {
-  collection, addDoc, updateDoc, getDocs, query, where, doc, getDoc, serverTimestamp
+  collection, addDoc, updateDoc, doc, getDoc, getDocs, query, where, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* ========= DOM ========= */
-const params = new URLSearchParams(location.search);
-const childId = params.get('child');
+/* ======= عناصر DOM ======= */
+const card         = document.getElementById('measCard');
+const chipsHost    = document.getElementById('chips');
+const severeBanner = document.getElementById('severeBanner');
 
-const loaderEl   = document.getElementById('loader');
-const toastEl    = document.getElementById('toast');
+const unitSel      = document.getElementById('unitSelect');
+const valueInput   = document.getElementById('valueInput');
+const convHint     = document.getElementById('convHint');
 
-const childNameEl= document.getElementById('childName');
-const childMetaEl= document.getElementById('childMeta');
-const chipRangeEl= document.getElementById('chipRange');
-const chipCREl   = document.getElementById('chipCR');
-const chipCFEl   = document.getElementById('chipCF');
+const slotSel      = document.getElementById('slotSelect');
+const carbsInput   = document.getElementById('carbsInput');
+const bolusDose    = document.getElementById('bolusDose');
+const corrDose     = document.getElementById('corrDose');
+const notesInput   = document.getElementById('notesInput');
 
-const dayEl      = document.getElementById('day');
-const btnToday   = document.getElementById('btnToday');
-const btnBack    = document.getElementById('btnBack');
-const btnMeals   = document.getElementById('btnMeals');
+const saveBtn      = document.getElementById('saveBtn');
+const saveEditBtn  = document.getElementById('saveEditBtn');
+const cancelEditBtn= document.getElementById('cancelEditBtn');
+const editBar      = document.getElementById('editBar');
 
-const slotEl     = document.getElementById('slot');
-const valueEl    = document.getElementById('value');
-const inUnitEl   = document.getElementById('inUnit');
-const convHint   = document.getElementById('convHint');
-const valueErr   = document.getElementById('valueErr');
+const tbody        = document.getElementById('measTableBody');
 
-const wrapCorrection   = document.getElementById('wrapCorrection');
-const correctionDoseEl = document.getElementById('correctionDose');
-const corrHint         = document.getElementById('corrHint');
+/* ======= حالة عامة ======= */
+let currentUser = null;
+let childId     = null; // نقرأها من querystring
+let childData   = null;
 
-const wrapBolus   = document.getElementById('wrapBolus');
-const bolusDoseEl = document.getElementById('bolusDose');
+let editMode = null; // { id, snapshot, loadedAt }
 
-const wrapHypo    = document.getElementById('wrapHypo');
-const hypoTreatmentEl = document.getElementById('hypoTreatment');
+/* ======= ثوابت ======= */
+const ALLOW_DUP_KEYS = new Set(['SNACK','PRE_SPORT','POST_SPORT']);
+const MEAL_SLOTS     = new Set([
+  'PRE_BREAKFAST','POST_BREAKFAST',
+  'PRE_LUNCH','POST_LUNCH',
+  'PRE_DINNER','POST_DINNER',
+  'SNACK'
+]);
 
-const notesEl     = document.getElementById('notes');
-const btnSave     = document.getElementById('btnSave');
-const btnReset    = document.getElementById('btnReset');
+const ROUND_STEP = 0.5; // تقريب الجرعات لأقرب نصف
+const TODAY = ()=> new Date();
 
-const outUnitEl   = document.getElementById('outUnit');
-const tbody       = document.getElementById('tbody');
-
-/* ========= Helpers ========= */
-const pad=n=>String(n).padStart(2,'0');
-const todayStr=()=>{const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
-const showToast=(msg)=>{ if(!toastEl) return; toastEl.textContent=msg; toastEl.classList.remove('hidden'); setTimeout(()=>toastEl.classList.add('hidden'), 2000); };
-function loader(show){ loaderEl?.classList.toggle('hidden', !show); }
-const toMgdl = mmol => Math.round(Number(mmol)*18);
-const toMmol = mgdl => Number(mgdl)/18;
-const fmtMmol = v => (v==null||isNaN(+v)?'—':Number(v).toFixed(1));
-const fmtMgdl = v => (v==null||isNaN(+v)?'—':Math.round(Number(v)));
-
-const MIN_MMOL = 2.0;
-const MIN_MGDL = 36;
-
-/* ========= Slot Enum ========= */
-const SLOT_ENUM = [
-  { key:'WAKE',            ar:'الاستيقاظ',    en:'Wake',            order:10 },
-  { key:'PRE_BREAKFAST',   ar:'ق.الفطار',     en:'Pre-Breakfast',   order:20 },
-  { key:'POST_BREAKFAST',  ar:'ب.الفطار',     en:'Post-Breakfast',  order:30 },
-  { key:'PRE_LUNCH',       ar:'ق.الغدا',      en:'Pre-Lunch',       order:40 },
-  { key:'POST_LUNCH',      ar:'ب.الغدا',      en:'Post-Lunch',      order:50 },
-  { key:'PRE_DINNER',      ar:'ق.العشا',      en:'Pre-Dinner',      order:60 },
-  { key:'POST_DINNER',     ar:'ب.العشا',      en:'Post-Dinner',     order:70 },
-  { key:'SNACK',           ar:'سناك',         en:'Snack',           order:80 },
-  { key:'PRE_BED',         ar:'ق.النوم',      en:'Pre-Bed',         order:90 },
-  { key:'DURING_SLEEP',    ar:'أثناء النوم',  en:'During Sleep',    order:100 },
-  { key:'PRE_SPORT',       ar:'ق.الرياضة',    en:'Pre-Exercise',    order:110 },
-  { key:'POST_SPORT',      ar:'ب.الرياضة',    en:'Post-Exercise',   order:120 },
-];
-const SLOT_BY_KEY = new Map(SLOT_ENUM.map(s=>[s.key,s]));
-const SLOT_BY_AR  = new Map(SLOT_ENUM.map(s=>[s.ar,s]));
-const SLOT_BY_EN  = new Map(SLOT_ENUM.map(s=>[s.en,s]));
-const ALLOW_DUP_KEYS = new Set(['SNACK']);
-const arLabel = key => (SLOT_BY_KEY.get(key)?.ar || key);
-
-/* تطبيع */
-function normalizeSlot(value){
-  if(!value) return null;
-  if (SLOT_BY_KEY.has(value)) return SLOT_BY_KEY.get(value);
-  if (SLOT_BY_AR.has(value))  return SLOT_BY_AR.get(value);
-  if (SLOT_BY_EN.has(value))  return SLOT_BY_EN.get(value);
-  return {key:String(value), ar:String(value), order:9999};
+/* ======= أدوات وحدات ======= */
+function toMmol(val, unit){
+  if (val==null || val==='') return null;
+  const n = Number(val);
+  if (Number.isNaN(n)) return null;
+  return (unit==='mgdl') ? n/18 : n;
+}
+function fromMmol(mmol, outUnit){
+  if (mmol==null) return null;
+  return (outUnit==='mgdl') ? mmol*18 : mmol;
+}
+function fmtVal(mmol, outUnit){
+  const v = fromMmol(mmol, outUnit);
+  if (v==null) return '';
+  return outUnit==='mgdl' ? Math.round(v).toString() : v.toFixed(1);
+}
+function roundDose(x){
+  return Math.round(Number(x)/ROUND_STEP)*ROUND_STEP;
 }
 
-/* ========= حالة ========= */
-let USER=null, CHILD=null;
-let normalMin=4.0, normalMax=7.0, CR=null, CF=null;
-let hypoLevel=3.5, hyperLevel=12;     // حدود التلوين
-let severeLow=3.0, severeHigh=13.9;   // للتنبيهات الحرجة
-let _rows=[];
+/* ======= نطاقات الطفل ======= */
+function getRanges(){
+  const r = childData?.normalRange || {};
+  const min = Number(r.min ?? 4.5);
+  const max = Number(r.max ?? 7);
+  const severeLow  = Number((r.severeLow  ?? r.severe_low  ?? min));
+  const severeHigh = Number((r.severeHigh ?? r.severe_high ?? max));
+  // مستويات التلوين
+  const hypoLevel  = Number(r.hypo ?? severeLow);
+  const hyperLevel = Number(r.hyper ?? severeHigh);
+  return { min, max, severeLow, severeHigh, hypoLevel, hyperLevel };
+}
 
-/* ========= تحميل بيانات الطفل ========= */
+/* ======= Chips أعلى البطاقة ======= */
+function renderChips(){
+  if (!chipsHost || !childData) return;
+  const { min, max, severeLow, severeHigh } = getRanges();
+  const cf = childData?.cf ?? childData?.correctionFactor ?? null;
+  const cr = childData?.cr ?? childData?.carbRatio ?? null;
+
+  chipsHost.innerHTML = [
+    `<span class="chip">الوحدة: ${unitSel.value==='mgdl'?'mg/dL':'mmol/L'}</span>`,
+    `<span class="chip">طبيعي (التقرير): ${severeLow}–${severeHigh} mmol/L</span>`,
+    `<span class="chip">النطاق القياسي: ${min}–${max} mmol/L</span>`,
+    cf!=null ? `<span class="chip">CF: ${cf} mmol/L/U</span>` : '',
+    cr!=null ? `<span class="chip">CR: ${cr} g/U</span>` : '',
+  ].filter(Boolean).join('');
+}
+
+/* ======= تلوين البطاقة + تنبيه ======= */
+function setCardState(state, severe=false){
+  card.classList.remove('state-low','state-ok','state-high','severe');
+  if (state==='low')  card.classList.add('state-low');
+  if (state==='high') card.classList.add('state-high');
+  if (state==='ok')   card.classList.add('state-ok');
+  if (severe) card.classList.add('severe');
+  severeBanner.hidden = !severe;
+}
+
+function classify(mmol){
+  const { hypoLevel, hyperLevel } = getRanges();
+  if (mmol==null) return 'ok';
+  if (mmol < hypoLevel)  return 'low';
+  if (mmol > hyperLevel) return 'high';
+  return 'ok';
+}
+
+/* ======= منع تكرار وقت القياس ======= */
+async function existsDuplicate(dateKey, slotKey, excludedId=null){
+  // نبحث في اليوم نفسه لنفس الخانة
+  const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
+  const qy  = query(col, where('date','==',dateKey), where('slotKey','==',slotKey));
+  const snap= await getDocs(qy);
+  let found = false;
+  snap.forEach(d=>{
+    if (excludedId && d.id===excludedId) return;
+    found = true;
+  });
+  return found;
+}
+
+/* ======= حسابات الجرعات ======= */
+function computeCorrection(mmol){
+  const cf = childData?.cf ?? childData?.correctionFactor ?? null;
+  const { max } = getRanges();
+  if (cf==null || mmol==null) return 0;
+  const delta = mmol - max;
+  if (delta <= 0) return 0;
+  return roundDose(delta / Number(cf));
+}
+function computeMealBolus(carbs){
+  const cr = childData?.cr ?? childData?.carbRatio ?? null;
+  if (cr==null || !carbs) return 0;
+  return roundDose(Number(carbs) / Number(cr));
+}
+
+/* ======= معاينة/تحقق/تلوين أثناء الكتابة ======= */
+function updatePreviewAndUI(){
+  const unit = unitSel.value;
+  const mmol = toMmol(valueInput.value, unit);
+
+  // تحويل وحدات تحت الحقل
+  if (mmol!=null) {
+    const other = unit==='mgdl' ? 'mmol/L' : 'mg/dL';
+    const otherVal = fmtVal(mmol, unit==='mgdl'?'mmol':'mgdl');
+    convHint.textContent = `${other} ≈ ${otherVal}`;
+  } else {
+    convHint.textContent = `${unit==='mgdl'?'mmol/L':'mg/dL'} ≈ 0`;
+  }
+
+  // تلوين البطاقة + التنبيه الشديد
+  const { severeLow, severeHigh } = getRanges();
+  const c = classify(mmol);
+  const severe = (mmol!=null) && (mmol<=severeLow || mmol>=severeHigh);
+  setCardState(c, severe);
+
+  // اقتراحات الجرعات
+  const showMeal = MEAL_SLOTS.has(slotSel.value);
+  document.getElementById('wrapBolus').style.display = showMeal ? '' : 'none';
+
+  if (mmol!=null){
+    // التصحيحي بعد الطبيعي الأعلى
+    const corr = computeCorrection(mmol);
+    corrDose.value = corr ? String(corr) : '';
+  } else {
+    corrDose.value = '';
+  }
+
+  const carbs = Number(carbsInput.value || 0);
+  if (showMeal && carbs>0){
+    const md = computeMealBolus(carbs);
+    bolusDose.value = md ? String(md) : '';
+  } else if (!showMeal){
+    bolusDose.value = '';
+    carbsInput.value = '';
+  }
+}
+
+/* ======= تعبئة/مسح البطاقة ======= */
+function clearForm(){
+  editMode = null;
+  valueInput.value = '';
+  corrDose.value   = '';
+  bolusDose.value  = '';
+  carbsInput.value = '';
+  notesInput.value = '';
+  saveBtn.hidden = false;
+  saveEditBtn.hidden = true;
+  editBar.hidden = true;
+  setCardState('ok', false);
+  updatePreviewAndUI();
+}
+function fillFormFromDoc(d){
+  const unit = (d.unit || (d.mgdl!=null?'mgdl':'mmol')).toLowerCase();
+  unitSel.value = unit;
+  if (d.mmol!=null) valueInput.value = fmtVal(d.mmol, unit);
+  else if (d.mgdl!=null) valueInput.value = unit==='mgdl' ? d.mgdl : (d.mgdl/18).toFixed(1);
+  slotSel.value = d.slotKey || d.slot || 'RANDOM';
+  corrDose.value = d.correctionDose ?? '';
+  bolusDose.value= d.bolusDose ?? '';
+  notesInput.value= d.notes ?? '';
+  updatePreviewAndUI();
+}
+
+/* ======= تحميل الطفل + جدول القياسات ======= */
 async function loadChild(){
-  loader(true);
-  try{
-    const ref = doc(db, `parents/${USER.uid}/children/${childId}`);
-    const snap = await getDoc(ref);
-    if(!snap.exists()){ alert('لم يتم العثور على الطفل'); history.back(); return; }
-    CHILD = snap.data();
+  // childId من الـ URL
+  const qs = new URLSearchParams(location.search);
+  childId = qs.get('child');
+  if (!childId) throw new Error('لا يوجد child في الرابط');
 
-    childNameEl.textContent = CHILD.name || 'طفل';
-    const age = (()=>{ if(!CHILD.birthDate) return '—'; const b=new Date(CHILD.birthDate), t=new Date(); let a=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth(); if(m<0||(m===0&&t.getDate()<b.getDate())) a--; return `${a} سنة`})();
-    childMetaEl.textContent = `${CHILD.gender||'—'} • العمر: ${age}`;
+  const cs = await getDoc(doc(db, `parents/${currentUser.uid}/children/${childId}`));
+  if (!cs.exists()) throw new Error('الطفل غير موجود');
+  childData = cs.data();
+  renderChips();
+}
 
-    // النطاق الطبيعي للعرض + التصحيحي
-    normalMin = Number(CHILD.normalRange?.min ?? 4.0);
-    normalMax = Number(CHILD.normalRange?.max ?? 7.0);
+async function loadTable(limitDays=14){
+  tbody.innerHTML = '';
+  const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
+  // آخر أسبوعين بترتيب تنازلي حسب التاريخ/الوقت
+  const qy  = query(col, orderBy('when','desc'));
+  const snap= await getDocs(qy);
 
-    // حدود Low/High للتلوين والحساب
-    hypoLevel  = Number(CHILD.hypoLevel  ?? normalMin);
-    hyperLevel = Number(CHILD.hyperLevel ?? normalMax);
+  const rows = [];
+  const cutoff = Date.now() - (limitDays*24*60*60*1000);
+  snap.forEach(ds=>{
+    const d = ds.data();
+    const when = d.when?.toDate?.() || (d.date? new Date(d.date): null);
+    if (!when || when.getTime()<cutoff) return;
+    rows.push({ id: ds.id, ...d, when });
+  });
 
-    // حدود شديدة (اختياري)
-    severeLow  = Number(CHILD.normalRange?.severeLow  ?? (hypoLevel-0.5));
-    severeHigh = Number(CHILD.normalRange?.severeHigh ?? 13.9);
+  rows.sort((a,b)=> b.when - a.when);
+  rows.forEach(d=>{
+    const unit = (d.unit || (d.mgdl!=null?'mgdl':'mmol')).toLowerCase();
+    const mmol = d.mmol!=null ? d.mmol : (d.mgdl/18);
+    const cls  = classify(mmol);
+    const dateKey = d.date || d.when.toISOString().slice(0,10);
 
-    CR = CHILD.carbRatio!=null ? Number(CHILD.carbRatio) : null;
-    CF = CHILD.correctionFactor!=null ? Number(CHILD.correctionFactor) : null;
+    const tr = document.createElement('tr');
 
-    chipRangeEl.textContent = `النطاق: ${normalMin}–${normalMax} mmol/L`;
-    chipCREl.textContent    = `CR: ${CR ?? '—'} g/U`;
-    chipCFEl.textContent    = `CF: ${CF ?? '—'} mmol/L/U`;
-  }finally{
-    loader(false);
+    const tdDate = document.createElement('td');
+    tdDate.textContent = dateKey;
+    tr.appendChild(tdDate);
+
+    const tdSlot = document.createElement('td');
+    tdSlot.textContent = d.slotKey || d.slot || '—';
+    tr.appendChild(tdSlot);
+
+    const tdVal = document.createElement('td');
+    const span = document.createElement('span');
+    span.className = `v-${cls==='low'?'low':cls==='high'?'high':'in'}`;
+    span.textContent = unit==='mgdl' ? Math.round(fromMmol(mmol,'mgdl')) : mmol.toFixed(1);
+    tdVal.appendChild(span);
+    tdVal.appendChild(document.createTextNode(` ${unit==='mgdl'?'mg/dL':'mmol/L'}`));
+    tr.appendChild(tdVal);
+
+    const tdBolus = document.createElement('td');
+    tdBolus.textContent = d.bolusDose ?? '—';
+    tr.appendChild(tdBolus);
+
+    const tdCorr = document.createElement('td');
+    tdCorr.textContent = d.correctionDose ?? '—';
+    tr.appendChild(tdCorr);
+
+    const tdNotes = document.createElement('td');
+    tdNotes.textContent = d.notes || '—';
+    tr.appendChild(tdNotes);
+
+    const tdAct = document.createElement('td');
+    tdAct.className = 'row-actions';
+    const btn = document.createElement('button');
+    btn.className = 'edit';
+    btn.textContent = 'تعديل ✏️';
+    btn.addEventListener('click', ()=> enterEditMode(d.id));
+    tdAct.appendChild(btn);
+    tr.appendChild(tdAct);
+
+    tbody.appendChild(tr);
+  });
+}
+
+/* ======= وضع تعديل ======= */
+async function enterEditMode(id){
+  const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/measurements/${id}`);
+  const s   = await getDoc(ref);
+  if (!s.exists()) return alert('القياس غير موجود');
+  const d = s.data();
+  fillFormFromDoc(d);
+  editMode = { id, snapshot: s, loadedAt: Date.now() };
+  saveBtn.hidden = true;
+  saveEditBtn.hidden = false;
+  editBar.hidden = false;
+}
+function cancelEdit(){
+  clearForm();
+}
+
+/* ======= حفظ جديد ======= */
+async function saveNew(){
+  const unit = unitSel.value;
+  const mmol = toMmol(valueInput.value, unit);
+  if (mmol==null) return alert('من فضلك أدخل قيمة صحيحة');
+
+  const when = TODAY();
+  const dateKey = when.toISOString().slice(0,10);
+  const slotKey = (slotSel.value || 'RANDOM').toUpperCase();
+
+  if (!ALLOW_DUP_KEYS.has(slotKey)){
+    const dup = await existsDuplicate(dateKey, slotKey, null);
+    if (dup) return alert('هذا الوقت مسجّل بالفعل لهذا اليوم.');
   }
-}
 
-/* ====== إعداد min حسب الوحدة ====== */
-function setInputMinByUnit(){
-  if (inUnitEl.value === 'mmol') {
-    valueEl.min = String(MIN_MMOL);
-    valueEl.step = '0.1';
-    valueEl.placeholder = 'مثال: 6.5';
-  } else {
-    valueEl.min = String(MIN_MGDL);
-    valueEl.step = '1';
-    valueEl.placeholder = 'مثال: 120';
-  }
-}
-
-/* ====== التحقق الأدنى ====== */
-function validateValue(){
-  const raw = Number(valueEl.value);
-  let ok = true;
-
-  if (isNaN(raw)) {
-    ok = false;
-  } else {
-    ok = (inUnitEl.value === 'mmol') ? (raw >= MIN_MMOL) : (raw >= MIN_MGDL);
-  }
-  valueErr.classList.toggle('hidden', ok || valueEl.value==='');
-  btnSave.disabled = !ok;
-  return ok;
-}
-
-/* ====== قراءة المدخل كـ mmol ====== */
-function readInputMmol(){
-  const v = Number(valueEl.value);
-  if(Number.isNaN(v)) return null;
-  return inUnitEl.value==='mmol' ? v : toMmol(v);
-}
-function readInputMgdl(){
-  const v = Number(valueEl.value);
-  if(Number.isNaN(v)) return null;
-  return inUnitEl.value==='mgdl' ? v : toMgdl(v);
-}
-
-/* ====== حالة القياس بناءً على hypo/hyper ====== */
-const getState = (mmol)=> (mmol==null||isNaN(+mmol)) ? '' :
-  (mmol < hypoLevel ? 'low' : (mmol > hyperLevel ? 'high' : 'normal'));
-
-/* ====== واجهة المعاينة (تصحيحي/هبوط/وجبة) ====== */
-function updatePreviewAndVisibility(){
-  const mmol = readInputMmol();
-  const mgdl = readInputMgdl();
-
-  convHint.textContent = (mmol==null) ? '—' :
-    (inUnitEl.value==='mmol' ? `≈ ${fmtMgdl(mgdl)} mg/dL` : `≈ ${fmtMmol(mmol)} mmol/L`);
-
-  const isLow        = (mmol!=null && mmol < hypoLevel);
-  const aboveTarget  = (mmol!=null && mmol > normalMax); // التصحيحي على الحد الأعلى للنطاق الطبيعي
-  const mealKeys = new Set(['PRE_BREAKFAST','PRE_LUNCH','PRE_DINNER','SNACK']);
-  const isMealTime = mealKeys.has(slotEl.value);
-
-  wrapHypo.classList.toggle('hidden', !isLow);
-  wrapCorrection.classList.toggle('hidden', !aboveTarget);
-  wrapBolus.classList.toggle('hidden', !isMealTime);
-
-  // تلميح التصحيحي
-  if (aboveTarget && CF){
-    const delta = mmol - normalMax; // للوصول لحد النطاق الأعلى
-    const dose  = Math.max(0, +(delta / CF).toFixed(1));
-    corrHint.textContent = `اقتراح تقريبي للوصول إلى حد النطاق الأعلى (${normalMax} mmol/L)`;
-    correctionDoseEl.value = dose ? String(dose) : '';
-  } else {
-    corrHint.textContent = '';
-    correctionDoseEl.value = '';
-  }
-}
-
-/* ====== تحميل جدول اليوم ====== */
-async function loadTable(){
-  loader(true);
-  try{
-    const ref = collection(db, `parents/${USER.uid}/children/${childId}/measurements`);
-    const qy  = query(ref, where('date','==', dayEl.value));
-    const snap= await getDocs(qy);
-
-    const rows=[];
-    snap.forEach(d=>{
-      const r=d.data();
-      let mmol=null, mgdl=null;
-
-      if(typeof r.value_mmol === 'number'){ mmol=Number(r.value_mmol); mgdl=toMgdl(mmol); }
-      else if (typeof r.value_mgdl === 'number'){ mgdl=Number(r.value_mgdl); mmol=toMmol(mgdl); }
-      else if (r.unit==='mmol/L' && typeof r.value==='number'){ mmol=Number(r.value); mgdl=toMgdl(mmol); }
-      else if (r.unit==='mg/dL' && typeof r.value==='number'){ mgdl=Number(r.value); mmol=toMmol(mgdl); }
-
-      const slotKey = (normalizeSlot(r.slotKey || r.slot || r.timeLabel || '')?.key) || 'RANDOM';
-      const state = getState(mmol);
-
-      rows.push({
-        id:d.id, slotKey, mmol, mgdl,
-        corr: r.correctionDose ?? '',
-        bolus: r.bolusDose ?? '',
-        hypo:  r.hypoTreatment ?? '',
-        notes: r.notes ?? ''
-      });
-    });
-
-    // ترتيب بسيط حسب slot.order
-    rows.sort((a,b)=> (SLOT_BY_KEY.get(a.slotKey)?.order||999) - (SLOT_BY_KEY.get(b.slotKey)?.order||999));
-    _rows = rows;
-    renderRows(rows);
-  }catch(e){
-    console.error(e);
-  }finally{
-    loader(false);
-  }
-}
-
-/* ====== رسم الجدول ====== */
-function renderRows(rows){
-  const unit = outUnitEl.value;
-  const html = rows.map(r=>{
-    const stClass = r.mmol==null ? '' : (r.mmol<hypoLevel?'state-low': (r.mmol>hyperLevel?'state-high':'state-ok'));
-    const valTxt = unit==='mgdl' ? `${fmtMgdl(r.mgdl)} mg/dL` : `${fmtMmol(r.mmol)} mmol/L`;
-    const stateTxt = r.mmol==null ? '—' : (r.mmol<hypoLevel ? 'انخفاض' : (r.mmol>hyperLevel ? 'ارتفاع' : 'طبيعي'));
-    return `<tr class="${stClass}">
-      <td>${arLabel(r.slotKey)}</td>
-      <td class="reading">${valTxt}</td>
-      <td>${stateTxt}</td>
-      <td>${r.corr!=='' && r.corr!=null ? r.corr : '—'}</td>
-      <td>${r.bolus!=='' && r.bolus!=null ? r.bolus : '—'}</td>
-      <td>${r.hypo && String(r.hypo).trim() ? r.hypo : '—'}</td>
-      <td>${r.notes && String(r.notes).trim() ? r.notes : '—'}</td>
-    </tr>`;
-  }).join('');
-  tbody.innerHTML = html || `<tr><td colspan="7" class="muted center">لا توجد قياسات لليوم.</td></tr>`;
-}
-
-/* ====== حفظ قياس ====== */
-async function saveMeasurement(){
-  if(!validateValue()) return;
-
-  const slotKey = (normalizeSlot(slotEl.value)?.key) || 'RANDOM';
-  const mmol = readInputMmol();
-  const mgdl = readInputMgdl();
-
-  const state = getState(mmol);
-  const data = {
-    date: dayEl.value,
+  const payload = {
+    mmol, unit,
+    when, date: dateKey,
     slotKey,
-    unit: inUnitEl.value==='mmol' ? 'mmol/L' : 'mg/dL',
-    value_mmol: mmol==null? null : Number(mmol),
-    value_mgdl: mgdl==null? null : Number(mgdl),
-    state, // low|normal|high
-    correctionDose: correctionDoseEl.value ? Number(correctionDoseEl.value) : null,
-    bolusDose:      bolusDoseEl.value ? Number(bolusDoseEl.value) : null,
-    hypoTreatment:  (hypoTreatmentEl.value||'').trim() || null,
-    notes:          (notesEl.value||'').trim() || null,
+    bolusDose:  bolusDose.value? Number(bolusDose.value): null,
+    correctionDose: corrDose.value? Number(corrDose.value): null,
+    notes: notesInput.value || '',
     createdAt: serverTimestamp()
   };
+  if (unit==='mgdl'){
+    payload.mgdl = Number(valueInput.value);
+  }
 
+  await addDoc(collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`), payload);
+  clearForm();
+  await loadTable();
+}
+
+/* ======= حفظ تعديل ======= */
+async function saveEdit(){
+  if (!editMode?.id) return;
+  const unit = unitSel.value;
+  const mmol = toMmol(valueInput.value, unit);
+  if (mmol==null) return alert('من فضلك أدخل قيمة صحيحة');
+
+  const when = TODAY(); // بإمكانك استبدالها بتاريخ محفوظ إن كنت تحفظ وقت محدد
+  const dateKey = when.toISOString().slice(0,10);
+  const slotKey = (slotSel.value || 'RANDOM').toUpperCase();
+
+  if (!ALLOW_DUP_KEYS.has(slotKey)){
+    const dup = await existsDuplicate(dateKey, slotKey, editMode.id);
+    if (dup) return alert('هذا الوقت مسجّل بالفعل لهذا اليوم.');
+  }
+
+  const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/measurements/${editMode.id}`);
+  const payload = {
+    mmol, unit,
+    when, date: dateKey,
+    slotKey,
+    bolusDose:  bolusDose.value? Number(bolusDose.value): null,
+    correctionDose: corrDose.value? Number(corrDose.value): null,
+    notes: notesInput.value || '',
+    updatedAt: serverTimestamp()
+  };
+  if (unit==='mgdl'){
+    payload.mgdl = Number(valueInput.value);
+  } else {
+    payload.mgdl = Math.round(fromMmol(mmol,'mgdl'));
+  }
+
+  await updateDoc(ref, payload);
+  clearForm();
+  await loadTable();
+}
+
+/* ======= أحداث ======= */
+unitSel.addEventListener('change', ()=>{ renderChips(); updatePreviewAndUI(); });
+valueInput.addEventListener('input', updatePreviewAndUI);
+slotSel.addEventListener('change', updatePreviewAndUI);
+carbsInput.addEventListener('input', updatePreviewAndUI);
+notesInput.addEventListener('input', ()=>{ /* لا شيء إضافي */ });
+
+saveBtn.addEventListener('click', saveNew);
+saveEditBtn.addEventListener('click', saveEdit);
+cancelEditBtn.addEventListener('click', cancelEdit);
+
+/* ======= جلسة المستخدم ======= */
+onAuthStateChanged(auth, async (user)=>{
+  if(!user){ location.href='index.html'; return; }
+  currentUser = user;
   try{
-    loader(true);
-    const ref = collection(db, `parents/${USER.uid}/children/${childId}/measurements`);
-    await addDoc(ref, data);
-    showToast('تم حفظ القياس ✅');
-    notesEl.value = '';
-    correctionDoseEl.value = '';
-    bolusDoseEl.value = '';
-    hypoTreatmentEl.value = '';
-    valueEl.value = '';
-    renderRows([]);
+    await loadChild();
+    updatePreviewAndUI();
     await loadTable();
   }catch(e){
     console.error(e);
-    alert('تعذّر الحفظ');
-  }finally{
-    loader(false);
+    alert(e.message || 'خطأ أثناء التحميل');
   }
-}
-
-/* ========= Init ========= */
-onAuthStateChanged(auth, async (user)=>{
-  if(!user){ location.href='index.html'; return; }
-  USER=user;
-  if(!childId){ alert('لا يوجد معرف طفل'); history.back(); return; }
-
-  dayEl.value = todayStr();
-  btnToday.addEventListener('click', ()=>{ dayEl.value=todayStr(); loadTable(); });
-
-  // إعداد الوحدات الافتراضية
-  inUnitEl.value  = localStorage.getItem('meas_in_unit') || 'mmol';
-  outUnitEl.value = localStorage.getItem('meas_out_unit')|| 'mmol';
-
-  inUnitEl.addEventListener('change', ()=>{
-    localStorage.setItem('meas_in_unit', inUnitEl.value);
-    setInputMinByUnit();
-    validateValue();
-    updatePreviewAndVisibility();
-  });
-  outUnitEl.addEventListener('change', ()=>{
-    localStorage.setItem('meas_out_unit', outUnitEl.value);
-    renderRows(_rows);
-  });
-
-  // بناء قائمة الـ Slots
-  slotEl.innerHTML = SLOT_ENUM
-    .sort((a,b)=>a.order-b.order)
-    .map(s=> `<option value="${s.key}">${s.ar}</option>`).join('');
-
-  // تنقّل يحافظ على ?child
-  btnBack.addEventListener('click', ()=>{
-    location.href = `child.html?child=${encodeURIComponent(childId)}`;
-  });
-  btnMeals.addEventListener('click', ()=>{
-    location.href = `meals.html?child=${encodeURIComponent(childId)}`;
-  });
-
-  await loadChild();
-  await loadTable();
-
-  // أحداث فورية
-  valueEl.addEventListener('input', ()=>{
-    validateValue();
-    updatePreviewAndVisibility();
-  });
-  slotEl.addEventListener('change', updatePreviewAndVisibility);
-  dayEl.addEventListener('change', async ()=>{
-    const t = todayStr();
-    if(dayEl.value > t){ alert('لا يمكن اختيار تاريخ مستقبلي'); dayEl.value=t; }
-    await loadTable();
-  });
-
-  btnSave.addEventListener('click', saveMeasurement);
-  btnReset.addEventListener('click', ()=> { valueEl.value=''; notesEl.value=''; correctionDoseEl.value=''; bolusDoseEl.value=''; hypoTreatmentEl.value=''; updatePreviewAndVisibility(); });
-
-  // اضبط min الأولي حسب الوحدة
-  setInputMinByUnit();
-  validateValue();
-  updatePreviewAndVisibility();
 });
