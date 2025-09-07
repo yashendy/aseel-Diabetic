@@ -57,3 +57,35 @@ tbody tr:nth-child(even){background:#fbfcff}
   .child-info .topbar{grid-template-columns:1fr;gap:10px}
   .form .grid{grid-template-columns:1fr}
 }
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:16px;box-shadow:0 4px 12px rgba(0,0,0,.04)}
+.row{display:flex;gap:12px;align-items:center;margin:8px 0}
+.row label{min-width:120px}
+.muted{opacity:.6}
+.small{font-size:12px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.chip{padding:4px 10px;border-radius:999px;border:1px solid #e5e7eb;background:#f9fafb;font-size:12px}
+.chip.warn{background:#fff3cd;border-color:#ffe08a}
+.chip.danger{background:#fee2e2;border-color:#fecaca}
+.btn{padding:8px 14px;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;cursor:pointer}
+.btn.primary{background:#3b82f6;color:#fff;border-color:#3b82f6}
+.btn.success{background:#22c55e;color:#fff;border-color:#22c55e}
+.btn.ghost{background:transparent}
+.table{width:100%;border-collapse:collapse;margin-top:12px}
+.table th,.table td{border-bottom:1px solid #e5e7eb;padding:10px;vertical-align:top}
+.row-actions button{border:none;background:transparent;cursor:pointer}
+.row-actions .edit{color:#0ea5e9}
+.severe-banner{background:#fee2e2;border:1px solid #fecaca;color:#991b1b;padding:8px 10px;border-radius:8px;margin-bottom:8px}
+.card.state-low{border-color:#fecaca;box-shadow:0 0 0 2px #fee2e2 inset}
+.card.state-high{border-color:#fde68a;box-shadow:0 0 0 2px #fef3c7 inset}
+.card.state-ok{border-color:#dcfce7;box-shadow:0 0 0 2px #dcfce7 inset}
+.card.severe{animation:wobble .25s ease-in-out 0s 2}
+@keyframes wobble{
+  0%{transform:translateX(0)}
+  25%{transform:translateX(-3px)}
+  50%{transform:translateX(3px)}
+  100%{transform:translateX(0)}
+}
+.editbar{display:flex;gap:10px;align-items:center;background:#f1f5f9;border:1px dashed #cbd5e1;padding:6px 10px;border-radius:8px;margin:6px 0}
+.v-low{padding:2px 6px;border-radius:6px;background:#fee2e2}
+.v-in{padding:2px 6px;border-radius:6px;background:#dcfce7}
+.v-high{padding:2px 6px;border-radius:6px;background:#fde68a}
