@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>إدخال قياس</title>
-  <link rel="stylesheet" href="./css/measurements.css" />
+  <link rel="stylesheet" href="./measurements.css" />
 </head>
 <body>
 
@@ -17,11 +17,10 @@
     <!-- الشيبس (تُملأ تلقائياً) -->
     <div id="chips" class="chips"></div>
 
-    <!-- تاريخ ووقت القياس -->
+    <!-- تاريخ القياس (بدون ساعة) -->
     <div class="row">
       <label>تاريخ القياس</label>
       <input type="date" id="dateInput" />
-      <input type="time" id="timeInput" />
     </div>
 
     <!-- قيمة القياس + الوحدة -->
@@ -55,7 +54,13 @@
       </select>
     </div>
 
-    <!-- حسابات الكارب/الوجبة -->
+    <!-- علاج هبوط (يظهر فقط عند Low) -->
+    <div id="wrapTreatLow" class="row" hidden>
+      <label>صححنا بإيه؟</label>
+      <input id="treatLowInput" type="text" placeholder="مثال: 10 جم جلوكوز/عصير" />
+    </div>
+
+    <!-- حسابات الكارب/الوجبة (تظل كما هي للوجبات والسناك) -->
     <div id="wrapBolus" class="row">
       <label>رفعنا بإيه؟</label>
       <input id="carbsInput" type="number" step="1" inputmode="numeric" placeholder="جرام الكارب (اختياري)" />
@@ -65,8 +70,8 @@
       </div>
     </div>
 
-    <!-- التصحيح -->
-    <div class="row">
+    <!-- التصحيحي (يظهر فقط عند High) -->
+    <div id="wrapCorr" class="row" hidden>
       <div class="dose-group">
         <label>التصحيحي</label>
         <input id="corrDose" type="number" step="0.5" inputmode="decimal" placeholder="0" />
@@ -92,7 +97,7 @@
     </div>
   </section>
 
-  <!-- جدول قياسات اليوم فقط -->
+  <!-- جدول قياسات نفس اليوم المُختار -->
   <section class="table-wrap">
     <table class="table" aria-label="جدول القياسات">
       <thead>
@@ -110,6 +115,6 @@
     </table>
   </section>
 
-  <script type="module" src="./js/measurements.js"></script>
+  <script type="module" src="./measurements.js"></script>
 </body>
 </html>
