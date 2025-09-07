@@ -1,8 +1,8 @@
-// js/meals.js — يعمل مع meals.html كما هو
+// js/meals.js — يعمل مع meals.html كما هو (كامل) + reachTargetSmart() الجديدة
 import { auth, db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs, addDoc,
-  query, where, orderBy, limit, serverTimestamp
+  query, where, orderBy, limit, serverTimestamp, deleteDoc
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
@@ -263,21 +263,138 @@ async function repeatLast(){
   renderItems(); recalcAll(); toast('تم جلب آخر وجبة ✅','success');
 }
 
-/* ===== الوصول للهدف بتكبير الكميات ===== */
-function reachTarget(){
+/* ===== مساعد الوصول للهدف — النسخة الذكية ===== */
+
+/** جرام كارب لكل 1 جم طعام */
+function carbPerGram(row){
+  const c=row?.per100?.carbs||0; return c>0 ? c/100 : 0;
+}
+/** أقرب قيمة لخطوة معينة (افتراضي 0.25) */
+function roundToStep(v, step=0.25){
+  return Math.round(v/step)*step;
+}
+/** يطبّق تعديل الجرامات على صف مع مراعاة نوع الوحدة والسقوف. يرجّع كمية الكارب التي تغيّرت فعليًا */
+function applyGramsDelta(row, gramsDelta, opts){
+  const {
+    maxItemGrams=100,           // سقف العنصر النهائي بالجرام
+    maxPressGrams=25,           // سقف التغيير لكل ضغطة (جرام)
+    hhStep=0.25,                // خطوة التقدير البيتي
+    maxPressHH=0.5              // أقصى تغيير بالوحدة البيتي في الضغطة
+  } = opts || {};
+
+  const cpg=carbPerGram(row);
+  if(cpg<=0) return 0;
+
+  // حد الضغطة
+  const limitedDelta = Math.max(-maxPressGrams, Math.min(maxPressGrams, gramsDelta));
+
+  if(row.unit==='grams'){ // تغيير مباشر بالجرام
+    const newGrams = Math.max(0, Math.min(maxItemGrams, row.grams + limitedDelta));
+    const realDeltaGrams = newGrams - row.grams;
+    row.grams = newGrams;
+    row.qty = row.grams; // في وضع الجرام، qty = grams
+    // تحديث القيم الغذائية
+    row.calc.carbs = row.per100.carbs*(row.grams/100);
+    row.calc.fiber = row.per100.fiber*(row.grams/100);
+    row.calc.cal   = row.per100.cal  *(row.grams/100);
+    row.calc.prot  = row.per100.prot *(row.grams/100);
+    row.calc.fat   = row.per100.fat  *(row.grams/100);
+    return realDeltaGrams * cpg;
+  }else{ // household
+    const m = row.measures.find(x=>x.name===row.measure) || row.measures[0];
+    if(!m || !m.grams) return 0;
+    const gramsPerUnit = m.grams;
+    // حوّل الجرامات المطلوبة إلى وحدات بيتي
+    let deltaUnits = limitedDelta / gramsPerUnit;
+    // سقف الضغطة بالوحدة البيتي
+    deltaUnits = Math.max(-maxPressHH, Math.min(maxPressHH, deltaUnits));
+    // تقريــب للخطوة المسموحة (0.25 كما طلبتي)
+    deltaUnits = roundToStep(deltaUnits, hhStep);
+
+    // الكمية الجديدة بالوحدة
+    const newQty = Math.max(0, row.qty + deltaUnits);
+    const newGrams = Math.min(maxItemGrams, newQty * gramsPerUnit);
+    // لو بسبب السقف رجّعنا أقل، أعيدي حساب الدلتا الفعلية
+    const realUnits = newGrams/gramsPerUnit - row.qty;
+
+    row.qty = roundToStep(newGrams/gramsPerUnit, hhStep);
+    row.grams = row.qty * gramsPerUnit;
+
+    row.calc.carbs = row.per100.carbs*(row.grams/100);
+    row.calc.fiber = row.per100.fiber*(row.grams/100);
+    row.calc.cal   = row.per100.cal  *(row.grams/100);
+    row.calc.prot  = row.per100.prot *(row.grams/100);
+    row.calc.fat   = row.per100.fat  *(row.grams/100);
+
+    return (realUnits*gramsPerUnit) * cpg;
+  }
+}
+
+/** حساب إجمالي الكارب (أو الصافي) للحالة الحالية */
+function computeCurrentCarbs(){
+  const totalC=items.reduce((a,r)=>a+r.calc.carbs,0);
+  const totalF=items.reduce((a,r)=>a+r.calc.fiber,0);
+  return useNetCarbsEl?.checked ? Math.max(0,totalC-totalF) : totalC;
+}
+
+/** ضبط للوصول للهدف — ذكي وتدريجي */
+function reachTargetSmart(){
   const min=Number(goalMinEl.textContent)||0, max=Number(goalMaxEl.textContent)||0;
-  if(!min&&!max){ toast('لا يوجد هدف محدد','info'); return; }
-  const target=max||min;
-  const current=useNetCarbsEl?.checked?Math.max(0,items.reduce((a,r)=>a+r.calc.carbs-r.calc.fiber,0)):items.reduce((a,r)=>a+r.calc.carbs,0);
-  if(current<=0||items.length===0){ toast('أضف عناصر أولاً','info'); return; }
-  const scale=target/current;
-  items.forEach(r=>{
-    if(r.unit==='grams'){ r.qty=round1(toNum(r.qty)*scale); r.grams=r.qty; }
-    else{ r.qty=round1(toNum(r.qty)*scale); const m=r.measures.find(x=>x.name===r.measure); r.grams=r.qty*(m?.grams||0); }
-    r.calc.carbs=r.per100.carbs*(r.grams/100); r.calc.fiber=r.per100.fiber*(r.grams/100);
-    r.calc.cal=r.per100.cal*(r.grams/100); r.calc.prot=r.per100.prot*(r.grams/100); r.calc.fat=r.per100.fat*(r.grams/100);
-  });
-  renderItems(); recalcAll(); toast('تم ضبط الكميات على الهدف 🎯','success');
+  const hasRange = !!(min||max);
+  const target = max || min;
+  if(!hasRange || !target){ toast('لا يوجد هدف محدد للكارب','info'); return; }
+  if(items.length===0){ toast('أضف عناصر أولاً','info'); return; }
+
+  let current = computeCurrentCarbs();
+  let deficit = target - current;
+  const tolerance = 3; // لو الفرق ≤ 3 جم نعتبر وصلنا
+  if(Math.abs(deficit) <= tolerance){ toast('داخل النطاق بالفعل ✅','success'); return; }
+
+  // قائمة العناصر مرتبة حسب الكثافة (زيادة) أو حسب مساهمة الكارب (نقص)
+  const withCpg = items.map((r)=>({r, cpg:carbPerGram(r), contrib:r.calc.carbs}))
+                       .filter(x=>x.cpg>0);
+  if(!withCpg.length){ toast('لا توجد عناصر ذات كارب لإعادة الضبط','info'); return; }
+
+  const MAX_LOOPS = 6;           // محاولات داخل الضغطة الواحدة
+  const CHUNK_CARB = 8;          // نقترب على جولات 8 جم كارب تقريبًا
+  const opts = { maxItemGrams:100, maxPressGrams:25, hhStep:0.25, maxPressHH:0.5 };
+
+  let loops = 0;
+  while(Math.abs(deficit) > tolerance && loops < MAX_LOOPS){
+    loops++;
+
+    if(deficit > 0){
+      // نحتاج زيادة — وزع على العناصر الأعلى كثافة أولاً
+      withCpg.sort((a,b)=>b.cpg - a.cpg);
+      for(const it of withCpg){
+        if(deficit <= tolerance) break;
+        const wantCarb = Math.min(deficit, CHUNK_CARB);
+        const gramsDelta = wantCarb / it.cpg;
+        const gotCarb = applyGramsDelta(it.r, gramsDelta, opts);
+        deficit -= gotCarb;
+      }
+    }else{
+      // نحتاج تقليل — قلل من الأعلى مساهمة أولاً
+      withCpg.sort((a,b)=>b.contrib - a.contrib);
+      for(const it of withCpg){
+        if(Math.abs(deficit) <= tolerance) break;
+        const wantCarb = Math.min(Math.abs(deficit), CHUNK_CARB);
+        const gramsDelta = -(wantCarb / it.cpg);
+        const gotCarb = applyGramsDelta(it.r, gramsDelta, opts);
+        deficit += Math.abs(gotCarb);
+      }
+    }
+    // أعِد الحساب لِلّفّة القادمة
+    current = computeCurrentCarbs();
+    deficit = target - current;
+  }
+
+  renderItems(); // نعيد رسم الصفوف بالقيم الجديدة
+  recalcAll();
+
+  const left = Math.round(deficit);
+  if(Math.abs(left) <= tolerance) toast('اقتربنا جدًا من الهدف 🎯','success');
+  else toast(`ما زال الفرق حوالي ${left} جم`, 'info');
 }
 
 /* ===== حفظ/إعادة/طباعة ===== */
@@ -404,7 +521,7 @@ function wireEvents(){
 
   // أساسية
   repeatLastBtn?.addEventListener('click',repeatLast);
-  reachTargetBtn?.addEventListener('click',reachTarget);
+  reachTargetBtn?.addEventListener('click',reachTargetSmart); // ← هنا ربطنا الزر بالدالة الجديدة
   saveMealBtn?.addEventListener('click',saveMeal);
   resetMealBtn?.addEventListener('click',resetMeal);
   printDayBtn?.addEventListener('click',printDay);
