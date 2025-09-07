@@ -185,3 +185,21 @@ button[disabled]{opacity:.6;cursor:not-allowed}
   object-fit: contain;    /* يخلي الصورة تنضغط/تتوسع جوا الإطار من غير ما تطلع */
   display: block;
 }
+/* أيقونات صغيرة جداً للبطاقات */
+.pick-card, .preset-card {
+  width: 60px;       /* البطاقة صغيرة كأنها أيقونة */
+  height: 60px;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.pick-card img,
+.preset-card img {
+  width: 32px;      /* الصورة صغيرة جداً */
+  height: 32px;
+  object-fit: contain;
+  display: block;
+}
