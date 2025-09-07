@@ -4,14 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>مكتبة الوجبات</title>
-  <link rel="stylesheet" href="css/meals.css" />
+  <link rel="icon" href="images/favicon.ico">
+  <link rel="stylesheet" href="css/meals.css?v=final-1" />
 </head>
 <body>
 
-  <!-- رأس بسيط -->
+  <!-- رأس الصفحة -->
   <header class="head">
     <div class="head-grid">
       <h1 class="page-title">مكتبة الوجبات</h1>
+
       <div class="controls">
         <select id="mealFilter" aria-label="فلتر التصنيف">
           <option value="all" selected>الكل</option>
@@ -20,14 +22,54 @@
           <option value="fat">دهون</option>
           <option value="fruit">فاكهة</option>
         </select>
+
         <input id="searchInput" type="search" placeholder="ابحث عن صنف…" />
         <button id="resetBtn" class="btn" type="button">إعادة ضبط</button>
+      </div>
+    </div>
+
+    <!-- شِيبس الأهداف + أزرار التحكم -->
+    <div class="targets-bar">
+      <div class="chips-wrap">
+        <span id="chipDate" class="chip">اليوم: —</span>
+        <span id="targetCarb" class="chip">كارب: —</span>
+        <span id="targetProtein" class="chip">بروتين: —</span>
+        <span id="targetFat" class="chip">دهون: —</span>
+        <span id="targetKcal" class="chip">سعرات: —</span>
+      </div>
+      <div class="actions-wrap">
+        <button id="applyTargetsBtn" class="btn ghost" type="button">تظبيط حسب هدف الكارب</button>
+        <button id="toggleAiBtn" class="btn" type="button" aria-expanded="false">🤖 اقتراح بالذكاء الاصطناعي</button>
+        <input id="dateInput" type="date" />
+        <button id="saveDayBtn" class="btn primary" type="button">حفظ اليوم</button>
       </div>
     </div>
   </header>
 
   <!-- المحتوى -->
   <main class="container">
+
+    <!-- لوحة الذكاء الاصطناعي (قابلة للطي) -->
+    <section id="aiPanel" class="ai-panel" hidden>
+      <div class="ai-grid">
+        <div>
+          <h3 class="ai-title">توازن الكارب حسب الهدف</h3>
+          <p class="muted">أدخل الكارب المطلوب لهذه الوجبة وسيتم اقتراح تركيبة تقريبية.</p>
+          <div class="row ai-row">
+            <label>كارب مطلوب</label>
+            <input id="aiCarbGoal" type="number" step="1" inputmode="numeric" placeholder="مثال: 45" />
+            <button id="aiSuggestBtn" class="btn" type="button">اقترح وجبة</button>
+          </div>
+          <div id="aiOut" class="ai-out muted">—</div>
+        </div>
+        <div>
+          <h3 class="ai-title">اقتراح عشوائي ذكي</h3>
+          <p class="muted">نقترح وجبة متوازنة سريعة من المكتبة.</p>
+          <button id="aiRandomBtn" class="btn" type="button">اقترح الآن</button>
+        </div>
+      </div>
+    </section>
+
     <!-- وجبات جاهزة -->
     <section class="section">
       <h2 class="section-title">وجبات جاهزة</h2>
@@ -47,6 +89,7 @@
     <!-- اختيارات اليوم -->
     <section class="section">
       <h2 class="section-title">اختيارات اليوم</h2>
+
       <div class="items-table">
         <div class="row header">
           <div>الصنف</div>
@@ -61,9 +104,35 @@
         </div>
         <div id="itemsBody"></div>
       </div>
+
+      <!-- إجماليات -->
+      <div class="totals">
+        <span id="sumCarb" class="chip">إجمالي الكارب: 0</span>
+        <span id="sumProtein" class="chip">إجمالي البروتين: 0</span>
+        <span id="sumFat" class="chip">إجمالي الدهون: 0</span>
+        <span id="sumKcal" class="chip">إجمالي السعرات: 0</span>
+      </div>
+    </section>
+
+    <!-- السجلات المحفوظة -->
+    <section class="section">
+      <h2 class="section-title">السجلات المحفوظة</h2>
+      <div class="items-table">
+        <div class="row header">
+          <div>التاريخ</div>
+          <div>الوجبات</div>
+          <div>كارب</div>
+          <div>بروتين</div>
+          <div>دهون</div>
+          <div>سعرات</div>
+          <div>ملاحظات</div>
+          <div>إجراء</div>
+        </div>
+        <div id="savedBody"></div>
+      </div>
     </section>
   </main>
 
-  <script src="js/meals.js" type="module"></script>
+  <script type="module" src="js/meals.js?v=final-1"></script>
 </body>
 </html>
