@@ -44,9 +44,10 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Tahoma,Arial;margin:0;p
 .v-in{padding:2px 6px;border-radius:6px;background:#dcfce7}
 .v-high{padding:2px 6px;border-radius:6px;background:#fde68a}
 
-/* إخفاء عمود التصحيحي تلقائيًا (العمود الخامس) */
-.table.hide-corr th:nth-child(5),
-.table.hide-corr td:nth-child(5){ display:none }
+/* بعد حذف عمود التاريخ:
+   الأعمدة: [الوقت(1), القيمة(2), جرعة(3), التصحيحي(4), ملاحظات(5), إجراءات(6)] */
+.table.hide-corr th:nth-child(4),
+.table.hide-corr td:nth-child(4){ display:none }
 
 /* طباعة PDF */
 @media print{
