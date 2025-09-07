@@ -1,135 +1,376 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>القياسات</title>
-  <link rel="stylesheet" href="css/measurements.css" />
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+// measurements.js — بطاقة إدخال/تعديل قياسات الأطفال
 
-</head>
-<body>
-  <div class="container">
+import { auth, db } from './firebase-config.js';
+import {
+  collection, addDoc, updateDoc, doc, getDoc, getDocs, query, where, orderBy, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-    <!-- شريط علوي -->
-    <header class="card child-info">
-      <div class="topbar">
-        <div class="nav">
-          <button class="btn back" id="btnBack">⬅ رجوع</button>
-          <button class="btn" id="btnMeals">🍽️ الوجبات</button>
-        </div>
-        <div class="who">
-          <h1>📊 القياسات — <span id="childName">طفل</span></h1>
-          <p class="muted" id="childMeta">—</p>
-          <div class="chips">
-            <span class="chip" id="chipRange">النطاق: —</span>
-            <span class="chip" id="chipCR">CR: —</span>
-            <span class="chip" id="chipCF">CF: —</span>
-          </div>
-        </div>
-        <div class="datebar">
-          <label for="day">اليوم:</label>
-          <input type="date" id="day" />
-          <button class="btn tiny" id="btnToday">اليوم</button>
-        </div>
-      </div>
-    </header>
+/* ===== عناصر DOM ===== */
+const card         = document.getElementById('measCard');
+const chipsHost    = document.getElementById('chips');
+const severeBanner = document.getElementById('severeBanner');
 
-    <!-- بطاقة إدخال القياس -->
-    <section class="card form">
-      <h2>إدخال قياس</h2>
-      <div class="grid">
-        <!-- وقت القياس -->
-        <div class="field">
-          <label for="slot">وقت القياس</label>
-          <select id="slot"></select>
-          <div class="hint">الاختيارات مرتبة زمنيًا.</div>
-        </div>
+const unitSel      = document.getElementById('unitSelect');
+const valueInput   = document.getElementById('valueInput');
+const convHint     = document.getElementById('convHint');
 
-        <!-- قيمة القياس + وحدة الإدخال -->
-        <div class="field">
-          <label for="value">قيمة القياس</label>
-          <div class="row-inline">
-            <input id="value" type="number" step="0.1" min="0" placeholder="مثال: 6.5" />
-            <select id="inUnit" class="unit">
-              <option value="mmol">mmol/L</option>
-              <option value="mgdl">mg/dL</option>
-            </select>
-          </div>
-          <div class="hint" id="convHint">—</div>
-          <div class="err hidden" id="valueErr">لا يمكن إدخال قياس أقل من 2 mmol/L أو 36 mg/dL</div>
-        </div>
+const slotSel      = document.getElementById('slotSelect');
+const carbsInput   = document.getElementById('carbsInput');
+const bolusDose    = document.getElementById('bolusDose');
+const corrDose     = document.getElementById('corrDose');
+const notesInput   = document.getElementById('notesInput');
 
-        <!-- جرعة التصحيح -->
-        <div class="field hidden" id="wrapCorrection">
-          <label for="correctionDose">جرعة تصحيحية (U)</label>
-          <input id="correctionDose" type="number" step="0.1" min="0" />
-          <div class="hint" id="corrHint">—</div>
-        </div>
+const saveBtn      = document.getElementById('saveBtn');
+const saveEditBtn  = document.getElementById('saveEditBtn');
+const cancelEditBtn= document.getElementById('cancelEditBtn');
+const editBar      = document.getElementById('editBar');
 
-        <!-- جرعة الأكل (Bolus) -->
-        <div class="field" id="wrapBolus">
-          <label for="bolusDose">جرعة الإنسولين قبل الأكل (U)</label>
-          <input id="bolusDose" type="number" step="0.1" min="0" placeholder="اختياري" />
-          <div class="hint">أدخلي جرعة الأكل إن وُجدت.</div>
-        </div>
+const tbody        = document.getElementById('measTableBody');
 
-        <!-- علاج الهبوط -->
-        <div class="field hidden" id="wrapHypo">
-          <label for="hypoTreatment">رفعنا بإيه؟</label>
-          <input id="hypoTreatment" placeholder="مثال: عصير 100ml / 3 جلوكوز" />
-        </div>
+/* ===== حالة عامة ===== */
+let currentUser = null;
+let childId     = null; // من URL ?child=...
+let childData   = null;
+let editMode    = null; // { id, snapshot, loadedAt }
 
-        <!-- ملاحظات -->
-        <div class="field row">
-          <label for="notes">ملاحظات</label>
-          <input id="notes" placeholder="اختياري…" />
-        </div>
-      </div>
+/* ===== ثوابت ===== */
+const ALLOW_DUP_KEYS = new Set(['SNACK','PRE_SPORT','POST_SPORT']);
+const MEAL_SLOTS = new Set([
+  'PRE_BREAKFAST','POST_BREAKFAST',
+  'PRE_LUNCH','POST_LUNCH',
+  'PRE_DINNER','POST_DINNER',
+  'SNACK'
+]);
+const ROUND_STEP = 0.5; // تقريب الجرعات لأقرب 0.5
+const TODAY = ()=> new Date();
 
-      <div class="actions">
-        <button class="btn primary" id="btnSave">💾 حفظ القياس</button>
-        <button class="btn" id="btnReset">مسح الحقول</button>
-      </div>
-      <div id="toast" class="toast hidden"></div>
-    </section>
+/* ===== وحدات ===== */
+function toMmol(val, unit){
+  if (val==null || val==='') return null;
+  const n = Number(val);
+  if (Number.isNaN(n)) return null;
+  return (unit==='mgdl') ? n/18 : n;
+}
+function fromMmol(mmol, outUnit){
+  if (mmol==null) return null;
+  return (outUnit==='mgdl') ? mmol*18 : mmol;
+}
+function fmtVal(mmol, outUnit){
+  const v = fromMmol(mmol, outUnit);
+  if (v==null) return '';
+  return outUnit==='mgdl' ? Math.round(v).toString() : v.toFixed(1);
+}
+function roundDose(x){ return Math.round(Number(x)/ROUND_STEP)*ROUND_STEP; }
 
-    <!-- جدول اليوم -->
-    <section class="card table">
-      <div class="table-head">
-        <h2>قياسات اليوم</h2>
-        <div class="view-unit">
-          <label for="outUnit">عرض القيم بالوحدة:</label>
-          <select id="outUnit" class="unit">
-            <option value="mmol">mmol/L</option>
-            <option value="mgdl">mg/dL</option>
-          </select>
-        </div>
-      </div>
+/* ===== نطاق الطفل ===== */
+function getRanges(){
+  const r = childData?.normalRange || {};
+  const min = Number(r.min ?? 4.5);
+  const max = Number(r.max ?? 7);
+  const severeLow  = Number((r.severeLow  ?? r.severe_low  ?? min));
+  const severeHigh = Number((r.severeHigh ?? r.severe_high ?? max));
+  const hypoLevel  = Number(r.hypo  ?? severeLow);
+  const hyperLevel = Number(r.hyper ?? severeHigh);
+  return { min, max, severeLow, severeHigh, hypoLevel, hyperLevel };
+}
 
-      <table>
-        <thead>
-          <tr>
-            <th>وقت القياس</th>
-            <th>القراءة</th>
-            <th>الحالة</th>
-            <th>جرعة التصحيح</th>
-            <th>جرعة قبل الأكل</th>
-            <th>علاج الهبوط</th>
-            <th>ملاحظات</th>
-            <th>تعديل</th>
-          </tr>
-        </thead>
-        <tbody id="tbody">
-          <tr><td colspan="8" class="muted">—</td></tr>
-        </tbody>
-      </table>
-    </section>
-  </div>
+/* ===== Chips ===== */
+function renderChips(){
+  if (!chipsHost || !childData) return;
+  const { min, max, severeLow, severeHigh } = getRanges();
+  const cf = childData?.cf ?? childData?.correctionFactor ?? null;
+  const cr = childData?.cr ?? childData?.carbRatio ?? null;
+  chipsHost.innerHTML = [
+    `<span class="chip">الوحدة: ${unitSel.value==='mgdl'?'mg/dL':'mmol/L'}</span>`,
+    `<span class="chip">طبيعي (التقرير): ${severeLow}–${severeHigh} mmol/L</span>`,
+    `<span class="chip">النطاق القياسي: ${min}–${max} mmol/L</span>`,
+    cf!=null ? `<span class="chip">CF: ${cf} mmol/L/U</span>` : '',
+    cr!=null ? `<span class="chip">CR: ${cr} g/U</span>` : ''
+  ].filter(Boolean).join('');
+}
 
-  <!-- اللودر -->
-  <div id="loader" class="loader hidden">جارِ التحميل…</div>
+/* ===== تلوين البطاقة + تنبيه ===== */
+function setCardState(state, severe=false){
+  card.classList.remove('state-low','state-ok','state-high','severe');
+  if (state==='low')  card.classList.add('state-low');
+  if (state==='high') card.classList.add('state-high');
+  if (state==='ok')   card.classList.add('state-ok');
+  if (severe) card.classList.add('severe');
+  severeBanner.hidden = !severe;
+}
+function classify(mmol){
+  const { hypoLevel, hyperLevel } = getRanges();
+  if (mmol==null) return 'ok';
+  if (mmol < hypoLevel)  return 'low';
+  if (mmol > hyperLevel) return 'high';
+  return 'ok';
+}
 
-  <script type="module" src="js/measurements.js"></script>
-</body>
-</html>
+/* ===== منع تكرار وقت القياس ===== */
+async function existsDuplicate(dateKey, slotKey, excludedId=null){
+  const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
+  const qy  = query(col, where('date','==',dateKey), where('slotKey','==',slotKey));
+  const snap= await getDocs(qy);
+  let found = false;
+  snap.forEach(d=>{
+    if (excludedId && d.id===excludedId) return;
+    found = true;
+  });
+  return found;
+}
+
+/* ===== حسابات الجرعات ===== */
+function computeCorrection(mmol){
+  const cf = childData?.cf ?? childData?.correctionFactor ?? null;
+  const { max } = getRanges();
+  if (cf==null || mmol==null) return 0;
+  const delta = mmol - max;
+  if (delta <= 0) return 0;
+  return roundDose(delta / Number(cf));
+}
+function computeMealBolus(carbs){
+  const cr = childData?.cr ?? childData?.carbRatio ?? null;
+  if (cr==null || !carbs) return 0;
+  return roundDose(Number(carbs) / Number(cr));
+}
+
+/* ===== معاينة/تحقق أثناء الإدخال ===== */
+function updatePreviewAndUI(){
+  const unit = unitSel.value;
+  const mmol = toMmol(valueInput.value, unit);
+
+  // تحويل وحدات
+  if (mmol!=null) {
+    const other = unit==='mgdl' ? 'mmol/L' : 'mg/dL';
+    const otherVal = fmtVal(mmol, unit==='mgdl'?'mmol':'mgdl');
+    convHint.textContent = `${other} ≈ ${otherVal}`;
+  } else {
+    convHint.textContent = `${unit==='mgdl'?'mmol/L':'mg/dL'} ≈ 0`;
+  }
+
+  // تلوين وتنبيه
+  const { severeLow, severeHigh } = getRanges();
+  const c = classify(mmol);
+  const severe = (mmol!=null) && (mmol<=severeLow || mmol>=severeHigh);
+  setCardState(c, severe);
+
+  // إظهار/إخفاء جزء الوجبة حسب الخانة
+  const showMeal = MEAL_SLOTS.has((slotSel.value||'').toUpperCase());
+  document.getElementById('wrapBolus').style.display = showMeal ? '' : 'none';
+
+  // التصحيح بعد max
+  if (mmol!=null){ corrDose.value = computeCorrection(mmol) || ''; }
+  else { corrDose.value = ''; }
+
+  // جرعة وجبة
+  const carbs = Number(carbsInput.value || 0);
+  if (showMeal && carbs>0) bolusDose.value = computeMealBolus(carbs) || '';
+  else if (!showMeal){ bolusDose.value=''; carbsInput.value=''; }
+}
+
+/* ===== تعبئة/مسح البطاقة ===== */
+function clearForm(){
+  editMode = null;
+  valueInput.value = '';
+  corrDose.value   = '';
+  bolusDose.value  = '';
+  carbsInput.value = '';
+  notesInput.value = '';
+  saveBtn.hidden = false;
+  saveEditBtn.hidden = true;
+  editBar.hidden = true;
+  setCardState('ok', false);
+  updatePreviewAndUI();
+}
+function fillFormFromDoc(d){
+  const unit = (d.unit || (d.mgdl!=null?'mgdl':'mmol')).toLowerCase();
+  unitSel.value = unit;
+  if (d.mmol!=null) valueInput.value = fmtVal(d.mmol, unit);
+  else if (d.mgdl!=null) valueInput.value = unit==='mgdl' ? d.mgdl : (d.mgdl/18).toFixed(1);
+  slotSel.value = d.slotKey || d.slot || 'RANDOM';
+  corrDose.value = d.correctionDose ?? '';
+  bolusDose.value= d.bolusDose ?? '';
+  notesInput.value= d.notes ?? '';
+  updatePreviewAndUI();
+}
+
+/* ===== تحميل الطفل + الجدول ===== */
+async function loadChild(){
+  const qs = new URLSearchParams(location.search);
+  childId = qs.get('child');
+  if (!childId) throw new Error('لا يوجد child في الرابط');
+
+  const cs = await getDoc(doc(db, `parents/${currentUser.uid}/children/${childId}`));
+  if (!cs.exists()) throw new Error('الطفل غير موجود');
+  childData = cs.data();
+  renderChips();
+}
+
+async function loadTable(limitDays=14){
+  tbody.innerHTML = '';
+  const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
+  const qy  = query(col, orderBy('when','desc'));
+  const snap= await getDocs(qy);
+
+  const rows = [];
+  const cutoff = Date.now() - (limitDays*24*60*60*1000);
+  snap.forEach(ds=>{
+    const d = ds.data();
+    const when = d.when?.toDate?.() || (d.date? new Date(d.date): null);
+    if (!when || when.getTime()<cutoff) return;
+    rows.push({ id: ds.id, ...d, when });
+  });
+
+  rows.sort((a,b)=> b.when - a.when);
+  rows.forEach(d=>{
+    const unit = (d.unit || (d.mgdl!=null?'mgdl':'mmol')).toLowerCase();
+    const mmol = d.mmol!=null ? d.mmol : (d.mgdl/18);
+    const cls  = classify(mmol);
+    const dateKey = d.date || d.when.toISOString().slice(0,10);
+
+    const tr = document.createElement('tr');
+
+    const tdDate = document.createElement('td');
+    tdDate.textContent = dateKey;
+    tr.appendChild(tdDate);
+
+    const tdSlot = document.createElement('td');
+    tdSlot.textContent = d.slotKey || d.slot || '—';
+    tr.appendChild(tdSlot);
+
+    const tdVal = document.createElement('td');
+    const span = document.createElement('span');
+    span.className = `v-${cls==='low'?'low':cls==='high'?'high':'in'}`;
+    span.textContent = unit==='mgdl' ? Math.round(fromMmol(mmol,'mgdl')) : mmol.toFixed(1);
+    tdVal.appendChild(span);
+    tdVal.appendChild(document.createTextNode(` ${unit==='mgdl'?'mg/dL':'mmol/L'}`));
+    tr.appendChild(tdVal);
+
+    const tdBolus = document.createElement('td');
+    tdBolus.textContent = d.bolusDose ?? '—';
+    tr.appendChild(tdBolus);
+
+    const tdCorr = document.createElement('td');
+    tdCorr.textContent = d.correctionDose ?? '—';
+    tr.appendChild(tdCorr);
+
+    const tdNotes = document.createElement('td');
+    tdNotes.textContent = d.notes || '—';
+    tr.appendChild(tdNotes);
+
+    const tdAct = document.createElement('td');
+    tdAct.className = 'row-actions';
+    const btn = document.createElement('button');
+    btn.className = 'edit';
+    btn.textContent = 'تعديل ✏️';
+    btn.addEventListener('click', ()=> enterEditMode(d.id));
+    tdAct.appendChild(btn);
+    tr.appendChild(tdAct);
+
+    tbody.appendChild(tr);
+  });
+}
+
+/* ===== وضع التعديل ===== */
+async function enterEditMode(id){
+  const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/measurements/${id}`);
+  const s   = await getDoc(ref);
+  if (!s.exists()) return alert('القياس غير موجود');
+  fillFormFromDoc(s.data());
+  editMode = { id, snapshot: s, loadedAt: Date.now() };
+  saveBtn.hidden = true;
+  saveEditBtn.hidden = false;
+  editBar.hidden = false;
+}
+function cancelEdit(){ clearForm(); }
+
+/* ===== حفظ قياس جديد ===== */
+async function saveNew(){
+  const unit = unitSel.value;
+  const mmol = toMmol(valueInput.value, unit);
+  if (mmol==null) return alert('من فضلك أدخل قيمة صحيحة');
+
+  const when = TODAY();
+  const dateKey = when.toISOString().slice(0,10);
+  const slotKey = (slotSel.value || 'RANDOM').toUpperCase();
+
+  if (!ALLOW_DUP_KEYS.has(slotKey)){
+    const dup = await existsDuplicate(dateKey, slotKey, null);
+    if (dup) return alert('هذا الوقت مسجّل بالفعل لهذا اليوم.');
+  }
+
+  const payload = {
+    mmol, unit,
+    when, date: dateKey,
+    slotKey,
+    bolusDose:   bolusDose.value? Number(bolusDose.value): null,
+    correctionDose: corrDose.value? Number(corrDose.value): null,
+    notes: (notesInput.value||'').trim(),
+    createdAt: serverTimestamp()
+  };
+  if (unit==='mgdl'){ payload.mgdl = Number(valueInput.value); }
+
+  await addDoc(collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`), payload);
+  clearForm();
+  await loadTable();
+}
+
+/* ===== حفظ التعديل ===== */
+async function saveEdit(){
+  if (!editMode?.id) return;
+  const unit = unitSel.value;
+  const mmol = toMmol(valueInput.value, unit);
+  if (mmol==null) return alert('من فضلك أدخل قيمة صحيحة');
+
+  const when = TODAY(); // يمكن استبدالها بتاريخ مخزّن لديك إن أردت تحرير وقت القياس نفسه
+  const dateKey = when.toISOString().slice(0,10);
+  const slotKey = (slotSel.value || 'RANDOM').toUpperCase();
+
+  if (!ALLOW_DUP_KEYS.has(slotKey)){
+    const dup = await existsDuplicate(dateKey, slotKey, editMode.id);
+    if (dup) return alert('هذا الوقت مسجّل بالفعل لهذا اليوم.');
+  }
+
+  const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/measurements/${editMode.id}`);
+  const payload = {
+    mmol, unit,
+    when, date: dateKey,
+    slotKey,
+    bolusDose:   bolusDose.value? Number(bolusDose.value): null,
+    correctionDose: corrDose.value? Number(corrDose.value): null,
+    notes: (notesInput.value||'').trim(),
+    updatedAt: serverTimestamp()
+  };
+  if (unit==='mgdl'){ payload.mgdl = Number(valueInput.value); }
+  else { payload.mgdl = Math.round(fromMmol(mmol,'mgdl')); }
+
+  await updateDoc(ref, payload);
+  clearForm();
+  await loadTable();
+}
+
+/* ===== أحداث ===== */
+unitSel.addEventListener('change', ()=>{ renderChips(); updatePreviewAndUI(); });
+valueInput.addEventListener('input', updatePreviewAndUI);
+slotSel.addEventListener('change', updatePreviewAndUI);
+carbsInput.addEventListener('input', updatePreviewAndUI);
+notesInput.addEventListener('input', ()=>{});
+
+saveBtn.addEventListener('click', saveNew);
+saveEditBtn.addEventListener('click', saveEdit);
+cancelEditBtn.addEventListener('click', cancelEdit);
+
+/* ===== بدء الجلسة ===== */
+onAuthStateChanged(auth, async (user)=>{
+  if(!user){ location.href='index.html'; return; }
+  currentUser = user;
+  try{
+    await loadChild();
+    updatePreviewAndUI();
+    await loadTable();
+  }catch(e){
+    console.error(e);
+    alert(e.message || 'خطأ أثناء التحميل');
+  }
+});
