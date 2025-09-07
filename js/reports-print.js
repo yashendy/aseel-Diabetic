@@ -1,284 +1,330 @@
-// js/reports-print.js — تلوين الطباعة low/ok/high على hypo/hyper، دون تغيير الـCSS/DOM
+// reports-print.js — طباعة تقرير القياسات (آمن ضد undefined .push)
+// ملاحظات:
+// - عدّل معرفات عناصر الواجهة هنا لو مختلفة في reports-print.html
+// - يعتمد على Firebase v12 (auth/firestore) مثل باقي المشروع
+
+// ===== Firebase =====
 import { auth, db } from './firebase-config.js';
-import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
-import { collection, query, where, orderBy, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
+import {
+  collection, query, where, orderBy, getDocs, doc, getDoc
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* عناصر */
-const params       = new URLSearchParams(location.search);
-const childId      = params.get('child');
+// ===== عناصر الواجهة (عدّل IDs لو لزم) =====
+const params = new URLSearchParams(location.search);
+const parentId = params.get('parent');
+const childId  = params.get('child');
 
-const childNameEl  = document.getElementById('childName');
-const childAgeEl   = document.getElementById('childAge');
-const childRangeEl = document.getElementById('childRange');
-const childCREl    = document.getElementById('childCR');
-const childCFEl    = document.getElementById('childCF');
+const unitSelect     = document.getElementById('unitSelect');     // 'mmol' | 'mgdl'
+const fromInput      = document.getElementById('fromDate');
+const toInput        = document.getElementById('toDate');
+const colorizeChk    = document.getElementById('colorizeChk');    // تلويـن (هبوط/طبيعي/ارتفاع)
+const hideNotesPrint = document.getElementById('hideNotesPrint'); // إخفاء الملاحظات في الطباعة
+const applyBtn       = document.getElementById('applyBtn');
+const printBtn       = document.getElementById('printBtn');
+const childNameEl    = document.getElementById('childName');
+const childMetaEl    = document.getElementById('childMeta');
+const tableBody      = document.getElementById('daysTableBody');  // <tbody> لصفوف الأيام
+const emptyMsg       = document.getElementById('emptyMsg');       // رسالة "لا توجد قياسات"
 
-const unitSelect   = document.getElementById('unitSelect');
-const fromDateEl   = document.getElementById('fromDate');
-const toDateEl     = document.getElementById('toDate');
-const notesEl      = document.getElementById('notes');
-
-const periodFrom   = document.getElementById('periodFrom');
-const periodTo     = document.getElementById('periodTo');
-const periodUnit   = document.getElementById('periodUnit');
-
-const notesBar     = document.getElementById('notesBar');
-const notesText    = document.getElementById('notesText');
-
-const tbody        = document.getElementById('tbody');
-const emptyEl      = document.getElementById('empty');
-
-const maskTreat    = document.getElementById('maskTreat');
-const colorize     = document.getElementById('colorize');
-const weeklyMode   = document.getElementById('weeklyMode');
-const manualMode   = document.getElementById('manualMode');
-
-const applyBtn     = document.getElementById('applyBtn');
-const printBtn     = document.getElementById('printBtn');
-const backBtn      = document.getElementById('backBtn');
-const blankBtn     = document.getElementById('blankBtn');
-
-/* أدوات */
-const pad = n => String(n).padStart(2,'0');
-const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const todayStr = ()=> fmtDate(new Date());
-const addDays = (d,delta)=> { const x=new Date(d); x.setDate(x.getDate()+delta); return x; };
-function calcAge(bd){ if(!bd) return '—'; const b=new Date(bd), t=new Date(); let a=t.getFullYear()-b.getFullYear(); const m=t.getMonth()-b.getMonth(); if(m<0||(m===0&&t.getDate()<b.getDate())) a--; return `${a} سنة`; }
-
-/* حالة */
-let currentUser, childData;
-let cachedRows = []; // [{date, cols:{colName: [{value,state,notes,bolus,corr}...]}}]
-
-/* تهيئة */
-(function initUI(){
-  const t = new Date();
-  toDateEl.value   = fmtDate(t);
-  fromDateEl.value = fmtDate(addDays(t,-7));
-  periodUnit.textContent = unitSelect.value==='mmol'?'mmol/L':'mg/dL';
-})();
-
-/* جلسة */
-onAuthStateChanged(auth, async (user)=>{
-  if(!user) return location.href='index.html';
-  if(!childId){ alert('لا يوجد معرف طفل في الرابط'); history.back(); return; }
-  currentUser = user;
-
-  await loadChild();
-  await refreshData();
-  renderQR();
-});
-
-/* رأس التقرير */
-async function loadChild(){
-  const dref = doc(db, `parents/${currentUser.uid}/children/${childId}`);
-  const snap = await getDoc(dref);
-  if(!snap.exists()){ alert('لم يتم العثور على الطفل'); return; }
-  childData = snap.data();
-
-  childNameEl.textContent = childData.name || 'طفل';
-  childAgeEl.textContent  = calcAge(childData.birthDate);
-  childRangeEl.textContent= `${childData?.normalRange?.min ?? '—'}–${childData?.normalRange?.max ?? '—'} mmol/L`;
-  childCREl.textContent   = `${childData?.carbRatio ?? '—'} g/U`;
-  childCFEl.textContent   = `${childData?.correctionFactor ?? '—'} mmol/L/U`;
-
-  // حدود اللون للطباعة
-  childData._hypo  = Number(childData.hypoLevel  ?? childData?.normalRange?.min ?? 4.5);
-  childData._hyper = Number(childData.hyperLevel ?? childData?.normalRange?.max ?? 11);
-}
-
-/* تحميل القياسات */
-async function refreshData(){
-  const manual = (params.get('mode')==='blank') || manualMode.checked;
-
-  tbody.innerHTML = '';
-  emptyEl.classList.add('hidden');
-
-  if (manual){
-    renderTable(true);
-    return;
-  }
-
-  await loadMeasurements();
-  if(!cachedRows.length){
-    emptyEl.classList.remove('hidden');
-  }
-  renderTable(false);
-}
-async function loadMeasurements(){
-  const from = fromDateEl.value || todayStr();
-  const to   = toDateEl.value   || todayStr();
-
-  periodFrom.textContent = from;
-  periodTo.textContent   = to;
-  periodUnit.textContent = unitSelect.value==='mmol'?'mmol/L':'mg/dL';
-
-  const ref = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
-  const qy  = query(ref, where('date','>=', from), where('date','<=', to), orderBy('date','asc'));
-  const snap= await getDocs(qy);
-
-  const byDate = new Map(); // date -> {cols:{colName:[]}}
-  const TABLE_COLS = ['wake','pre_bf','post_bf','pre_ln','post_ln','pre_dn','post_dn','snack','pre_sleep','during_sleep','pre_sport','post_sport'];
-
-  const mapSlot = (s)=>{
-    const x = String(s || '').toLowerCase();
-    const m = {
-      'wake':'wake',
-      'pre_breakfast':'pre_bf', 'pre_bf':'pre_bf', 'ق. الفطار':'pre_bf',
-      'post_breakfast':'post_bf','post_bf':'post_bf','ب. الفطار':'post_bf',
-      'pre_lunch':'pre_ln','pre_ln':'pre_ln','ق. الغداء':'pre_ln',
-      'post_lunch':'post_ln','post_ln':'post_ln','ب. الغداء':'post_ln',
-      'pre_dinner':'pre_dn','pre_dn':'pre_dn','ق. العشاء':'pre_dn',
-      'post_dinner':'post_dn','post_dn':'post_dn','ب. العشاء':'post_dn',
-      'snack':'snack','سناك':'snack',
-      'pre_sleep':'pre_sleep','ق. النوم':'pre_sleep',
-      'during_sleep':'during_sleep','أثناء النوم':'during_sleep',
-      'pre_sport':'pre_sport','ق. الرياضة':'pre_sport',
-      'post_sport':'post_sport','ب. الرياضة':'post_sport'
-    };
-    return m[x] || x;
+// ===== نطاقات الطفل (من وثيقة الطفل) =====
+let childData = null;
+function getRanges() {
+  const r = childData?.normalRange || {};
+  return {
+    min: Number(r.min ?? 4.5),
+    max: Number(r.max ?? 7),
+    severeLow: Number(r.severeLow ?? r.severe_low ?? 3.5),
+    severeHigh: Number(r.severeHigh ?? r.severe_high ?? 12)
   };
+}
 
-  snap.forEach(d=>{
-    const m = d.data();
-    const date = m.date;
-    if (!byDate.has(date)) byDate.set(date, {date, cols:Object.fromEntries(TABLE_COLS.map(c=>[c,[]]))});
+// ===== أدوات تاريخ =====
+const MS_DAY = 24*60*60*1000;
+const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0,0);
+const endOfDay   = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23,59,59,999);
+const fmtDate    = d => d.toISOString().slice(0,10);
 
-    // تحويل القيمة
-    let mmol=null, mgdl=null;
-    if(typeof m.value_mmol === 'number'){ mmol=Number(m.value_mmol); mgdl=Math.round(mmol*18); }
-    else if (typeof m.value_mgdl === 'number'){ mgdl=Number(m.value_mgdl); mmol=mgdl/18; }
-    else if (m.unit==='mmol/L' && typeof m.value==='number'){ mmol=Number(m.value); mgdl=Math.round(mmol*18); }
-    else if (m.unit==='mg/dL' && typeof m.value==='number'){ mgdl=Number(m.value); mmol=mgdl/18; }
-    if(mmol==null || !isFinite(mmol)) return;
+// ===== خانات الجدول (SLOTS) =====
+const SLOTS = [
+  'FASTING', 'PRE_BREAKFAST', 'POST_BREAKFAST',
+  'PRE_LUNCH', 'POST_LUNCH', 'PRE_DINNER', 'POST_DINNER',
+  'BEDTIME', 'OVERNIGHT', 'RANDOM'
+];
 
-    // الحالة حسب hypo/hyper
-    const st = (mmol < childData._hypo) ? 'low' : (mmol > childData._hyper) ? 'high' : 'ok';
+// ترتيب العرض في الجدول (يمكن تغييره ليتماشى مع رؤوس الأعمدة لديك)
+const DISPLAY_ORDER = [
+  'OVERNIGHT',     // أثناء النوم
+  'FASTING',       // الاستيقاظ
+  'PRE_BREAKFAST', // ق.الفطار
+  'POST_BREAKFAST',// ب.الفطار
+  'PRE_LUNCH',     // ق.الغدا
+  'POST_LUNCH',    // ب.الغدا
+  'PRE_DINNER',    // ق.العشا
+  'POST_DINNER',   // ب.العشا
+  'BEDTIME',       // ق.النوم
+  'RANDOM'         // عشوائي
+];
 
-    const unit = unitSelect.value==='mmol'?'mmol/L':'mg/dL';
-    const value = unit==='mmol/L' ? Number(mmol.toFixed(1)) : Math.round(mgdl);
+// خريطة أسماء عربية اختياريًا (لو حابب توليد رؤوس/عناوين)
+const SLOT_AR = {
+  FASTING:'الاستيقاظ', PRE_BREAKFAST:'ق.الفطار', POST_BREAKFAST:'ب.الفطار',
+  PRE_LUNCH:'ق.الغدا', POST_LUNCH:'ب.الغدا',
+  PRE_DINNER:'ق.العشا', POST_DINNER:'ب.العشا',
+  BEDTIME:'ق.النوم', OVERNIGHT:'أثناء النوم', RANDOM:'عشوائي'
+};
 
-    const slot = mapSlot(m.slotKey || m.slot || m.timeLabel || 'random');
-    byDate.get(date).cols[slot].push({
-      value,
-      unit,
-      state: m.state || st,
-      bolus: m.bolusDose ?? null,
-      corr:  m.correctionDose ?? null,
-      notes: m.notes || ''
-    });
+// ===== تطبيع أسماء الخانات =====
+function mapSlotSafe(raw){
+  const s = (raw || '').toString().trim().toUpperCase();
+  if (SLOTS.includes(s)) return s;
+  const aliases = {
+    'FAST':'FASTING','AWAKE':'FASTING','استيقاظ':'FASTING',
+    'PREBREAKFAST':'PRE_BREAKFAST','ق.الفطار':'PRE_BREAKFAST',
+    'POSTBREAKFAST':'POST_BREAKFAST','ب.الفطار':'POST_BREAKFAST',
+    'PRELUNCH':'PRE_LUNCH','ق.الغدا':'PRE_LUNCH',
+    'POSTLUNCH':'POST_LUNCH','ب.الغدا':'POST_LUNCH',
+    'PREDINNER':'PRE_DINNER','ق.العشا':'PRE_DINNER',
+    'POSTDINNER':'POST_DINNER','ب.العشا':'POST_DINNER',
+    'SLEEP':'BEDTIME','BED':'BEDTIME','ق.النوم':'BEDTIME',
+    'NIGHT':'OVERNIGHT','OVERNITE':'OVERNIGHT','أثناء النوم':'OVERNIGHT',
+    'RND':'RANDOM','عشوائي':'RANDOM','RANDOM':'RANDOM'
+  };
+  return aliases[s] || 'RANDOM';
+}
+
+// ===== وحدات =====
+function toMmol(val, unit){
+  if (val == null) return null;
+  const n = Number(val);
+  if (Number.isNaN(n)) return null;
+  return (unit==='mgdl' || unit==='mg/dL' || unit==='MGDL' || unit==='MG/DL') ? n/18 : n;
+}
+function fromMmol(val, outUnit){
+  return (outUnit==='mgdl') ? val*18 : val;
+}
+function formatValue(mmol, outUnit){
+  if (mmol == null) return '';
+  const v = fromMmol(mmol, outUnit);
+  return outUnit==='mgdl' ? Math.round(v).toString() : v.toFixed(1);
+}
+
+// ===== إنشاء صف اليوم افتراضيًا =====
+function makeDayRow(dateKey){
+  const cols = {};
+  SLOTS.forEach(s => cols[s] = []);
+  return { dateKey, cols, notes: [], state: null, bolusDose: null, correctionDose: null };
+}
+
+// ===== تحميل القياسات وتجميعها =====
+async function loadSnapshot(uid, childId){
+  const col = collection(db, `parents/${uid}/children/${childId}/measurements`);
+  // نرتّب حسب when و date (لو بعض السجلات بدون when)
+  const qs = [
+    query(col, orderBy('when', 'asc')),
+    query(col, orderBy('date', 'asc'))
+  ];
+  const results = await Promise.allSettled(qs.map(getDocs));
+  // دمج النتائج
+  const docs = [];
+  for (const r of results){
+    if (r.status==='fulfilled'){
+      r.value.forEach(d => docs.push(d));
+    }
+  }
+  return docs;
+}
+
+function normalizeDoc(dsnap){
+  const m = dsnap.data?.() || dsnap.data || null;
+  if (!m) return null;
+  const when = m.when?.toDate?.() || (m.date ? new Date(m.date) : null);
+  if (!when || isNaN(when.getTime())) return null;
+
+  const raw = m.mmol ?? m.value ?? m.glucose ?? m.mgdl;
+  const unit = (m.unit || (m.mgdl != null ? 'mgdl':'mmol')).toString().toLowerCase();
+  const mmol = toMmol(raw, unit);
+  if (mmol == null) return null;
+
+  return {
+    when,
+    mmol,
+    slot: mapSlotSafe(m.slotKey || m.slot || m.timeLabel || m.slotLabel),
+    notes: m.notes || '',
+    state: m.state || null,
+    bolusDose: m.bolusDose ?? null,
+    correctionDose: m.correctionDose ?? null
+  };
+}
+
+function buildDaysMap(allDocs, fromD, toD){
+  const byDate = new Map();
+  const fromTs = startOfDay(fromD).getTime();
+  const toTs   = endOfDay(toD).getTime();
+
+  allDocs.forEach(snap => {
+    const n = normalizeDoc(snap);
+    if(!n) return;
+    const t = n.when.getTime();
+    if (t < fromTs || t > toTs) return;
+
+    const key = n.when.toISOString().slice(0,10);
+    let day = byDate.get(key);
+    if(!day){
+      day = makeDayRow(key);
+      byDate.set(key, day);
+    }
+    if (!Array.isArray(day.cols[n.slot])) day.cols[n.slot] = [];
+    day.cols[n.slot].push({ t: n.when, mmol: n.mmol, notes: n.notes });
+
+    if (n.notes) day.notes.push(n.notes);
+    if (n.state && !day.state) day.state = n.state;
+    if (n.bolusDose != null && day.bolusDose == null) day.bolusDose = n.bolusDose;
+    if (n.correctionDose != null && day.correctionDose == null) day.correctionDose = n.correctionDose;
   });
 
-  cachedRows = Array.from(byDate.values());
+  return Array.from(byDate.values()).sort((a,b)=> a.dateKey.localeCompare(b.dateKey));
 }
 
-/* رسم الجدول */
-function renderTable(isManual){
-  tbody.innerHTML = '';
-  const TABLE_COLS = ['wake','pre_bf','post_bf','pre_ln','post_ln','pre_dn','post_dn','snack','pre_sleep','during_sleep','pre_sport','post_sport'];
+// ===== تلوين القيم حسب النطاق =====
+function classify(mmol){
+  const {min, max, severeLow, severeHigh} = getRanges();
+  if (mmol < severeLow) return 'low';           // هبوط
+  if (mmol > severeHigh) return 'high';         // ارتفاع
+  if (mmol >= min && mmol <= max) return 'in';  // طبيعي
+  return 'mid'; // خارج طبيعي لكن مش شديد (اختياري)
+}
+function spanValue(mmol, outUnit, colorize){
+  const val = formatValue(mmol, outUnit);
+  if (!colorize) return `<span>${val}</span>`;
+  const cls = classify(mmol); // low | in | high | mid
+  // CSS: .v-low{background:#fee2e2} .v-in{background:#dcfce7} .v-high{background:#fde68a} .v-mid{background:#e5e7eb}
+  return `<span class="v-${cls}">${val}</span>`;
+}
 
-  const colorizeOn   = !isManual && colorize.checked;
-  const hideAllNotes = maskTreat.checked;
+// ===== رسم الجدول =====
+function clearTable(){
+  if (tableBody) tableBody.innerHTML = '';
+}
+function renderTable(days, outUnit){
+  if (!tableBody) return;
+  clearTable();
 
-  for(const r of cachedRows){
-    const tr=document.createElement('tr');
+  if (!days.length){
+    emptyMsg && emptyMsg.classList.remove('hidden');
+    return;
+  }
+  emptyMsg && emptyMsg.classList.add('hidden');
 
-    const tdDate=document.createElement('td');
-    tdDate.textContent = isManual ? '' : r.date;
-    if(isManual) tdDate.contentEditable='true';
+  days.forEach(day=>{
+    const tr = document.createElement('tr');
+
+    // عمود التاريخ
+    const tdDate = document.createElement('td');
+    tdDate.textContent = day.dateKey;
     tr.appendChild(tdDate);
 
-    for(const cName of TABLE_COLS){
-      const td=document.createElement('td');
-      const items=r.cols[cName]||[];
-
-      if(items.length===0){
-        td.innerHTML = isManual ? '' : '—';
-      }else{
-        items.forEach((it,idx)=>{
-          const span=document.createElement('div');
-          span.textContent=it.value;
-          if(colorizeOn){
-            const st=(it.state||'').toLowerCase();
-            if(st.startsWith('low')) span.classList.add('low');
-            else if(st.startsWith('high')) span.classList.add('high');
-            else span.classList.add('okv');
-          }
-          td.appendChild(span);
-
-          if(it.corr!=null || it.bolus!=null){
-            const d=document.createElement('span');
-            d.className='dose';
-            const parts=[];
-            if(it.corr!=null)  parts.push(`تصحيح: ${it.corr}U`);
-            if(it.bolus!=null) parts.push(`وجبة: ${it.bolus}U`);
-            d.textContent=parts.join(' • ');
-            td.appendChild(d);
-          }
-
-          // الملاحظات داخل الخلية — تُخفى كلها عند تفعيل الخيار
-          if(it.notes && !hideAllNotes){
-            const n=document.createElement('span');
-            n.className='note';
-            n.textContent=it.notes;
-            td.appendChild(n);
-          }
-
-          if(idx<items.length-1){
-            const hr=document.createElement('hr');
-            hr.style.border='none'; hr.style.borderTop='1px dashed #eee'; hr.style.margin='6px 0';
-            td.appendChild(hr);
-          }
-        });
+    // أعمدة الخانات بالترتيب المحدد
+    DISPLAY_ORDER.forEach(slot=>{
+      const td = document.createElement('td');
+      const arr = Array.isArray(day.cols?.[slot]) ? day.cols[slot] : [];
+      if (!arr.length){
+        td.innerHTML = '<span class="muted">—</span>';
+      } else {
+        // قيَم اليوم داخل الخانة
+        const colorize = !!(colorizeChk && colorizeChk.checked);
+        td.innerHTML = arr
+          .sort((a,b)=> a.t - b.t)
+          .map(x => spanValue(x.mmol, outUnit, colorize))
+          .join(' ');
       }
-
-      if(isManual) td.contentEditable='true';
       tr.appendChild(td);
-    }
+    });
 
-    tbody.appendChild(tr);
+    // عمود ملاحظات (اختياري حسب التفعيل)
+    const tdNotes = document.createElement('td');
+    const hideNotes = !!(hideNotesPrint && hideNotesPrint.checked);
+    tdNotes.innerHTML = hideNotes ? '<span class="muted">—</span>'
+                                  : (day.notes && day.notes.length ? day.notes.join(' • ') : '<span class="muted">—</span>');
+    tr.appendChild(tdNotes);
+
+    tableBody.appendChild(tr);
+  });
+}
+
+// ===== تحميل الطفل + القياسات + التشغيل =====
+let currentUser = null;
+onAuthStateChanged(auth, async (user)=>{
+  if(!user){ location.href='index.html'; return; }
+  currentUser = user;
+
+  // وثيقة الطفل
+  const cs = await getDoc(doc(db, `parents/${parentId || user.uid}/children/${childId}`));
+  if (!cs.exists()){
+    alert('الطفل غير موجود'); history.back(); return;
   }
-}
+  childData = cs.data();
 
-/* شريط الملاحظات أعلى التقرير */
-function updateTopNotes(){
-  const val = (notesEl.value || '').trim();
-  if(val){
-    notesText.textContent = val;
-    notesBar.classList.remove('hidden');
-  }else{
-    notesText.textContent = '';
-    notesBar.classList.add('hidden');
-  }
-}
+  // رأس الصفحة (الاسم + العمر تقريبًا)
+  const name = childData.name || '—';
+  const b = childData.birthDate ? new Date(childData.birthDate) : null;
+  const ageYears = b ? Math.max(0, (new Date().getFullYear() - b.getFullYear())) : '';
+  if (childNameEl) childNameEl.textContent = name;
+  if (childMetaEl) childMetaEl.textContent = ageYears ? `العمر ~ ${ageYears} سنة` : '';
 
-/* QR */
-function renderQR(){
-  try{
-    const canvas=document.getElementById('qr');
-    // eslint-disable-next-line no-undef
-    QRCode.toCanvas(canvas, location.href, { width:128, margin:1 }, ()=>{});
-  }catch{}
-}
+  // نطاق التاريخ الافتراضي: آخر 7 أيام
+  const today = new Date();
+  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate()-6);
+  if (fromInput && !fromInput.value) fromInput.value = fmtDate(from);
+  if (toInput && !toInput.value)     toInput.value   = fmtDate(today);
 
-/* أحداث */
-applyBtn.addEventListener('click', refreshData);
-printBtn.addEventListener('click', ()=> window.print());
-backBtn.addEventListener('click', ()=> history.back());
-blankBtn.addEventListener('click', ()=>{
-  manualMode.checked = true;
-  refreshData();
+  // تحميل القياسات ثم العرض
+  await refresh();
 });
-unitSelect.addEventListener('change', refreshData);
-weeklyMode.addEventListener('change', refreshData);
-manualMode.addEventListener('change', refreshData);
-maskTreat.addEventListener('change', ()=> renderTable(manualMode.checked));
-notesEl.addEventListener('input', updateTopNotes);
 
-/* قراءة URL (لو وُجدت) */
-(function applyParamsFromURL(){
-  const from=params.get('from'); const to=params.get('to'); const unit=params.get('unit');
-  if(from) fromDateEl.value=from;
-  if(to)   toDateEl.value=to;
-  if(unit) unitSelect.value=unit;
-  periodUnit.textContent = unitSelect.value==='mmol'?'mmol/L':'mg/dL';
-})();
+// ===== واجهة المستخدم =====
+applyBtn && applyBtn.addEventListener('click', refresh);
+printBtn && printBtn.addEventListener('click', ()=> window.print());
+unitSelect && unitSelect.addEventListener('change', refresh);
+colorizeChk && colorizeChk.addEventListener('change', ()=> renderCurrentCache());
+hideNotesPrint && hideNotesPrint.addEventListener('change', ()=> renderCurrentCache());
+
+// كاش آخر نتائج لتحسين إعادة العرض عند تغيير التلوين فقط
+let __cache_days = [];
+
+async function refresh(){
+  try{
+    if (!currentUser || !childId) return;
+
+    clearTable();
+    emptyMsg && emptyMsg.classList.add('hidden');
+
+    const allDocs = await loadSnapshot(currentUser.uid, childId);
+    const from = fromInput?.value ? new Date(fromInput.value) : new Date(Date.now()-6*MS_DAY);
+    const to   = toInput?.value   ? new Date(toInput.value)   : new Date();
+    const days = buildDaysMap(allDocs, from, to);
+    __cache_days = days;
+
+    const outUnit = (unitSelect?.value || 'mmol').toLowerCase();
+    renderTable(days, outUnit);
+  }catch(e){
+    console.error('refresh error:', e);
+    emptyMsg && (emptyMsg.textContent = 'حدث خطأ أثناء تحميل البيانات'); 
+    emptyMsg && emptyMsg.classList.remove('hidden');
+  }
+}
+
+function renderCurrentCache(){
+  const outUnit = (unitSelect?.value || 'mmol').toLowerCase();
+  renderTable(__cache_days || [], outUnit);
+}
+
+// ===== تنسيقات بسيطة (اختيارية) =====
+// أضِف هذه الفئات في CSS إن لم تكن موجودة:
+/*
+.muted { opacity: .5 }
+.v-low  { padding:2px 6px; border-radius:6px; background:#fee2e2; }  // أحمر فاتح
+.v-in   { padding:2px 6px; border-radius:6px; background:#dcfce7; }  // أخضر فاتح
+.v-high { padding:2px 6px; border-radius:6px; background:#fde68a; }  // أصفر فاتح
+.v-mid  { padding:2px 6px; border-radius:6px; background:#e5e7eb; }  // رمادي فاتح
+*/
