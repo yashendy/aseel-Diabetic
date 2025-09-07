@@ -1,4 +1,4 @@
-// measurements.js — تاريخ/وقت القياس + جدول اليوم فقط + تعديل يملأ كل الحقول
+// measurements.js — بدون ساعة: تاريخ فقط، جدول اليوم المختار، إظهار/إخفاء الحقول حسب الحالة، تعديل قياس
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -7,29 +7,34 @@ import {
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* ===== DOM ===== */
-const card         = document.getElementById('measCard');
-const chipsHost    = document.getElementById('chips');
-const severeBanner = document.getElementById('severeBanner');
+const card           = document.getElementById('measCard');
+const chipsHost      = document.getElementById('chips');
+const severeBanner   = document.getElementById('severeBanner');
 
-const dateInput    = document.getElementById('dateInput');
-const timeInput    = document.getElementById('timeInput');
+const dateInput      = document.getElementById('dateInput');
 
-const unitSel      = document.getElementById('unitSelect');
-const valueInput   = document.getElementById('valueInput');
-const convHint     = document.getElementById('convHint');
+const unitSel        = document.getElementById('unitSelect');
+const valueInput     = document.getElementById('valueInput');
+const convHint       = document.getElementById('convHint');
 
-const slotSel      = document.getElementById('slotSelect');
-const carbsInput   = document.getElementById('carbsInput');
-const bolusDose    = document.getElementById('bolusDose');
-const corrDose     = document.getElementById('corrDose');
-const notesInput   = document.getElementById('notesInput');
+const slotSel        = document.getElementById('slotSelect');
+const carbsInput     = document.getElementById('carbsInput');
+const bolusDose      = document.getElementById('bolusDose');
 
-const saveBtn      = document.getElementById('saveBtn');
-const saveEditBtn  = document.getElementById('saveEditBtn');
-const cancelEditBtn= document.getElementById('cancelEditBtn');
-const editBar      = document.getElementById('editBar');
+const wrapCorr       = document.getElementById('wrapCorr');
+const corrDose       = document.getElementById('corrDose');
 
-const tbody        = document.getElementById('measTableBody');
+const wrapTreatLow   = document.getElementById('wrapTreatLow');
+const treatLowInput  = document.getElementById('treatLowInput');
+
+const notesInput     = document.getElementById('notesInput');
+
+const saveBtn        = document.getElementById('saveBtn');
+const saveEditBtn    = document.getElementById('saveEditBtn');
+const cancelEditBtn  = document.getElementById('cancelEditBtn');
+const editBar        = document.getElementById('editBar');
+
+const tbody          = document.getElementById('measTableBody');
 
 /* ===== State ===== */
 let currentUser = null;
@@ -42,7 +47,7 @@ const ALLOW_DUP_KEYS = new Set(['SNACK','PRE_SPORT','POST_SPORT']);
 const MEAL_SLOTS = new Set(['PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK']);
 const ROUND_STEP = 0.5;
 
-/* ===== Utilities ===== */
+/* ===== Units ===== */
 function toMmol(val, unit){
   if (val==null || val==='') return null;
   const n = Number(val);
@@ -72,16 +77,18 @@ function getRanges(){
   return { min, max, severeLow, severeHigh, hypoLevel, hyperLevel };
 }
 
-/* ===== Selected date/time ===== */
-function initDateTimeDefaults(){
+/* ===== Date helpers ===== */
+function initDateDefault(){
   const now = new Date();
   dateInput.value = now.toISOString().slice(0,10);
-  timeInput.value = now.toTimeString().slice(0,5); // HH:MM
+}
+function selectedDateKey(){
+  return (dateInput?.value || new Date().toISOString().slice(0,10));
 }
 function selectedWhen(){
-  const d = dateInput?.value || new Date().toISOString().slice(0,10);
-  const t = timeInput?.value || new Date().toTimeString().slice(0,5);
-  const dt = new Date(`${d}T${t}:00`);
+  // نخزن when كـ تاريخ فقط (منتصف الليل) للسجل
+  const dk = selectedDateKey();
+  const dt = new Date(`${dk}T00:00:00`);
   return isNaN(dt.getTime()) ? new Date() : dt;
 }
 
@@ -89,18 +96,12 @@ function selectedWhen(){
 function renderChips(){
   if (!chipsHost || !childData) return;
   const { min, max, severeLow, severeHigh } = getRanges();
-  const cf = childData?.cf ?? childData?.correctionFactor ?? null;
-  const cr = childData?.cr ?? childData?.carbRatio ?? null;
-  const dtxt = (dateInput.value || '—') + ' ' + (timeInput.value || 'الآن');
-
   chipsHost.innerHTML = [
-    `<span class="chip">التاريخ: ${dtxt}</span>`,
+    `<span class="chip">التاريخ: ${selectedDateKey()}</span>`,
     `<span class="chip">الوحدة: ${unitSel.value==='mgdl'?'mg/dL':'mmol/L'}</span>`,
     `<span class="chip">طبيعي (التقرير): ${severeLow}–${severeHigh} mmol/L</span>`,
-    `<span class="chip">النطاق القياسي: ${min}–${max} mmol/L</span>`,
-    cf!=null ? `<span class="chip">CF: ${cf} mmol/L/U</span>` : '',
-    cr!=null ? `<span class="chip">CR: ${cr} g/U</span>` : ''
-  ].filter(Boolean).join('');
+    `<span class="chip">النطاق القياسي: ${min}–${max} mmol/L</span>`
+  ].join('');
 }
 
 /* ===== Card state / severe ===== */
@@ -163,63 +164,68 @@ function updatePreviewAndUI(){
   }
 
   // state / severe
-  const { severeLow, severeHigh } = getRanges();
+  const { severeLow, severeHigh, min, max } = getRanges();
   const c = classify(mmol);
   const severe = (mmol!=null) && (mmol<=severeLow || mmol>=severeHigh);
   setCardState(c, severe);
 
-  // meal section visibility
+  // show/hide correction & treat-low
+  const isHigh = mmol!=null && mmol > max;
+  const isLow  = mmol!=null && mmol < min;
+
+  wrapCorr.hidden      = !isHigh;
+  wrapTreatLow.hidden  = !isLow;
+
+  // correction value
+  if (isHigh)  { corrDose.value = computeCorrection(mmol) || ''; }
+  else         { corrDose.value = ''; }
+
+  // meal section visibility (كما هي)
   const showMeal = MEAL_SLOTS.has((slotSel.value||'').toUpperCase());
   document.getElementById('wrapBolus').style.display = showMeal ? '' : 'none';
 
-  // correction
-  if (mmol!=null){ corrDose.value = computeCorrection(mmol) || ''; }
-  else { corrDose.value = ''; }
-
-  // meal bolus
-  const carbs = Number(carbsInput.value || 0);
-  if (showMeal && carbs>0) bolusDose.value = computeMealBolus(carbs) || '';
-  else if (!showMeal){ bolusDose.value=''; carbsInput.value=''; }
-
-  // chips (date/time/unit)
+  // chips
   renderChips();
 }
 
 /* ===== Form helpers ===== */
-function clearForm(){
+function clearForm(keepDate=true){
+  const dk = selectedDateKey();
   editMode = null;
-  // لا نعيد تعيين التاريخ/الوقت حتى لا يزعج المستخدم
   valueInput.value = '';
   corrDose.value   = '';
   bolusDose.value  = '';
   carbsInput.value = '';
+  treatLowInput.value = '';
   notesInput.value = '';
   saveBtn.hidden = false;
   saveEditBtn.hidden = true;
   editBar.hidden = true;
   setCardState('ok', false);
+  if (!keepDate) initDateDefault();
+  else dateInput.value = dk;
   updatePreviewAndUI();
 }
 function fillFormFromDoc(d){
-  // when → date/time
-  const when = d.when?.toDate?.() || (d.date ? new Date(d.date) : new Date());
-  dateInput.value = when.toISOString().slice(0,10);
-  timeInput.value = when.toTimeString().slice(0,5);
+  // date only
+  const dk = d.date || new Date().toISOString().slice(0,10);
+  dateInput.value = dk;
 
   const unit = (d.unit || (d.mgdl!=null?'mgdl':'mmol')).toLowerCase();
   unitSel.value = unit;
   if (d.mmol!=null) valueInput.value = fmtVal(d.mmol, unit);
   else if (d.mgdl!=null) valueInput.value = unit==='mgdl' ? d.mgdl : (d.mgdl/18).toFixed(1);
 
-  slotSel.value   = d.slotKey || d.slot || 'RANDOM';
-  corrDose.value  = d.correctionDose ?? '';
-  bolusDose.value = d.bolusDose ?? '';
-  notesInput.value= d.notes ?? '';
+  slotSel.value    = d.slotKey || d.slot || 'RANDOM';
+  corrDose.value   = d.correctionDose ?? '';
+  bolusDose.value  = d.bolusDose ?? '';
+  treatLowInput.value = d.treatLow || '';
+  notesInput.value = d.notes ?? '';
 
   updatePreviewAndUI();
 }
 
-/* ===== Load child + today's table ===== */
+/* ===== Load child + table for a date ===== */
 async function loadChild(){
   const qs = new URLSearchParams(location.search);
   childId = qs.get('child');
@@ -231,35 +237,32 @@ async function loadChild(){
   renderChips();
 }
 
-async function loadTableToday(){
+async function loadTableFor(dateKey){
   tbody.innerHTML = '';
-  const todayKey = new Date().toISOString().slice(0,10);
-  const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
-
-  // نكتفي بالفلترة حسب التاريخ فقط، ثم نرتب محليًا بالوقت نزولاً (لتجنب إنشاء index)
-  const qy  = query(col, where('date','==', todayKey));
-  const snap= await getDocs(qy);
+  const col  = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
+  const qy   = query(col, where('date','==', dateKey));
+  const snap = await getDocs(qy);
 
   const rows = [];
   snap.forEach(ds=>{
     const d = ds.data();
-    const when = d.when?.toDate?.() || (d.date? new Date(d.date): null);
+    const when = d.when?.toDate?.() || new Date(`${d.date}T00:00:00`);
     rows.push({ id: ds.id, ...d, when });
   });
 
-  rows.sort((a,b)=> (b.when?.getTime?.()||0) - (a.when?.getTime?.()||0));
+  // فرز محلي (معظمها نفس التوقيت لكن للحفاظ على ترتيب ثابت)
+  rows.sort((a,b)=> (a.slotKey||'').localeCompare(b.slotKey||''));
 
   rows.forEach(d=>{
     const unit = (d.unit || (d.mgdl!=null?'mgdl':'mmol')).toLowerCase();
     const mmol = d.mmol!=null ? d.mmol : (d.mgdl/18);
     const cls  = classify(mmol);
-    const dateKey = d.date || d.when?.toISOString?.().slice(0,10) || todayKey;
-    const timeTxt = d.when ? new Date(d.when).toTimeString().slice(0,5) : (timeInput.value || '');
+    const dateKeyOut = d.date || dateKey;
 
     const tr = document.createElement('tr');
 
     const tdDate = document.createElement('td');
-    tdDate.textContent = dateKey;
+    tdDate.textContent = dateKeyOut;
     tr.appendChild(tdDate);
 
     const tdSlot = document.createElement('td');
@@ -271,7 +274,7 @@ async function loadTableToday(){
     span.className = `v-${cls==='low'?'low':cls==='high'?'high':'in'}`;
     span.textContent = unit==='mgdl' ? Math.round(fromMmol(mmol,'mgdl')) : mmol.toFixed(1);
     tdVal.appendChild(span);
-    tdVal.appendChild(document.createTextNode(` ${unit==='mgdl'?'mg/dL':'mmol/L'} — ${timeTxt}`));
+    tdVal.appendChild(document.createTextNode(` ${unit==='mgdl'?'mg/dL':'mmol/L'}`));
     tr.appendChild(tdVal);
 
     const tdBolus = document.createElement('td');
@@ -283,7 +286,8 @@ async function loadTableToday(){
     tr.appendChild(tdCorr);
 
     const tdNotes = document.createElement('td');
-    tdNotes.textContent = d.notes || '—';
+    const extra = d.treatLow ? ` • صححنا بإيه: ${d.treatLow}` : '';
+    tdNotes.textContent = (d.notes || '—') + extra;
     tr.appendChild(tdNotes);
 
     const tdAct = document.createElement('td');
@@ -310,93 +314,81 @@ async function enterEditMode(id){
   saveEditBtn.hidden = false;
   editBar.hidden = false;
 }
-function cancelEdit(){ clearForm(); }
 
-/* ===== Save new ===== */
-async function saveNew(){
-  const unit = unitSel.value;
-  const mmol = toMmol(valueInput.value, unit);
+/* ===== Save new / edit ===== */
+async function saveCommon(isEdit){
+  const unit    = unitSel.value;
+  const mmol    = toMmol(valueInput.value, unit);
   if (mmol==null) return alert('من فضلك أدخل قيمة صحيحة');
 
-  const when = selectedWhen();
-  const dateKey = when.toISOString().slice(0,10);
+  const dateKey = selectedDateKey();
+  const when    = selectedWhen();
   const slotKey = (slotSel.value || 'RANDOM').toUpperCase();
 
   if (!ALLOW_DUP_KEYS.has(slotKey)){
-    const dup = await existsDuplicate(dateKey, slotKey, null);
+    const dup = await existsDuplicate(dateKey, slotKey, isEdit ? editMode?.id : null);
     if (dup) return alert('هذا الوقت مسجّل بالفعل لهذا اليوم.');
   }
+
+  const { min, max } = getRanges();
+  const isHigh = mmol > max;
+  const isLow  = mmol < min;
 
   const payload = {
     mmol, unit,
     when, date: dateKey,
     slotKey,
+    // جرعة الوجبة اختيارية
     bolusDose:   bolusDose.value? Number(bolusDose.value): null,
-    correctionDose: corrDose.value? Number(corrDose.value): null,
+    // التصحيحي يظهر فقط عند High
+    correctionDose: isHigh && corrDose.value ? Number(corrDose.value) : null,
+    // علاج الهبوط يظهر فقط عند Low
+    treatLow: isLow && treatLowInput.value ? treatLowInput.value.trim() : null,
     notes: (notesInput.value||'').trim(),
-    createdAt: serverTimestamp()
+    [isEdit ? 'updatedAt' : 'createdAt']: serverTimestamp()
   };
   if (unit==='mgdl'){ payload.mgdl = Number(valueInput.value); }
 
-  await addDoc(collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`), payload);
-  clearForm();
-  await loadTableToday();
-}
-
-/* ===== Save edit ===== */
-async function saveEdit(){
-  if (!editMode?.id) return;
-  const unit = unitSel.value;
-  const mmol = toMmol(valueInput.value, unit);
-  if (mmol==null) return alert('من فضلك أدخل قيمة صحيحة');
-
-  const when = selectedWhen();
-  const dateKey = when.toISOString().slice(0,10);
-  const slotKey = (slotSel.value || 'RANDOM').toUpperCase();
-
-  if (!ALLOW_DUP_KEYS.has(slotKey)){
-    const dup = await existsDuplicate(dateKey, slotKey, editMode.id);
-    if (dup) return alert('هذا الوقت مسجّل بالفعل لهذا اليوم.');
+  if (isEdit){
+    const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/measurements/${editMode.id}`);
+    await updateDoc(ref, payload);
+  } else {
+    await addDoc(collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`), payload);
   }
 
-  const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/measurements/${editMode.id}`);
-  const payload = {
-    mmol, unit,
-    when, date: dateKey,
-    slotKey,
-    bolusDose:   bolusDose.value? Number(bolusDose.value): null,
-    correctionDose: corrDose.value? Number(corrDose.value): null,
-    notes: (notesInput.value||'').trim(),
-    updatedAt: serverTimestamp()
-  };
-  if (unit==='mgdl'){ payload.mgdl = Number(valueInput.value); }
-  else { payload.mgdl = Math.round(fromMmol(mmol,'mgdl')); }
-
-  await updateDoc(ref, payload);
-  clearForm();
-  await loadTableToday();
+  const dk = selectedDateKey();
+  clearForm(true);
+  await loadTableFor(dk);
 }
+
+const saveNew  = ()=> saveCommon(false);
+const saveEdit = ()=> saveCommon(true);
 
 /* ===== Events ===== */
 unitSel.addEventListener('change', ()=>{ renderChips(); updatePreviewAndUI(); });
 valueInput.addEventListener('input', updatePreviewAndUI);
 slotSel.addEventListener('change', updatePreviewAndUI);
 carbsInput.addEventListener('input', updatePreviewAndUI);
-dateInput.addEventListener('change', renderChips);
-timeInput.addEventListener('change', renderChips);
+notesInput.addEventListener('input', ()=>{});
+dateInput.addEventListener('change', async ()=>{
+  renderChips();
+  await loadTableFor(selectedDateKey());
+});
 saveBtn.addEventListener('click', saveNew);
 saveEditBtn.addEventListener('click', saveEdit);
-cancelEditBtn.addEventListener('click', cancelEdit);
+cancelEditBtn.addEventListener('click', ()=> clearForm(false));
 
 /* ===== Boot ===== */
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href='index.html'; return; }
   currentUser = user;
   try{
-    initDateTimeDefaults();
+    initDateDefault();
+    const qs = new URLSearchParams(location.search);
+    childId = qs.get('child');
     await loadChild();
     updatePreviewAndUI();
-    await loadTableToday(); // يعرض قياسات اليوم فقط
+    await loadTableFor(selectedDateKey()); // يعرض قياسات نفس التاريخ المختار
   }catch(e){
     console.error(e);
     alert(e.message || 'خطأ أثناء التحميل');
