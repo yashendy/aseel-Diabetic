@@ -1,138 +1,236 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>مكتبة الوجبات</title>
-  <link rel="icon" href="images/favicon.ico">
-  <link rel="stylesheet" href="css/meals.css?v=final-1" />
+  <title>الوجبات</title>
+  <link rel="stylesheet" href="css/meals.css?v=final-merge" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
 </head>
 <body>
+  <div class="container">
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-  <!-- رأس الصفحة -->
-  <header class="head">
-    <div class="head-grid">
-      <h1 class="page-title">مكتبة الوجبات</h1>
-
-      <div class="controls">
-        <select id="mealFilter" aria-label="فلتر التصنيف">
-          <option value="all" selected>الكل</option>
-          <option value="protein">بروتين</option>
-          <option value="carb">كارب</option>
-          <option value="fat">دهون</option>
-          <option value="fruit">فاكهة</option>
-        </select>
-
-        <input id="searchInput" type="search" placeholder="ابحث عن صنف…" />
-        <button id="resetBtn" class="btn" type="button">إعادة ضبط</button>
-      </div>
-    </div>
-
-    <!-- شِيبس الأهداف + أزرار التحكم -->
-    <div class="targets-bar">
-      <div class="chips-wrap">
-        <span id="chipDate" class="chip">اليوم: —</span>
-        <span id="targetCarb" class="chip">كارب: —</span>
-        <span id="targetProtein" class="chip">بروتين: —</span>
-        <span id="targetFat" class="chip">دهون: —</span>
-        <span id="targetKcal" class="chip">سعرات: —</span>
-      </div>
-      <div class="actions-wrap">
-        <button id="applyTargetsBtn" class="btn ghost" type="button">تظبيط حسب هدف الكارب</button>
-        <button id="toggleAiBtn" class="btn" type="button" aria-expanded="false">🤖 اقتراح بالذكاء الاصطناعي</button>
-        <input id="dateInput" type="date" />
-        <button id="saveDayBtn" class="btn primary" type="button">حفظ اليوم</button>
-      </div>
-    </div>
-  </header>
-
-  <!-- المحتوى -->
-  <main class="container">
-
-    <!-- لوحة الذكاء الاصطناعي (قابلة للطي) -->
-    <section id="aiPanel" class="ai-panel" hidden>
-      <div class="ai-grid">
+    <header class="top card">
+      <div class="head-grid">
         <div>
-          <h3 class="ai-title">توازن الكارب حسب الهدف</h3>
-          <p class="muted">أدخل الكارب المطلوب لهذه الوجبة وسيتم اقتراح تركيبة تقريبية.</p>
-          <div class="row ai-row">
-            <label>كارب مطلوب</label>
-            <input id="aiCarbGoal" type="number" step="1" inputmode="numeric" placeholder="مثال: 45" />
-            <button id="aiSuggestBtn" class="btn" type="button">اقترح وجبة</button>
+          <h1>🍽️ إدارة الوجبات — <span id="childName">...</span></h1>
+          <p id="childMeta" class="muted">—</p>
+        </div>
+        <div class="controls">
+          <div class="field">
+            <label>تاريخ</label>
+            <input type="date" id="mealDate" />
           </div>
-          <div id="aiOut" class="ai-out muted">—</div>
+          <div class="field">
+            <label>نوع الوجبة</label>
+            <select id="mealType">
+              <option value="فطار">فطار</option>
+              <option value="غدا">غدا</option>
+              <option value="عشا">عشا</option>
+              <option value="سناك">سناك</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>قياس قبل الوجبة</label>
+            <select id="preReading"></select>
+          </div>
+          <div class="field">
+            <label>قياس بعد الوجبة</label>
+            <select id="postReading"></select>
+          </div>
         </div>
-        <div>
-          <h3 class="ai-title">اقتراح عشوائي ذكي</h3>
-          <p class="muted">نقترح وجبة متوازنة سريعة من المكتبة.</p>
-          <button id="aiRandomBtn" class="btn" type="button">اقترح الآن</button>
+      </div>
+      <div class="top-actions">
+        <a class="secondary" href="child-edit.html?child=" id="settingsLink">⚙️ إعداد الطفل</a>
+        <button id="backBtn" class="secondary">⬅️ رجوع</button>
+      </div>
+    </header>
+
+    <section class="goal card">
+      <div class="goal-row">
+        <div class="goal-chip">
+          🎯 هدف الكارب (<span id="goalType">فطار</span>):
+          <strong id="goalMin">—</strong>–<strong id="goalMax">—</strong> g
+        </div>
+        <div class="unit-chip" id="unitChip">وحدة: —</div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar"><span id="carbProgress" style="width:0%"></span></div>
+        <div class="progress-legend">
+          <span id="carbState" class="muted tiny">—</span>
         </div>
       </div>
     </section>
 
-    <!-- وجبات جاهزة -->
-    <section class="section">
-      <h2 class="section-title">وجبات جاهزة</h2>
-      <div id="presetGrid" class="preset-grid">
-        <!-- يتم الملء من meals.js -->
+    <section class="builder card">
+      <div class="builder-head">
+        <h3>مكوّنات الوجبة</h3>
+        <div class="actions">
+          <button id="addItemBtn">➕ إضافة صنف من المكتبة</button>
+          <button id="repeatLastBtn" class="secondary">🧲 تكرار آخر وجبة</button>
+          <button id="aiBtn" class="secondary">🤖 مساعد AI (وصف نصّي)</button>
+          <button id="presetBtn" class="secondary">🍱 إضافة من وجبة جاهزة</button>
+          <button id="presetSaveBtn" class="secondary">💾 حفظ الحالية كوجبة جاهزة</button>
+        </div>
       </div>
-    </section>
 
-    <!-- مكتبة الأصناف -->
-    <section class="section">
-      <h2 class="section-title">الأصناف</h2>
-      <div id="pickerGrid" class="picker-grid">
-        <!-- يتم الملء من meals.js -->
-      </div>
-    </section>
-
-    <!-- اختيارات اليوم -->
-    <section class="section">
-      <h2 class="section-title">اختيارات اليوم</h2>
-
-      <div class="items-table">
+      <div id="itemsTable" class="items-table">
         <div class="row header">
           <div>الصنف</div>
-          <div>الكمية</div>
           <div>الوحدة</div>
-          <div>كارب</div>
+          <div>الكمية</div>
+          <div>المقياس</div>
+          <div>الجرامات</div>
+          <div>كارب (g)</div>
+          <div>ألياف (g)</div>
+          <div>سعرات</div>
           <div>بروتين</div>
           <div>دهون</div>
-          <div>سعرات</div>
-          <div>ملاحظات</div>
-          <div>إجراء</div>
+          <div>حذف</div>
         </div>
         <div id="itemsBody"></div>
       </div>
 
-      <!-- إجماليات -->
-      <div class="totals">
-        <span id="sumCarb" class="chip">إجمالي الكارب: 0</span>
-        <span id="sumProtein" class="chip">إجمالي البروتين: 0</span>
-        <span id="sumFat" class="chip">إجمالي الدهون: 0</span>
-        <span id="sumKcal" class="chip">إجمالي السعرات: 0</span>
-      </div>
-    </section>
-
-    <!-- السجلات المحفوظة -->
-    <section class="section">
-      <h2 class="section-title">السجلات المحفوظة</h2>
-      <div class="items-table">
-        <div class="row header">
-          <div>التاريخ</div>
-          <div>الوجبات</div>
-          <div>كارب</div>
-          <div>بروتين</div>
-          <div>دهون</div>
-          <div>سعرات</div>
-          <div>ملاحظات</div>
-          <div>إجراء</div>
+      <div class="summary sticky">
+        <div class="sum-grid">
+          <div class="sum-box"><div class="label">إجمالي الجرامات</div><div class="value"><span id="tGrams">0</span> g</div></div>
+          <div class="sum-box"><div class="label">إجمالي الكارب</div><div class="value"><span id="tCarbs">0</span> g</div></div>
+          <div class="sum-box"><div class="label">إجمالي الألياف</div><div class="value"><span id="tFiber">0</span> g</div></div>
+          <div class="sum-box"><div class="label">الكارب الصافي</div><div class="value"><span id="tNetCarbs">0</span> g</div></div>
+          <div class="sum-box"><div class="label">السعرات</div><div class="value"><span id="tCal">0</span> kcal</div></div>
+          <div class="sum-box"><div class="label">البروتين</div><div class="value"><span id="tProt">0</span> g</div></div>
+          <div class="sum-box"><div class="label">الدهون</div><div class="value"><span id="tFat">0</span> g</div></div>
+          <div class="sum-box"><div class="label">GL الإجمالي (توعوي)</div><div class="value"><span id="tGL">0</span></div></div>
         </div>
-        <div id="savedBody"></div>
+
+        <div class="opts-line">
+          <label class="switch">
+            <input type="checkbox" id="useNetCarbs" />
+            <span>⚡ استخدم الكارب الصافي لحساب الجرعة (توعوي)</span>
+          </label>
+          <button id="reachTargetBtn" class="secondary">✨ ضبط الكميات للوصول للهدف</button>
+        </div>
+
+        <div class="dose">
+          <div class="dose-line">
+            <span>💉 الجرعة المقترحة:</span>
+            <strong id="suggestedDose">0</strong> U
+            <small class="muted" id="doseExplain"></small>
+          </div>
+          <div class="dose-line">
+            <span class="muted">نطاق متوقع (غير طبي):</span>
+            <span id="doseRange" class="dose-badge">—</span>
+          </div>
+          <div class="dose-line">
+            <label>الجرعة المعطاة فعليًا (اختياري)</label>
+            <input type="number" step="0.5" id="appliedDose" placeholder="مثال: 4.5" />
+          </div>
+          <div class="dose-line">
+            <label>ملاحظات</label>
+            <input type="text" id="mealNotes" placeholder="ملاحظات على الوجبة" />
+          </div>
+        </div>
+
+        <div class="save-actions">
+          <button id="saveMealBtn">حفظ الوجبة</button>
+          <button id="resetMealBtn" class="secondary">إعادة الضبط</button>
+          <button id="printDayBtn" class="secondary">🖨️ طباعة وجبات اليوم</button>
+        </div>
+
+        <p class="muted tiny">⚠️ هذا تقدير إرشادي يعتمد على المدخلات ولا يعتبر نصيحة طبية.</p>
       </div>
     </section>
-  </main>
 
-  <script type="module" src="js/meals.js?v=final-1"></script>
+    <section class="card">
+      <div class="table-head">
+        <h3>وجبات يوم <span id="tableDate">—</span></h3>
+        <div class="table-tools">
+          <select id="filterType">
+            <option value="الكل">كل الأنواع</option>
+            <option value="فطار">فطار</option>
+            <option value="غدا">غدا</option>
+            <option value="عشا">عشا</option>
+            <option value="سناك">سناك</option>
+          </select>
+        </div>
+      </div>
+      <div id="mealsList" class="meals-list"></div>
+      <div id="noMeals" class="empty hidden">لا توجد وجبات لهذا اليوم.</div>
+    </section>
+  </div>
+
+  <!-- مودال اختيار صنف -->
+  <div id="pickerModal" class="modal hidden" aria-modal="true" role="dialog">
+    <div class="modal-body" role="document">
+      <div class="modal-header">
+        <h3>اختيار صنف من المكتبة</h3>
+        <button id="closePicker" class="close" aria-label="إغلاق">✕</button>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label>بحث بالاسم أو #هاشتاج</label>
+          <input type="text" id="pickSearch" placeholder="مثال: شوفان أو #فطار" />
+        </div>
+        <div class="field">
+          <label>تصنيف</label>
+          <select id="pickCategory">
+            <option value="الكل">الكل</option>
+            <option>نشويات</option>
+            <option>حليب</option>
+            <option>فاكهة</option>
+            <option>خضروات</option>
+            <option>لحوم</option>
+            <option>دهون</option>
+          </select>
+        </div>
+      </div>
+      <div id="pickerGrid" class="picker-grid"></div>
+      <div id="pickerEmpty" class="empty hidden">لا توجد نتائج مطابقة.</div>
+    </div>
+  </div>
+
+  <!-- مودال مساعد AI النصّي -->
+  <div id="aiModal" class="modal hidden" aria-modal="true" role="dialog">
+    <div class="modal-body" role="document">
+      <div class="modal-header">
+        <h3>🤖 مساعد تكوين الوجبة من نص</h3>
+        <button id="aiClose" class="close" aria-label="إغلاق">✕</button>
+      </div>
+      <div class="form-grid">
+        <div class="field" style="grid-column:1/-1">
+          <label>اكتبي وصف الوجبة</label>
+          <textarea id="aiText" rows="4" placeholder="مثال: كوب ونصف أرز أبيض + 2 شريحة توست بني + 10 جم جبنة + تفاحة صغيرة"></textarea>
+        </div>
+      </div>
+      <div class="actions" style="justify-content:flex-end;margin-top:8px">
+        <button id="aiAnalyze" class="secondary">تحليل</button>
+        <button id="aiApply" disabled>إضافة العناصر المقترحة</button>
+      </div>
+      <div id="aiResults" class="ai-results"></div>
+      <p class="muted tiny">
+        افتراضيًا يعمل محليًا بدون إنترنت. عند تفعيل Cloud Function <code>aiSuggestFromText</code> سيُستخدم تلقائيًا.
+      </p>
+    </div>
+  </div>
+
+    <!-- مودال الوجبات الجاهزة -->
+  <div id="presetModal" class="modal hidden" aria-modal="true" role="dialog">
+    <div class="modal-body" role="document">
+      <div class="modal-header">
+        <h3>🍱 اختر وجبة جاهزة</h3>
+        <button id="presetClose" class="close" aria-label="إغلاق">✕</button>
+      </div>
+      <div class="preset-tabs">
+        <button class="tab active" data-type="فطار">🍳 فطار</button>
+        <button class="tab" data-type="غدا">🍲 غدا</button>
+        <button class="tab" data-type="عشا">🍽️ عشا</button>
+      </div>
+      <div id="presetGrid" class="preset-grid"></div>
+      <div id="presetEmpty" class="empty hidden">لا توجد وجبات جاهزة لهذا النوع.</div>
+    </div>
+  </div>
+
+  <script type="module" src="js/meals.js?v=final-merge"></script>
 </body>
 </html>
