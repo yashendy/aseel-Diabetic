@@ -1,8 +1,8 @@
-// measurements.js — بدون ساعة: تاريخ فقط، جدول اليوم المختار، إظهار/إخفاء الحقول حسب الحالة، تعديل قياس
+// measurements.js — بدون ساعة، إظهار التصحيحي/علاج الهبوط حسب الحالة، وحذف من الجدول فقط
 
 import { auth, db } from './firebase-config.js';
 import {
-  collection, addDoc, updateDoc, doc, getDoc, getDocs, query, where, serverTimestamp
+  collection, addDoc, updateDoc, deleteDoc, doc, getDoc, getDocs, query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
@@ -30,9 +30,6 @@ const treatLowInput  = document.getElementById('treatLowInput');
 const notesInput     = document.getElementById('notesInput');
 
 const saveBtn        = document.getElementById('saveBtn');
-const saveEditBtn    = document.getElementById('saveEditBtn');
-const cancelEditBtn  = document.getElementById('cancelEditBtn');
-const editBar        = document.getElementById('editBar');
 
 const tbody          = document.getElementById('measTableBody');
 
@@ -40,7 +37,6 @@ const tbody          = document.getElementById('measTableBody');
 let currentUser = null;
 let childId     = null;
 let childData   = null;
-let editMode    = null; // { id }
 
 /* ===== Consts ===== */
 const ALLOW_DUP_KEYS = new Set(['SNACK','PRE_SPORT','POST_SPORT']);
@@ -122,15 +118,12 @@ function classify(mmol){
 }
 
 /* ===== Duplicate protection ===== */
-async function existsDuplicate(dateKey, slotKey, excludedId=null){
+async function existsDuplicate(dateKey, slotKey){
   const col = collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`);
   const qy  = query(col, where('date','==',dateKey), where('slotKey','==',slotKey));
   const snap= await getDocs(qy);
   let found = false;
-  snap.forEach(d=>{
-    if (excludedId && d.id===excludedId) return;
-    found = true;
-  });
+  snap.forEach(()=> found = true);
   return found;
 }
 
@@ -169,18 +162,20 @@ function updatePreviewAndUI(){
   const severe = (mmol!=null) && (mmol<=severeLow || mmol>=severeHigh);
   setCardState(c, severe);
 
-  // show/hide correction & treat-low
+  // show/hide correction & treat-low (مخفية افتراضيًا)
   const isHigh = mmol!=null && mmol > max;
   const isLow  = mmol!=null && mmol < min;
 
   wrapCorr.hidden      = !isHigh;
   wrapTreatLow.hidden  = !isLow;
 
-  // correction value
+  // fill/clear controlled fields
   if (isHigh)  { corrDose.value = computeCorrection(mmol) || ''; }
   else         { corrDose.value = ''; }
 
-  // meal section visibility (كما هي)
+  if (!isLow)  { treatLowInput.value = ''; }
+
+  // meal section visibility
   const showMeal = MEAL_SLOTS.has((slotSel.value||'').toUpperCase());
   document.getElementById('wrapBolus').style.display = showMeal ? '' : 'none';
 
@@ -191,41 +186,18 @@ function updatePreviewAndUI(){
 /* ===== Form helpers ===== */
 function clearForm(keepDate=true){
   const dk = selectedDateKey();
-  editMode = null;
   valueInput.value = '';
   corrDose.value   = '';
   bolusDose.value  = '';
   carbsInput.value = '';
   treatLowInput.value = '';
   notesInput.value = '';
-  saveBtn.hidden = false;
-  saveEditBtn.hidden = true;
-  editBar.hidden = true;
   setCardState('ok', false);
-  if (!keepDate) initDateDefault();
-  else dateInput.value = dk;
-  updatePreviewAndUI();
-}
-function fillFormFromDoc(d){
-  // date only
-  const dk = d.date || new Date().toISOString().slice(0,10);
-  dateInput.value = dk;
-
-  const unit = (d.unit || (d.mgdl!=null?'mgdl':'mmol')).toLowerCase();
-  unitSel.value = unit;
-  if (d.mmol!=null) valueInput.value = fmtVal(d.mmol, unit);
-  else if (d.mgdl!=null) valueInput.value = unit==='mgdl' ? d.mgdl : (d.mgdl/18).toFixed(1);
-
-  slotSel.value    = d.slotKey || d.slot || 'RANDOM';
-  corrDose.value   = d.correctionDose ?? '';
-  bolusDose.value  = d.bolusDose ?? '';
-  treatLowInput.value = d.treatLow || '';
-  notesInput.value = d.notes ?? '';
-
+  if (!keepDate) initDateDefault(); else dateInput.value = dk;
   updatePreviewAndUI();
 }
 
-/* ===== Load child + table for a date ===== */
+/* ===== Child + table ===== */
 async function loadChild(){
   const qs = new URLSearchParams(location.search);
   childId = qs.get('child');
@@ -250,7 +222,7 @@ async function loadTableFor(dateKey){
     rows.push({ id: ds.id, ...d, when });
   });
 
-  // فرز محلي (معظمها نفس التوقيت لكن للحفاظ على ترتيب ثابت)
+  // ترتيب بسيط
   rows.sort((a,b)=> (a.slotKey||'').localeCompare(b.slotKey||''));
 
   rows.forEach(d=>{
@@ -292,33 +264,29 @@ async function loadTableFor(dateKey){
 
     const tdAct = document.createElement('td');
     tdAct.className = 'row-actions';
-    const btn = document.createElement('button');
-    btn.className = 'edit';
-    btn.textContent = 'تعديل ✏️';
-    btn.addEventListener('click', ()=> enterEditMode(d.id));
-    tdAct.appendChild(btn);
+    const del = document.createElement('button');
+    del.className = 'delete';
+    del.textContent = 'حذف 🗑️';
+    del.addEventListener('click', ()=> deleteMeasurement(d.id, dateKey));
+    tdAct.appendChild(del);
     tr.appendChild(tdAct);
 
     tbody.appendChild(tr);
   });
 }
 
-/* ===== Edit mode ===== */
-async function enterEditMode(id){
+/* ===== Delete ===== */
+async function deleteMeasurement(id, dateKey){
+  if (!confirm('هل تريد حذف هذا القياس؟')) return;
   const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/measurements/${id}`);
-  const s   = await getDoc(ref);
-  if (!s.exists()) return alert('القياس غير موجود');
-  fillFormFromDoc(s.data());
-  editMode = { id };
-  saveBtn.hidden = true;
-  saveEditBtn.hidden = false;
-  editBar.hidden = false;
+  await deleteDoc(ref);
+  await loadTableFor(dateKey);
 }
 
-/* ===== Save new / edit ===== */
-async function saveCommon(isEdit){
-  const unit    = unitSel.value;
-  const mmol    = toMmol(valueInput.value, unit);
+/* ===== Save new ===== */
+async function saveNew(){
+  const unit = unitSel.value;
+  const mmol = toMmol(valueInput.value, unit);
   if (mmol==null) return alert('من فضلك أدخل قيمة صحيحة');
 
   const dateKey = selectedDateKey();
@@ -326,7 +294,7 @@ async function saveCommon(isEdit){
   const slotKey = (slotSel.value || 'RANDOM').toUpperCase();
 
   if (!ALLOW_DUP_KEYS.has(slotKey)){
-    const dup = await existsDuplicate(dateKey, slotKey, isEdit ? editMode?.id : null);
+    const dup = await existsDuplicate(dateKey, slotKey);
     if (dup) return alert('هذا الوقت مسجّل بالفعل لهذا اليوم.');
   }
 
@@ -335,34 +303,19 @@ async function saveCommon(isEdit){
   const isLow  = mmol < min;
 
   const payload = {
-    mmol, unit,
-    when, date: dateKey,
-    slotKey,
-    // جرعة الوجبة اختيارية
+    mmol, unit, when, date: dateKey, slotKey,
     bolusDose:   bolusDose.value? Number(bolusDose.value): null,
-    // التصحيحي يظهر فقط عند High
     correctionDose: isHigh && corrDose.value ? Number(corrDose.value) : null,
-    // علاج الهبوط يظهر فقط عند Low
     treatLow: isLow && treatLowInput.value ? treatLowInput.value.trim() : null,
     notes: (notesInput.value||'').trim(),
-    [isEdit ? 'updatedAt' : 'createdAt']: serverTimestamp()
+    createdAt: serverTimestamp()
   };
   if (unit==='mgdl'){ payload.mgdl = Number(valueInput.value); }
 
-  if (isEdit){
-    const ref = doc(db, `parents/${currentUser.uid}/children/${childId}/measurements/${editMode.id}`);
-    await updateDoc(ref, payload);
-  } else {
-    await addDoc(collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`), payload);
-  }
-
-  const dk = selectedDateKey();
+  await addDoc(collection(db, `parents/${currentUser.uid}/children/${childId}/measurements`), payload);
   clearForm(true);
-  await loadTableFor(dk);
+  await loadTableFor(dateKey);
 }
-
-const saveNew  = ()=> saveCommon(false);
-const saveEdit = ()=> saveCommon(true);
 
 /* ===== Events ===== */
 unitSel.addEventListener('change', ()=>{ renderChips(); updatePreviewAndUI(); });
@@ -375,8 +328,6 @@ dateInput.addEventListener('change', async ()=>{
   await loadTableFor(selectedDateKey());
 });
 saveBtn.addEventListener('click', saveNew);
-saveEditBtn.addEventListener('click', saveEdit);
-cancelEditBtn.addEventListener('click', ()=> clearForm(false));
 
 /* ===== Boot ===== */
 onAuthStateChanged(auth, async (user)=>{
