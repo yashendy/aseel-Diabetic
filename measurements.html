@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>إدخال قياس</title>
-  <link rel="stylesheet" href="css/measurements.css" />
+  <link rel="stylesheet" href="./measurements.css" />
 </head>
 <body>
 
@@ -14,8 +14,15 @@
       ⚠️ تنبيه شديد — رجاء التعامل فورًا حسب الخطة المتفق عليها
     </div>
 
-    <!-- الشيبس: تعبئة تلقائيًا -->
+    <!-- الشيبس (تُملأ تلقائياً) -->
     <div id="chips" class="chips"></div>
+
+    <!-- تاريخ ووقت القياس -->
+    <div class="row">
+      <label>تاريخ القياس</label>
+      <input type="date" id="dateInput" />
+      <input type="time" id="timeInput" />
+    </div>
 
     <!-- قيمة القياس + الوحدة -->
     <div class="row">
@@ -85,7 +92,7 @@
     </div>
   </section>
 
-  <!-- جدول القياسات الأخيرة -->
+  <!-- جدول قياسات اليوم فقط -->
   <section class="table-wrap">
     <table class="table" aria-label="جدول القياسات">
       <thead>
@@ -103,7 +110,6 @@
     </table>
   </section>
 
-  <!-- Firebase + سكربت الصفحة -->
-  <script type="module" src="js/measurements.js"></script>
+  <script type="module" src="./measurements.js"></script>
 </body>
 </html>
