@@ -170,3 +170,18 @@ button[disabled]{opacity:.6;cursor:not-allowed}
   .controls{ grid-template-columns:1fr; }
   .row{ min-width: 720px; } /* تمرير أفقي بسيط بدل انكسار الأعمدة */
 }
+/* تأكد أن الصور داخل البطاقة ما تخرجش أبداً */
+.pick-card, .preset-card {
+  overflow: hidden;       /* يخلي المحتوى محصور */
+  border-radius: 10px;    /* نفس استدارة البطاقة */
+}
+
+.pick-card img,
+.preset-card img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;    /* يخلي الصورة تنضغط/تتوسع جوا الإطار من غير ما تطلع */
+  display: block;
+}
