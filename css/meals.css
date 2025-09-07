@@ -118,3 +118,55 @@ button[disabled]{opacity:.6;cursor:not-allowed}
 @media print{
   body{background:#fff}
 }
+/* ===== [Overrides] Compact library & presets + Mobile fixes ===== */
+
+/* 1) مكتبة الأصناف: كروت أصغر وصور رمزية صغيرة */
+.picker-grid .pick-card{ gap:8px; padding:6px; border-radius:10px; }
+.picker-grid .pick-thumb{ width:36px; height:36px; border-radius:8px; }
+.picker-grid .pick-thumb img{ object-fit:contain; }
+.picker-grid .pick-meta{ font-size:12px; }
+.picker-grid .badge{ font-size:11px; padding:2px 6px; }
+
+/* 2) الوجبات الجاهزة: أيقونات أصغر وبطاقة أرفع */
+.preset-grid{ gap:8px; }
+.preset-card{ border-radius:10px; }
+.preset-top{ padding:6px; gap:8px; }
+.preset-top .thumb{ width:36px; height:36px; }
+.preset-top .thumb img{ object-fit:contain; }
+.preset-top .title{ font-size:13px; }
+.preset-body{ font-size:12px; }
+
+/* 3) تحسينات عامة لتصغير الشيبس */
+.chip{ font-size:11px; padding:2px 6px; }
+
+/* 4) تحسينات الموبايل */
+@media (max-width: 680px){
+  /* رأس الصفحة */
+  .head-grid{ flex-direction:column; align-items:flex-start; gap:10px; }
+  .controls{ min-width:unset; grid-template-columns:1fr 1fr; gap:8px; }
+
+  /* جدول العناصر: يسمح بتمرير أفقي خفيف بدل التكسر */
+  .items-table{ overflow-x:auto; }
+  .row{
+    grid-template-columns:
+      1.5fr 100px 90px 120px 90px 90px 90px 90px 90px 70px;
+    min-width: 820px; /* بدلاً من 1040px */
+  }
+  .row.header{ font-size:13px; }
+  .row > div{ padding:6px; }
+
+  /* مودال المكتبة: عمود واحد وهوامش أصغر */
+  .modal-body{ max-width:100%; padding:12px; }
+  .picker-grid{ grid-template-columns:1fr; }
+  .picker-grid .pick-thumb{ width:32px; height:32px; }
+
+  /* بطاقات الوجبات الجاهزة أصغر */
+  .preset-grid{ grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; }
+  .preset-top .title{ font-size:12.5px; }
+}
+
+/* شاشات أصغر جداً */
+@media (max-width: 420px){
+  .controls{ grid-template-columns:1fr; }
+  .row{ min-width: 720px; } /* تمرير أفقي بسيط بدل انكسار الأعمدة */
+}
