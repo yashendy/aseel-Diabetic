@@ -337,4 +337,47 @@ async function loadAll() {
   if (lineChart) { lineChart.destroy(); }
   lineChart = new Chart(document.getElementById("dayChart"), lineCfg);
 
-  renderLegend(li
+  renderLegend(lineLegend, [
+    `Severe Low = ${formatValue(convertForDisplay(child.severeLow,"mmol",displayUnit), displayUnit)}`,
+    `Severe High = ${formatValue(convertForDisplay(child.severeHigh,"mmol",displayUnit), displayUnit)}`
+  ]);
+
+  // Pie
+  const pie = buildPieData(raw, child.severeLow, child.severeHigh, displayUnit);
+  if (pieChart) pieChart.destroy();
+  pieChart = new Chart(document.getElementById("rangePie"), {
+    type: "doughnut",
+    data: pie,
+    options: {
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } }
+    },
+    plugins: [DoughnutWritePlugin]
+  });
+
+  renderLegend(pieLegend, ["TBR: دون Severe Low", "TIR: داخل النطاق", "TAR: فوق Severe High"]);
+}
+
+// ---------- Events ----------
+rangeSel.addEventListener("change", () => {
+  customBox.style.display = rangeSel.value === "custom" ? "flex" : "none";
+  if (rangeSel.value !== "custom") loadAll();
+});
+applyCustom.addEventListener("click", () => loadAll());
+
+unitSelect.addEventListener("change", () => {
+  unitSelect.dataset.userTouched = "1";
+  loadAll();
+});
+
+// ---------- Startup ----------
+window.addEventListener("load", async () => {
+  // wait for auth state to be ready (firebase-config likely already sets onAuthStateChanged)
+  if (auth.currentUser) {
+    await loadAll();
+  } else {
+    const unsub = auth.onAuthStateChanged(async (u) => {
+      if (u) { await loadAll(); unsub(); }
+    });
+  }
+});
