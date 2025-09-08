@@ -197,6 +197,49 @@
     setStatus('❌ لا تملك صلاحية الاطلاع على هذا الطفل.', false);
   }
 </script>
+  <script type="module">
+  import { getParams, getContextFromStorage, ensureDoctorOrParentAccess } from './js/common-auth.js';
+  import { db } from './js/firebase-config.js';
+  import { collection, query, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
+
+  // 1) اجلب IDs من الرابط أو من sessionStorage كـ Fallback
+  let { parentId, childId } = getParams();
+  if(!parentId || !childId){
+    const ctx = getContextFromStorage();
+    if (ctx) { parentId = ctx.parentId; childId = ctx.childId; }
+  }
+  if(!parentId || !childId){
+    alert('رابط غير مكتمل: لا يوجد parentId/childId');
+    location.href = 'index.html'; // أو dashboard المناسب
+  }
+
+  // عنصر رسالة خفيف
+  const statusEl = document.getElementById('status') || (()=> {
+    const el = document.createElement('div'); el.id='status'; el.style.margin='10px';
+    document.body.prepend(el); return el; })();
+  const setStatus = (m, ok)=>{ statusEl.textContent=m; statusEl.style.color = ok?'#00c08b':'#ff6b6b'; };
+
+  try{
+    setStatus('التحقّق من الصلاحيات…', true);
+    const { role, childData } = await ensureDoctorOrParentAccess(parentId, childId);
+    setStatus(`تم — المستخدم: ${role === 'doctor' ? 'طبيب' : 'وليّ أمر'} — تحميل التحليلات…`, true);
+
+    // لو عندك الدالة الأصلية موجودة، هنستدعيها كما هي
+    if (typeof window.loadAnalytics === 'function') {
+      window.loadAnalytics({ parentId, childId, childData });
+    } else {
+      // مثال بسيط غير مدمّر
+      const col = collection(db, `parents/${parentId}/children/${childId}/measurements`);
+      const snap = await getDocs(query(col, orderBy('date','desc'), limit(20)));
+      console.log('[Analytics] sample rows:', snap.docs.map(d=>d.data()));
+      setStatus(`تم جلب ${snap.size} قياسات (عرض تجريبي).`, true);
+    }
+  }catch(e){
+    console.error('[Analytics] gate error:', e);
+    setStatus('لا تملك صلاحية الاطلاع على هذا الطفل.', false);
+  }
+</script>
 </body>
 </html>
+
 
