@@ -1,20 +1,19 @@
 // js/admin.js
 import { auth, db } from './firebase-config.js';
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  onAuthStateChanged, signOut
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import {
-  collection, collectionGroup, query, where, orderBy,
+  collection, collectionGroup, query, where,
   getDocs, getDoc, doc, updateDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-const $ = (id)=>document.getElementById(id);
+const $ = id => document.getElementById(id);
 
-/* عناصر */
+/* عناصر واجهة */
 const adminName = $('adminName');
 const btnSignOut = $('btnSignOut');
 
 const btnRefreshLists = $('btnRefreshLists');
+const btnRefreshChildren = $('btnRefreshChildren');
 const btnOpenAssign = $('btnOpenAssign');
 
 const childrenTbody = $('childrenTbody');
@@ -53,13 +52,13 @@ function showToast(msg='تم'){ if(!toast) return; toast.querySelector('.msg').t
 function setStatus(el, msg, ok=false){ el.textContent = msg; el.className = 'status ' + (ok?'ok':'err'); }
 function escapeHtml(s){ return (s ?? '').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
-/* مصادقة + تحقق أن المستخدم أدمن */
+/* مصادقة + تحقّق الأدمن */
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href = 'index.html'; return; }
   CURRENT_ADMIN = user;
   adminName.textContent = user.displayName || user.email || '—';
 
-  // تحقق دور الأدمن
+  // لازم users/{uid}.role == "admin"
   const uSnap = await getDoc(doc(db, 'users', user.uid));
   const role = uSnap.exists() ? (uSnap.data()?.role) : null;
   if (role !== 'admin'){
@@ -68,17 +67,22 @@ onAuthStateChanged(auth, async (user)=>{
     return;
   }
 
-  await loadLists();
+  await loadLists();   // تحميل الأطباء + الأطفال
   wireEvents();
 });
 
-/* أحداث */
+/* ربط الأحداث */
 function wireEvents(){
   btnSignOut?.addEventListener('click', ()=>signOut(auth));
 
   btnRefreshLists?.addEventListener('click', async ()=>{
     await loadLists();
-    showToast('تم التحديث');
+    showToast('تم تحديث القوائم');
+  });
+
+  btnRefreshChildren?.addEventListener('click', async ()=>{
+    await loadChildren();  // تحديث الأطفال فقط
+    showToast('تم تحديث الأطفال');
   });
 
   btnOpenAssign?.addEventListener('click', openAssignModal);
@@ -116,7 +120,7 @@ async function loadDoctors(){
     renderDoctorsTable(ALL_DOCTORS);
     doctorsHint.textContent = `${ALL_DOCTORS.length} دكتور/ة`;
   }catch(e){
-    console.error(e);
+    console.error('[Admin] loadDoctors error:', e);
     doctorsTbody.innerHTML = `<tr><td class="empty" colspan="3">تعذّر تحميل الأطباء.</td></tr>`;
     doctorsHint.textContent = '—';
   }
@@ -124,20 +128,22 @@ async function loadDoctors(){
 
 async function loadChildren(){
   try{
-    // نقرأ الأطفال من collection group
+    // الإدمن لديه سماح read في القواعد داخل children/{childId} و {anySub=**}
     const qy = query(collectionGroup(db, 'children'));
     const snap = await getDocs(qy);
     ALL_CHILDREN = [];
     snap.forEach(s=>{
-      const p = s.ref.path.split('/'); // parents/{pid}/children/{cid}
-      const parentId = p[1], childId = p[3];
+      // path: parents/{parentId}/children/{childId}
+      const parts = s.ref.path.split('/');
+      const parentId = parts[1], childId = parts[3];
       const d = s.data();
       const consent = d?.sharingConsent === true
         || (d?.sharingConsent && typeof d.sharingConsent === 'object' && d.sharingConsent.doctor === true)
         || d?.shareDoctor === true;
 
       ALL_CHILDREN.push({
-        parentId, childId,
+        parentId,
+        childId,
         name: d?.name || '—',
         parentName: d?.parentName || parentId,
         assignedDoctor: d?.assignedDoctor || null,
@@ -147,7 +153,7 @@ async function loadChildren(){
     renderChildrenTable(ALL_CHILDREN);
     childrenHint.textContent = `${ALL_CHILDREN.length} طفل`;
   }catch(e){
-    console.error(e);
+    console.error('[Admin] loadChildren error:', e);
     childrenTbody.innerHTML = `<tr><td class="empty" colspan="4">تعذّر تحميل الأطفال.</td></tr>`;
     childrenHint.textContent = '—';
   }
@@ -273,10 +279,8 @@ async function assignNow(){
 
     await updateDoc(ref, {
       assignedDoctor: doctorUid,
-      assignedDoctorInfo: {
-        uid: doctorUid, name: doctorName || null, email: doctorEmail || null
-      },
-      // ✅ نثبت الموافقة بالشكلين لضمان توافق كل الواجهات
+      assignedDoctorInfo: { uid: doctorUid, name: doctorName || null, email: doctorEmail || null },
+      // نثبت الموافقة بالشكلين لضمان توافق الواجهات
       sharingConsent: { doctor: true },
       shareDoctor: true,
       updatedAt: serverTimestamp()
@@ -286,11 +290,9 @@ async function assignNow(){
     showToast('تم الإسناد');
     await loadChildren(); // تحديث القائمة لتظهر شارة "معين"
   }catch(e){
-    console.error(e);
+    console.error('[Admin] assign error:', e);
     setStatus(modalStatus, 'تعذّر الإسناد. تحقّق من الصلاحيات/الاتصال.', false);
   }finally{
     showLoader(false);
   }
 }
-
-/* انتهاء */
