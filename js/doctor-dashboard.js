@@ -3,21 +3,18 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  // أطفال الدكتور
-  collectionGroup, query, where, getDocs,
-  // أكواد الربط
-  collection, doc, setDoc, deleteDoc, getDoc, orderBy,
-  serverTimestamp
+  collectionGroup, collection, query, where, orderBy,
+  getDocs, doc, getDoc, setDoc, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const $ = (id)=>document.getElementById(id);
 
-// عناصر الواجهة (طبقًا لـ doctor-dashboard.html)
-const elDoctorName   = $('doctorName');
-const elChildrenBody = $('childrenTbody');
-const elChildSearch  = $('childSearch');
-const elChildrenCnt  = $('childrenCount');
-const elCodesList    = $('codesList');
+// عناصر الواجهة (طبقًا للـ HTML لديك)
+const elDoctorName   = $('doctorName');       // اسم الطبيب أعلى الصفحة (اختياري)
+const elChildrenBody = $('childrenTbody');    // <tbody> لجدول الأطفال
+const elChildSearch  = $('childSearch');      // input للبحث
+const elChildrenCnt  = $('childrenCount');    // شارة العدّاد
+const elCodesList    = $('codesList');        // قائمة أكواد الربط
 const btnCreateCode  = $('btnCreateCode');
 const btnReloadCodes = $('btnReloadCodes');
 const btnRefresh     = $('btnRefresh');
@@ -29,7 +26,13 @@ let ALL_CHILDREN = [];
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href = 'index.html'; return; }
   CURRENT_USER = user;
-  elDoctorName.textContent = user.displayName || user.email || '—';
+
+  // Debug مهم لتأكيد الـ UID
+  console.log('[Doctor Dashboard] UID =', user.uid);
+  if (elDoctorName) {
+    elDoctorName.textContent = user.displayName || user.email || '—';
+    elDoctorName.title = `UID: ${user.uid}`;
+  }
 
   await Promise.all([
     loadChildren(),
@@ -49,14 +52,33 @@ onAuthStateChanged(auth, async (user)=>{
 async function loadChildren(){
   if(!CURRENT_USER) return;
 
+  // دالة صغيرة لعرض رسالة داخل الجدول
+  const showMsg = (text)=> {
+    elChildrenBody.innerHTML = `<tr><td class="empty" colspan="6">${text}</td></tr>`;
+    elChildrenCnt.textContent = '0';
+  };
+
   try {
-    // يقرأ فقط الأطفال الذين تم تعيين الطبيب لهم
-    const qy = query(
+    // الاستعلام الأساسي: دكتور + موافقة مشاركة
+    let qy = query(
       collectionGroup(db, 'children'),
-      where('assignedDoctor', '==', CURRENT_USER.uid)
+      where('assignedDoctor', '==', CURRENT_USER.uid),
+      where('sharingConsent.doctor', '==', true)
     );
 
-    const snap = await getDocs(qy);
+    let snap;
+    try {
+      snap = await getDocs(qy);
+    } catch (e) {
+      // لو محتاج فهرس كومبوزيت أو أي فشل، نعمل fallback على شرط واحد
+      console.warn('[Doctor Dashboard] fallback to single where due to:', e?.code || e);
+      qy = query(
+        collectionGroup(db, 'children'),
+        where('assignedDoctor', '==', CURRENT_USER.uid)
+      );
+      snap = await getDocs(qy);
+    }
+
     ALL_CHILDREN = [];
 
     snap.forEach(docSnap=>{
@@ -64,30 +86,27 @@ async function loadChildren(){
       const path = docSnap.ref.path.split('/'); // ["parents", pid, "children", cid]
       const parentId = path[1];
       const childId  = path[3];
-
       const d = docSnap.data();
 
-      // تحقّق واجهة (القواعد أصلاً تمنع من غير موافقة)
+      // فلترة نهائية بالأمان (القواعد بتتحقق برضه)
       const consent = d?.sharingConsent === true
         || (d?.sharingConsent && typeof d.sharingConsent === 'object' && d.sharingConsent.doctor === true);
 
-      if (consent) {
+      if (consent && d?.assignedDoctor === CURRENT_USER.uid) {
         ALL_CHILDREN.push({ parentId, childId, ...d });
       }
     });
 
     renderChildren(ALL_CHILDREN);
   } catch (e) {
-    console.error(e);
-    // رسالة داخل tbody
-    elChildrenBody.innerHTML = `<tr><td class="empty" colspan="6">تعذّر تحميل الأطفال: تحقّق من الصلاحيات أو الاتصال.</td></tr>`;
-    elChildrenCnt.textContent = '0';
+    console.error('[Doctor Dashboard] loadChildren error:', e);
+    showMsg('تعذّر تحميل الأطفال: تحقّق من الصلاحيات أو الاتصال.');
   }
 }
 
 /* ====== فلترة بالاسم ====== */
 function onSearch(){
-  const t = (elChildSearch.value || '').trim().toLowerCase();
+  const t = (elChildSearch?.value || '').trim().toLowerCase();
   const f = ALL_CHILDREN.filter(c => (c.name || '').toLowerCase().includes(t));
   renderChildren(f);
 }
@@ -104,7 +123,6 @@ function renderChildren(list){
 
   list.forEach(c=>{
     const tr = document.createElement('tr');
-
     const age = c.birthDate ? calcAge(c.birthDate) : '-';
     const unit = c.glucoseUnit || c.unit || '-';
 
@@ -139,7 +157,7 @@ async function createLinkCode(){
   try{
     const code = genCode(6);
 
-    // نتأكد (احتمال ضئيل للتصادم) — لو موجود نعيد المحاولة مرة واحدة
+    // تأكد من عدم التصادم مرة واحدة فقط
     const codeRef = doc(db, 'linkCodes', code);
     const existsSnap = await getDoc(codeRef);
     const finalCode = existsSnap.exists() ? genCode(6) : code;
@@ -169,7 +187,6 @@ async function deleteLinkCode(code){
     const s = await getDoc(ref);
     if(!s.exists()){ return; }
     const d = s.data();
-    // نحذف فقط لو غير مستخدم أو ملك الطبيب
     if (d.used !== true && d.doctorId === CURRENT_USER.uid){
       await deleteDoc(ref);
       await loadCodes();
@@ -178,12 +195,6 @@ async function deleteLinkCode(code){
     console.error(e);
     renderCodesError('تعذّر حذف الكود.');
   }
-}
-
-function copyToClipboard(text){
-  try{
-    navigator.clipboard?.writeText(text);
-  }catch{}
 }
 
 async function loadCodes(){
@@ -232,8 +243,6 @@ async function loadCodes(){
 function renderCodesError(msg){
   elCodesList.innerHTML = `<div class="empty">${msg}</div>`;
 }
-
-// فضّلنا تعيين دالة الحذف على window كي تعمل من HTML المُنشأ ديناميكيًا
 window.__delCode = deleteLinkCode;
 
 /* ====== Utils ====== */
