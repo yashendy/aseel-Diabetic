@@ -1,23 +1,26 @@
 // js/child-edit.js
 import { auth, db } from "./firebase-config.js";
 import {
-  doc, getDoc, setDoc, updateDoc, serverTimestamp, writeBatch
+  doc, getDoc, setDoc, updateDoc,
+  serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* عناصر الواجهة */
 const el = (id)=>document.getElementById(id);
-const childIdBadge = el("childIdBadge");
-const loader = el("loader");
-const toast = el("toast");
-const linkStatus = el("linkStatus");
-const doctorState = el("doctorState");
+const childIdBadge   = el("childIdBadge");
+const loader         = el("loader");
+const toast          = el("toast");
+const linkStatus     = el("linkStatus");
+const doctorState    = el("doctorState");
 
-const btnRefresh = el("btnRefresh");
-const btnSave = el("btnSave");
-const btnBack = el("btnBack");
+const btnRefresh     = el("btnRefresh");
+const btnSave        = el("btnSave");
+const btnBack        = el("btnBack");
 const btnLinkDoctor  = el("btnLinkDoctor");
-const btnUnlinkDoctor = el("btnUnlinkDoctor");
+const btnUnlinkDoctor= el("btnUnlinkDoctor");
+
+const linkCodeInput  = el("linkCodeInput");
 
 /* عناصر الإدخال */
 const fields = {
@@ -41,7 +44,7 @@ const fields = {
   useNetCarbs: el("f_useNetCarbs"),
   netCarbRule: el("f_netCarbRule"),
 
-  // carb targets (المفاتيح بدون f_ عشان نستخدمها في validate)
+  // carb targets
   carb_b_min: el("f_carb_b_min"),
   carb_b_max: el("f_carb_b_max"),
   carb_l_min: el("f_carb_l_min"),
@@ -60,7 +63,7 @@ const fields = {
   severeHigh: el("f_severeHigh"),
 
   // privacy
-  shareDoctor: el("f_shareDoctor"),
+  shareDoctor: el("f_shareDoctor"), // ← قد يكون غير موجود في بعض النسخ؛ سنحمي التعامل معه
 };
 
 let currentParent = null;
@@ -71,22 +74,25 @@ let childData = null;
 
 /* أدوات */
 function qs(key){ const u=new URLSearchParams(location.search); return u.get(key) || ""; }
-function showLoader(v=true){ loader.classList.toggle("hidden", !v); }
-function showToast(msg="تم"){ toast.querySelector(".msg").textContent=msg; toast.classList.remove("hidden"); setTimeout(()=>toast.classList.add("hidden"), 1800); }
-function setStatus(msg, ok=false){ linkStatus.textContent = msg; linkStatus.className = "status " + (ok ? "ok" : "err"); }
-function clearStatus(){ setStatus("", true); linkStatus.classList.add("hidden"); requestAnimationFrame(()=>linkStatus.classList.remove("hidden")); }
+function showLoader(v=true){ loader?.classList.toggle("hidden", !v); }
+function showToast(msg="تم"){
+  if (!toast) return;
+  toast.querySelector(".msg").textContent=msg;
+  toast.classList.remove("hidden");
+  setTimeout(()=>toast.classList.add("hidden"), 1800);
+}
+function setStatus(msg, ok=false){
+  if (!linkStatus) return;
+  linkStatus.textContent = msg;
+  linkStatus.className = "status " + (ok ? "ok" : "err");
+}
+function clearStatus(){ setStatus("", true); linkStatus?.classList.add("hidden"); requestAnimationFrame(()=>linkStatus?.classList.remove("hidden")); }
 function setDoctorBadge(uid, name){
+  if (!doctorState) return;
   if (uid) { doctorState.textContent = name ? `مرتبط: ${name}` : `مرتبط (${uid})`; }
   else { doctorState.textContent = "غير مرتبط"; }
 }
-async function fetchUserName(uid){
-  try{
-    const s = await getDoc(doc(db,"users",uid));
-    if (s.exists()) return s.data()?.displayName || s.data()?.name || uid;
-  }catch{}
-  return uid;
-}
-const num = (v)=> (v===''||v==null) ? null : (Number(v));
+const num = (v)=> (v===''||v==null) ? null : Number(v);
 function clampNull(n){ return (n===''||n==null||Number.isNaN(Number(n))) ? null : Number(n); }
 
 /* تحميل الوثيقة */
@@ -100,30 +106,30 @@ async function loadChild(){
     const s = await getDoc(doc(db, childDocPath));
     childData = s.exists() ? s.data() : null;
 
-    childIdBadge.textContent = childId || "—";
+    childIdBadge && (childIdBadge.textContent = childId || "—");
 
     // بيانات عامة
-    fields.name.value       = childData?.name || "";
-    fields.gender.value     = childData?.gender || "";
-    fields.birthDate.value  = childData?.birthDate || "";
-    fields.unit.value       = childData?.unit || "";
-    fields.deviceName.value = childData?.deviceName || "";
-    fields.weightKg.value   = childData?.weightKg ?? "";
-    fields.heightCm.value   = childData?.heightCm ?? "";
+    fields.name && (fields.name.value       = childData?.name || "");
+    fields.gender && (fields.gender.value     = childData?.gender || "");
+    fields.birthDate && (fields.birthDate.value  = childData?.birthDate || "");
+    fields.unit && (fields.unit.value       = childData?.unit || "");
+    fields.deviceName && (fields.deviceName.value = childData?.deviceName || "");
+    fields.weightKg && (fields.weightKg.value   = childData?.weightKg ?? "");
+    fields.heightCm && (fields.heightCm.value   = childData?.heightCm ?? "");
 
     // أنسولين
-    fields.basalType.value  = childData?.insulin?.basalType || "";
-    fields.bolusType.value  = childData?.insulin?.bolusType || "";
-    fields.longInsulin.value= childData?.longActingDose?.insulin || "";
-    fields.longTime.value   = childData?.longActingDose?.time || "";
-    fields.longUnits.value  = childData?.longActingDose?.units ?? "";
+    fields.basalType && (fields.basalType.value  = childData?.insulin?.basalType || "");
+    fields.bolusType && (fields.bolusType.value  = childData?.insulin?.bolusType || "");
+    fields.longInsulin && (fields.longInsulin.value= childData?.longActingDose?.insulin || "");
+    fields.longTime && (fields.longTime.value   = childData?.longActingDose?.time || "");
+    fields.longUnits && (fields.longUnits.value  = childData?.longActingDose?.units ?? "");
 
-    fields.carbRatio.value        = childData?.carbRatio ?? "";
-    fields.correctionFactor.value = childData?.correctionFactor ?? "";
+    fields.carbRatio && (fields.carbRatio.value        = childData?.carbRatio ?? "");
+    fields.correctionFactor && (fields.correctionFactor.value = childData?.correctionFactor ?? "");
 
     // Net carbs
-    fields.useNetCarbs.checked = !!childData?.useNetCarbs;
-    fields.netCarbRule.value   = childData?.mealsDoses?.netCarbRule || "";
+    if (fields.useNetCarbs) fields.useNetCarbs.checked = !!childData?.useNetCarbs;
+    fields.netCarbRule && (fields.netCarbRule.value   = childData?.mealsDoses?.netCarbRule || "");
 
     // مستهدفات الكارب
     const b = childData?.carbTargets?.breakfast || {};
@@ -131,26 +137,31 @@ async function loadChild(){
     const d = childData?.carbTargets?.dinner    || {};
     const s_ = childData?.carbTargets?.snack    || {};
 
-    fields.carb_b_min.value = b.min ?? "";
-    fields.carb_b_max.value = b.max ?? "";
-    fields.carb_l_min.value = l.min ?? "";
-    fields.carb_l_max.value = l.max ?? "";
-    fields.carb_d_min.value = d.min ?? "";
-    fields.carb_d_max.value = d.max ?? "";
-    fields.carb_s_min.value = s_.min ?? "";
-    fields.carb_s_max.value = s_.max ?? "";
+    fields.carb_b_min && (fields.carb_b_min.value = b.min ?? "");
+    fields.carb_b_max && (fields.carb_b_max.value = b.max ?? "");
+    fields.carb_l_min && (fields.carb_l_min.value = l.min ?? "");
+    fields.carb_l_max && (fields.carb_l_max.value = l.max ?? "");
+    fields.carb_d_min && (fields.carb_d_min.value = d.min ?? "");
+    fields.carb_d_max && (fields.carb_d_max.value = d.max ?? "");
+    fields.carb_s_min && (fields.carb_s_min.value = s_.min ?? "");
+    fields.carb_s_max && (fields.carb_s_max.value = s_.max ?? "");
 
     // نطاقات السكر
     const norm = childData?.normalRange || {};
-    fields.norm_min.value   = norm.min ?? "";
-    fields.norm_max.value   = norm.max ?? "";
-    fields.severeLow.value  = norm.severeLow ?? "";
-    fields.severeHigh.value = norm.severeHigh ?? "";
-    fields.hypo.value       = childData?.hypoLevel ?? "";
-    fields.hyper.value      = childData?.hyperLevel ?? "";
+    fields.norm_min   && (fields.norm_min.value   = norm.min ?? "");
+    fields.norm_max   && (fields.norm_max.value   = norm.max ?? "");
+    fields.severeLow  && (fields.severeLow.value  = norm.severeLow ?? "");
+    fields.severeHigh && (fields.severeHigh.value = norm.severeHigh ?? "");
+    fields.hypo       && (fields.hypo.value       = childData?.hypoLevel ?? "");
+    fields.hyper      && (fields.hyper.value      = childData?.hyperLevel ?? "");
 
     // الخصوصية + الطبيب
-    fields.shareDoctor.checked = !!childData?.shareDoctor;
+    if (fields.shareDoctor) {
+      const consentOn = (childData?.sharingConsent === true) ||
+                        (childData?.sharingConsent && typeof childData.sharingConsent === "object" && childData.sharingConsent.doctor === true) ||
+                        !!childData?.shareDoctor; // توافق مع حقول قديمة
+      fields.shareDoctor.checked = consentOn;
+    }
     setDoctorBadge(childData?.doctorUid || childData?.assignedDoctor || null, childData?.doctorName || childData?.assignedDoctorInfo?.name || null);
     setStatus("تم تحميل البيانات.", true);
   }catch(e){
@@ -171,7 +182,7 @@ function validate(){
     ["norm_min","norm_max","النطاق الطبيعي"]
   ];
   for (const [a,b,name] of pairs){
-    if (!fields[a] || !fields[b]){ alert(`حقل غير موجود: ${a} أو ${b}`); return false; }
+    if (!fields[a] || !fields[b]) continue; // لو الحقول مش موجودة نتجاوز
     const v1 = num(fields[a].value), v2 = num(fields[b].value);
     if (v1!=null && v2!=null && v1>v2){
       alert(`قيمة Min أكبر من Max في قسم "${name}"`);
@@ -186,55 +197,56 @@ async function save(){
   if (!validate()) return;
   if (!parentId || !childId){ setStatus("رابط الصفحة غير صحيح.", false); return; }
 
-  const unitSel = fields.unit.value; // 'mmol' | 'mgdl'
+  const unitSel = fields.unit?.value; // 'mmol' | 'mgdl'
   const updateObj = {
-    name: (fields.name.value||"").trim() || null,
-    gender: fields.gender.value || null,
-    birthDate: fields.birthDate.value || null,
-    deviceName: (fields.deviceName.value||"").trim() || null,
+    name: (fields.name?.value||"").trim() || null,
+    gender: fields.gender?.value || null,
+    birthDate: fields.birthDate?.value || null,
+    deviceName: (fields.deviceName?.value||"").trim() || null,
     unit: unitSel || null,
-    weightKg: clampNull(fields.weightKg.value),
-    heightCm: clampNull(fields.heightCm.value),
+    weightKg: clampNull(fields.weightKg?.value),
+    heightCm: clampNull(fields.heightCm?.value),
 
     // insulin
     insulin: {
-      basalType: (fields.basalType.value||"").trim() || null,
-      bolusType: (fields.bolusType.value||"").trim() || null,
+      basalType: (fields.basalType?.value||"").trim() || null,
+      bolusType: (fields.bolusType?.value||"").trim() || null,
     },
 
     longActingDose: {
-      insulin: (fields.longInsulin.value||"").trim() || null,
-      time: fields.longTime.value || null,
-      units: clampNull(fields.longUnits.value),
+      insulin: (fields.longInsulin?.value||"").trim() || null,
+      time: fields.longTime?.value || null,
+      units: clampNull(fields.longUnits?.value),
     },
 
-    carbRatio: clampNull(fields.carbRatio.value),
-    correctionFactor: clampNull(fields.correctionFactor.value),
+    carbRatio: clampNull(fields.carbRatio?.value),
+    correctionFactor: clampNull(fields.correctionFactor?.value),
 
-    useNetCarbs: !!fields.useNetCarbs.checked,
+    useNetCarbs: !!fields.useNetCarbs?.checked,
     mealsDoses: {
-      name: childData?.mealsDoses?.name || null, // نترك الاسم كما هو إن كان موجود
-      netCarbRule: fields.netCarbRule.value || null,
+      name: childData?.mealsDoses?.name || null, // لا نغيّر الاسم إن كان موجود
+      netCarbRule: fields.netCarbRule?.value || null,
     },
 
     carbTargets: {
-      breakfast: { min: clampNull(fields.carb_b_min.value), max: clampNull(fields.carb_b_max.value) },
-      lunch:     { min: clampNull(fields.carb_l_min.value), max: clampNull(fields.carb_l_max.value) },
-      dinner:    { min: clampNull(fields.carb_d_min.value), max: clampNull(fields.carb_d_max.value) },
-      snack:     { min: clampNull(fields.carb_s_min.value), max: clampNull(fields.carb_s_max.value) },
+      breakfast: { min: clampNull(fields.carb_b_min?.value), max: clampNull(fields.carb_b_max?.value) },
+      lunch:     { min: clampNull(fields.carb_l_min?.value), max: clampNull(fields.carb_l_max?.value) },
+      dinner:    { min: clampNull(fields.carb_d_min?.value), max: clampNull(fields.carb_d_max?.value) },
+      snack:     { min: clampNull(fields.carb_s_min?.value), max: clampNull(fields.carb_s_max?.value) },
     },
 
     normalRange: {
-      min: clampNull(fields.norm_min.value),
-      max: clampNull(fields.norm_max.value),
-      severeLow: clampNull(fields.severeLow.value),
-      severeHigh: clampNull(fields.severeHigh.value),
+      min: clampNull(fields.norm_min?.value),
+      max: clampNull(fields.norm_max?.value),
+      severeLow: clampNull(fields.severeLow?.value),
+      severeHigh: clampNull(fields.severeHigh?.value),
     },
 
-    hypoLevel: clampNull(fields.hypo.value),
-    hyperLevel: clampNull(fields.hyper.value),
+    hypoLevel: clampNull(fields.hypo?.value),
+    hyperLevel: clampNull(fields.hyper?.value),
 
-    shareDoctor: !!fields.shareDoctor.checked,
+    // لو الـ checkbox غير موجود، نحافظ على القيمة القديمة بدل ما نكسر الصفحة
+    shareDoctor: fields.shareDoctor ? !!fields.shareDoctor.checked : !!childData?.shareDoctor,
     updatedAt: serverTimestamp(),
   };
 
@@ -256,10 +268,11 @@ async function save(){
   }
 }
 
-/* ربط/فك الطبيب — أمثلة (تكمل لاحقًا حسب تطبيقك) */
+/* ربط/فك الطبيب */
 async function linkDoctor(){
-  // نستخدم prompt مؤقتًا لإدخال الكود بدون تعديل كبير في الواجهة
-  const raw = prompt("أدخل كود الربط من الطبيب:");
+  // نقرأ أولاً من input إن وُجد، وإلا نستخدم prompt
+  const inVal = (linkCodeInput?.value || "").trim();
+  const raw = inVal || prompt("أدخل كود الربط من الطبيب:");
   const code = (raw || "").trim();
   if (!code){ return; }
   if (!parentId || !childId){ setStatus("الرابط غير صحيح: مفقود parent أو child.", false); return; }
@@ -267,25 +280,14 @@ async function linkDoctor(){
   try{
     showLoader(true);
 
-    // نقرأ الكود
     const codeRef = doc(db, "linkCodes", code);
     const codeSnap = await getDoc(codeRef);
-    if (!codeSnap.exists()){
-      setStatus("الكود غير موجود ❌", false);
-      return;
-    }
+    if (!codeSnap.exists()){ setStatus("الكود غير موجود ❌", false); return; }
     const codeData = codeSnap.data();
 
-    if (codeData.used){
-      setStatus("هذا الكود تم استخدامه من قبل ❌", false);
-      return;
-    }
-
+    if (codeData.used){ setStatus("هذا الكود تم استخدامه من قبل ❌", false); return; }
     const doctorId = codeData.doctorId;
-    if (!doctorId){
-      setStatus("الكود غير صالح ❌", false);
-      return;
-    }
+    if (!doctorId){ setStatus("الكود غير صالح ❌", false); return; }
 
     // معلومات الطبيب لعرض الاسم والإيميل
     let doctorInfo = { uid: doctorId };
@@ -296,9 +298,9 @@ async function linkDoctor(){
         doctorInfo.name  = u.displayName || u.name || null;
         doctorInfo.email = u.email || null;
       }
-    }catch{ /* تجاهل أي خطأ هنا */ }
+    }catch{ /* تجاهل */ }
 
-    // نحدّث الكود + وثيقة الطفل في Batch واحد
+    // تحديث الكود + الطفل في Batch واحد
     const batch = writeBatch(db);
 
     batch.update(codeRef, {
@@ -309,23 +311,27 @@ async function linkDoctor(){
     });
 
     const childRef = doc(db, `parents/${parentId}/children/${childId}`);
+    // نحافظ على أي مفاتيح أخرى داخل sharingConsent إن وُجدت
+    const nextConsent =
+      (childData?.sharingConsent && typeof childData.sharingConsent === "object")
+        ? { ...childData.sharingConsent, doctor: true }
+        : { doctor: true };
+
     batch.update(childRef, {
       assignedDoctor: doctorId,
       assignedDoctorInfo: doctorInfo,
-      // نضمن وجود الموافقة لتسمح القواعد بقراءة الطبيب
-      sharingConsent: (childData?.sharingConsent && typeof childData.sharingConsent === "object")
-        ? { ...childData.sharingConsent, doctor: true }
-        : { doctor: true },
-      // حقول قديمة للعرض إن كانت واجهتك تستخدمها
+      sharingConsent: nextConsent,
+      // توافق مع واجهات قديمة
       doctorUid: doctorId,
       doctorName: doctorInfo.name || null,
       updatedAt: serverTimestamp()
     });
 
     await batch.commit();
-
     setStatus("تم ربط الطفل بالدكتور ✅", true);
     showToast("تم الربط");
+    // تفريغ خانة الإدخال إن كانت مستخدمة
+    if (linkCodeInput) linkCodeInput.value = "";
     await loadChild();
   }catch(e){
     console.error(e);
@@ -343,8 +349,6 @@ async function unlinkDoctor(){
     showLoader(true);
 
     const childRef = doc(db, `parents/${parentId}/children/${childId}`);
-
-    // نحدّث فقط وثيقة الطفل (لا نُعيد تفعيل الكود المستهلك)
     const nextSharing =
       (childData?.sharingConsent && typeof childData.sharingConsent === "object")
         ? { ...childData.sharingConsent, doctor: false }
