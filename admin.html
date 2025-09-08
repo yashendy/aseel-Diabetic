@@ -12,7 +12,12 @@
       <span class="logo">SK</span>
       <strong>لوحة الإدارة</strong>
     </div>
+
     <div class="spacer"></div>
+
+    <!-- زر الأصناف الغذائية -->
+    <a class="btn ghost" href="food-items.html" id="btnFoodItems">الأصناف الغذائية</a>
+
     <div class="admin-info">
       <span id="adminName">—</span>
       <button id="btnSignOut" class="btn ghost">خروج</button>
@@ -20,7 +25,7 @@
   </header>
 
   <main class="container">
-    <!-- بطاقات سريعة (اختياري) -->
+    <!-- بطاقات إحصائية -->
     <section class="cards">
       <div class="card">
         <div class="card-title">الأطباء</div>
@@ -36,12 +41,13 @@
       </div>
     </section>
 
-    <!-- 🎯 سكشن إسناد طبيب لطفل -->
+    <!-- سكشن إسناد طبيب لطفل -->
     <section class="panel">
       <div class="panel-head">
         <h2>إسناد طبيب لطفل</h2>
-        <div class="actions">
-          <button id="btnRefreshLists" class="btn ghost">تحديث القوائم ↻</button>
+        <div class="actions" style="display:flex; gap:8px">
+          <button id="btnRefreshChildren" class="btn ghost">تحديث الأطفال ↻</button>
+          <button id="btnRefreshLists" class="btn ghost">تحديث القوائم ↻↻</button>
         </div>
       </div>
 
@@ -60,6 +66,7 @@
       </div>
 
       <div class="lists-wrap">
+        <!-- جدول الأطفال -->
         <div class="list-card">
           <div class="list-title">الأطفال</div>
           <div class="list-sub">اختر طفلًا للإسناد</div>
@@ -83,6 +90,7 @@
           </div>
         </div>
 
+        <!-- جدول الأطباء -->
         <div class="list-card">
           <div class="list-title">الأطباء</div>
           <div class="list-sub">اختر طبيبًا</div>
