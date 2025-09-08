@@ -137,5 +137,38 @@
 
   <!-- كود الصفحة -->
   <script type="module" src="js/reports-print.js?v=5"></script>
+  <!-- … محتوى reports-print.html القديم كما هو … -->
+
+<!-- أضيفي هذا قبل إغلاق </body> -->
+<script type="module">
+  import { getParams, ensureDoctorAccess } from './js/common-auth.js';
+
+  const { parentId, childId } = getParams();
+  if(!parentId || !childId){
+    alert('رابط غير مكتمل: لا يوجد parentId/childId');
+    location.href = 'doctor-dashboard.html';
+  }
+
+  const statusEl = document.createElement('div');
+  statusEl.style.margin = '10px';
+  document.body.prepend(statusEl);
+
+  function setStatus(msg, ok){ statusEl.textContent = msg; statusEl.style.color = ok ? 'lime' : 'tomato'; }
+
+  try{
+    setStatus('التحقق من الصلاحيات…', true);
+    const { childData } = await ensureDoctorAccess(parentId, childId);
+    setStatus('تم — جارٍ تجهيز التقرير…', true);
+
+    if (typeof window.renderReport === 'function') {
+      window.renderReport({ parentId, childId, childData });
+    } else {
+      setStatus('✔️ التحقق تم. التقرير سيُعرض من الكود الأصلي.', true);
+    }
+  }catch(e){
+    console.error('[Reports] error:', e);
+    setStatus('❌ لا تملك صلاحية الاطلاع على هذا الطفل.', false);
+  }
+</script>
 </body>
 </html>
