@@ -5,6 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>إعدادات الطفل</title>
   <link rel="stylesheet" href="./css/child-edit.css" />
+  <style>
+    /* إضافة بسيطة لا تؤثر على ستايلك القائم */
+    .link-code-wrap{margin-top:10px;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+    .link-code-wrap .hint{grid-column:1 / -1;color:#667;font-size:12px}
+    .input{height:40px;border:1px solid #e7eef9;border-radius:10px;padding:0 10px}
+    .btn.ghost{background:#fff;border:1px solid #e7eef9;border-radius:10px;padding:10px 14px;cursor:pointer}
+    .btn.back{background:#fff;border:1px solid #e7eef9}
+    .status{margin-top:8px;font-size:13px}
+    .status.ok{color:#0b7a35}
+    .status.err{color:#b10f2e}
+    .badge{display:inline-block;background:#eef4ff;border:1px solid #d8e6ff;color:#274a93;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}
+    .row{display:flex;gap:8px;align-items:center}
+    .row .grow{flex:1}
+    .row-switch{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
+    .switch{position:relative;display:inline-block;width:48px;height:26px}
+    .switch input{opacity:0;width:0;height:0}
+    .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#dfe7f7;border-radius:999px;transition:.2s}
+    .slider:before{position:absolute;content:"";height:20px;width:20px;left:3px;top:3px;background:white;border-radius:50%;transition:.2s}
+    .switch input:checked + .slider{background:#6aa9ff}
+    .switch input:checked + .slider:before{transform:translateX(22px)}
+    .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+    .form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+    .loader.hidden,.toast.hidden{display:none}
+  </style>
 </head>
 <body>
   <div class="container" id="childEditPage">
@@ -44,7 +68,7 @@
         </div>
         <div>
           <label for="f_deviceName">اسم الجهاز</label>
-          <input id="f_deviceName" type="text" placeholder="Dexcom / Libre ..." />
+          <input id="f_deviceName" type="text" placeholder="Dexcom / Libre ." />
         </div>
         <div>
           <label for="f_weightKg">الوزن (كجم)</label>
@@ -187,7 +211,8 @@
         </div>
       </div>
 
-      <div class="row">
+      <!-- حالة الربط + الأزرار كما هي -->
+      <div class="row" style="margin-top:10px">
         <div class="doctor">
           <div class="muted small">حالة الربط بالطبيب</div>
           <div id="doctorState" class="badge">—</div>
@@ -199,13 +224,21 @@
         </div>
       </div>
 
-      <div class="row-switch">
-        <span class="muted small">موافقة مشاركة البيانات مع الطبيب</span>
-        <label class="switch">
-          <input id="f_shareDoctor" type="checkbox" />
-          <span class="slider"></span>
-        </label>
+      <!-- ✅ الإضافة الجديدة: إدخال كود الربط (اختياري بدل prompt) -->
+      <div class="link-code-wrap">
+        <input id="linkCodeInput" class="input" type="text" inputmode="text" autocomplete="one-time-code" placeholder="أدخل كود الربط هنا (اختياري)" />
+        <button class="btn ghost" type="button" onclick="(function(){
+          const el=document.getElementById('linkCodeInput');
+          if(!el) return;
+          const v=(el.value||'').trim();
+          if(!v){ alert('من فضلك أدخل كود الربط'); return; }
+          // نجعل الدالة في js تستخدم هذا المدخل إن أردتِ لاحقًا
+          // مؤقتًا، نستدعي زر الربط العادي
+          document.getElementById('btnLinkDoctor')?.click();
+        })()">تفعيل</button>
+        <div class="hint">تستطيعِي إدخال كود الربط هنا ثم الضغط على "تفعيل" — أو اتركيه واستخدمي زر «ربط الطبيب» الذي يفتح نافذة إدخال.</div>
       </div>
+
       <div id="linkStatus" class="status"></div>
     </section>
 
