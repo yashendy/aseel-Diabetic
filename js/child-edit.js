@@ -151,7 +151,7 @@ async function loadChild(){
 
     // الخصوصية + الطبيب
     fields.shareDoctor.checked = !!childData?.shareDoctor;
-    setDoctorBadge(childData?.doctorUid || null, childData?.doctorName || null);
+    setDoctorBadge(childData?.doctorUid || childData?.assignedDoctor || null, childData?.doctorName || childData?.assignedDoctorInfo?.name || null);
     setStatus("تم تحميل البيانات.", true);
   }catch(e){
     console.error(e);
@@ -257,8 +257,118 @@ async function save(){
 }
 
 /* ربط/فك الطبيب — أمثلة (تكمل لاحقًا حسب تطبيقك) */
-async function linkDoctor(){ /* ... */ }
-async function unlinkDoctor(){ /* ... */ }
+async function linkDoctor(){
+  // نستخدم prompt مؤقتًا لإدخال الكود بدون تعديل كبير في الواجهة
+  const raw = prompt("أدخل كود الربط من الطبيب:");
+  const code = (raw || "").trim();
+  if (!code){ return; }
+  if (!parentId || !childId){ setStatus("الرابط غير صحيح: مفقود parent أو child.", false); return; }
+
+  try{
+    showLoader(true);
+
+    // نقرأ الكود
+    const codeRef = doc(db, "linkCodes", code);
+    const codeSnap = await getDoc(codeRef);
+    if (!codeSnap.exists()){
+      setStatus("الكود غير موجود ❌", false);
+      return;
+    }
+    const codeData = codeSnap.data();
+
+    if (codeData.used){
+      setStatus("هذا الكود تم استخدامه من قبل ❌", false);
+      return;
+    }
+
+    const doctorId = codeData.doctorId;
+    if (!doctorId){
+      setStatus("الكود غير صالح ❌", false);
+      return;
+    }
+
+    // معلومات الطبيب لعرض الاسم والإيميل
+    let doctorInfo = { uid: doctorId };
+    try{
+      const uSnap = await getDoc(doc(db, "users", doctorId));
+      if (uSnap.exists()){
+        const u = uSnap.data();
+        doctorInfo.name  = u.displayName || u.name || null;
+        doctorInfo.email = u.email || null;
+      }
+    }catch{ /* تجاهل أي خطأ هنا */ }
+
+    // نحدّث الكود + وثيقة الطفل في Batch واحد
+    const batch = writeBatch(db);
+
+    batch.update(codeRef, {
+      used: true,
+      parentId: parentId,
+      childId: childId,
+      usedAt: serverTimestamp()
+    });
+
+    const childRef = doc(db, `parents/${parentId}/children/${childId}`);
+    batch.update(childRef, {
+      assignedDoctor: doctorId,
+      assignedDoctorInfo: doctorInfo,
+      // نضمن وجود الموافقة لتسمح القواعد بقراءة الطبيب
+      sharingConsent: (childData?.sharingConsent && typeof childData.sharingConsent === "object")
+        ? { ...childData.sharingConsent, doctor: true }
+        : { doctor: true },
+      // حقول قديمة للعرض إن كانت واجهتك تستخدمها
+      doctorUid: doctorId,
+      doctorName: doctorInfo.name || null,
+      updatedAt: serverTimestamp()
+    });
+
+    await batch.commit();
+
+    setStatus("تم ربط الطفل بالدكتور ✅", true);
+    showToast("تم الربط");
+    await loadChild();
+  }catch(e){
+    console.error(e);
+    setStatus("فشل الربط ❌", false);
+  }finally{
+    showLoader(false);
+  }
+}
+
+async function unlinkDoctor(){
+  if (!parentId || !childId){ setStatus("الرابط غير صحيح: مفقود parent أو child.", false); return; }
+  if (!confirm("هل تريد فك الربط مع الطبيب؟")) return;
+
+  try{
+    showLoader(true);
+
+    const childRef = doc(db, `parents/${parentId}/children/${childId}`);
+
+    // نحدّث فقط وثيقة الطفل (لا نُعيد تفعيل الكود المستهلك)
+    const nextSharing =
+      (childData?.sharingConsent && typeof childData.sharingConsent === "object")
+        ? { ...childData.sharingConsent, doctor: false }
+        : { doctor: false };
+
+    await updateDoc(childRef, {
+      assignedDoctor: null,
+      assignedDoctorInfo: null,
+      doctorUid: null,
+      doctorName: null,
+      sharingConsent: nextSharing,
+      updatedAt: serverTimestamp()
+    });
+
+    setStatus("تم فك الربط مع الطبيب ✅", true);
+    showToast("تم فك الربط");
+    await loadChild();
+  }catch(e){
+    console.error(e);
+    setStatus("تعذر فك الربط ❌", false);
+  }finally{
+    showLoader(false);
+  }
+}
 
 /* الأحداث */
 btnRefresh?.addEventListener("click", loadChild);
