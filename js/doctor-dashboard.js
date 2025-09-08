@@ -3,22 +3,57 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collectionGroup, query, where, getDocs
+  // أطفال الدكتور
+  collectionGroup, query, where, getDocs,
+  // أكواد الربط
+  collection, doc, setDoc, deleteDoc, getDoc, orderBy,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const $ = (id)=>document.getElementById(id);
 
+// عناصر الواجهة (طبقًا لـ doctor-dashboard.html)
+const elDoctorName   = $('doctorName');
+const elChildrenBody = $('childrenTbody');
+const elChildSearch  = $('childSearch');
+const elChildrenCnt  = $('childrenCount');
+const elCodesList    = $('codesList');
+const btnCreateCode  = $('btnCreateCode');
+const btnReloadCodes = $('btnReloadCodes');
+const btnRefresh     = $('btnRefresh');
+
+let CURRENT_USER = null;
 let ALL_CHILDREN = [];
 
 /* ====== Boot ====== */
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href = 'index.html'; return; }
+  CURRENT_USER = user;
+  elDoctorName.textContent = user.displayName || user.email || '—';
+
+  await Promise.all([
+    loadChildren(),
+    loadCodes()
+  ]);
+
+  // أحداث
+  elChildSearch?.addEventListener('input', onSearch);
+  btnCreateCode?.addEventListener('click', createLinkCode);
+  btnReloadCodes?.addEventListener('click', loadCodes);
+  btnRefresh?.addEventListener('click', async ()=>{
+    await Promise.all([loadChildren(), loadCodes()]);
+  });
+});
+
+/* ====== تحميل الأطفال المرتبطين ====== */
+async function loadChildren(){
+  if(!CURRENT_USER) return;
 
   try {
     // يقرأ فقط الأطفال الذين تم تعيين الطبيب لهم
     const qy = query(
       collectionGroup(db, 'children'),
-      where('assignedDoctor', '==', user.uid)
+      where('assignedDoctor', '==', CURRENT_USER.uid)
     );
 
     const snap = await getDocs(qy);
@@ -32,69 +67,174 @@ onAuthStateChanged(auth, async (user)=>{
 
       const d = docSnap.data();
 
-      // لو القواعد سمحت، الوثيقة أصلاً مرشّحة. (إضافة تحقق احتياطي UI فقط)
+      // تحقّق واجهة (القواعد أصلاً تمنع من غير موافقة)
       const consent = d?.sharingConsent === true
         || (d?.sharingConsent && typeof d.sharingConsent === 'object' && d.sharingConsent.doctor === true);
 
       if (consent) {
-        ALL_CHILDREN.push({
-          parentId,
-          childId,
-          ...d
-        });
+        ALL_CHILDREN.push({ parentId, childId, ...d });
       }
     });
 
-    render(ALL_CHILDREN);
+    renderChildren(ALL_CHILDREN);
   } catch (e) {
     console.error(e);
-    $('childList').innerHTML = '';
-    $('empty').style.display = 'block';
-    $('empty').textContent = 'تعذّر تحميل الأطفال: صلاحيات غير كافية أو خطأ في الاتصال.';
+    // رسالة داخل tbody
+    elChildrenBody.innerHTML = `<tr><td class="empty" colspan="6">تعذّر تحميل الأطفال: تحقّق من الصلاحيات أو الاتصال.</td></tr>`;
+    elChildrenCnt.textContent = '0';
   }
-});
+}
 
-/* ====== بحث بالاسم ====== */
-$('q')?.addEventListener('input', ()=>{
-  const t = ($('q').value || '').trim().toLowerCase();
+/* ====== فلترة بالاسم ====== */
+function onSearch(){
+  const t = (elChildSearch.value || '').trim().toLowerCase();
   const f = ALL_CHILDREN.filter(c => (c.name || '').toLowerCase().includes(t));
-  render(f);
-});
+  renderChildren(f);
+}
 
-/* ====== Render ====== */
-function render(list){
-  const wrap = $('childList');
-  wrap.innerHTML = '';
+/* ====== Render: أطفال في جدول ====== */
+function renderChildren(list){
+  elChildrenBody.innerHTML = '';
 
   if(!list.length){
-    $('empty').style.display = 'block';
+    elChildrenBody.innerHTML = `<tr><td class="empty" colspan="6">لا يوجد أطفال مرتبطون حتى الآن.</td></tr>`;
+    elChildrenCnt.textContent = '0';
     return;
   }
-  $('empty').style.display = 'none';
 
   list.forEach(c=>{
-    const div = document.createElement('div');
-    div.className = 'cardx child-card';
+    const tr = document.createElement('tr');
 
     const age = c.birthDate ? calcAge(c.birthDate) : '-';
-    const unit = c.glucoseUnit || '-';
-    const cr   = (c.carbRatio ?? '-') ;
-    const cf   = (c.correctionFactor ?? '-') ;
+    const unit = c.glucoseUnit || c.unit || '-';
 
-    div.innerHTML = `
-      <div>
-        <div><strong>${escapeHtml(c.name || '-')}</strong>
-          <span class="muted">• ${escapeHtml(c.gender || '-')} • العمر ${age}</span>
-        </div>
-        <div class="muted tiny">وحدة: ${escapeHtml(unit)} • CR ${escapeHtml(String(cr))} • CF ${escapeHtml(String(cf))}</div>
-      </div>
-      <div>
-        <a class="secondary" href="doctor-child.html?parent=${encodeURIComponent(c.parentId)}&child=${encodeURIComponent(c.childId)}">عرض</a>
-      </div>
+    tr.innerHTML = `
+      <td>${escapeHtml(c.name || '-')}</td>
+      <td>${escapeHtml(c.gender || '-')}</td>
+      <td>${escapeHtml(c.birthDate || '-')}</td>
+      <td>${escapeHtml(String(age))}</td>
+      <td>${escapeHtml(unit)}</td>
+      <td>
+        <a class="btn small secondary" href="doctor-child.html?parent=${encodeURIComponent(c.parentId)}&child=${encodeURIComponent(c.childId)}">عرض</a>
+      </td>
     `;
-    wrap.appendChild(div);
+    elChildrenBody.appendChild(tr);
   });
+
+  elChildrenCnt.textContent = String(list.length);
 }
+
+/* ====== أكواد الربط (الدكتور) ====== */
+// توليد كود بسيط 6 خانات (حروف كبيرة + أرقام)
+function genCode(len=6){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for(let i=0;i<len;i++) out += chars[Math.floor(Math.random()*chars.length)];
+  return out;
+}
+
+async function createLinkCode(){
+  if(!CURRENT_USER) return;
+
+  try{
+    const code = genCode(6);
+
+    // نتأكد (احتمال ضئيل للتصادم) — لو موجود نعيد المحاولة مرة واحدة
+    const codeRef = doc(db, 'linkCodes', code);
+    const existsSnap = await getDoc(codeRef);
+    const finalCode = existsSnap.exists() ? genCode(6) : code;
+    const finalRef  = existsSnap.exists() ? doc(db,'linkCodes',finalCode) : codeRef;
+
+    await setDoc(finalRef, {
+      doctorId: CURRENT_USER.uid,
+      createdAt: serverTimestamp(),
+      used: false,
+      parentId: null,
+      childId: null
+    });
+
+    await loadCodes();
+  }catch(e){
+    console.error(e);
+    renderCodesError('تعذّر إنشاء الكود.');
+  }
+}
+
+async function deleteLinkCode(code){
+  if(!CURRENT_USER) return;
+  if(!confirm('حذف هذا الكود؟')) return;
+
+  try{
+    const ref = doc(db,'linkCodes', code);
+    const s = await getDoc(ref);
+    if(!s.exists()){ return; }
+    const d = s.data();
+    // نحذف فقط لو غير مستخدم أو ملك الطبيب
+    if (d.used !== true && d.doctorId === CURRENT_USER.uid){
+      await deleteDoc(ref);
+      await loadCodes();
+    }
+  }catch(e){
+    console.error(e);
+    renderCodesError('تعذّر حذف الكود.');
+  }
+}
+
+function copyToClipboard(text){
+  try{
+    navigator.clipboard?.writeText(text);
+  }catch{}
+}
+
+async function loadCodes(){
+  if(!CURRENT_USER) return;
+
+  try{
+    elCodesList.innerHTML = `<div class="empty">جارٍ التحميل…</div>`;
+
+    const qy = query(
+      collection(db,'linkCodes'),
+      where('doctorId','==', CURRENT_USER.uid),
+      orderBy('createdAt','desc')
+    );
+    const snap = await getDocs(qy);
+
+    const rows = [];
+    snap.forEach(s=>{
+      const d = s.data();
+      const code = s.id;
+      const meta = d.used
+        ? `مستخدم ✓ — parent: ${d.parentId||'-'} — child: ${d.childId||'-'}`
+        : `غير مستخدم`;
+      const actions = d.used
+        ? `<button class="btn small secondary" onclick="(()=>navigator.clipboard.writeText('${code}'))()">نسخ</button>`
+        : `<button class="btn small secondary" onclick="(()=>navigator.clipboard.writeText('${code}'))()">نسخ</button>
+           <button class="btn small danger" onclick="window.__delCode && window.__delCode('${code}')">حذف</button>`;
+
+      rows.push(`
+        <div class="row">
+          <div class="meta">
+            <div><strong class="mono">${escapeHtml(code)}</strong></div>
+            <div class="muted">${meta}</div>
+          </div>
+          <div class="actions">${actions}</div>
+        </div>
+      `);
+    });
+
+    elCodesList.innerHTML = rows.length ? rows.join('') : `<div class="empty">لا توجد أكواد بعد.</div>`;
+  }catch(e){
+    console.error(e);
+    renderCodesError('تعذّر تحميل الأكواد.');
+  }
+}
+
+function renderCodesError(msg){
+  elCodesList.innerHTML = `<div class="empty">${msg}</div>`;
+}
+
+// فضّلنا تعيين دالة الحذف على window كي تعمل من HTML المُنشأ ديناميكيًا
+window.__delCode = deleteLinkCode;
 
 /* ====== Utils ====== */
 function calcAge(birthDateStr){
