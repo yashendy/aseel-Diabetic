@@ -156,5 +156,47 @@
 
   <!-- منطق الصفحة (يستورد firebase-config.js داخليًا كموديول) -->
   <script type="module" src="js/analytics.js"></script>
+
+  <!-- … محتوى analytics.html القديم كما هو … -->
+
+<!-- أضيفي هذا قبل إغلاق </body> -->
+<script type="module">
+  import { getParams, ensureDoctorAccess } from './js/common-auth.js';
+  import { db } from './js/firebase-config.js';
+  import {
+    collection, query, orderBy, limit, getDocs
+  } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
+
+  const { parentId, childId } = getParams();
+  if(!parentId || !childId){
+    alert('رابط غير مكتمل: لا يوجد parentId/childId');
+    location.href = 'doctor-dashboard.html';
+  }
+
+  const statusEl = document.createElement('div');
+  statusEl.style.margin = '10px';
+  document.body.prepend(statusEl);
+
+  function setStatus(msg, ok){ statusEl.textContent = msg; statusEl.style.color = ok ? 'lime' : 'tomato'; }
+
+  try{
+    setStatus('التحقق من الصلاحيات…', true);
+    const { childData } = await ensureDoctorAccess(parentId, childId);
+    setStatus('تم — جاري تحميل التحليلات…', true);
+
+    if (typeof window.loadAnalytics === 'function') {
+      window.loadAnalytics({ parentId, childId, childData });
+    } else {
+      const col = collection(db, `parents/${parentId}/children/${childId}/measurements`);
+      const snap = await getDocs(query(col, orderBy('date','desc'), limit(20)));
+      console.log('[Analytics] sample:', snap.docs.map(d=>d.data()));
+      setStatus(`تم جلب ${snap.size} قياسات (عرض تجريبي).`, true);
+    }
+  }catch(e){
+    console.error('[Analytics] error:', e);
+    setStatus('❌ لا تملك صلاحية الاطلاع على هذا الطفل.', false);
+  }
+</script>
 </body>
 </html>
+
