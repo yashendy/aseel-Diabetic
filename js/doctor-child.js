@@ -105,3 +105,19 @@ async function loadMeasurements(){
     tb.appendChild(tr);
   });
 }
+// … كود doctor-child.js القديم كما هو …
+
+// دالة جديدة
+function initChildActions(parentId, childId){
+  const btnAnalytics = document.getElementById('btnOpenAnalytics');
+  const btnReport    = document.getElementById('btnOpenReport');
+  if (!btnAnalytics || !btnReport) return;
+
+  const makeUrl = (page) => `${page}?parentId=${encodeURIComponent(parentId)}&childId=${encodeURIComponent(childId)}`;
+  btnAnalytics.onclick = () => window.open(makeUrl('analytics.html'), '_blank');
+  btnReport.onclick    = () => window.open(makeUrl('reports-print.html'), '_blank');
+}
+
+// بعد ما تحمّلي بيانات الطفل (وعندك parentId و childId):
+initChildActions(parentId, childId);
+
