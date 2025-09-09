@@ -1,107 +1,69 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>تقارير الطفل</title>
-  <link rel="stylesheet" href="./css/reports.css">
+  <meta charset="UTF-8" />
+  <title>طباعة التقرير</title>
+  <link rel="stylesheet" href="reports-print.css" />
 </head>
 <body>
-
-  <!-- الهيدر القديم (نعرض الاسم/الميتا فقط) -->
-  <div id="childBanner" class="card child-info" style="display:none">
-    <div class="head">
-      <h1 id="bannerName">—</h1>
-      <p id="bannerMeta" class="muted small">—</p>
+  <header>
+    <button id="backBtn">⟵ رجوع</button>
+    <h1>تقرير القياسات</h1>
+    <div id="childMeta">
+      <span id="cName"></span> — <span id="cAge"></span> — <span id="cWeight"></span>
+      <span id="cBasal"></span> — <span id="cBolus"></span> — CF: <span id="cCF"></span> — CR: <span id="cCR"></span>
     </div>
-  </div>
+  </header>
 
-  <!-- تنقّل -->
-  <div class="card">
-    <div class="row" id="childNav"></div>
-  </div>
-
-  <!-- أدوات الفترة + الأزرار -->
-  <div class="card controls no-print">
-    <div class="range">
-      <div class="filter">
-        <label>المدى السريع</label>
-        <select id="preset">
-          <option value="7">أسبوع</option>
-          <option value="14">14 يوم</option>
-          <option value="30">شهر</option>
-          <option value="90">3 شهور</option>
-          <option value="90_only">90 يوم</option>
-          <option value="custom">مخصّص</option>
-        </select>
-      </div>
-
-      <div id="datesBox" class="dates hidden">
-        <div class="filter">
-          <label>من</label>
-          <input id="from" type="date">
-        </div>
-        <div class="filter">
-          <label>إلى</label>
-          <input id="to" type="date">
-        </div>
-      </div>
-
-      <label class="toggle-notes">
-        <input id="toggleNotes" type="checkbox" checked>
-        <span>إظهار الملاحظات/الجرعات</span>
-      </label>
-    </div>
-
-    <div class="actions">
-      <a id="lnkHome" class="btn gray">رجوع</a>
-      <a id="btnReportPrintPage" class="btn warning" target="_blank" rel="noopener">صفحة طباعة التقرير</a>
-      <a id="btnAnalyticsPage" class="btn success" target="_blank" rel="noopener">التحاليل</a>
-      <button id="btnBlank" class="btn gray">ورقة فارغة (7 أيام)</button>
-      <button id="btnPrint" class="btn danger">طباعة</button>
-      <button id="run" class="btn primary">عرض</button>
-    </div>
-  </div>
-
-  <!-- وصف الفترة -->
-  <div id="meta" class="container small muted">—</div>
-
-  <!-- الجدول القديم -->
-  <section class="card table" id="tableSection">
-    <div class="legend small">
-      <span class="badge b-sevlow">هبوط شديد</span>
-      <span class="badge b-low">هبوط</span>
-      <span class="badge b-ok">طبيعي</span>
-      <span class="badge b-high">ارتفاع</span>
-      <span class="badge b-sevhigh">ارتفاع شديد</span>
-    </div>
-
-    <div class="table-wrap">
-      <table id="rep" aria-label="جدول التقارير">
-        <thead>
-          <tr>
-            <th>التاريخ</th>
-            <th>الاستيقاظ</th>
-            <th>ق.الفطار</th>
-            <th>ب.الفطار</th>
-            <th>ق.الغدا</th>
-            <th>ب.الغدا</th>
-            <th>ق.العشا</th>
-            <th>ب.العشا</th>
-            <th>سناك</th>
-            <th>ق.النوم</th>
-            <th>أثناء النوم</th>
-          </tr>
-        </thead>
-        <tbody id="rows">
-          <tr><td colspan="10" class="center muted">اختر المدى ثم اضغط عرض.</td></tr>
-        </tbody>
-      </table>
-    </div>
+  <section class="controls">
+    <label>من <input type="date" id="fromDate" /></label>
+    <label>إلى <input type="date" id="toDate" /></label>
+    <label>الوحدة
+      <select id="unitSelect">
+        <option value="mmol">mmol/L</option>
+        <option value="mgdl">mg/dL</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="colorize" /> تلوين</label>
+    <label><input type="checkbox" id="maskTreat" /> إخفاء الملاحظات</label>
+    <button id="applyBtn">تطبيق</button>
+    <button id="blankBtn">نموذج فارغ الآن</button>
+    <button id="printBtn">طباعة</button>
   </section>
 
-  <div id="loader" class="loader" style="display:none">جاري التحميل…</div>
+  <section class="period">
+    <span>من: <span id="periodFrom"></span></span>
+    <span>إلى: <span id="periodTo"></span></span>
+    <span>الوحدة: <span id="periodUnit"></span></span>
+  </section>
 
-  <script type="module" src="./js/reports.js"></script>
+  <section class="notes">
+    <label>ملاحظات التقرير:
+      <textarea id="notes"></textarea>
+    </label>
+    <div id="reportNotes"></div>
+  </section>
+
+  <table id="reportTable">
+    <thead>
+      <tr>
+        <th>التاريخ</th>
+        <th>الاستيقاظ</th>
+        <th>ق. الفطار</th>
+        <th>ب. الفطار</th>
+        <th>ق. الغدا</th>
+        <th>ب. الغدا</th>
+        <th>ق. العشا</th>
+        <th>ب. العشا</th>
+        <th>سناك</th>
+        <th>ق. النوم</th>
+        <th>أثناء النوم</th>
+        <th>ملاحظات</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <script src="reports-print.js"></script>
 </body>
 </html>
