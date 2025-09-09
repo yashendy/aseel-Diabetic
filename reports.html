@@ -5,10 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>التقارير</title>
   <link rel="stylesheet" href="./css/reports.css">
-  <style>
-    /* تأكيد وجود .hidden لو مش متضافة في ملف CSS */
-    .hidden { display: none !important; }
-  </style>
+  <style>.hidden{display:none!important}</style>
 </head>
 <body class="notes-hidden">
   <!-- بانر الطفل -->
@@ -73,9 +70,9 @@
   <div id="loader" class="loader card">جاري التحميل…</div>
 
   <!-- === العروض الثلاثة داخل نفس الصفحة === -->
-  <!-- 1) عرض التقرير الأساسي -->
+
+  <!-- 1) التقرير -->
   <section id="reportView" class="card">
-    <!-- أسطورة الألوان -->
     <div class="legend no-print">
       <span class="badge b-sevlow">هبوط شديد</span>
       <span class="badge b-low">هبوط</span>
@@ -83,27 +80,19 @@
       <span class="badge b-high">ارتفاع</span>
       <span class="badge b-sevhigh">ارتفاع شديد</span>
     </div>
-
-    <!-- الجدول -->
     <div class="table-wrap">
       <table id="rep" class="table" aria-label="تقرير قياسات">
-        <thead>
-          <tr id="headRow">
-            <!-- يُبنى ديناميكيًا -->
-          </tr>
-        </thead>
-        <tbody id="rows">
-          <!-- يُملأ ديناميكيًا -->
-        </tbody>
+        <thead><tr id="headRow"></tr></thead>
+        <tbody id="rows"></tbody>
       </table>
     </div>
   </section>
 
-  <!-- 2) عرض التحليلات داخل نفس الصفحة -->
+  <!-- 2) التحليلات -->
   <section id="analysisView" class="card hidden">
     <div class="center">
       <h2>التحاليل</h2>
-      <p class="muted">يتم توليد التحليلات من نفس البيانات المختارة.</p>
+      <p class="muted">تُحسب من نفس البيانات المعروضة.</p>
       <div style="margin:12px 0">
         <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
         <button class="btn primary" id="btnRecalcAnalysis">إعادة حساب التحليلات</button>
@@ -112,11 +101,11 @@
     </div>
   </section>
 
-  <!-- 3) عرض الطباعة داخل نفس الصفحة -->
+  <!-- 3) نسخة الطباعة -->
   <section id="printView" class="card hidden">
     <div class="center">
       <h2>صفحة طباعة التقرير</h2>
-      <p class="muted">نفس الجدول أدناه بتنسيق أنظف للطباعة.</p>
+      <p class="muted">نفس الجدول بتنسيق أنظف للطباعة.</p>
       <div style="margin:12px 0">
         <button class="btn gray no-print" onclick="showView('report')">رجوع للتقرير</button>
         <button class="btn warning no-print" onclick="window.print()">طباعة</button>
@@ -130,6 +119,7 @@
     </div>
   </section>
 
+  <!-- ملاحظة: يفترض أن Firebase App مُهيّأ مسبقًا عالمياً في موقعك -->
   <script type="module" src="./js/reports.js"></script>
 </body>
 </html>
