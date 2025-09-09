@@ -1,56 +1,136 @@
-/* reports-print.css */
-body {
-  font-family: Arial, sans-serif;
+/* ========== القواعد العامة ========== */
+:root{
+  --c-border:#d9d9e3;
+  --c-text:#111;
+  --c-sub:#555;
+  --c-bg:#fff;
+  --c-card:#fafafa;
+
+  --c-hypo-bg:#ffe9ef;
+  --c-hypo-text:#a8002a;
+
+  --c-okv-bg:#f2f5f7;
+  --c-okv-text:#1a1a1a;
+
+  --c-hyper-bg:#fff4df;
+  --c-hyper-text:#8a4d00;
+}
+
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
+body{
+  margin:0;
+  font-family: "Tajawal", system-ui, -apple-system, Arial, sans-serif;
+  background: var(--c-bg);
+  color: var(--c-text);
+  line-height:1.45;
+  padding:16px;
   direction: rtl;
-  margin: 20px;
 }
 
-.controls {
-  margin-bottom: 20px;
+.container{ max-width:1200px; margin:0 auto; }
+
+.card{
+  background:var(--c-card);
+  border:1px solid var(--c-border);
+  border-radius:14px;
+  padding:14px;
+  margin-bottom:14px;
 }
 
-.controls label {
-  margin-right: 10px;
+/* الأزرار والحقول */
+.btn{
+  background:#2e7d32;
+  color:#fff;
+  border:none;
+  border-radius:10px;
+  padding:10px 14px;
+  cursor:pointer;
+}
+.btn.secondary{ background:#616161; }
+.btn.primary{ background:#1565c0; }
+.btn:disabled{ opacity:.6; cursor:not-allowed; }
+
+.row{ display:flex; align-items:center; gap:10px; }
+.wrap{ flex-wrap:wrap; }
+.field{ display:flex; flex-direction:column; gap:6px; }
+.field.grow{ flex:1; min-width:240px; }
+
+.chk{ display:flex; align-items:center; gap:6px; }
+
+/* الشيبس */
+.chips{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.chip{
+  border:1px solid var(--c-border);
+  border-radius:999px;
+  padding:4px 10px;
+  background:#fff;
+  font-size:12px;
+}
+.chip.hypo{ background:var(--c-hypo-bg); color:var(--c-hypo-text); }
+.chip.okv{ background:var(--c-okv-bg); color:var(--c-okv-text); }
+.chip.hyper{ background:var(--c-hyper-bg); color:var(--c-hyper-text); }
+
+.report-notes{
+  margin-top:8px;
+  color:var(--c-sub);
+  font-size:13px;
 }
 
-#reportTable {
-  width: 100%;
-  border-collapse: collapse;
+/* ========== الجدول ========== */
+.table-wrap{ overflow:auto; }
+.table{ width:100%; border-collapse:collapse; table-layout:fixed; }
+.table th, .table td{
+  border:1px solid var(--c-border);
+  padding:8px 6px;
+  text-align:center;
+  vertical-align:middle;
+  white-space:nowrap;
+}
+.table thead th{
+  background:#fff;
+  position:sticky;
+  top:0;
+  z-index:2;
 }
 
-#reportTable th, #reportTable td {
-  border: 1px solid #ccc;
-  padding: 6px;
-  text-align: center;
-}
-
-/* التلوين حسب Hypo/Hyper */
-.cell-hypo {
-  background-color: #ffe5e5;
-  color: #b30000;
-}
-.cell-normal {
-  background-color: #f5f5f5;
-}
-.cell-hyper {
-  background-color: #fff0cc;
-  color: #995c00;
-}
+/* ألوان التلوين على الخلية */
+.table td.low{   background:var(--c-hypo-bg);  color:var(--c-hypo-text); }
+.table td.okv{   background:var(--c-okv-bg);   color:var(--c-okv-text); }
+.table td.high{  background:var(--c-hyper-bg); color:var(--c-hyper-text); }
 
 /* السهام */
-.arrow-up {
-  color: #009900;
-  font-size: 0.8em;
-  margin-right: 4px;
-}
-.arrow-down {
-  color: #cc0000;
-  font-size: 0.8em;
-  margin-right: 4px;
-}
+.arrow{ font-size:.85em; margin-inline:4px; }
+.arrow.up{   color:#2e7d32; }  /* أخضر */
+.arrow.down{ color:#c62828; }  /* أحمر */
 
-@media print {
-  .controls {
-    display: none;
+/* ========== الطباعة ========== */
+@media print{
+  @page{
+    size: A4 portrait;
+    margin: 10mm;
   }
+
+  body{ padding:0; }
+  .controls{ display:none !important; }
+
+  .card{
+    border:none;
+    padding:8px 0;
+    margin:0 0 8px 0;
+    background:#fff;
+  }
+
+  .summary .chip{ border-color:#ccc; }
+
+  .table th, .table td{
+    padding:4px 3px;
+    font-size:11px;
+  }
+
+  /* ضمان أن 14 صف (أسبوعين) يظهروا في ورقة واحدة */
+  .table{
+    font-size:11px;
+  }
+  .table tr{ page-break-inside: avoid; }
 }
