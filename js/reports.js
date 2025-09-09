@@ -1,21 +1,22 @@
 /* التقارير — ملف JS كامل ومحدّث
    - يقرأ من Firestore: parents/{parent}/children/{child}/measurements
-   - يُظهر بيانات الطفل تحت شريط التنقّل + نسخة للطباعة
+   - يَعرض بيانات الطفل تحت شريط التنقّل + نسخة للطباعة
    - زر "عرض" دائم الظهور
    - الملاحظات/التصحيح أسفل كل قياس مع خيار إظهار/إخفاء
    - صفحة طباعة: شبكة واضحة + وضع أفقي + خيار إظهار الملاحظات + نموذج فارغ
    - التحاليل: Doughnut (هبوط/طبيعي/ارتفاع) + متوسط + ملخص ذكي + مقارنة بين فترتين
-   - حماية كاملة من مراجع Firestore غير الصالحة + استنتاج parent من child
+   - حماية من مراجع Firestore غير الصالحة + استنتاج parent من child
 */
 
-/* استيراد Firestore من موديولك */
 import { db } from "./firebase-config.js";
-
 import {
   doc, getDoc,
   collection, query, where, orderBy, getDocs,
   collectionGroup, documentId
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import {
+  getAuth, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* ===== أدوات عامة ===== */
 const $  = (s, p=document)=> p.querySelector(s);
@@ -140,7 +141,6 @@ function renderChildInfoCard(c){
     <b>النطاق:</b> ${nmin}–${nmax} mmol/L •
     <b>CR:</b> ${carb} g/U • <b>CF:</b> ${corr} mmol/L/U
   `;
-
   childInfoCard.classList.remove("hidden");
   printHeader.textContent = childInfoContent.textContent; // نسخة للطباعة
 }
@@ -176,11 +176,9 @@ function renderRows(tbody, byDay){
     tdDate.textContent=d;
     tr.appendChild(tdDate);
 
-    const prev = byDay[fmtISO(addDays(new Date(d),-1))] || {};
-
     for (const [slot] of COLS){
       const td = document.createElement("td");
-      const rec = byDay[d]?.[slot]; const prevRec = prev?.[slot];
+      const rec = byDay[d]?.[slot];
 
       if (rec){
         const mmol = toMmol(rec); const v = round1(mmol);
@@ -226,7 +224,6 @@ async function loadChild(){
   childDoc = snap.exists() ? snap.data() : {};
   bannerName.textContent = childDoc?.name || "الطفل";
 
-  // metaHead القديم
   const ageTxt = (()=> {
     const dob = childDoc?.birthDate || childDoc?.dob; if(!dob) return "—";
     const b = new Date(dob), n=new Date();
@@ -240,7 +237,6 @@ async function loadChild(){
     metaHead.textContent = `العمر: ${ageTxt} • معامل الكارب: ${carb} • التصحيحي: ${corr}`;
   }
 
-  // حدود الطفل (إن وُجدت)
   if (childDoc?.normalRange){
     if (childDoc.normalRange.min!=null) limits.normalMin = +childDoc.normalRange.min;
     if (childDoc.normalRange.max!=null) limits.normalMax = +childDoc.normalRange.max;
@@ -250,21 +246,17 @@ async function loadChild(){
 
   renderChildInfoCard(childDoc);
 
-  // تعبئة حقول Hypo/Hyper الافتراضية للتحاليل
-  hypoInput.value  = (limits.normalMin ?? 3.9).toFixed(1);
-  hyperInput.value = (limits.normalMax ?? 10.0).toFixed(1);
+  hypoInput && (hypoInput.value  = (limits.normalMin ?? 3.9).toFixed(1));
+  hyperInput && (hyperInput.value = (limits.normalMax ?? 10.0).toFixed(1));
 }
 
 /* ===== استنتاج parent من child لو ناقص ===== */
 async function ensureParentFromChild() {
   if (!db || parentId || !childId) return;
-
-  // documentId داخل collectionGroup لازم يستقبل المسار الكامل داخل المجموعة
   const q = query(
     collectionGroup(db, "children"),
     where(documentId(), "==", `children/${childId}`)
   );
-
   const snaps = await getDocs(q);
   if (!snaps.empty) {
     const s = snaps.docs[0];
@@ -316,8 +308,7 @@ async function buildReport(fromISO, toISO){
       emptyRows(rowsEl);
       emptyRows(rowsPrint);
     }
-  }catch(e){
-    console.error(e);
+  }catch(_){
     emptyRows(rowsEl, "حدث خطأ أثناء تحميل البيانات");
   }finally{
     setLoader(false);
@@ -346,7 +337,6 @@ function computeStats(byDay, hypo, hyper){
 }
 
 function buildAnalytics(){
-  const ChartLib = window.Chart;
   if (!currentDataByDay || !Object.keys(currentDataByDay).length) {
     analysisNumbers.innerHTML = `<div class="muted">لا توجد بيانات لعرض التحاليل.</div>`;
     smartSummary.textContent = "";
@@ -365,22 +355,20 @@ function buildAnalytics(){
     <div class="badge b-high">ارتفاع: ${st.hyper}</div>
   `;
 
+  if (chartInst) chartInst.destroy();
+  // Chart.js متوفر من الـ HTML
+  chartInst = new Chart(doughnutCanvas.getContext("2d"), {
+    type: "doughnut",
+    data: { labels: ["هبوط", "طبيعي", "ارتفاع"], datasets: [{ data: [st.hypo, st.normal, st.hyper] }] },
+    options: { responsive:true, plugins:{ legend:{ position:"bottom" } } }
+  });
+
   const tips = [];
   if (st.tir < 60) tips.push("النطاق منخفض — راجعي أهداف الوجبات والتصحيح.");
   if (st.hypo > st.hyper) tips.push("الهبوطات أكثر من الارتفاعات — فكري في تقليل جرعات الوجبات أو التصحيح.");
   if (st.hyper > st.hypo) tips.push("الارتفاعات أعلى — ربما نحتاج زيادة طفيفة في التصحيح أو مراجعة الكارب.");
   if (st.worstSlot) tips.push(`أكثر فترة خروجًا: ${COLS.find(c=>c[0]===st.worstSlot)?.[1] || st.worstSlot}.`);
   smartSummary.textContent = tips.join(" ");
-
-  if (chartInst) chartInst.destroy();
-  chartInst = new ChartLib(doughnutCanvas.getContext("2d"), {
-    type: "doughnut",
-    data: {
-      labels: ["هبوط", "طبيعي", "ارتفاع"],
-      datasets: [{ data: [st.hypo, st.normal, st.hyper] }]
-    },
-    options: { responsive:true, plugins:{ legend:{ position:"bottom" } } }
-  });
 }
 
 /* مقارنة فترتين */
@@ -451,7 +439,6 @@ function wireUI(){
     showView("report");
   });
 
-  // الطباعة
   btnPrint?.addEventListener("click", ()=> window.print());
   btnPrintPDF?.addEventListener("click", ()=> window.print());
   chkPrintNotes?.addEventListener("change", syncPrintNotes);
@@ -465,7 +452,6 @@ function wireUI(){
     renderRows(rowsPrint, byDay);
   });
 
-  // التقرير الفارغ (في العرض الرئيسي)
   btnBlank?.addEventListener("click", ()=>{
     const start=new Date();
     const days=Array.from({length:7},(_,i)=>fmtISO(addDays(start,i)));
@@ -476,14 +462,12 @@ function wireUI(){
     metaEl.textContent = "ورقة فارغة للأسبوع القادم";
   });
 
-  // التنقل بين العروض
   analysisBtn?.addEventListener("click", (e)=>{ e.preventDefault(); showView("analysis"); buildAnalytics(); });
   reportPrintBtn?.addEventListener("click", (e)=>{ e.preventDefault(); showView("print"); });
 
   $("#btnRecalcAnalysis")?.addEventListener("click", ()=> buildAnalytics());
   btnCompare?.addEventListener("click", ()=> buildComparison());
 
-  // زر رجوع
   if (lnkHome) lnkHome.href = parentId ? `parent.html?parent=${encodeURIComponent(parentId)}` : "parent.html";
 }
 
@@ -518,12 +502,22 @@ function buildNav(){
   }
 }
 
+/* ===== تأكيد المصادقة وضبط parentId = uid إن كان فاضي ===== */
+async function ensureAuthAndOwnerParent() {
+  const auth = getAuth();
+  const user = await new Promise((resolve) => {
+    const unsub = onAuthStateChanged(auth, (u) => { unsub(); resolve(u || null); });
+  });
+  if (!parentId && user?.uid) parentId = user.uid;
+}
+
 /* ===== بدء التشغيل ===== */
 async function start(){
   parentId = qparam("parent") || sessionStorage.getItem("lastParent") || "";
   childId  = qparam("child")  || sessionStorage.getItem("lastChild")  || "";
 
-  await ensureParentFromChild();
+  await ensureAuthAndOwnerParent();  // يحقق شرط isOwner بالقواعد إذا كان parentId غير ممرّر
+  await ensureParentFromChild();     // يحاول الاستنتاج من child لو ظلّ فاضيًا
 
   if (parentId) sessionStorage.setItem("lastParent", parentId);
   if (childId)  sessionStorage.setItem("lastChild",  childId);
