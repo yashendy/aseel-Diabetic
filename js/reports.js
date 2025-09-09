@@ -1,39 +1,10 @@
-// يقرأ من parents/.../measurements (سجل لكل قراءة) ويجمّع يوميًا + ألوان وسهم ونقطة + إظهار/إخفاء الملاحظات
-import { auth, db } from "./firebase-config.js";
-import {
-  collection, query, where, orderBy, getDocs, doc, getDoc
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+/* التقارير – يعمل داخل صفحة واحدة مع تبديل العروض (report/analysis/print) */
 
-/* عناصر */
-const $ = (id)=>document.getElementById(id);
-const presetEl = $("preset");
-const datesBox = $("datesBox");
-const fromEl = $("from");
-const toEl = $("to");
-const runBtn = $("run");
-const rowsEl = $("rows");
-const metaEl = $("meta");
-const loader = $("loader");
-const navRow = $("childNav");
-const nameEl = $("bannerName");
-const metaHeadEl = $("bannerMeta");
-const banner = $("childBanner");
-const lnkHome = $("lnkHome");
-const btnBlank = $("btnBlank");
-const btnPrint = $("btnPrint");
-const btnReportPrintPage = $("btnReportPrintPage");
-const btnAnalyticsPage = $("btnAnalyticsPage");
-const toggleNotes = $("toggleNotes");
+// =====================[ الإعدادات العامة ]=====================
+const $ = (sel, p = document) => p.querySelector(sel);
+const $$ = (sel, p = document) => Array.from(p.querySelectorAll(sel));
 
-/* أدوات */
-const fmtISO = (d)=> d.toISOString().slice(0,10);
-const addDays = (d, n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
-const escapeHTML = (s)=> String(s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m]));
-const round1 = (n)=> (Number.isFinite(Number(n))? Math.round(Number(n)*10)/10 : null);
-const qs = (k)=> new URLSearchParams(location.search).get(k) || "";
-
-/* الأعمدة (ترتيب الأوقات) */
+/* فترات اليوم (مع إضافة PRE_SLEEP ق.النوم) */
 const COLS = [
   ["WAKE","الاستيقاظ"],
   ["PRE_BREAKFAST","ق.الفطار"],
@@ -43,8 +14,11 @@ const COLS = [
   ["PRE_DINNER","ق.العشا"],
   ["POST_DINNER","ب.العشا"],
   ["SNACK","سناك"],
+  ["PRE_SLEEP","ق.النوم"],     // جديد
   ["DURING_SLEEP","أثناء النوم"],
 ];
+
+/* Aliases لتوحيد الأسماء القادمة من المصدر */
 const SLOT_ALIAS = {
   WAKE:["WAKE","UPON_WAKE","UPONWAKE"],
   PRE_BREAKFAST:["PRE_BREAKFAST","PRE_BF","PREBREAKFAST"],
@@ -54,247 +28,388 @@ const SLOT_ALIAS = {
   PRE_DINNER:["PRE_DINNER","PREDINNER"],
   POST_DINNER:["POST_DINNER","POSTDINNER"],
   SNACK:["SNACK"],
-  DURING_SLEEP:["DURING_SLEEP","NIGHT","BEFORE_SLEEP","BEFORESLEEP"]
+  PRE_SLEEP:["PRE_SLEEP","BEFORE_SLEEP","BEFORESLEEP","PRE-SLEEP"], // جديد
+  DURING_SLEEP:["DURING_SLEEP","NIGHT"]
 };
-function normalizeSlotKey(key){
-  const k = String(key||"").toUpperCase();
-  for(const std in SLOT_ALIAS){
-    if(SLOT_ALIAS[std].includes(k)) return std;
+
+const SLOT_MAP = (()=> {
+  const m = {};
+  for (const [k, list] of Object.entries(SLOT_ALIAS)) {
+    for (const a of list) m[a.toUpperCase()] = k;
   }
-  return null;
+  return m;
+})();
+
+/* تنسيق التاريخ (محلي وليس UTC) */
+const fmtISO = (d)=>{
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const y = x.getFullYear();
+  const m = String(x.getMonth()+1).padStart(2,'0');
+  const dd = String(x.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+};
+const addDays = (d, n)=> {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate()+n);
+  return x;
+};
+
+// =====================[ عناصر الصفحة ]=====================
+const presetEl = $("#preset");
+const datesBox = $("#datesBox");
+const fromEl = $("#from");
+const toEl = $("#to");
+const runEl = $("#run");
+const btnPrint = $("#btnPrint");
+const btnBlank = $("#btnBlank");
+const toggleNotes = $("#toggleNotes");
+const rowsEl = $("#rows");
+const headRowEl = $("#headRow");
+const metaEl = $("#meta");
+const loaderEl = $("#loader");
+const childNav = $("#childNav");
+const childBanner = $("#childBanner");
+const bannerName = $("#bannerName");
+const metaHead = $("#metaHead");
+const lnkHome = $("#lnkHome");
+
+const analysisBtn = $("#btnAnalyticsPage");
+const reportPrintBtn = $("#btnReportPrintPage");
+
+const analysisContainer = $("#analysisContainer");
+const headRowPrint = $("#headRowPrint");
+const rowsPrint = $("#rowsPrint");
+
+// =====================[ متغيرات حالة ]=====================
+let parentId = "";
+let childId = "";
+let childInfo = null;
+let limits = { severeLow: 55, normalMin: 70, normalMax: 180, severeHigh: 300 };
+
+let currentDataByDay = {};   // سنحتفظ بها لإعادة استخدام الجدول نفسه في print/analysis
+
+// =====================[ أدوات مساعدة ]=====================
+const setLoader = (v)=> loaderEl.style.display = v ? "flex" : "none";
+const num = (x)=> (x==null || isNaN(+x)) ? null : +(+x).toFixed(1);
+
+const classify = (v)=>{
+  if (v==null) return null;
+  if (v <= limits.severeLow) return "b-sevlow";
+  if (v < limits.normalMin) return "b-low";
+  if (v <= limits.normalMax) return "b-ok";
+  if (v < limits.severeHigh) return "b-high";
+  return "b-sevhigh";
+};
+
+function qparam(name){
+  const u = new URL(location.href);
+  return u.searchParams.get(name) || "";
 }
 
-/* حالة المستخدم/المسارات + حدود التلوين */
-let parentId=null, childId=null, childDoc=null;
-const LIMITS = { norm_min:null, norm_max:null, hypo:null, hyper:null, severeLow:null, severeHigh:null };
+// =====================[ بناء رأس الجدول ]=====================
+function buildHead(targetTheadRow){
+  targetTheadRow.innerHTML = "";
+  const thDate = document.createElement("th");
+  thDate.textContent = "التاريخ";
+  thDate.className = "date";
+  targetTheadRow.appendChild(thDate);
 
-function setLoader(v){ loader && (loader.style.display = v? "flex" : "none"); }
-
-/* تنقّل وروابط */
-function buildNav(){
-  if(!navRow) return;
-  navRow.innerHTML = "";
-  const items = [
-    ["child-dashboard.html","الرئيسية"],
-    ["measures.html","قياسات السكر"],
-    ["meals.html","الوجبات"],
-    ["reports.html","التقارير"],
-    ["analytics.html","التحاليل"],
-    ["visits.html","الزيارات الطبية"],
-  ];
-  for(const [href,label] of items){
-    const a = document.createElement("a");
-    a.className = "btn gray";
-    a.href = `${href}?parent=${encodeURIComponent(parentId)}&child=${encodeURIComponent(childId)}`;
-    a.textContent = label;
-    a.target = (href==="analytics.html") ? "_blank" : "_self";
-    a.rel = (a.target==="_blank") ? "noopener" : "";
-    navRow.appendChild(a);
+  for (const [, label] of COLS) {
+    const th = document.createElement("th");
+    th.textContent = label;
+    targetTheadRow.appendChild(th);
   }
-  if(lnkHome) lnkHome.href=`child.html?&child=${encodeURIComponent(childId)}`;
-  if(btnReportPrintPage){
-    btnReportPrintPage.href=`reports-print.html?parent=${encodeURIComponent(parentId)}&child=${encodeURIComponent(childId)}`;
-    btnReportPrintPage.target="_blank"; btnReportPrintPage.rel="noopener";
+}
+
+// =====================[ بناء صفوف الجدول ]=====================
+function buildEmptyMessage(targetBody, text="لا توجد بيانات ضمن المدى المحدد"){
+  const span = COLS.length + 1; // +1 للتاريخ
+  targetBody.innerHTML = `<tr><td colspan="${span}" class="center muted">${text}</td></tr>`;
+}
+
+function renderRows(targetBody, byDay){
+  const days = Object.keys(byDay).sort(); // تصاعدي
+  if (days.length === 0) {
+    buildEmptyMessage(targetBody);
+    return;
   }
-  if(btnAnalyticsPage){
-    btnAnalyticsPage.href=`analytics.html?parent=${encodeURIComponent(parentId)}&child=${encodeURIComponent(childId)}`;
-    btnAnalyticsPage.target="_blank"; btnAnalyticsPage.rel="noopener";
-  }
-}
+  const frag = document.createDocumentFragment();
 
-/* تحميل بيانات الطفل + حدود */
-async function loadChild(){
-  const snap = await getDoc(doc(db,"parents",parentId,"children",childId));
-  childDoc = snap.exists()? snap.data(): {};
-  if(nameEl) nameEl.textContent = childDoc?.name || "—";
-  if(metaHeadEl){
-    const g = childDoc?.gender || "—";
-    const w = childDoc?.weightKg ?? "—";
-    const h = childDoc?.heightCm ?? "—";
-    metaHeadEl.textContent = `${g} • ${w} كجم • ${h} سم`;
-  }
-  if(banner) banner.style.display="block";
+  for (const d of days) {
+    const tr = document.createElement("tr");
 
-  // حدود التلوين (mmol/L)
-  LIMITS.norm_min   = childDoc?.normalRange?.min ?? null;
-  LIMITS.norm_max   = childDoc?.normalRange?.max ?? null;
-  LIMITS.severeLow  = childDoc?.normalRange?.severeLow ?? null;
-  LIMITS.severeHigh = childDoc?.normalRange?.severeHigh ?? null;
-  LIMITS.hypo       = childDoc?.hypoLevel ?? null;
-  LIMITS.hyper      = childDoc?.hyperLevel ?? null;
-}
+    const tdDate = document.createElement("td");
+    tdDate.className = "date";
+    tdDate.textContent = d;
+    tr.appendChild(tdDate);
 
-/* تحويل القيمة للـ mmol/L */
-function valueToMmol(rec){
-  if (typeof rec?.value_mmol === "number") return rec.value_mmol;
-  if (typeof rec?.value === "number" && (rec?.unit||"").toLowerCase()==="mmol/l") return rec.value;
-  const mgdl = (typeof rec?.value_mgdl === "number") ? rec.value_mgdl
-             : (typeof rec?.value === "number" ? rec.value : null);
-  if (mgdl==null) return null;
-  return mgdl/18;
-}
+    for (const [slotKey] of COLS) {
+      const td = document.createElement("td");
+      const rec = byDay[d]?.[slotKey] || null;
 
-/* تصنيف الحالة */
-function classify(value){
-  const v = Number(value);
-  if(!Number.isFinite(v)) return {cls:"b-ok", label:"—"};
-  const L = LIMITS;
-  if (L.severeLow!=null && v <= L.severeLow)   return {cls:"b-sevlow",  label:"هبوط شديد"};
-  if (L.hypo!=null      && v <  L.hypo)        return {cls:"b-low",     label:"هبوط"};
-  if (L.severeHigh!=null && v >= L.severeHigh) return {cls:"b-sevhigh", label:"ارتفاع شديد"};
-  if (L.hyper!=null      && v >  L.hyper)      return {cls:"b-high",    label:"ارتفاع"};
+      if (rec && rec.value != null) {
+        const v = num(rec.value);
+        const cls = classify(v) || "";
+        const line = document.createElement("div");
+        line.className = "value-line";
 
-  return {cls:"b-ok", label:"طبيعي"};
-}
+        const b = document.createElement("b");
+        b.textContent = (v==null?"—":v);
+        const dot = document.createElement("span");
+        dot.className = `state-dot ${cls}`;
+        dot.textContent = "●";
 
-/* أعلى من اليوم السابق؟ (للسهم) */
-function isHigher(currMmol, prevMmol){
-  if(!Number.isFinite(currMmol) || !Number.isFinite(prevMmol)) return false;
-  const deltaAbs = 0.6;   // mmol/L
-  const deltaPct = 10;    // %
-  return (currMmol - prevMmol) >= deltaAbs || ((currMmol - prevMmol)/prevMmol*100) >= deltaPct;
-}
+        line.appendChild(b);
+        line.appendChild(dot);
+        td.appendChild(line);
 
-/* تحميل وتجميع القراءات يوميًا */
-async function fetchAggregated(fromISO, toISO){
-  const col = collection(db, "parents", parentId, "children", childId, "measurements");
-  const qy = query(
-    col,
-    where("date", ">=", fromISO),
-    where("date", "<=", toISO),
-    orderBy("date","asc"),
-    orderBy("when","asc")
-  );
-  const snap = await getDocs(qy);
+        // جرعات
+        if (rec.bolus || rec.correction) {
+          const dl = document.createElement("div");
+          dl.className = "dose-line";
+          const parts = [];
+          if (rec.bolus) parts.push(`وجبة: ${rec.bolus}`);
+          if (rec.correction) parts.push(`تصحيح: ${rec.correction}`);
+          dl.textContent = parts.join(" • ");
+          td.appendChild(dl);
+        }
 
-  const byDay = {};
-  snap.forEach(d=>{
-    const rec = d.data();
-    const date = rec?.date; if(!date) return;
-    const slot = normalizeSlotKey(rec?.slotKey); if(!slot) return;
-    if(!byDay[date]) byDay[date] = {};
-    const prev = byDay[date][slot];
-    if(!prev || (rec.when && (!prev.when || (rec.when.toMillis?.()||0) > (prev.when?.toMillis?.()||0)))){
-      byDay[date][slot] = rec;
+        // ملاحظات
+        if (rec.note) {
+          const nl = document.createElement("div");
+          nl.className = "note-line";
+          nl.textContent = rec.note;
+          td.appendChild(nl);
+        }
+      } else {
+        td.textContent = "—";
+      }
+      tr.appendChild(td);
     }
-  });
+
+    frag.appendChild(tr);
+  }
+
+  targetBody.innerHTML = "";
+  targetBody.appendChild(frag);
+}
+
+// =====================[ جلب البيانات (نموذج) ]=====================
+/* ملاحظة: ادمجي هنا كود Firebase الأصلي عندك.
+   لتجربة سريعة، هنستخدم مصدر بيانات وهمي إذا مفيش Firebase. */
+async function fetchMeasurements(fromISO, toISO){
+  // TODO: استبدلي هذا بمصدر بياناتك من Firestore:
+  // parents/{parentId}/measurements? where date between fromISO..toISO
+  // يجب أن يعيد عناصر بشكل: {date:'YYYY-MM-DD', slot:'PRE_SLEEP'.., value:123, bolus?, correction?, note?}
+  return [];
+}
+
+// تطبيع السجل إلى byDay[date][slotKey]
+function groupByDay(list){
+  const byDay = {};
+  for (const r of list) {
+    const date = r.date;
+    const slotKey = SLOT_MAP[(r.slot||"").toUpperCase()] || (COLS.find(c=>c[0]===r.slot)?.[0] ?? null);
+    if (!date || !slotKey) continue;
+    byDay[date] ||= {};
+    byDay[date][slotKey] = {
+      value: r.value,
+      bolus: r.bolus,
+      correction: r.correction,
+      note: r.note
+    };
+  }
   return byDay;
 }
 
-/* أيام الفترة */
-function listDates(fromISO, toISO){
-  const out=[]; let d=new Date(fromISO); const end=new Date(toISO);
-  while(d<=end){ out.push(fmtISO(d)); d.setDate(d.getDate()+1); }
-  return out;
+// =====================[ بناء التقرير ]=====================
+async function buildReport(fromISO, toISO){
+  setLoader(true);
+  try {
+    // وصف المدى
+    metaEl.textContent = `من ${fromISO} إلى ${toISO}`;
+
+    // جلب بيانات الطفل وحدوده لو متاحة لديك (يمكنك استبداله بكودك)
+    // limits = { severeLow, normalMin, normalMax, severeHigh } ← في مشروعك اقرئيها من مستند الطفل
+
+    // قياسات
+    const list = await fetchMeasurements(fromISO, toISO);
+    const byDay = groupByDay(list);
+
+    currentDataByDay = byDay; // للاستخدام في الطباعة/التحاليل
+
+    // بناء الرأس
+    buildHead(headRowEl);
+    buildHead(headRowPrint);
+
+    // الصفوف
+    renderRows(rowsEl, byDay);
+    renderRows(rowsPrint, byDay);
+
+    if (!list.length) {
+      buildEmptyMessage(rowsEl);
+      buildEmptyMessage(rowsPrint);
+    }
+  } catch (e) {
+    console.error(e);
+    buildEmptyMessage(rowsEl, "حدث خطأ أثناء تحميل البيانات");
+  } finally {
+    setLoader(false);
+  }
 }
 
-/* HTML خلية */
-function cellHTML(rec, prevRec){
-  if(!rec) return "—";
-  const mmol = valueToMmol(rec);
-  const prevMmol = valueToMmol(prevRec);
-  const v = round1(mmol);
+// =====================[ التبديل بين العروض داخل الصفحة ]=====================
+window.showView = function(which){
+  const reportSec   = $("#reportView");
+  const analysisSec = $("#analysisView");
+  const printSec    = $("#printView");
 
-  const {cls,label} = classify(mmol);
-  const badge = `<span class="badge ${cls}" title="${label}">${label}</span>`;
-  const showUp = isHigher(mmol, prevMmol);
-  const trend = showUp
-    ? `<span class="state-dot dot-up">•</span><span class="arrow" title="أعلى من أمس">▲</span>`
-    : "";
+  for (const el of [reportSec, analysisSec, printSec]) el?.classList.add("hidden");
+  if (which === "analysis") {
+    analysisSec?.classList.remove("hidden");
+    buildAnalysis();
+  } else if (which === "print") {
+    printSec?.classList.remove("hidden");
+  } else {
+    reportSec?.classList.remove("hidden");
+  }
+};
 
-  const doseParts = [];
-  if (rec?.bolusDose != null)      doseParts.push(`جرعة: ${rec.bolusDose}U`);
-  if (rec?.correctionDose != null) doseParts.push(`تصحيح: ${rec.correctionDose}U`);
-  const doses = doseParts.join(" • ");
-  const note  = rec?.notes || rec?.hypoTreatment || "";
-
-  const dosesHtml = doses ? `<div class="dose-line">${escapeHTML(doses)}</div>` : "";
-  const noteHtml  = note  ? `<div class="note-line">${escapeHTML(note)}</div>`   : "";
-
-  return `
-    <div class="value-line"><b>${v!=null ? v.toFixed(1) : "—"}</b>${badge}${trend}</div>
-    ${dosesHtml}${noteHtml}
+// تحليل بسيط كمثال (استبدليه بتحليلك التفصيلي)
+function buildAnalysis(){
+  if (!currentDataByDay || !Object.keys(currentDataByDay).length) {
+    analysisContainer.textContent = "لا توجد بيانات لعرض التحليلات.";
+    return;
+  }
+  let total = 0, count = 0;
+  for (const d of Object.values(currentDataByDay)) {
+    for (const [slot, rec] of Object.entries(d)) {
+      if (rec?.value != null) { total += +rec.value; count++; }
+    }
+  }
+  const avg = count ? (total / count).toFixed(1) : "—";
+  analysisContainer.innerHTML = `
+    <div class="badge b-ok">متوسط القياسات: ${avg}</div>
   `;
 }
 
-/* بناء الجدول */
-function buildTableSkeleton(){
-  const thead = document.querySelector("#rep thead tr");
-  thead.innerHTML = `<th>التاريخ</th>` + COLS.map(([,ar])=>`<th>${ar}</th>`).join("");
-}
-
-function renderTable(fromISO, toISO, byDay){
-  const dates = listDates(fromISO,toISO);
-  const html = dates.map(date=>{
-    const day = byDay[date] || {};
-    const prevDate = fmtISO(addDays(new Date(date), -1));
-    const prevDay = byDay[prevDate] || {};
-    const tds = COLS.map(([std])=>`<td>${cellHTML(day[std], prevDay[std])}</td>`).join("");
-    return `<tr><td class="date">${date}</td>${tds}</tr>`;
-  }).join("");
-  rowsEl.innerHTML = html || `<tr><td colspan="10" class="center muted">لا توجد بيانات.</td></tr>`;
-}
-
-/* تحميل وبناء */
-async function buildReport(fromISO, toISO){
-  setLoader(true);
-  rowsEl.innerHTML = `<tr><td colspan="10" class="center muted">جاري التحميل…</td></tr>`;
-  const byDay = await fetchAggregated(fromISO, toISO);
-  buildTableSkeleton();
-  renderTable(fromISO, toISO, byDay);
-  metaEl.textContent = `الفترة: ${fromISO} → ${toISO} • الوحدة: mmol/L`;
-  setLoader(false);
-}
-
-/* سلوك القائمة المنسدلة + الملاحظات */
+// =====================[ واجهة المستخدم والأحداث ]=====================
 function applyPreset(val){
-  const custom = (val==="custom");
-  datesBox.classList.toggle("hidden", !custom);
-  if(custom) return;
-
   const today = new Date();
-  let days = 7;
-  if(val==="14") days=14;
-  else if(val==="30") days=30;
-  else if(val==="90" || val==="90_only") days=90;
+  let from = null, to = null;
 
-  const to = fmtISO(today);
-  const from = fmtISO(addDays(today, -(days-1)));
-  fromEl.value = from; toEl.value = to;
+  if (val === "custom") {
+    datesBox.classList.remove("hidden");
+    fromEl.focus();
+    return;
+  } else {
+    datesBox.classList.add("hidden");
+  }
+
+  if (val === "90_only") {
+    // آخر 90 يوم من اليوم فقط (بدون تغيير to)
+    to = today;
+    from = addDays(today, -89);
+  } else {
+    const days = Number(val || 7);
+    to = today;
+    from = addDays(today, -(days-1));
+  }
+
+  fromEl.value = fmtISO(from);
+  toEl.value = fmtISO(to);
 }
+
 function wireUI(){
-  presetEl?.addEventListener("change", ()=> applyPreset(presetEl.value));
-  runBtn?.addEventListener("click", async ()=>{
-    const v = presetEl?.value || "7";
-    if(v!=="custom") applyPreset(v);
-    const fromISO = fromEl.value || fmtISO(addDays(new Date(), -6));
-    const toISO   = toEl.value   || fmtISO(new Date());
-    await buildReport(fromISO, toISO);
-  });
-  btnPrint?.addEventListener("click", ()=> window.print());
-  btnBlank?.addEventListener("click", ()=>{
-    const today=new Date();
-    const days=Array.from({length:7},(_,i)=>fmtISO(addDays(today,i)));
-    rowsEl.innerHTML = days.map(d=>`<tr><td class="date">${d}</td>${"<td>—</td>".repeat(9)}</tr>`).join("");
-  });
+  // تبديل الملاحظات
   toggleNotes?.addEventListener("change", ()=>{
     document.body.classList.toggle("notes-hidden", !toggleNotes.checked);
   });
+
+  // المدى السريع
+  presetEl?.addEventListener("change", ()=>{
+    applyPreset(presetEl.value);
+  });
+
+  // عرض
+  runEl?.addEventListener("click", ()=>{
+    const p = presetEl.value;
+    if (p !== "custom") applyPreset(p);
+    const fromISO = fromEl.value;
+    const toISO = toEl.value || fmtISO(new Date());
+    buildReport(fromISO, toISO);
+    showView("report");
+  });
+
+  // طباعة
+  btnPrint?.addEventListener("click", ()=> window.print());
+
+  // ورقة فارغة (7 أيام)
+  btnBlank?.addEventListener("click", ()=>{
+    const start = new Date();
+    const days = Array.from({length:7}, (_,i)=> fmtISO(addDays(start, i)));
+    const byDay = {};
+    for (const d of days) byDay[d] = {};
+    currentDataByDay = byDay;
+    buildHead(headRowEl);
+    buildHead(headRowPrint);
+    renderRows(rowsEl, byDay);
+    renderRows(rowsPrint, byDay);
+    metaEl.textContent = "ورقة فارغة للأسبوع القادم";
+  });
+
+  // عرض التحليلات والطباعة داخل نفس الصفحة
+  analysisBtn?.addEventListener("click", (e)=> { e.preventDefault(); showView("analysis"); });
+  reportPrintBtn?.addEventListener("click", (e)=> { e.preventDefault(); showView("print"); });
+
+  // زر الرجوع للصفحة الرئيسية مع تمرير parent
+  if (lnkHome) {
+    const p = encodeURIComponent(parentId || "");
+    lnkHome.href = `parent.html?parent=${p}`;
+  }
 }
 
-/* إقلاع */
-onAuthStateChanged(auth, async (user)=>{
-  if(!user){ location.href="/login.html"; return; }
-  parentId = qs("parent") || user.uid;
-  childId  = qs("child")  || "";
-  buildNav();
-  await loadChild();
+// إنشاء شريط التنقل العلوي
+function buildNav(){
+  const nav = [
+    ["parent.html","الرئيسية"],                // تم التعديل
+    ["measurements.html","قياسات السكر"],      // تم التعديل
+    ["meals.html","الوجبات"],
+    ["reports.html","التقارير"],
+    ["#","التحاليل","analysis"],               // يبدل View
+    ["visits.html","الزيارات الطبية"],
+  ];
 
-  // افتراضي: أسبوع (يملأ التواريخ وهو مخفي)
-  presetEl.value = "7";
-  applyPreset("7");
+  childNav.innerHTML = "";
+  for (const [href, label, type] of nav) {
+    const a = document.createElement("a");
+    a.className = "btn gray";
+    a.textContent = label;
+
+    if (type === "analysis") {
+      a.addEventListener("click", (e)=>{ e.preventDefault(); showView("analysis"); });
+    } else {
+      a.href = href;
+    }
+    childNav.appendChild(a);
+  }
+}
+
+// =====================[ بدء التشغيل ]=====================
+async function main(){
+  parentId = qparam("parent");
+  childId = qparam("child");
+
+  // بانر
+  childBanner.style.display = "block";
+  bannerName.textContent = childId ? `الطفل: ${childId}` : "الطفل";
+  metaHead.textContent = "—";
+
+  // UI
   wireUI();
+  buildNav();
+  applyPreset("7");            // افتراضي: أسبوع
+  runEl.click();               // يبني التقرير مباشرة
+}
 
-  // تحميل أولي
-  await buildReport(fromEl.value, toEl.value);
-});
+document.addEventListener("DOMContentLoaded", main);
