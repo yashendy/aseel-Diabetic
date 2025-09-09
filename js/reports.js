@@ -1,11 +1,20 @@
-/* التقارير — كل الإضافات بدون حذف أي جزء شغّال */
+/* التقارير — ملف JS كامل ومحدّث
+   - يقرأ من Firestore: parents/{parent}/children/{child}/measurements
+   - يُظهر بيانات الطفل تحت شريط التنقّل + نسخة للطباعة
+   - زر "عرض" دائم الظهور
+   - الملاحظات/التصحيح أسفل كل قياس مع خيار إظهار/إخفاء
+   - صفحة طباعة: شبكة واضحة + وضع أفقي + خيار إظهار الملاحظات + نموذج فارغ
+   - التحاليل: Doughnut (هبوط/طبيعي/ارتفاع) + متوسط + ملخص ذكي + مقارنة بين فترتين
+   - حماية كاملة من مراجع Firestore غير الصالحة + استنتاج parent من child
+*/
 
 /* استيراد Firestore من موديولك */
 import { db } from "./firebase-config.js";
 
 import {
   doc, getDoc,
-  collection, query, where, orderBy, getDocs
+  collection, query, where, orderBy, getDocs,
+  collectionGroup, documentId
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 /* ===== أدوات عامة ===== */
@@ -29,7 +38,7 @@ const rowsEl=$("#rows"), headRowEl=$("#headRow"), metaEl=$("#meta"), loaderEl=$(
 const childNav=$("#childNav"), childBanner=$("#childBanner"), bannerName=$("#bannerName"), metaHead=$("#metaHead");
 const lnkHome=$("#lnkHome");
 const analysisBtn=$("#btnAnalyticsPage"), reportPrintBtn=$("#btnReportPrintPage");
-const headRowPrint=$("#headRowPrint"), rowsPrint=$("#rowsPrint"), analysisContainer=$("#analysisContainer");
+const headRowPrint=$("#headRowPrint"), rowsPrint=$("#rowsPrint");
 const childInfoCard=$("#childInfoCard"), childInfoContent=$("#childInfoContent");
 const printHeader=$("#printHeader");
 const hypoInput=$("#hypoInput"), hyperInput=$("#hyperInput");
@@ -89,7 +98,7 @@ function toMmol(rec){
   return (mgdl==null) ? null : (mgdl/18);
 }
 
-/* تصنيف قيمة واحدة بناءً على حدود الطفل */
+/* تصنيف قيمة واحدة وفق حدود الطفل */
 function classifyByLimits(v){
   if (!Number.isFinite(v)) return "b-ok";
   if (limits.severeLow!=null && v <= limits.severeLow) return "b-sevlow";
@@ -133,16 +142,21 @@ function renderChildInfoCard(c){
   `;
 
   childInfoCard.classList.remove("hidden");
-
-  // نسخة مصغرة للطباعة
-  printHeader.textContent = childInfoContent.textContent;
+  printHeader.textContent = childInfoContent.textContent; // نسخة للطباعة
 }
 
 /* ===== رأس الجدول ===== */
 function buildHead(row){
   row.innerHTML = "";
-  const thDate = document.createElement("th"); thDate.textContent="التاريخ"; thDate.className="date"; row.appendChild(thDate);
-  for (const [,label] of COLS){ const th=document.createElement("th"); th.textContent=label; row.appendChild(th); }
+  const thDate = document.createElement("th");
+  thDate.textContent="التاريخ";
+  thDate.className="date";
+  row.appendChild(thDate);
+  for (const [,label] of COLS){
+    const th=document.createElement("th");
+    th.textContent=label;
+    row.appendChild(th);
+  }
 }
 function emptyRows(tbody, txt="لا توجد بيانات ضمن المدى المحدد"){
   tbody.innerHTML = `<tr><td colspan="${COLS.length+1}" class="center muted">${txt}</td></tr>`;
@@ -167,6 +181,7 @@ function renderRows(tbody, byDay){
     for (const [slot] of COLS){
       const td = document.createElement("td");
       const rec = byDay[d]?.[slot]; const prevRec = prev?.[slot];
+
       if (rec){
         const mmol = toMmol(rec); const v = round1(mmol);
         const cls = classifyByLimits(mmol);
@@ -186,7 +201,10 @@ function renderRows(tbody, byDay){
           const nl = document.createElement("div"); nl.className="note-line";
           nl.textContent = rec.notes || rec.hypoTreatment || ""; td.appendChild(nl);
         }
-      } else td.textContent="—";
+      } else {
+        td.textContent="—";
+      }
+
       tr.appendChild(td);
     }
 
@@ -198,11 +216,17 @@ function renderRows(tbody, byDay){
 
 /* ===== جلب بيانات الطفل + الحدود ===== */
 async function loadChild(){
-  const snap = await getDoc(doc(db, "parents", parentId, "children", childId));
+  if (!db || !parentId || !childId) {
+    bannerName.textContent = "الطفل";
+    if (metaHead) metaHead.textContent = "—";
+    return null;
+  }
+  const ref = doc(db, "parents", parentId, "children", childId);
+  const snap = await getDoc(ref);
   childDoc = snap.exists() ? snap.data() : {};
   bannerName.textContent = childDoc?.name || "الطفل";
 
-  // metaHead القديم يظل كما هو
+  // metaHead القديم
   const ageTxt = (()=> {
     const dob = childDoc?.birthDate || childDoc?.dob; if(!dob) return "—";
     const b = new Date(dob), n=new Date();
@@ -216,7 +240,7 @@ async function loadChild(){
     metaHead.textContent = `العمر: ${ageTxt} • معامل الكارب: ${carb} • التصحيحي: ${corr}`;
   }
 
-  // حدود الطفل
+  // حدود الطفل (إن وُجدت)
   if (childDoc?.normalRange){
     if (childDoc.normalRange.min!=null) limits.normalMin = +childDoc.normalRange.min;
     if (childDoc.normalRange.max!=null) limits.normalMax = +childDoc.normalRange.max;
@@ -226,13 +250,32 @@ async function loadChild(){
 
   renderChildInfoCard(childDoc);
 
-  // حطّ القيم الافتراضية لحقول Hypo/Hyper في التحاليل
+  // تعبئة حقول Hypo/Hyper الافتراضية للتحاليل
   hypoInput.value  = (limits.normalMin ?? 3.9).toFixed(1);
   hyperInput.value = (limits.normalMax ?? 10.0).toFixed(1);
 }
 
+/* ===== استنتاج parent من child لو ناقص ===== */
+async function ensureParentFromChild() {
+  if (!db || parentId || !childId) return;
+
+  // documentId داخل collectionGroup لازم يستقبل المسار الكامل داخل المجموعة
+  const q = query(
+    collectionGroup(db, "children"),
+    where(documentId(), "==", `children/${childId}`)
+  );
+
+  const snaps = await getDocs(q);
+  if (!snaps.empty) {
+    const s = snaps.docs[0];
+    parentId = s.ref.parent.parent.id;
+    sessionStorage.setItem("lastParent", parentId);
+  }
+}
+
 /* ===== القياسات: نفس مسار النسخة القديمة ===== */
 async function fetchAggregated(fromISO, toISO){
+  if (!db || !parentId || !childId) return {};
   const col = collection(db, "parents", parentId, "children", childId, "measurements");
   const qy = query(
     col,
@@ -284,7 +327,7 @@ async function buildReport(fromISO, toISO){
 /* ===== التحاليل ===== */
 function computeStats(byDay, hypo, hyper){
   let hypoC=0, normC=0, hyperC=0, sum=0, cnt=0;
-  const perSlotCounts = {}; // لمعرفة أكثر فترة خروجًا
+  const perSlotCounts = {};
   for (const day of Object.values(byDay)){
     for (const [slot, rec] of Object.entries(day)){
       const v = toMmol(rec);
@@ -297,13 +340,13 @@ function computeStats(byDay, hypo, hyper){
   }
   const avg = cnt ? +(sum/cnt).toFixed(1) : null;
   const tir = cnt ? Math.round((normC/cnt)*100) : 0;
-  // أكثر فترة خروجًا عن النطاق
   let worstSlot=null, wVal=0;
   for (const [s,c] of Object.entries(perSlotCounts)){ if(c>wVal){wVal=c; worstSlot=s;} }
   return {hypo:hypoC, normal:normC, hyper:hyperC, avg, tir, worstSlot, total:cnt};
 }
 
 function buildAnalytics(){
+  const ChartLib = window.Chart;
   if (!currentDataByDay || !Object.keys(currentDataByDay).length) {
     analysisNumbers.innerHTML = `<div class="muted">لا توجد بيانات لعرض التحاليل.</div>`;
     smartSummary.textContent = "";
@@ -322,7 +365,6 @@ function buildAnalytics(){
     <div class="badge b-high">ارتفاع: ${st.hyper}</div>
   `;
 
-  // ملخص ذكي مبسّط (بدون خوادم)
   const tips = [];
   if (st.tir < 60) tips.push("النطاق منخفض — راجعي أهداف الوجبات والتصحيح.");
   if (st.hypo > st.hyper) tips.push("الهبوطات أكثر من الارتفاعات — فكري في تقليل جرعات الوجبات أو التصحيح.");
@@ -330,15 +372,12 @@ function buildAnalytics(){
   if (st.worstSlot) tips.push(`أكثر فترة خروجًا: ${COLS.find(c=>c[0]===st.worstSlot)?.[1] || st.worstSlot}.`);
   smartSummary.textContent = tips.join(" ");
 
-  // Doughnut Hypo/Normal/Hyper
   if (chartInst) chartInst.destroy();
-  chartInst = new Chart(doughnutCanvas.getContext("2d"), {
+  chartInst = new ChartLib(doughnutCanvas.getContext("2d"), {
     type: "doughnut",
     data: {
       labels: ["هبوط", "طبيعي", "ارتفاع"],
-      datasets: [{
-        data: [st.hypo, st.normal, st.hyper]
-      }]
+      datasets: [{ data: [st.hypo, st.normal, st.hyper] }]
     },
     options: { responsive:true, plugins:{ legend:{ position:"bottom" } } }
   });
@@ -479,18 +518,26 @@ function buildNav(){
   }
 }
 
-/* ===== تشغيل ===== */
+/* ===== بدء التشغيل ===== */
 async function start(){
   parentId = qparam("parent") || sessionStorage.getItem("lastParent") || "";
   childId  = qparam("child")  || sessionStorage.getItem("lastChild")  || "";
 
+  await ensureParentFromChild();
+
   if (parentId) sessionStorage.setItem("lastParent", parentId);
   if (childId)  sessionStorage.setItem("lastChild",  childId);
 
-  childBanner.style.display = "block";
-  await loadChild();
   buildNav();
   wireUI();
+
+  if (!parentId || !childId) {
+    metaEl.textContent = "يجب تحديد الطفل (parent & child) لعرض البيانات.";
+    return;
+  }
+
+  childBanner.style.display = "block";
+  await loadChild();
 
   presetEl.value = "7";
   applyPreset("7");
