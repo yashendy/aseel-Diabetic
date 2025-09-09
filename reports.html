@@ -69,7 +69,6 @@
   <!-- مؤشر التحميل -->
   <div id="loader" class="loader card">جاري التحميل…</div>
 
-  <!-- العروض داخل نفس الصفحة -->
   <!-- 1) التقرير -->
   <section id="reportView" class="card">
     <div class="legend no-print">
@@ -104,11 +103,6 @@
   <section id="printView" class="card hidden">
     <div class="center">
       <h2>صفحة طباعة التقرير</h2>
-      <p class="muted">نفس الجدول بتنسيق مناسب للطباعة.</p>
-      <div style="margin:12px 0">
-        <button class="btn gray no-print" onclick="showView('report')">رجوع للتقرير</button>
-        <button class="btn warning no-print" onclick="window.print()">طباعة</button>
-      </div>
     </div>
     <div class="table-wrap">
       <table id="repPrint" class="table">
@@ -116,9 +110,13 @@
         <tbody id="rowsPrint"></tbody>
       </table>
     </div>
+    <div class="center no-print" style="margin:12px 0">
+      <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
+      <button class="btn warning" onclick="window.print()">طباعة</button>
+    </div>
   </section>
 
-  <!-- تهيئة Firebase (تعريف window.firebaseConfig) -->
+  <!-- تعريف window.firebaseConfig (بدون import) -->
   <script src="./js/firebase-config.js"></script>
   <!-- شيفرة الصفحة -->
   <script type="module" src="./js/reports.js"></script>
