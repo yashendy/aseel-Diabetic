@@ -1,29 +1,41 @@
-/* التقارير – صفحة واحدة مع تبديل العروض + Firestore (ES Modules) */
+/* التقارير — قراءة بيانات الطفل والقياسات بنفس منطق النسخة القديمة
+   - المسار: parents/{parent}/children/{child}/measurements
+   - يدعم slotKey وقيم value_mmol/value_mgdl
+   - يعمل مع firebase-config.js كـ Module ويستورد db
+   - لو parent مش موجود في الرابط نستخدم user.uid (Auth)
+*/
 
-/* 1) استيراد db من firebase-config.js (مكون موديول) */
 import { db } from "./firebase-config.js";
-
-/* 2) استيراد دوال Firestore من نفس نسخة الموديول 12.1.0 */
 import {
   doc, getDoc,
-  collection, collectionGroup,
-  query, where, orderBy, getDocs,
-  documentId
+  collection, query, where, orderBy, getDocs
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import {
+  getAuth, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* ===== أدوات عامة ===== */
+const auth = getAuth();
+
+/* عناصر واجهة */
 const $  = (s, p=document)=> p.querySelector(s);
-const $$ = (s, p=document)=> Array.from(p.querySelectorAll(s));
-function qparam(name){ const u = new URL(location.href); return u.searchParams.get(name) || ""; }
-function linkWithParams(href, extra = {}) {
-  const qs = new URLSearchParams();
-  if (parentId) qs.set("parent", parentId);
-  if (childId)  qs.set("child", childId);
-  for (const [k,v] of Object.entries(extra)) if (v != null) qs.set(k, v);
-  return href + (href.includes("?") ? "&" : "?") + qs.toString();
-}
+const fmtISO = (d)=> d.toISOString().slice(0,10);
+const addDays = (d,n)=>{ const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()+n); return x; };
 
-/* ===== الفترات (تشمل ق.النوم) ===== */
+const presetEl = $("#preset"), datesBox=$("#datesBox"), fromEl=$("#from"), toEl=$("#to"), runEl=$("#run");
+const btnPrint=$("#btnPrint"), btnBlank=$("#btnBlank"), toggleNotes=$("#toggleNotes");
+const rowsEl=$("#rows"), headRowEl=$("#headRow"), metaEl=$("#meta"), loaderEl=$("#loader");
+const childNav=$("#childNav");
+const bannerName=$("#bannerName");
+const metaHead = $("#metaHead") || $("#bannerMeta"); // دعم الاسمين
+const lnkHome=$("#lnkHome");
+const analysisBtn=$("#btnAnalyticsPage"), reportPrintBtn=$("#btnReportPrintPage");
+const headRowPrint=$("#headRowPrint"), rowsPrint=$("#rowsPrint"), analysisContainer=$("#analysisContainer");
+
+let parentId="", childId="", childDoc=null;
+let limits = { severeLow:55, normalMin:70, normalMax:180, severeHigh:300 };
+let currentDataByDay={};
+
+/* الأعمدة والفترات (مع ق.النوم) */
 const COLS = [
   ["WAKE","الاستيقاظ"],
   ["PRE_BREAKFAST","ق.الفطار"],
@@ -46,262 +58,167 @@ const SLOT_ALIAS = {
   PRE_DINNER:["PRE_DINNER","PREDINNER"],
   POST_DINNER:["POST_DINNER","POSTDINNER"],
   SNACK:["SNACK"],
-  PRE_SLEEP:["PRE_SLEEP","BEFORE_SLEEP","BEFORESLEEP","PRE-SLEEP"],
+  PRE_SLEEP:["PRE_SLEEP","BEFORE_SLEEP","BEFORESLEEP","PRE-SLEEP"],  // جديد
   DURING_SLEEP:["DURING_SLEEP","NIGHT"]
 };
-const SLOT_MAP = (()=>{ const m={}; for (const [k,a] of Object.entries(SLOT_ALIAS)) a.forEach(x=>m[x.toUpperCase()]=k); return m; })();
-
-/* ===== تواريخ ===== */
-const fmtISO = (d)=> d.toISOString().slice(0,10);
-const addDays = (d, n)=> { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate()+n); return x; };
-
-/* ===== عناصر الواجهة ===== */
-const presetEl=$("#preset"), datesBox=$("#datesBox"), fromEl=$("#from"), toEl=$("#to"), runEl=$("#run");
-const btnPrint=$("#btnPrint"), btnBlank=$("#btnBlank"), toggleNotes=$("#toggleNotes");
-const rowsEl=$("#rows"), headRowEl=$("#headRow"), metaEl=$("#meta"), loaderEl=$("#loader");
-const childNav=$("#childNav"), childBanner=$("#childBanner"), bannerName=$("#bannerName"), metaHead=$("#metaHead");
-const lnkHome=$("#lnkHome");
-const analysisBtn=$("#btnAnalyticsPage"), reportPrintBtn=$("#btnReportPrintPage");
-const headRowPrint=$("#headRowPrint"), rowsPrint=$("#rowsPrint"), analysisContainer=$("#analysisContainer");
-
-/* ===== حالة عامة ===== */
-let parentId="", childId="", childInfo=null;
-let limits = { severeLow:55, normalMin:70, normalMax:180, severeHigh:300 };
-let currentDataByDay = {};
-
-/* ===== مساعدات ===== */
-const setLoader = (v)=> loaderEl.style.display = v ? "flex" : "none";
-const num = (x)=> (x==null || isNaN(+x)) ? null : +(+x).toFixed(1);
-const classify = (v)=>{
-  if (v==null) return null;
-  if (v <= limits.severeLow) return "b-sevlow";
-  if (v <  limits.normalMin) return "b-low";
-  if (v <= limits.normalMax) return "b-ok";
-  if (v <  limits.severeHigh) return "b-high";
-  return "b-sevhigh";
-};
-
-/* ===== بانر الطفل ===== */
-function calcAge(birthISO){
-  if(!birthISO) return "—";
-  const b = new Date(birthISO), n = new Date();
-  let y=n.getFullYear()-b.getFullYear(), m=n.getMonth()-b.getMonth(), d=n.getDate()-b.getDate();
-  if (d<0) m--; if (m<0){ y--; m+=12; }
-  return y>0 ? `${y} سنة${m?` و${m} شهر`:''}` : `${m} شهر`;
+function normalizeSlotKey(k){
+  const x = String(k||"").toUpperCase();
+  for (const std in SLOT_ALIAS) if (SLOT_ALIAS[std].includes(x)) return std;
+  return null;
 }
 
-async function loadChild(){
-  if (!db || !parentId || !childId) { bannerName.textContent="الطفل"; metaHead.textContent="—"; return null; }
-  const ref = doc(db, "parents", parentId, "children", childId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) { bannerName.textContent="الطفل"; metaHead.textContent="—"; return null; }
-  const c = snap.data(); childInfo = c;
+/* أدوات عرض */
+const setLoader = (v)=> loaderEl && (loaderEl.style.display = v ? "flex" : "none");
+const round1 = (n)=> (Number.isFinite(+n) ? Math.round(+n*10)/10 : null);
 
-  const name = c.name || c.fullName || childId;
-  bannerName.textContent = name;
-
-  const age  = calcAge(c.birthDate || c.birth || c.dob);
-  const carb = c.carbRatio ?? c.carb ?? "—";
-  const corr = c.correctionFactor ?? c.correction ?? "—";
-  metaHead.textContent = `العمر: ${age} • معامل الكارب: ${carb} • التصحيحي: ${corr}`;
-
-  if (c.normalRange) {
-    if (c.normalRange.min!=null) limits.normalMin = c.normalRange.min;
-    if (c.normalRange.max!=null) limits.normalMax = c.normalRange.max;
-  }
-  if (c.severeLow  != null) limits.severeLow  = c.severeLow;
-  if (c.severeHigh != null) limits.severeHigh = c.severeHigh;
-
-  return c;
+/* تحويل القيم إلى mmol/L */
+function toMmol(rec){
+  if (typeof rec?.value_mmol === "number") return rec.value_mmol;
+  if (typeof rec?.value === "number" && (rec?.unit||"").toLowerCase()==="mmol/l") return rec.value;
+  const mgdl = (typeof rec?.value_mgdl === "number") ? rec.value_mgdl
+              : (typeof rec?.value === "number" ? rec.value : null);
+  return (mgdl==null) ? null : (mgdl/18);
 }
 
-/* يستنتج parent من child لو لم يُمرّر */
-async function tryResolveParentFromChildId(){
-  if (!db || !childId || parentId) return;
-  try {
-    const q = query(collectionGroup(db, "children"), where(documentId(), "==", childId));
-    const snaps = await getDocs(q);
-    if (!snaps.empty) {
-      const s = snaps.docs[0];
-      parentId = s.ref.parent.parent.id;
-      sessionStorage.setItem("lastParent", parentId);
+/* تصنيف حسب حدود الطفل */
+function classify(v){
+  if (!Number.isFinite(v)) return "b-ok";
+  if (limits.severeLow!=null && v <= limits.severeLow) return "b-sevlow";
+  if (limits.normalMin!=null && v <  limits.normalMin) return "b-low";
+  if (limits.severeHigh!=null && v >= limits.severeHigh) return "b-sevhigh";
+  if (limits.normalMax!=null && v >  limits.normalMax) return "b-high";
+  return "b-ok";
+}
+
+/* بناء رأس الجدول */
+function buildHead(row){
+  row.innerHTML = "";
+  const thDate = document.createElement("th"); thDate.textContent="التاريخ"; thDate.className="date"; row.appendChild(thDate);
+  for (const [,label] of COLS){ const th=document.createElement("th"); th.textContent=label; row.appendChild(th); }
+}
+
+/* رسائل فارغة */
+function emptyRows(tbody, txt="لا توجد بيانات ضمن المدى المحدد"){
+  tbody.innerHTML = `<tr><td colspan="${COLS.length+1}" class="center muted">${txt}</td></tr>`;
+}
+
+/* بناء صفوف */
+function renderRows(tbody, byDay){
+  const days = Object.keys(byDay).sort();
+  if (!days.length){ emptyRows(tbody); return; }
+  const frag = document.createDocumentFragment();
+  for (const d of days){
+    const tr = document.createElement("tr");
+    const tdDate = document.createElement("td"); tdDate.className="date"; tdDate.textContent=d; tr.appendChild(tdDate);
+    const prev = byDay[fmtISO(addDays(new Date(d),-1))] || {};
+    for (const [slot] of COLS){
+      const td = document.createElement("td");
+      const rec = byDay[d]?.[slot]; const prevRec = prev?.[slot];
+      if (rec){
+        const mmol = toMmol(rec); const v = round1(mmol);
+        const cls = classify(mmol);
+        const val = document.createElement("div"); val.className="value-line";
+        const b = document.createElement("b"); b.textContent = (v!=null ? v.toFixed(1) : "—");
+        const dot = document.createElement("span"); dot.className=`state-dot ${cls}`; dot.textContent="●";
+        val.appendChild(b); val.appendChild(dot); td.appendChild(val);
+
+        if (rec?.bolusDose!=null || rec?.correctionDose!=null){
+          const dl = document.createElement("div"); dl.className="dose-line";
+          const parts=[]; if(rec.bolusDose!=null) parts.push(`جرعة: ${rec.bolusDose}U`);
+          if(rec.correctionDose!=null) parts.push(`تصحيح: ${rec.correctionDose}U`);
+          dl.textContent = parts.join(" • "); td.appendChild(dl);
+        }
+        if (rec?.notes || rec?.hypoTreatment){
+          const nl = document.createElement("div"); nl.className="note-line";
+          nl.textContent = rec.notes || rec.hypoTreatment || ""; td.appendChild(nl);
+        }
+      } else td.textContent="—";
+      tr.appendChild(td);
     }
-  } catch (e) {
-    console.warn("resolve parent failed:", e);
+    frag.appendChild(tr);
+  }
+  tbody.innerHTML=""; tbody.appendChild(frag);
+}
+
+/* جلب بيانات الطفل + الحدود */
+async function loadChild(){
+  const snap = await getDoc(doc(db, "parents", parentId, "children", childId));
+  childDoc = snap.exists() ? snap.data() : {};
+  bannerName.textContent = childDoc?.name || "الطفل";
+  const ageTxt = (()=> {
+    const dob = childDoc?.birthDate || childDoc?.dob; if(!dob) return "—";
+    const b = new Date(dob), n=new Date();
+    let y=n.getFullYear()-b.getFullYear(), m=n.getMonth()-b.getMonth(), d=n.getDate()-b.getDate();
+    if (d<0) m--; if (m<0){ y--; m+=12; }
+    return y>0 ? `${y} سنة${m?` و${m} شهر`:''}` : `${m} شهر`;
+  })();
+  if (metaHead) {
+    const carb = childDoc?.carbRatio ?? childDoc?.carb ?? "—";
+    const corr = childDoc?.correctionFactor ?? childDoc?.correction ?? "—";
+    metaHead.textContent = `العمر: ${ageTxt} • معامل الكارب: ${carb} • التصحيحي: ${corr}`;
+  }
+
+  if (childDoc?.normalRange){
+    if (childDoc.normalRange.min!=null) limits.normalMin = childDoc.normalRange.min;
+    if (childDoc.normalRange.max!=null) limits.normalMax = childDoc.normalRange.max;
+    if (childDoc.normalRange.severeLow!=null) limits.severeLow = childDoc.normalRange.severeLow;
+    if (childDoc.normalRange.severeHigh!=null) limits.severeHigh = childDoc.normalRange.severeHigh;
   }
 }
 
-/* ===== Firestore: القياسات ===== */
-async function fetchMeasurements(fromISO, toISO){
-  if (!db || !parentId) return [];
-  const col = collection(db, "parents", parentId, "measurements");
+/* جلب القياسات من المسار القديم */
+async function fetchAggregated(fromISO, toISO){
+  // NOTE: نفس مسار النسخة القديمة
+  const col = collection(db, "parents", parentId, "children", childId, "measurements");
+  const qy = query(
+    col,
+    where("date", ">=", fromISO),
+    where("date", "<=", toISO),
+    orderBy("date","asc"),
+    orderBy("when","asc") // يختار أحدث قراءة للفترة في نفس اليوم
+  );
+  const snap = await getDocs(qy);
 
-  // المحاولة 1: حقل تاريخ ISO
-  let snaps = [];
-  try {
-    const q1 = query(col,
-      where("date", ">=", fromISO),
-      where("date", "<=", toISO),
-      orderBy("date","asc")
-    );
-    snaps = (await getDocs(q1)).docs;
-  } catch(_){}
-
-  // المحاولة 2: حقل Timestamp
-  if (snaps.length === 0) {
-    try {
-      const fromTs = new Date(fromISO+"T00:00:00");
-      const toTs   = new Date(toISO+"T23:59:59");
-      const q2 = query(col,
-        where("ts", ">=", fromTs),
-        where("ts", "<=", toTs),
-        orderBy("ts","asc")
-      );
-      snaps = (await getDocs(q2)).docs;
-    } catch(_){}
-  }
-
-  const list = [];
-  for (const d of snaps) {
-    const x = d.data();
-    const dateISO = x.date || (x.ts?.toDate ? fmtISO(x.ts.toDate()) : null);
-    const rawSlot = (x.slot || x.period || x.timeSlot || "").toString().toUpperCase();
-    const slot    = SLOT_MAP[rawSlot] || rawSlot;
-    list.push({
-      date: dateISO,
-      slot,
-      value: x.value ?? x.glucose ?? x.bg ?? null,
-      bolus: x.bolus ?? x.mealBolus ?? null,
-      correction: x.correction ?? x.corr ?? null,
-      note: x.note ?? x.notes ?? null
-    });
-  }
-  return list.filter(r=> r.date && r.slot);
-}
-
-function groupByDay(list){
   const byDay = {};
-  for (const r of list) {
-    const slotKey = SLOT_MAP[(r.slot||"").toUpperCase()] || (COLS.find(c=>c[0]===r.slot)?.[0] ?? null);
-    if (!slotKey) continue;
-    (byDay[r.date] ||= {})[slotKey] = { value:r.value, bolus:r.bolus, correction:r.correction, note:r.note };
-  }
+  snap.forEach(docSnap=>{
+    const r = docSnap.data();
+    const date = r?.date; if(!date) return;
+    const slot = normalizeSlotKey(r?.slotKey || r?.slot || r?.period || r?.timeSlot);
+    if(!slot) return;
+    (byDay[date] ||= {});
+    const prev = byDay[date][slot];
+    // نخزن الأحدث حسب "when"
+    const currTs = r?.when?.toMillis ? r.when.toMillis() : (r?.when || 0);
+    const prevTs = prev?.when?.toMillis ? prev.when.toMillis() : (prev?.when || 0);
+    if(!prev || currTs >= prevTs) byDay[date][slot] = r;
+  });
   return byDay;
 }
 
-/* ===== بناء الجدول ===== */
-function buildHead(targetRow){
-  targetRow.innerHTML = "";
-  const thDate = document.createElement("th");
-  thDate.textContent = "التاريخ";
-  thDate.className = "date";
-  targetRow.appendChild(thDate);
-  for (const [,label] of COLS) {
-    const th = document.createElement("th");
-    th.textContent = label;
-    targetRow.appendChild(th);
-  }
-}
-function buildEmptyMessage(tbody, text="لا توجد بيانات ضمن المدى المحدد"){
-  const span = COLS.length + 1;
-  tbody.innerHTML = `<tr><td colspan="${span}" class="center muted">${text}</td></tr>`;
-}
-function renderRows(tbody, byDay){
-  const days = Object.keys(byDay).sort();
-  if (!days.length) return buildEmptyMessage(tbody);
-  const frag = document.createDocumentFragment();
-
-  for (const d of days) {
-    const tr = document.createElement("tr");
-
-    const tdDate = document.createElement("td");
-    tdDate.className = "date";
-    tdDate.textContent = d;
-    tr.appendChild(tdDate);
-
-    for (const [slotKey] of COLS) {
-      const td = document.createElement("td");
-      const rec = byDay[d]?.[slotKey] || null;
-
-      if (rec && rec.value != null) {
-        const v = num(rec.value);
-        const cls = classify(v) || "";
-
-        const line = document.createElement("div");
-        line.className = "value-line";
-
-        const b = document.createElement("b");
-        b.textContent = (v==null ? "—" : v);
-
-        const dot = document.createElement("span");
-        dot.className = `state-dot ${cls}`;
-        dot.textContent = "●";
-
-        line.appendChild(b);
-        line.appendChild(dot);
-        td.appendChild(line);
-
-        if (rec.bolus || rec.correction) {
-          const dl = document.createElement("div");
-          dl.className = "dose-line";
-          const parts = [];
-          if (rec.bolus) parts.push(`وجبة: ${rec.bolus}`);
-          if (rec.correction) parts.push(`تصحيح: ${rec.correction}`);
-          dl.textContent = parts.join(" • ");
-          td.appendChild(dl);
-        }
-
-        if (rec.note) {
-          const nl = document.createElement("div");
-          nl.className = "note-line";
-          nl.textContent = rec.note;
-          td.appendChild(nl);
-        }
-      } else {
-        td.textContent = "—";
-      }
-
-      tr.appendChild(td);
-    }
-
-    frag.appendChild(tr);
-  }
-
-  tbody.innerHTML = "";
-  tbody.appendChild(frag);
-}
-
-/* ===== بناء التقرير ===== */
+/* بناء التقرير */
 async function buildReport(fromISO, toISO){
   setLoader(true);
-  try {
+  try{
     metaEl.textContent = `من ${fromISO} إلى ${toISO}`;
-
-    const list = await fetchMeasurements(fromISO, toISO);
-    const byDay = groupByDay(list);
-    currentDataByDay = byDay;
-
     buildHead(headRowEl); buildHead(headRowPrint);
-    renderRows(rowsEl, byDay); renderRows(rowsPrint, byDay);
-
-    if (!list.length) { buildEmptyMessage(rowsEl); buildEmptyMessage(rowsPrint); }
-  } catch (e) {
+    rowsEl.innerHTML = `<tr><td colspan="${COLS.length+1}" class="center muted">جاري التحميل…</td></tr>`;
+    const byDay = await fetchAggregated(fromISO, toISO);
+    currentDataByDay = byDay;
+    renderRows(rowsEl, byDay);
+    renderRows(rowsPrint, byDay);
+    if (!Object.keys(byDay).length){
+      emptyRows(rowsEl);
+      emptyRows(rowsPrint);
+    }
+  }catch(e){
     console.error(e);
-    buildEmptyMessage(rowsEl, "حدث خطأ أثناء تحميل البيانات");
-  } finally {
+    emptyRows(rowsEl, "حدث خطأ أثناء تحميل البيانات");
+  }finally{
     setLoader(false);
   }
 }
 
-/* ===== العروض داخل الصفحة ===== */
-window.showView = function(which){
-  const reportSec=$("#reportView"), analysisSec=$("#analysisView"), printSec=$("#printView");
-  [reportSec,analysisSec,printSec].forEach(el=>el?.classList.add("hidden"));
-  if (which==="analysis"){ analysisSec?.classList.remove("hidden"); buildAnalysis(); }
-  else if (which==="print"){ printSec?.classList.remove("hidden"); }
-  else { reportSec?.classList.remove("hidden"); }
-};
-
+/* تحليل بسيط داخل نفس الصفحة */
 function buildAnalysis(){
   if (!currentDataByDay || !Object.keys(currentDataByDay).length) {
     analysisContainer.textContent = "لا توجد بيانات لعرض التحليلات.";
@@ -310,106 +227,109 @@ function buildAnalysis(){
   let total=0, count=0;
   for (const d of Object.values(currentDataByDay))
     for (const r of Object.values(d))
-      if (r?.value!=null){ total+=+r.value; count++; }
+      if (r?.value_mmol!=null || r?.value_mgdl!=null || r?.value!=null){ total += toMmol(r) || 0; count++; }
   analysisContainer.innerHTML = `<div class="badge b-ok">متوسط القياسات: ${count ? (total/count).toFixed(1) : "—"}</div>`;
 }
 
-/* ===== واجهة المستخدم ===== */
+/* واجهة المستخدم */
 function applyPreset(val){
-  const today = new Date(); let from=null, to=null;
-  if (val==="custom"){ datesBox.classList.remove("hidden"); fromEl.focus(); return; }
-  datesBox.classList.add("hidden");
-  if (val==="90_only"){ to=today; from=addDays(today,-89); }
-  else { const days=Number(val||7); to=today; from=addDays(today, -(days-1)); }
-  fromEl.value = fmtISO(from); toEl.value = fmtISO(to);
+  const custom = (val==="custom");
+  datesBox.classList.toggle("hidden", !custom);
+  if (custom) return;
+  const today = new Date();
+  let days = 7;
+  if (val==="14") days=14; else if (val==="30") days=30; else if(val==="90"||val==="90_only") days=90;
+  const to = fmtISO(today), from = fmtISO(addDays(today, -(days-1)));
+  fromEl.value = from; toEl.value = to;
 }
-
 function wireUI(){
-  toggleNotes?.addEventListener("change", ()=>{
-    document.body.classList.toggle("notes-hidden", !toggleNotes.checked);
-  });
-
   presetEl?.addEventListener("change", ()=> applyPreset(presetEl.value));
 
   runEl?.addEventListener("click", ()=>{
-    const p = presetEl.value;
-    if (p !== "custom") applyPreset(p);
-    const fromISO = fromEl.value;
-    const toISO   = toEl.value || fmtISO(new Date());
+    const v = presetEl?.value || "7";
+    if (v!=="custom") applyPreset(v);
+    const fromISO = fromEl.value || fmtISO(addDays(new Date(), -6));
+    const toISO   = toEl.value   || fmtISO(new Date());
     buildReport(fromISO, toISO);
-    showView("report");
   });
 
   btnPrint?.addEventListener("click", ()=> window.print());
 
   btnBlank?.addEventListener("click", ()=>{
-    const start = new Date();
-    const days = Array.from({length:7}, (_,i)=> fmtISO(addDays(start, i)));
-    const byDay = {}; for (const d of days) byDay[d] = {};
-    currentDataByDay = byDay;
+    const start=new Date();
+    const days=Array.from({length:7},(_,i)=>fmtISO(addDays(start,i)));
+    const byDay={}; days.forEach(d=>byDay[d]={});
+    currentDataByDay=byDay;
     buildHead(headRowEl); buildHead(headRowPrint);
     renderRows(rowsEl, byDay); renderRows(rowsPrint, byDay);
     metaEl.textContent = "ورقة فارغة للأسبوع القادم";
   });
 
-  analysisBtn?.addEventListener("click", (e)=>{ e.preventDefault(); showView("analysis"); });
-  reportPrintBtn?.addEventListener("click", (e)=>{ e.preventDefault(); showView("print"); });
-  $("#btnRecalcAnalysis")?.addEventListener("click", ()=> buildAnalysis());
+  toggleNotes?.addEventListener("change", ()=> {
+    document.body.classList.toggle("notes-hidden", !toggleNotes.checked);
+  });
 
+  analysisBtn?.addEventListener("click", (e)=>{ e.preventDefault(); showView("analysis"); buildAnalysis(); });
+  reportPrintBtn?.addEventListener("click", (e)=>{ e.preventDefault(); showView("print"); });
+}
+
+/* تبديل العروض */
+window.showView = function(which){
+  const reportSec=$("#reportView"), analysisSec=$("#analysisView"), printSec=$("#printView");
+  [reportSec,analysisSec,printSec].forEach(el=>el?.classList.add("hidden"));
+  if (which==="analysis") analysisSec?.classList.remove("hidden");
+  else if (which==="print") printSec?.classList.remove("hidden");
+  else reportSec?.classList.remove("hidden");
+};
+
+/* تنقّل */
+function buildNav(){
+  if(!childNav) return;
+  childNav.innerHTML = "";
+  const items = [
+    ["parent.html","الرئيسية"],
+    ["measurements.html","قياسات السكر"],
+    ["meals.html","الوجبات"],
+    ["reports.html","التقارير"],
+    ["#","التحاليل", "view:analysis"],
+    ["visits.html","الزيارات الطبية"],
+  ];
+  for (const it of items){
+    const [href,label,type] = it;
+    const a = document.createElement("a");
+    a.className="btn gray"; a.textContent=label;
+    if (type==="view:analysis"){ a.href="#"; a.addEventListener("click",(e)=>{e.preventDefault(); showView("analysis"); buildAnalysis();}); }
+    else { a.href = `${href}?parent=${encodeURIComponent(parentId)}&child=${encodeURIComponent(childId)}`; }
+    childNav.appendChild(a);
+  }
   if (lnkHome) lnkHome.href = parentId ? `parent.html?parent=${encodeURIComponent(parentId)}` : "parent.html";
 }
 
-/* شريط التنقّل (يمرّر دائمًا ?parent&child) */
-function buildNav(){
-  const nav = [
-    ["parent.html","الرئيسية","page"],
-    ["measurements.html","قياسات السكر","page"],
-    ["meals.html","الوجبات","page"],
-    ["reports.html","التقارير","self"],
-    ["#","التحاليل","view:analysis"],
-    ["visits.html","الزيارات الطبية","page"],
-  ];
-  childNav.innerHTML = "";
-  for (const [href, label, type] of nav) {
-    const a = document.createElement("a");
-    a.className = "btn gray";
-    a.textContent = label;
+/* تشغيل */
+function qs(k){ return new URLSearchParams(location.search).get(k) || ""; }
 
-    if (type && type.startsWith("view:")) {
-      a.href = "#";
-      a.addEventListener("click", (e)=>{ e.preventDefault(); showView(type.split(":")[1]); });
-    } else if (type === "self") {
-      a.href = linkWithParams("reports.html");
-    } else {
-      a.href = linkWithParams(href);
-    }
-    childNav.appendChild(a);
-  }
+async function startWithKnownIds(){
+  bannerName.textContent = "الطفل";
+  await loadChild();
+  buildNav();
+  wireUI();
+  presetEl.value = "7";
+  applyPreset("7");
+  runEl.click(); // يبني التقرير
 }
 
-/* ===== بدء التشغيل ===== */
-async function main(){
-  try {
-    parentId = qparam("parent") || sessionStorage.getItem("lastParent") || "";
-    childId  = qparam("child")  || sessionStorage.getItem("lastChild")  || "";
+document.addEventListener("DOMContentLoaded", async ()=>{
+  parentId = qs("parent") || "";
+  childId  = qs("child")  || "";
 
-    if (!parentId && childId) {               // يستنتج الـ parent إذا كان مفقودًا
-      await tryResolveParentFromChildId();
-    }
-
-    if (parentId) sessionStorage.setItem("lastParent", parentId);
-    if (childId)  sessionStorage.setItem("lastChild",  childId);
-
-    childBanner.style.display = "block";
-    await loadChild();                         // اسم الطفل + بياناته
-
-    wireUI();                                  // تفعيل الأزرار
-    buildNav();                                // شريط التنقّل
-    applyPreset("14");                         // افتراضي
-    runEl.click();                             // بناء التقرير مباشرة
-  } catch (err) {
-    console.error(err);
-    metaEl.textContent = "حدثت مشكلة في التهيئة. تأكدي من إعداد Firebase.";
+  if (!parentId){
+    // لو مفيش parent في الرابط، استخدم user.uid زي النسخة القديمة
+    onAuthStateChanged(auth, async (user)=>{
+      if(!user){ /* لو عندك صفحة تسجيل */ return startWithKnownIds(); }
+      parentId = user.uid;
+      await startWithKnownIds();
+    });
+  } else {
+    await startWithKnownIds();
   }
-}
-document.addEventListener("DOMContentLoaded", main);
+});
