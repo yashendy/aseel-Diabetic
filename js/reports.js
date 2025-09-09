@@ -337,36 +337,58 @@ function computeStats(byDay, hypo, hyper){
 }
 
 function buildAnalytics(){
+  // لو ما فيش بيانات للفترة المختارة
   if (!currentDataByDay || !Object.keys(currentDataByDay).length) {
     analysisNumbers.innerHTML = `<div class="muted">لا توجد بيانات لعرض التحاليل.</div>`;
     smartSummary.textContent = "";
-    if (chartInst) { chartInst.destroy(); chartInst=null; }
+    if (chartInst) { chartInst.destroy(); chartInst = null; }
     return;
   }
+
   const hypo  = parseFloat(hypoInput.value)  || 3.9;
   const hyper = parseFloat(hyperInput.value) || 10.0;
 
-  const st = computeStats(currentDataByDay, hypo, hyper);
+  // إحصائيات العدّ الخام
+  const st = computeStats(currentDataByDay, hypo, hyper); // {hypo, normal, hyper, total, avg, tir, worstSlot}
 
+  // نحسب النِّسب: هبوط/ارتفاع، و"طبيعي" = 100 - (هبوط + ارتفاع)
+  const pct = (n, total)=> total ? Math.round((n * 1000) / total) / 10 : 0; // 1 decimal
+  const pHypo  = pct(st.hypo,  st.total);
+  const pHyper = pct(st.hyper, st.total);
+  let   pNorm  = +(100 - pHypo - pHyper).toFixed(1);
+  if (pNorm < 0) pNorm = 0; // حماية من التقريب
+
+  // البادجات (نِسب)
   analysisNumbers.innerHTML = `
     <div class="badge b-ok">المتوسط: ${st.avg ?? "—"} mmol/L</div>
-    <div class="badge b-ok">ضمن النطاق: ${st.tir}%</div>
-    <div class="badge b-low">هبوط: ${st.hypo}</div>
-    <div class="badge b-high">ارتفاع: ${st.hyper}</div>
+    <div class="badge b-ok">TIR ضمن النطاق: ${pNorm}%</div>
+    <div class="badge b-low">هبوط: ${pHypo}%</div>
+    <div class="badge b-ok">طبيعي: ${pNorm}%</div>
+    <div class="badge b-high">ارتفاع: ${pHyper}%</div>
   `;
 
+  // الدونات بالنِّسب (المجموع = 100%)
   if (chartInst) chartInst.destroy();
-  // Chart.js متوفر من الـ HTML
   chartInst = new Chart(doughnutCanvas.getContext("2d"), {
     type: "doughnut",
-    data: { labels: ["هبوط", "طبيعي", "ارتفاع"], datasets: [{ data: [st.hypo, st.normal, st.hyper] }] },
-    options: { responsive:true, plugins:{ legend:{ position:"bottom" } } }
+    data: {
+      labels: ["هبوط", "طبيعي", "ارتفاع"],
+      datasets: [{ data: [pHypo, pNorm, pHyper] }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.parsed}%` } }
+      }
+    }
   });
 
+  // ملخص سريع
   const tips = [];
-  if (st.tir < 60) tips.push("النطاق منخفض — راجعي أهداف الوجبات والتصحيح.");
-  if (st.hypo > st.hyper) tips.push("الهبوطات أكثر من الارتفاعات — فكري في تقليل جرعات الوجبات أو التصحيح.");
-  if (st.hyper > st.hypo) tips.push("الارتفاعات أعلى — ربما نحتاج زيادة طفيفة في التصحيح أو مراجعة الكارب.");
+  if (pNorm < 60) tips.push("ضمن النطاق أقل من 60% — راجعي أهداف الوجبات والتصحيح.");
+  if (pHypo > pHyper) tips.push("الهبوطات أعلى — قلّلي جرعات الوجبات/التصحيح بحذر.");
+  if (pHyper > pHypo) tips.push("الارتفاعات أعلى — راجعي معامل الكارب/التصحيح.");
   if (st.worstSlot) tips.push(`أكثر فترة خروجًا: ${COLS.find(c=>c[0]===st.worstSlot)?.[1] || st.worstSlot}.`);
   smartSummary.textContent = tips.join(" ");
 }
