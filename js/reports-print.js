@@ -1,10 +1,7 @@
-/* reports-print.js (v9)
- * - البيانات داخليًا mmol فقط، والعرض حسب الوحدة
- * - الفترة تعمل بدقة (من/إلى) مع وضع أسبوعي اختياري
- * - الملاحظات أسفل القياس داخل الخلية
- * - بيانات الطفل (الاسم/العمر/الوزن/أنسولين/CF/CR + وحدة التصحيحي) في الرأس
- * - Hypo/Hyper تلوين + أسهم اتجاه
- * - طباعة Landscape + نموذج أسبوعين في ورقة واحدة
+/* reports-print.js (v10)
+ * إصلاح الفترة: استعلام بـ when و date + دمج/فلترة
+ * إظهار الاسم من عدة مسارات محتملة
+ * باقي الميزات كما هي (mmol داخليًا، تلوين/أسهم، ملاحظات تحت القيمة، Landscape)
  */
 
 // عناصر DOM
@@ -74,6 +71,7 @@ function mkBaseRow(date){
 }
 
 const rows = []; // [{date, slots:{KEY:{mmol,note}}, rowNotes}]
+const docsSeen = new Set(); // doc.id لمنع التكرار
 
 // ===== أدوات =====
 const toMmol = (val, unit) => unit === "mgdl" ? (val / MGDL_PER_MMOL) : val;
@@ -113,14 +111,22 @@ function humanAgeFromBirth(dateStr){
   return `${years}س ${months}ش`;
 }
 
-function fmtCF(cf, unit){
+function fmtCF(cf){
   if (cf == null || cf === "" || isNaN(cf)) return "—";
-  // افتراضيًا CF يُقاس mg/dL لكل 1U؛ لو عايزة mmol بدلاً من mg/dL ممكن نحسب تحويل.
-  return `${cf} mg/dL لكل 1U`;
+  return `1U لكل ${cf} mg/dL`;
 }
 function fmtCR(cr){
   if (cr == null || cr === "" || isNaN(cr)) return "—";
   return `1U : ${cr}g`;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>\"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function inDateRange(dateKey, from, to){
+  // dateKey, from, to بصيغة YYYY-MM-DD
+  return dateKey >= from && dateKey <= to;
 }
 
 // ===== ريندر الجدول =====
@@ -153,7 +159,6 @@ function render(){
         const prevMmol = rows[idx-1]?.slots?.[key]?.mmol ?? null;
         const arrow = trendArrow(mmol, prevMmol);
 
-        // قيمة + (اختياري) ملاحظة أسفلها
         const valHtml = `${arrow}${fromMmol(mmol, unit)}`;
         const noteHtml = note && !maskTreatEl.checked
           ? `<div class="cell-note">${escapeHtml(note)}</div>` : "";
@@ -169,10 +174,6 @@ function render(){
 
     tbody.appendChild(tr);
   });
-}
-
-function escapeHtml(s){
-  return String(s).replace(/[&<>\"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
 // ===== تحميل بيانات الطفل + القياسات =====
@@ -205,6 +206,7 @@ async function loadAll(){
   }
 
   rows.length = 0;
+  docsSeen.clear();
 
   // Firebase؟
   const qs = new URLSearchParams(location.search);
@@ -231,53 +233,86 @@ async function loadAll(){
         HYPO_M  = Number(childData.severeLow  ?? childData.severe_low  ?? HYPO_M);
         HYPER_M = Number(childData.severeHigh ?? childData.severe_high ?? HYPER_M);
 
-        cName.textContent   = childData.name || "—";
+        const nameGuess =
+          childData.name ||
+          (childData.assignedDoctorInfo && childData.assignedDoctorInfo.name) ||
+          childData.childName || childData.displayName || "—";
+
+        cName.textContent   = nameGuess;
         cAge.textContent    = humanAgeFromBirth(childData.birthDate || childData.birthdate);
         cWeight.textContent = childData.weight || childData.weightKg || childData.weight_kg || "—";
 
         const basalType = childData.basalType || childData.basal || "—";
-        const basalDose = childData.basalDose || childData.basal_units || null;
+        const basalDose = childData.basalDose || childData.basal_units || childData.bolusDose || null;
         cBasal.textContent = basalDose ? `${basalType} — ${basalDose}U` : basalType;
 
         const bolusType = childData.bolusType || childData.rapidType || "—";
         cBolus.textContent = bolusType;
 
-        cCF.textContent = fmtCF(childData.correctionFactor ?? childData.cf, unitSelect.value);
+        cCF.textContent = fmtCF(childData.correctionFactor ?? childData.cf);
         cCR.textContent = fmtCR(childData.carbRatio ?? childData.cr);
       } else {
         cName.textContent = cAge.textContent = cWeight.textContent =
         cBasal.textContent = cBolus.textContent = cCF.textContent = cCR.textContent = "—";
       }
 
-      // قياسات في الفترة المحددة
+      // ===== القياسات في الفترة المحددة =====
       const start = new Date(from); start.setHours(0,0,0,0);
       const end   = new Date(to);   end.setHours(23,59,59,999);
 
       const byDate = new Map(); // dateKey -> row
       const rowFor = (dkey) => (byDate.get(dkey) || byDate.set(dkey, mkBaseRow(dkey)).get(dkey));
 
-      // المسار الأول (لو parent/child متاح)
-      let snaps = [];
-      if (parentId && childId){
-        const q1 = await db.collection("parents").doc(parentId)
-          .collection("children").doc(childId)
-          .collection("measurements")
-          .where("when", ">=", start)
-          .where("when", "<=", end)
-          .orderBy("when","asc").get();
-        snaps = q1.docs;
-      } else {
-        // collectionGroup كبديل عام
-        const q2 = await db.collectionGroup("measurements")
-          .where("when", ">=", start)
-          .where("when", "<=", end)
-          .orderBy("when","asc").get();
-        snaps = q2.docs;
-      }
+      // 1) استعلام when (Timestamp)
+      let snapsWhen = [];
+      try{
+        const base =
+          parentId && childId
+            ? db.collection("parents").doc(parentId)
+                .collection("children").doc(childId)
+                .collection("measurements")
+            : db.collectionGroup("measurements");
 
-      for (const doc of snaps){
+        const qWhen = await base
+          .where("when", ">=", start)
+          .where("when", "<=", end)
+          .orderBy("when", "asc")
+          .get();
+
+        snapsWhen = qWhen.docs;
+      }catch(e){ /* ignore if index missing */ }
+
+      // 2) استعلام date (String YYYY-MM-DD)
+      let snapsDate = [];
+      try{
+        const base2 =
+          parentId && childId
+            ? db.collection("parents").doc(parentId)
+                .collection("children").doc(childId)
+                .collection("measurements")
+            : db.collectionGroup("measurements");
+
+        const qDate = await base2
+          .where("date", ">=", from)
+          .where("date", "<=", to)
+          .orderBy("date", "asc")
+          .get();
+
+        snapsDate = qDate.docs;
+      }catch(e){ /* ignore if index missing */ }
+
+      // دمج + منع التكرار + فلترة وقائية
+      const all = [...snapsWhen, ...snapsDate];
+      for (const doc of all){
+        if (docsSeen.has(doc.id)) continue;
+        docsSeen.add(doc.id);
+
         const d = doc.data();
+
+        // احسب مفتاح التاريخ
         const dkey = (d.date || tsToDateKey(d.when));
+        if (!inDateRange(dkey, from, to)) continue; // فلترة إضافية
+
         const row = rowFor(dkey);
 
         const slot = normalizeSlot(d.slotKey || d.slot || "");
@@ -295,10 +330,10 @@ async function loadAll(){
 
         row.slots[slot].mmol = mmol;
 
-        // ملاحظة القياس (تحت الرقم)
+        // ملاحظة القياس (تظهر تحت القيمة)
         if (d.notes) row.slots[slot].note = String(d.notes);
 
-        // ملاحظات الصف (حقل عام)
+        // ملاحظات الصف العامة
         if (d.rowNotes) row.rowNotes = String(d.rowNotes);
       }
 
@@ -312,14 +347,16 @@ async function loadAll(){
 
   // ——— إن لم يتوفر Firebase: بيانات تجريبية (mmol داخليًا) ———
   HYPO_M = 3.9; HYPER_M = 10.0;
+  rows.length = 0;
   rows.push(demoRow("2025-09-01"), demoRow("2025-09-02"), demoRow("2025-09-03"));
+
   // بيانات طفل تجريبية
   cName.textContent = "Demo Child";
   cAge.textContent  = "11س 4ش";
   cWeight.textContent = "32";
   cBasal.textContent = "Lantus — 10U";
   cBolus.textContent = "NovoRapid";
-  cCF.textContent = fmtCF(40, unitSelect.value);
+  cCF.textContent = fmtCF(40);
   cCR.textContent = fmtCR(12);
 
   render();
