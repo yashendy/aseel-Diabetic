@@ -65,6 +65,10 @@ body{
 .table td.okv{   background:var(--c-okv-bg);   color:var(--c-okv-text) }
 .table td.high{  background:var(--c-hyper-bg); color:var(--c-hyper-text) }
 
+/* قيمة + ملاحظة داخل الخلية */
+.cell-wrap{ display:flex; flex-direction:column; align-items:center; gap:2px }
+.cell-note{ font-size:11px; color:#6b7280; line-height:1.2; white-space:normal }
+
 /* سهام الاتجاه */
 .arrow{ font-size:.85em; margin-inline:4px }
 .arrow.up{   color:#2e7d32 } /* أخضر */
