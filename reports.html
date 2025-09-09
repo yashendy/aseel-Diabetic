@@ -5,10 +5,40 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>التقارير</title>
   <link rel="stylesheet" href="./css/reports.css">
-  <style>.hidden{display:none!important}</style>
+  <style>
+    .hidden{display:none!important}
+    /* إخفاء سطور الملاحظات/الجرعات عند إغلاق الخيار */
+    .notes-hidden .note-line,
+    .notes-hidden .dose-line { display:none; }
+
+    /* بطاقة معلومات الطفل أسفل التنقّل */
+    .info-card{margin-top:8px}
+    .info-card .mini{font-size:13px; line-height:1.7}
+    .info-card b{font-weight:700}
+
+    /* نسخة الطباعة: شبكة واضحة */
+    #printView .table.print-grid th,
+    #printView .table.print-grid td { border:1px solid #e6e6e6; }
+    #printView .table.print-grid { border-collapse:collapse; }
+
+    /* ترويسة الطباعة */
+    .print-header{font-size:12px; margin-bottom:6px}
+    .print-controls{margin:12px 0}
+
+    /* دايمًا خليه لطيف */
+    .muted{opacity:.8}
+
+    @media print{
+      .no-print{display:none!important}
+      @page{ size: A4 landscape; margin:10mm; }
+      .print-header{font-size:12px}
+    }
+  </style>
+  <!-- Chart.js للتحاليل -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body class="notes-hidden">
-  <!-- بانر الطفل -->
+  <!-- بانر أعلى الصفحة (موجود مسبقًا) -->
   <section id="childBanner" class="card child-info">
     <div class="head">
       <h1 id="bannerName">—</h1>
@@ -21,10 +51,15 @@
     <div id="childNav" class="row"></div>
   </div>
 
+  <!-- بطاقة بيانات الطفل تحت التنقّل -->
+  <section id="childInfoCard" class="card info-card no-print hidden">
+    <div id="childInfoContent" class="mini"></div>
+  </section>
+
   <!-- أدوات التحكم -->
   <section class="card controls no-print">
-    <div class="actions">
-      <label class="toggle-notes">
+    <div class="actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <label class="toggle-notes" title="إظهار الملاحظات وجرعات التصحيح تحت كل قياس">
         <input id="toggleNotes" type="checkbox" checked>
         <span>إظهار الملاحظات/الجرعات</span>
       </label>
@@ -34,9 +69,12 @@
       <a id="btnPrint" class="btn gray">طباعة</a>
       <a id="btnBlank" class="btn danger">ورقة فارغة (7 أيام)</a>
       <a id="lnkHome" class="btn gray">رجوع</a>
+
+      <!-- زر عرض دائم الظهور -->
+      <button id="run" class="btn primary">عرض</button>
     </div>
 
-    <div class="range">
+    <div class="range" style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
       <div class="filter">
         <label for="preset">المدى السريع</label>
         <select id="preset">
@@ -49,7 +87,7 @@
         </select>
       </div>
 
-      <div id="datesBox" class="dates hidden">
+      <div id="datesBox" class="dates hidden" style="display:flex;gap:12px">
         <div class="filter">
           <label for="from">من</label>
           <input id="from" type="date">
@@ -58,7 +96,6 @@
           <label for="to">إلى</label>
           <input id="to" type="date">
         </div>
-        <button id="run" class="btn primary">عرض</button>
       </div>
     </div>
   </section>
@@ -66,7 +103,7 @@
   <!-- وصف الفترة -->
   <div id="meta" class="container small muted"></div>
 
-  <!-- مؤشر التحميل -->
+  <!-- مؤشر تحميل -->
   <div id="loader" class="loader card">جاري التحميل…</div>
 
   <!-- 1) التقرير -->
@@ -86,33 +123,72 @@
     </div>
   </section>
 
-  <!-- 2) التحليلات -->
+  <!-- 2) التحاليل -->
   <section id="analysisView" class="card hidden">
     <div class="center">
       <h2>التحاليل</h2>
-      <p class="muted">تُحتسب من نفس البيانات المعروضة.</p>
-      <div style="margin:12px 0">
-        <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
-        <button class="btn primary" id="btnRecalcAnalysis">إعادة حساب التحليلات</button>
+      <p class="muted">التوزيع (هبوط/طبيعي/ارتفاع) يعتمد على حدود Hypo/Hyper أدناه.</p>
+
+      <div class="no-print" style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:10px 0;">
+        <div>
+          <label for="hypoInput" class="muted">Hypo</label><br>
+          <input id="hypoInput" type="number" step="0.1" style="width:120px">
+        </div>
+        <div>
+          <label for="hyperInput" class="muted">Hyper</label><br>
+          <input id="hyperInput" type="number" step="0.1" style="width:120px">
+        </div>
+        <button id="btnRecalcAnalysis" class="btn primary">إعادة حساب التحاليل</button>
       </div>
-      <div id="analysisContainer">—</div>
+
+      <div style="max-width:720px;margin:auto">
+        <canvas id="doughnutChart" height="180"></canvas>
+      </div>
+
+      <div id="analysisNumbers" style="margin-top:10px"></div>
+      <div id="smartSummary" class="muted" style="margin-top:8px"></div>
+
+      <hr class="no-print" style="margin:16px 0; opacity:.2">
+
+      <div class="no-print" style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap">
+        <div>
+          <label class="muted">قارن من</label><br>
+          <input id="cmpFrom" type="date" style="width:150px">
+        </div>
+        <div>
+          <label class="muted">إلى</label><br>
+          <input id="cmpTo" type="date" style="width:150px">
+        </div>
+        <button id="btnCompare" class="btn gray">قارن الفترتين</button>
+      </div>
+
+      <div id="compareArea" style="margin-top:12px"></div>
+
+      <div style="margin-top:12px">
+        <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
+      </div>
     </div>
   </section>
 
   <!-- 3) نسخة الطباعة -->
   <section id="printView" class="card hidden">
-    <div class="center">
-      <h2>صفحة طباعة التقرير</h2>
+    <div class="print-header" id="printHeader">—</div>
+
+    <div class="no-print print-controls" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <label>
+        <input id="chkPrintNotes" type="checkbox" checked>
+        <span>إظهار الملاحظات/التصحيح</span>
+      </label>
+      <button class="btn warning" id="btnPrintPDF">طباعة PDF</button>
+      <button class="btn danger" id="btnPrintBlank">نموذج فارغ</button>
+      <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
     </div>
+
     <div class="table-wrap">
-      <table id="repPrint" class="table">
+      <table id="repPrint" class="table print-grid">
         <thead><tr id="headRowPrint"></tr></thead>
         <tbody id="rowsPrint"></tbody>
       </table>
-    </div>
-    <div class="center no-print" style="margin:12px 0">
-      <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
-      <button class="btn warning" onclick="window.print()">طباعة</button>
     </div>
   </section>
 
