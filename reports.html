@@ -16,7 +16,7 @@
     </div>
   </section>
 
-  <!-- شريط تنقل الصفحات -->
+  <!-- شريط تنقّل الصفحات -->
   <div class="card no-print">
     <div id="childNav" class="row"></div>
   </div>
@@ -66,11 +66,10 @@
   <!-- وصف الفترة -->
   <div id="meta" class="container small muted"></div>
 
-  <!-- مؤشر تحميل -->
+  <!-- مؤشر التحميل -->
   <div id="loader" class="loader card">جاري التحميل…</div>
 
-  <!-- === العروض الثلاثة داخل نفس الصفحة === -->
-
+  <!-- العروض داخل نفس الصفحة -->
   <!-- 1) التقرير -->
   <section id="reportView" class="card">
     <div class="legend no-print">
@@ -92,7 +91,7 @@
   <section id="analysisView" class="card hidden">
     <div class="center">
       <h2>التحاليل</h2>
-      <p class="muted">تُحسب من نفس البيانات المعروضة.</p>
+      <p class="muted">تُحتسب من نفس البيانات المعروضة.</p>
       <div style="margin:12px 0">
         <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
         <button class="btn primary" id="btnRecalcAnalysis">إعادة حساب التحليلات</button>
@@ -105,7 +104,7 @@
   <section id="printView" class="card hidden">
     <div class="center">
       <h2>صفحة طباعة التقرير</h2>
-      <p class="muted">نفس الجدول بتنسيق أنظف للطباعة.</p>
+      <p class="muted">نفس الجدول بتنسيق مناسب للطباعة.</p>
       <div style="margin:12px 0">
         <button class="btn gray no-print" onclick="showView('report')">رجوع للتقرير</button>
         <button class="btn warning no-print" onclick="window.print()">طباعة</button>
@@ -119,7 +118,9 @@
     </div>
   </section>
 
-  <!-- ملاحظة: يفترض أن Firebase App مُهيّأ مسبقًا عالمياً في موقعك -->
+  <!-- تهيئة Firebase (تعريف window.firebaseConfig) -->
+  <script src="./js/firebase-config.js"></script>
+  <!-- شيفرة الصفحة -->
   <script type="module" src="./js/reports.js"></script>
 </body>
 </html>
