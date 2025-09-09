@@ -5,16 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>تقرير القياسات — طباعة</title>
 
-  <!-- أيقونة/ستايلات عامة للمشروع -->
   <link rel="icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/reports-print.css?v=7" />
+  <link rel="stylesheet" href="css/reports-print.css?v=8" />
 </head>
 <body>
   <div class="container">
-    <!-- شريط التحكم العلوي -->
+
+    <!-- شريط التحكم -->
     <section class="card controls">
       <div class="row wrap">
-        <button id="printBtn" class="btn">🖨️ طباعة / PDF</button>
+        <button id="printBtn" class="btn">🖨️ PDF / طباعة</button>
         <button id="blankBtn" class="btn secondary">نموذج فارغ الآن</button>
         <button id="applyBtn" class="btn primary">تطبيق</button>
 
@@ -38,7 +38,7 @@
 
         <label class="field grow">
           <span>ملاحظات أعلى التقرير</span>
-          <input type="text" id="notes" placeholder="ملاحظاتك المختصرة تظهر أعلى التقرير" />
+          <input type="text" id="notes" placeholder="ملاحظات مختصرة" />
         </label>
       </div>
 
@@ -50,7 +50,7 @@
       </div>
     </section>
 
-    <!-- ملخص أعلى التقرير -->
+    <!-- رأس التقرير + بيانات الطفل -->
     <section class="card summary">
       <div class="chips">
         <span class="chip">الفترة: <b id="periodFrom">—</b> → <b id="periodTo">—</b></span>
@@ -59,10 +59,21 @@
         <span class="chip okv">Normal</span>
         <span class="chip hyper">Hyper</span>
       </div>
+
+      <div class="chips small" id="childChips">
+        <span class="chip">الاسم: <b id="cName">—</b></span>
+        <span class="chip">السن: <b id="cAge">—</b></span>
+        <span class="chip">الوزن: <b id="cWeight">—</b></span>
+        <span class="chip">قاعدي: <b id="cBasal">—</b></span>
+        <span class="chip">سريع: <b id="cBolus">—</b></span>
+        <span class="chip">CF: <b id="cCF">—</b></span>
+        <span class="chip">CR: <b id="cCR">—</b></span>
+      </div>
+
       <div class="report-notes" id="reportNotes"></div>
     </section>
 
-    <!-- الجدول الرئيسي -->
+    <!-- الجدول -->
     <section class="card table-wrap">
       <table class="table" id="reportTable">
         <thead>
@@ -86,12 +97,12 @@
     </section>
   </div>
 
-  <!-- لو مشروعك يحمّل Firebase عالمياً، الملف التالي يكون محمّل مسبقاً -->
+  <!-- Firebase لو متاح عالمياً -->
   <!-- <script src="firebase-app.js"></script>
-  <script src="firebase-firestore.js"></script>
   <script src="firebase-auth.js"></script>
+  <script src="firebase-firestore.js"></script>
   <script src="firebase-config.js"></script> -->
 
-  <script src="js/reports-print.js?v=7"></script>
+  <script src="js/reports-print.js?v=8"></script>
 </body>
 </html>
