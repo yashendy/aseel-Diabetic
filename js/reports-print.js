@@ -1,9 +1,10 @@
-/* reports-print.js (v8)
- * - تحويل داخلي mmol فقط، والعرض حسب الوحدة المختارة
- * - إزالة اسم الوحدة من الخلايا (أرقام + أسهم فقط)
- * - بيانات الطفل أعلى التقرير
- * - تلوين Hypo/Hyper + سهام اتجاه
- * - Landscape print + نموذج أسبوعين في ورقة واحدة
+/* reports-print.js (v9)
+ * - البيانات داخليًا mmol فقط، والعرض حسب الوحدة
+ * - الفترة تعمل بدقة (من/إلى) مع وضع أسبوعي اختياري
+ * - الملاحظات أسفل القياس داخل الخلية
+ * - بيانات الطفل (الاسم/العمر/الوزن/أنسولين/CF/CR + وحدة التصحيحي) في الرأس
+ * - Hypo/Hyper تلوين + أسهم اتجاه
+ * - طباعة Landscape + نموذج أسبوعين في ورقة واحدة
  */
 
 // عناصر DOM
@@ -40,7 +41,7 @@ const MGDL_PER_MMOL = 18;
 let HYPO_M = 3.9;
 let HYPER_M = 10.0;
 
-// خريطة الخانات (القيم تُحفظ داخليًا بالـ mmol)
+// ترتيب العرض
 const DISPLAY_ORDER = [
   "FASTING",
   "PRE_BREAKFAST","POST_BREAKFAST",
@@ -65,8 +66,14 @@ const CANON = {
   OVERNIGHT: ["OVERNIGHT","NIGHT","أثناء النوم"]
 };
 
-const rows = []; // [{date:string, slots:{key:mmol|null}, notes:string}]
-function mkBaseRow(date){ return { date, slots:Object.fromEntries(DISPLAY_ORDER.map(k=>[k,null])), notes:"" }; }
+// بنية الصف داخليًا: mmol + ملاحظات لكل خانة
+function mkBaseRow(date){
+  const slots = {};
+  DISPLAY_ORDER.forEach(k => slots[k] = { mmol:null, note:"" });
+  return { date, slots, rowNotes:"" };
+}
+
+const rows = []; // [{date, slots:{KEY:{mmol,note}}, rowNotes}]
 
 // ===== أدوات =====
 const toMmol = (val, unit) => unit === "mgdl" ? (val / MGDL_PER_MMOL) : val;
@@ -106,6 +113,16 @@ function humanAgeFromBirth(dateStr){
   return `${years}س ${months}ش`;
 }
 
+function fmtCF(cf, unit){
+  if (cf == null || cf === "" || isNaN(cf)) return "—";
+  // افتراضيًا CF يُقاس mg/dL لكل 1U؛ لو عايزة mmol بدلاً من mg/dL ممكن نحسب تحويل.
+  return `${cf} mg/dL لكل 1U`;
+}
+function fmtCR(cr){
+  if (cr == null || cr === "" || isNaN(cr)) return "—";
+  return `1U : ${cr}g`;
+}
+
 // ===== ريندر الجدول =====
 function render(){
   const unit = unitSelect.value; // mmol | mgdl
@@ -124,35 +141,43 @@ function render(){
 
     DISPLAY_ORDER.forEach(key => {
       const td = document.createElement("td");
-      const mmol = row.slots[key]; // داخليًا mmol
+      const mmol = row.slots[key].mmol;
+      const note = row.slots[key].note;
+
       if (mmol == null){
         td.textContent = "-";
       } else {
-        // تلوين الخلية
         const cls = classifyByMmol(mmol);
         if (colorizeEl.checked && cls) td.classList.add(cls);
 
-        // سهم الاتجاه بمقارنة صف سابق
-        const prevMmol = rows[idx-1]?.slots?.[key] ?? null;
+        const prevMmol = rows[idx-1]?.slots?.[key]?.mmol ?? null;
         const arrow = trendArrow(mmol, prevMmol);
 
-        // الرقم فقط (لا وحدة داخل الخلية)
-        td.innerHTML = `${arrow}${fromMmol(mmol, unit)}`;
+        // قيمة + (اختياري) ملاحظة أسفلها
+        const valHtml = `${arrow}${fromMmol(mmol, unit)}`;
+        const noteHtml = note && !maskTreatEl.checked
+          ? `<div class="cell-note">${escapeHtml(note)}</div>` : "";
+
+        td.innerHTML = `<div class="cell-wrap">${valHtml}${noteHtml}</div>`;
       }
       tr.appendChild(td);
     });
 
     const tdNotes = document.createElement("td");
-    tdNotes.textContent = maskTreatEl.checked ? "•••" : (row.notes || "");
+    tdNotes.textContent = maskTreatEl.checked ? "•••" : (row.rowNotes || "");
     tr.appendChild(tdNotes);
 
     tbody.appendChild(tr);
   });
 }
 
+function escapeHtml(s){
+  return String(s).replace(/[&<>\"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
 // ===== تحميل بيانات الطفل + القياسات =====
 async function loadAll(){
-  // تواريخ
+  // الفترة
   let from = fromDateEl.value;
   let to   = toDateEl.value;
 
@@ -174,81 +199,110 @@ async function loadAll(){
   // نموذج يدوي فارغ (14 صف)
   if (manualMode.checked){
     rows.length = 0;
-    for (let i=0;i<14;i++){
-      rows.push(mkBaseRow(""));
-    }
+    for (let i=0;i<14;i++) rows.push(mkBaseRow(""));
     render();
     return;
   }
 
-  // إعادة ضبط
   rows.length = 0;
 
   // Firebase؟
   const qs = new URLSearchParams(location.search);
   const parentId = qs.get("parent");
-  const childId  = qs.get("child");
+  const childId  = qs.get("child") || qs.get("cid"); // بديل
 
   try{
     if (window.firebase && firebase.firestore){
       const db = firebase.firestore();
 
       // بيانات الطفل
+      let childData = null;
       if (parentId && childId){
-        const childSnap = await db.collection("parents").doc(parentId)
+        const snap = await db.collection("parents").doc(parentId)
           .collection("children").doc(childId).get();
-        const ch = childSnap.data() || {};
-
-        // عتبات
-        HYPO_M  = Number(ch.severeLow  ?? ch.severe_low  ?? HYPO_M);
-        HYPER_M = Number(ch.severeHigh ?? ch.severe_high ?? HYPER_M);
-
-        // Chips
-        cName.textContent   = ch.name || "—";
-        cAge.textContent    = humanAgeFromBirth(ch.birthDate || ch.birthdate);
-        cWeight.textContent = ch.weight || ch.weightKg || ch.weight_kg || "—";
-
-        const basalType = ch.basalType || ch.basal || "—";
-        const basalDose = ch.basalDose || ch.bolusDose || ch.basal_units || null;
-        cBasal.textContent = basalDose ? `${basalType} — ${basalDose}U` : basalType;
-
-        const bolusType = ch.bolusType || ch.rapidType || "—";
-        cBolus.textContent = bolusType;
-
-        cCF.textContent = ch.correctionFactor ?? ch.cf ?? "—";
-        cCR.textContent = ch.carbRatio ?? ch.cr ?? "—";
+        childData = snap.exists ? snap.data() : null;
+      }
+      if (!childData && childId){
+        const snap2 = await db.collection("children").doc(childId).get();
+        childData = snap2.exists ? snap2.data() : null;
       }
 
-      // قياسات من مسار الطفل المحدد (مفضل)
+      if (childData){
+        HYPO_M  = Number(childData.severeLow  ?? childData.severe_low  ?? HYPO_M);
+        HYPER_M = Number(childData.severeHigh ?? childData.severe_high ?? HYPER_M);
+
+        cName.textContent   = childData.name || "—";
+        cAge.textContent    = humanAgeFromBirth(childData.birthDate || childData.birthdate);
+        cWeight.textContent = childData.weight || childData.weightKg || childData.weight_kg || "—";
+
+        const basalType = childData.basalType || childData.basal || "—";
+        const basalDose = childData.basalDose || childData.basal_units || null;
+        cBasal.textContent = basalDose ? `${basalType} — ${basalDose}U` : basalType;
+
+        const bolusType = childData.bolusType || childData.rapidType || "—";
+        cBolus.textContent = bolusType;
+
+        cCF.textContent = fmtCF(childData.correctionFactor ?? childData.cf, unitSelect.value);
+        cCR.textContent = fmtCR(childData.carbRatio ?? childData.cr);
+      } else {
+        cName.textContent = cAge.textContent = cWeight.textContent =
+        cBasal.textContent = cBolus.textContent = cCF.textContent = cCR.textContent = "—";
+      }
+
+      // قياسات في الفترة المحددة
       const start = new Date(from); start.setHours(0,0,0,0);
       const end   = new Date(to);   end.setHours(23,59,59,999);
 
-      const map = new Map(); // dateKey -> row
-      function rowFor(dateKey){
-        if (!map.has(dateKey)) map.set(dateKey, mkBaseRow(dateKey));
-        return map.get(dateKey);
-      }
+      const byDate = new Map(); // dateKey -> row
+      const rowFor = (dkey) => (byDate.get(dkey) || byDate.set(dkey, mkBaseRow(dkey)).get(dkey));
 
+      // المسار الأول (لو parent/child متاح)
+      let snaps = [];
       if (parentId && childId){
-        const qs1 = await db.collection("parents").doc(parentId)
+        const q1 = await db.collection("parents").doc(parentId)
           .collection("children").doc(childId)
           .collection("measurements")
           .where("when", ">=", start)
           .where("when", "<=", end)
           .orderBy("when","asc").get();
-
-        qs1.forEach(doc => addDocToRows(doc.data(), rowFor, maskTreatEl.checked));
+        snaps = q1.docs;
       } else {
-        // بديل: collectionGroup (لو ما وصلنا للـ path)
-        const qs2 = await db.collectionGroup("measurements")
+        // collectionGroup كبديل عام
+        const q2 = await db.collectionGroup("measurements")
           .where("when", ">=", start)
           .where("when", "<=", end)
           .orderBy("when","asc").get();
-
-        qs2.forEach(doc => addDocToRows(doc.data(), rowFor, maskTreatEl.checked));
+        snaps = q2.docs;
       }
 
-      rows.push(...Array.from(map.values()));
+      for (const doc of snaps){
+        const d = doc.data();
+        const dkey = (d.date || tsToDateKey(d.when));
+        const row = rowFor(dkey);
+
+        const slot = normalizeSlot(d.slotKey || d.slot || "");
+        if (!slot || !DISPLAY_ORDER.includes(slot)) continue;
+
+        // طبّع إلى mmol داخليًا
+        let mmol = null;
+        if (typeof d.value_mmol === "number") mmol = d.value_mmol;
+        else if (typeof d.value_mgdl === "number") mmol = d.value_mgdl / MGDL_PER_MMOL;
+        else if (typeof d.value === "number"){
+          if ((d.unit||"").toLowerCase().includes("mg")) mmol = d.value / MGDL_PER_MMOL;
+          else mmol = d.value;
+        }
+        if (mmol == null || isNaN(mmol)) continue;
+
+        row.slots[slot].mmol = mmol;
+
+        // ملاحظة القياس (تحت الرقم)
+        if (d.notes) row.slots[slot].note = String(d.notes);
+
+        // ملاحظات الصف (حقل عام)
+        if (d.rowNotes) row.rowNotes = String(d.rowNotes);
+      }
+
+      rows.push(...Array.from(byDate.values()));
       render();
       return;
     }
@@ -256,39 +310,19 @@ async function loadAll(){
     console.error("Firebase error:", e);
   }
 
-  // إن لم يتوفر Firebase — بيانات تجريبية (mmol داخليًا)
-  HYPO_M = 3.9; HYPER_M = 10;
-  rows.push(
-    demoRow("2025-09-01"),
-    demoRow("2025-09-02"),
-    demoRow("2025-09-03")
-  );
+  // ——— إن لم يتوفر Firebase: بيانات تجريبية (mmol داخليًا) ———
+  HYPO_M = 3.9; HYPER_M = 10.0;
+  rows.push(demoRow("2025-09-01"), demoRow("2025-09-02"), demoRow("2025-09-03"));
+  // بيانات طفل تجريبية
+  cName.textContent = "Demo Child";
+  cAge.textContent  = "11س 4ش";
+  cWeight.textContent = "32";
+  cBasal.textContent = "Lantus — 10U";
+  cBolus.textContent = "NovoRapid";
+  cCF.textContent = fmtCF(40, unitSelect.value);
+  cCR.textContent = fmtCR(12);
+
   render();
-}
-
-function addDocToRows(d, rowFor, maskNotes){
-  const dateKey = (d.date || tsToDateKey(d.when));
-  const row = rowFor(dateKey);
-
-  // Normalize slot
-  const slot = normalizeSlot(d.slotKey || d.slot || "");
-  if (!slot || !DISPLAY_ORDER.includes(slot)) return;
-
-  // استخرج القيمة وطبّعها إلى mmol داخليًا
-  let mmol = null;
-  if (typeof d.value_mmol === "number") mmol = d.value_mmol;
-  else if (typeof d.value_mgdl === "number") mmol = d.value_mgdl / MGDL_PER_MMOL;
-  else if (typeof d.value === "number"){
-    if ((d.unit||"").toLowerCase().includes("mg")) mmol = d.value / MGDL_PER_MMOL;
-    else mmol = d.value; // مفترض mmol
-  }
-  if (mmol == null || isNaN(mmol)) return;
-
-  row.slots[slot] = mmol;
-
-  if (d.notes && !maskNotes){
-    row.notes = (row.notes ? row.notes+" | " : "") + d.notes;
-  }
 }
 
 function tsToDateKey(when){
@@ -303,17 +337,17 @@ function tsToDateKey(when){
 // بيانات تجريبية
 function demoRow(date){
   const r = mkBaseRow(date);
-  r.slots.FASTING = 5.2;
-  r.slots.PRE_BREAKFAST = 4.1;
-  r.slots.POST_BREAKFAST = 7.8;
-  r.slots.PRE_LUNCH = 5.6;
-  r.slots.POST_LUNCH = 11.2;
-  r.slots.PRE_DINNER = 5.4;
-  r.slots.POST_DINNER = 12.6;
-  r.slots.RANDOM = 6.2;
-  r.slots.PRE_SLEEP = 5.0;
-  r.slots.OVERNIGHT = 5.6;
-  r.notes = "Demo";
+  r.slots.FASTING.mmol = 5.2;
+  r.slots.PRE_BREAKFAST.mmol = 4.1;
+  r.slots.POST_BREAKFAST.mmol = 7.8;
+  r.slots.PRE_LUNCH.mmol = 5.6;
+  r.slots.POST_LUNCH.mmol = 11.2; r.slots.POST_LUNCH.note = "بعد وجبة ثقيلة";
+  r.slots.PRE_DINNER.mmol = 5.4;
+  r.slots.POST_DINNER.mmol = 12.6; r.slots.POST_DINNER.note = "تصحيح مطلوب";
+  r.slots.RANDOM.mmol = 6.2;
+  r.slots.PRE_SLEEP.mmol = 5.0;
+  r.slots.OVERNIGHT.mmol = 5.6;
+  r.rowNotes = "Demo";
   return r;
 }
 
@@ -322,7 +356,7 @@ applyBtn.addEventListener("click", loadAll);
 blankBtn.addEventListener("click", () => { manualMode.checked = true; loadAll(); });
 printBtn.addEventListener("click", () => window.print());
 
-unitSelect.addEventListener("change", () => render());
+unitSelect.addEventListener("change", () => render());   // تحويل عرض فقط
 colorizeEl.addEventListener("change", () => render());
 maskTreatEl.addEventListener("change", () => render());
 weeklyMode.addEventListener("change", () => loadAll());
