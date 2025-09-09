@@ -1,7 +1,9 @@
-/* reports-print.js (v10)
- * إصلاح الفترة: استعلام بـ when و date + دمج/فلترة
- * إظهار الاسم من عدة مسارات محتملة
- * باقي الميزات كما هي (mmol داخليًا، تلوين/أسهم، ملاحظات تحت القيمة، Landscape)
+/* reports-print.js (v12)
+ * - اسم الطفل: pickName(childData) تبحث في مسارات متعددة (root + nested)
+ * - الفترة: استعلام when + date + دمج/فلترة
+ * - البيانات داخليًا mmol فقط؛ العرض حسب الوحدة
+ * - ملاحظات القياس أسفل القيمة؛ تلوين Hypo/Hyper + أسهم اتجاه
+ * - طباعة Landscape + نموذج أسبوعين في ورقة واحدة
  */
 
 // عناصر DOM
@@ -63,27 +65,36 @@ const CANON = {
   OVERNIGHT: ["OVERNIGHT","NIGHT","أثناء النوم"]
 };
 
-// بنية الصف داخليًا: mmol + ملاحظات لكل خانة
-function mkBaseRow(date){
-  const slots = {};
-  DISPLAY_ORDER.forEach(k => slots[k] = { mmol:null, note:"" });
-  return { date, slots, rowNotes:"" };
-}
-
-const rows = []; // [{date, slots:{KEY:{mmol,note}}, rowNotes}]
-const docsSeen = new Set(); // doc.id لمنع التكرار
-
-// ===== أدوات =====
+// ==== أدوات عامة ====
 const toMmol = (val, unit) => unit === "mgdl" ? (val / MGDL_PER_MMOL) : val;
 const fromMmol = (mmol, unit) =>
   unit === "mgdl" ? Math.round(mmol * MGDL_PER_MMOL) : +mmol.toFixed(1);
 
-function normalizeSlot(key){
-  const K = (key||"").toString().trim().toUpperCase().replace(/\s+/g," ");
-  for (const canon in CANON){
-    if (CANON[canon].some(s => s.toUpperCase() === K)) return canon;
+function resolveIds() {
+  const qs = new URLSearchParams(location.search);
+  let parentId = qs.get("parent") || null;
+  let childId  = qs.get("child") || qs.get("cid") || null;
+  if (!childId)  childId  = localStorage.getItem("report_childId") || localStorage.getItem("report_cid") || null;
+  if (!parentId) parentId = localStorage.getItem("report_parentId") || null;
+  return { parentId, childId };
+}
+
+function pick(obj, path) {
+  try {
+    return path.split(".").reduce((o,k)=> (o && o[k]!=null ? o[k] : null), obj) ?? null;
+  } catch { return null; }
+}
+
+function pickName(childData){
+  const paths = [
+    "name","childName","displayName","fullName","arabicName","arName",
+    "mealsDoses.name","profile.name","info.name","assignedDoctorInfo.name"
+  ];
+  for (const p of paths){
+    const v = pick(childData, p);
+    if (typeof v === "string" && v.trim().length) return v.trim();
   }
-  return null;
+  return "—";
 }
 
 function classifyByMmol(mmol){
@@ -124,12 +135,28 @@ function escapeHtml(s){
   return String(s).replace(/[&<>\"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
-function inDateRange(dateKey, from, to){
-  // dateKey, from, to بصيغة YYYY-MM-DD
-  return dateKey >= from && dateKey <= to;
+function inDateRange(dateKey, from, to){ return dateKey >= from && dateKey <= to; }
+
+function tsToDateKey(when){
+  try{
+    if (!when) return new Date().toISOString().slice(0,10);
+    if (when.toDate) return when.toDate().toISOString().slice(0,10);
+    const t = new Date(when);
+    return isNaN(+t) ? new Date().toISOString().slice(0,10) : t.toISOString().slice(0,10);
+  }catch{ return new Date().toISOString().slice(0,10); }
 }
 
-// ===== ريندر الجدول =====
+// ==== بنية البيانات ====
+function mkBaseRow(date){
+  const slots = {};
+  DISPLAY_ORDER.forEach(k => slots[k] = { mmol:null, note:"" });
+  return { date, slots, rowNotes:"" };
+}
+
+const rows = [];          // [{date, slots:{KEY:{mmol,note}}, rowNotes}]
+const docsSeen = new Set(); // لتجنب تكرار نفس الوثيقة
+
+// ==== ريندر الجدول ====
 function render(){
   const unit = unitSelect.value; // mmol | mgdl
   tbody.innerHTML = "";
@@ -176,7 +203,7 @@ function render(){
   });
 }
 
-// ===== تحميل بيانات الطفل + القياسات =====
+// ==== تحميل بيانات الطفل + القياسات ====
 async function loadAll(){
   // الفترة
   let from = fromDateEl.value;
@@ -209,15 +236,13 @@ async function loadAll(){
   docsSeen.clear();
 
   // Firebase؟
-  const qs = new URLSearchParams(location.search);
-  const parentId = qs.get("parent");
-  const childId  = qs.get("child") || qs.get("cid"); // بديل
+  const { parentId, childId } = resolveIds();
 
   try{
     if (window.firebase && firebase.firestore){
       const db = firebase.firestore();
 
-      // بيانات الطفل
+      // ===== بيانات الطفل =====
       let childData = null;
       if (parentId && childId){
         const snap = await db.collection("parents").doc(parentId)
@@ -233,20 +258,15 @@ async function loadAll(){
         HYPO_M  = Number(childData.severeLow  ?? childData.severe_low  ?? HYPO_M);
         HYPER_M = Number(childData.severeHigh ?? childData.severe_high ?? HYPER_M);
 
-        const nameGuess =
-          childData.name ||
-          (childData.assignedDoctorInfo && childData.assignedDoctorInfo.name) ||
-          childData.childName || childData.displayName || "—";
-
-        cName.textContent   = nameGuess;
+        cName.textContent   = pickName(childData);
         cAge.textContent    = humanAgeFromBirth(childData.birthDate || childData.birthdate);
         cWeight.textContent = childData.weight || childData.weightKg || childData.weight_kg || "—";
 
-        const basalType = childData.basalType || childData.basal || "—";
+        const basalType = childData.basalType || childData.basal || pick(childData,"insulin.basal") || "—";
         const basalDose = childData.basalDose || childData.basal_units || childData.bolusDose || null;
         cBasal.textContent = basalDose ? `${basalType} — ${basalDose}U` : basalType;
 
-        const bolusType = childData.bolusType || childData.rapidType || "—";
+        const bolusType = childData.bolusType || childData.rapidType || pick(childData,"insulin.rapid") || "—";
         cBolus.textContent = bolusType;
 
         cCF.textContent = fmtCF(childData.correctionFactor ?? childData.cf);
@@ -263,7 +283,7 @@ async function loadAll(){
       const byDate = new Map(); // dateKey -> row
       const rowFor = (dkey) => (byDate.get(dkey) || byDate.set(dkey, mkBaseRow(dkey)).get(dkey));
 
-      // 1) استعلام when (Timestamp)
+      // 1) when (Timestamp)
       let snapsWhen = [];
       try{
         const base =
@@ -280,9 +300,9 @@ async function loadAll(){
           .get();
 
         snapsWhen = qWhen.docs;
-      }catch(e){ /* ignore if index missing */ }
+      }catch(e){ /* index missing? نكمل */ }
 
-      // 2) استعلام date (String YYYY-MM-DD)
+      // 2) date (String YYYY-MM-DD)
       let snapsDate = [];
       try{
         const base2 =
@@ -299,26 +319,29 @@ async function loadAll(){
           .get();
 
         snapsDate = qDate.docs;
-      }catch(e){ /* ignore if index missing */ }
+      }catch(e){ /* index missing? نكمل */ }
 
-      // دمج + منع التكرار + فلترة وقائية
+      // دمج + منع التكرار + فلترة
       const all = [...snapsWhen, ...snapsDate];
       for (const doc of all){
         if (docsSeen.has(doc.id)) continue;
         docsSeen.add(doc.id);
 
         const d = doc.data();
-
-        // احسب مفتاح التاريخ
         const dkey = (d.date || tsToDateKey(d.when));
-        if (!inDateRange(dkey, from, to)) continue; // فلترة إضافية
+        if (!inDateRange(dkey, from, to)) continue;
 
         const row = rowFor(dkey);
 
-        const slot = normalizeSlot(d.slotKey || d.slot || "");
+        const slotRaw = d.slotKey || d.slot || "";
+        const slot = (() => {
+          const k = (slotRaw||"").toString().trim().toUpperCase().replace(/\s+/g," ");
+          for (const canon in CANON){ if (CANON[canon].some(s => s.toUpperCase() === k)) return canon; }
+          return null;
+        })();
         if (!slot || !DISPLAY_ORDER.includes(slot)) continue;
 
-        // طبّع إلى mmol داخليًا
+        // mmol داخليًا
         let mmol = null;
         if (typeof d.value_mmol === "number") mmol = d.value_mmol;
         else if (typeof d.value_mgdl === "number") mmol = d.value_mgdl / MGDL_PER_MMOL;
@@ -330,13 +353,11 @@ async function loadAll(){
 
         row.slots[slot].mmol = mmol;
 
-        // ملاحظة القياس (تظهر تحت القيمة)
         if (d.notes) row.slots[slot].note = String(d.notes);
-
-        // ملاحظات الصف العامة
         if (d.rowNotes) row.rowNotes = String(d.rowNotes);
       }
 
+      rows.length = 0;
       rows.push(...Array.from(byDate.values()));
       render();
       return;
@@ -350,25 +371,16 @@ async function loadAll(){
   rows.length = 0;
   rows.push(demoRow("2025-09-01"), demoRow("2025-09-02"), demoRow("2025-09-03"));
 
-  // بيانات طفل تجريبية
-  cName.textContent = "Demo Child";
-  cAge.textContent  = "11س 4ش";
-  cWeight.textContent = "32";
-  cBasal.textContent = "Lantus — 10U";
-  cBolus.textContent = "NovoRapid";
-  cCF.textContent = fmtCF(40);
-  cCR.textContent = fmtCR(12);
+  // بيانات طفل تجريبية (لو مفيش Firestore)
+  cName.textContent = "—";
+  cAge.textContent  = "—";
+  cWeight.textContent = "—";
+  cBasal.textContent = "—";
+  cBolus.textContent = "—";
+  cCF.textContent = "—";
+  cCR.textContent = "—";
 
   render();
-}
-
-function tsToDateKey(when){
-  try{
-    if (!when) return new Date().toISOString().slice(0,10);
-    if (when.toDate) return when.toDate().toISOString().slice(0,10);
-    const t = new Date(when);
-    return isNaN(+t) ? new Date().toISOString().slice(0,10) : t.toISOString().slice(0,10);
-  }catch{ return new Date().toISOString().slice(0,10); }
 }
 
 // بيانات تجريبية
@@ -388,7 +400,7 @@ function demoRow(date){
   return r;
 }
 
-// ===== أحداث =====
+// أحداث
 applyBtn.addEventListener("click", loadAll);
 blankBtn.addEventListener("click", () => { manualMode.checked = true; loadAll(); });
 printBtn.addEventListener("click", () => window.print());
