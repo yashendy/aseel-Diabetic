@@ -1,49 +1,97 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <title>تقرير الطباعة</title>
-  <link rel="stylesheet" href="css/reports-print.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>تقرير القياسات — طباعة</title>
+
+  <!-- أيقونة/ستايلات عامة للمشروع -->
+  <link rel="icon" href="favicon.ico" />
+  <link rel="stylesheet" href="css/reports-print.css?v=7" />
 </head>
 <body>
-  <div class="controls">
-    <label>الوحدة:
-      <select id="unitSelect">
-        <option value="mgdl">mg/dL</option>
-        <option value="mmol">mmol/L</option>
-      </select>
-    </label>
-    <label>من: <input type="date" id="fromDate"></label>
-    <label>إلى: <input type="date" id="toDate"></label>
-    <label>ملاحظات: <input type="text" id="notes"></label>
-    <button id="applyBtn">تطبيق</button>
-    <button id="blankBtn">نموذج فارغ</button>
-    <button id="printBtn">طباعة</button>
-    <label><input type="checkbox" id="maskTreat"> إخفاء الملاحظات</label>
-    <label><input type="checkbox" id="colorize"> تلوين Hypo/Hyper</label>
-    <label><input type="checkbox" id="weeklyMode"> تقرير أسبوعي</label>
-    <label><input type="checkbox" id="manualMode"> وضع يدوي</label>
+  <div class="container">
+    <!-- شريط التحكم العلوي -->
+    <section class="card controls">
+      <div class="row wrap">
+        <button id="printBtn" class="btn">🖨️ طباعة / PDF</button>
+        <button id="blankBtn" class="btn secondary">نموذج فارغ الآن</button>
+        <button id="applyBtn" class="btn primary">تطبيق</button>
+
+        <label class="field">
+          <span>الوحدة</span>
+          <select id="unitSelect">
+            <option value="mmol">mmol/L</option>
+            <option value="mgdl">mg/dL</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>من</span>
+          <input type="date" id="fromDate" />
+        </label>
+
+        <label class="field">
+          <span>إلى</span>
+          <input type="date" id="toDate" />
+        </label>
+
+        <label class="field grow">
+          <span>ملاحظات أعلى التقرير</span>
+          <input type="text" id="notes" placeholder="ملاحظاتك المختصرة تظهر أعلى التقرير" />
+        </label>
+      </div>
+
+      <div class="row wrap toggles">
+        <label class="chk"><input type="checkbox" id="maskTreat" checked /> إخفاء الملاحظات في الطباعة</label>
+        <label class="chk"><input type="checkbox" id="colorize" checked /> تلوين (هبوط/طبيعي/ارتفاع)</label>
+        <label class="chk"><input type="checkbox" id="weeklyMode" /> تقرير خاص (أسبوعي)</label>
+        <label class="chk"><input type="checkbox" id="manualMode" /> وضع يدوي (نموذج فارغ قابل للتحرير)</label>
+      </div>
+    </section>
+
+    <!-- ملخص أعلى التقرير -->
+    <section class="card summary">
+      <div class="chips">
+        <span class="chip">الفترة: <b id="periodFrom">—</b> → <b id="periodTo">—</b></span>
+        <span class="chip">الوحدة: <b id="periodUnit">mmol/L</b></span>
+        <span class="chip hypo">Hypo</span>
+        <span class="chip okv">Normal</span>
+        <span class="chip hyper">Hyper</span>
+      </div>
+      <div class="report-notes" id="reportNotes"></div>
+    </section>
+
+    <!-- الجدول الرئيسي -->
+    <section class="card table-wrap">
+      <table class="table" id="reportTable">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>الاستيقاظ</th>
+            <th>ق. الفطار</th>
+            <th>ب. الفطار</th>
+            <th>ق. الغدا</th>
+            <th>ب. الغدا</th>
+            <th>ق. العشا</th>
+            <th>ب. العشا</th>
+            <th>سناك</th>
+            <th>ق. النوم</th>
+            <th>أثناء النوم</th>
+            <th>ملاحظات</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </section>
   </div>
 
-  <div class="report-header">
-    <span id="periodFrom"></span> - <span id="periodTo"></span>
-    (<span id="periodUnit">mg/dL</span>)
-  </div>
+  <!-- لو مشروعك يحمّل Firebase عالمياً، الملف التالي يكون محمّل مسبقاً -->
+  <!-- <script src="firebase-app.js"></script>
+  <script src="firebase-firestore.js"></script>
+  <script src="firebase-auth.js"></script>
+  <script src="firebase-config.js"></script> -->
 
-  <table id="reportTable">
-    <thead>
-      <tr>
-        <th>التاريخ</th>
-        <th>الفطور</th>
-        <th>الغداء</th>
-        <th>العشاء</th>
-        <th>قبل النوم</th>
-        <th>ملاحظات</th>
-      </tr>
-    </thead>
-    <tbody id="tbody"></tbody>
-  </table>
-
-  <script src="js/reports-print.js"></script>
+  <script src="js/reports-print.js?v=7"></script>
 </body>
 </html>
