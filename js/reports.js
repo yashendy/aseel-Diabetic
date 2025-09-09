@@ -1,24 +1,17 @@
-/* التقارير – صفحة واحدة مع تبديل العروض + استرجاع بيانات Firestore */
+/* التقارير – صفحة واحدة مع تبديل العروض + Firestore (ES Modules) */
 
-// ===================== Firebase (تهيئة آمنة) =====================
-import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+/* 1) استيراد db من firebase-config.js (مكون موديول) */
+import { db } from "./firebase-config.js";
+
+/* 2) استيراد دوال Firestore من نفس نسخة الموديول 12.1.0 */
 import {
-  getFirestore, doc, getDoc,
+  doc, getDoc,
   collection, collectionGroup,
   query, where, orderBy, getDocs,
   documentId
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-let app = null, db = null;
-try {
-  const cfg = getApps().length ? null : (window.firebaseConfig || null);
-  app = getApps().length ? getApp() : (cfg ? initializeApp(cfg) : null);
-  db  = app ? getFirestore(app) : null;
-} catch (e) {
-  console.warn("Firebase init warning:", e);
-}
-
-// ===================== أدوات عامة =====================
+/* ===== أدوات عامة ===== */
 const $  = (s, p=document)=> p.querySelector(s);
 const $$ = (s, p=document)=> Array.from(p.querySelectorAll(s));
 function qparam(name){ const u = new URL(location.href); return u.searchParams.get(name) || ""; }
@@ -30,7 +23,7 @@ function linkWithParams(href, extra = {}) {
   return href + (href.includes("?") ? "&" : "?") + qs.toString();
 }
 
-// ===================== الفترات (تشمل ق.النوم) =====================
+/* ===== الفترات (تشمل ق.النوم) ===== */
 const COLS = [
   ["WAKE","الاستيقاظ"],
   ["PRE_BREAKFAST","ق.الفطار"],
@@ -58,11 +51,11 @@ const SLOT_ALIAS = {
 };
 const SLOT_MAP = (()=>{ const m={}; for (const [k,a] of Object.entries(SLOT_ALIAS)) a.forEach(x=>m[x.toUpperCase()]=k); return m; })();
 
-// ===================== تواريخ =====================
-const fmtISO = (d)=> d.toISOString().slice(0,10); // كما كان
+/* ===== تواريخ ===== */
+const fmtISO = (d)=> d.toISOString().slice(0,10);
 const addDays = (d, n)=> { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate()+n); return x; };
 
-// ===================== عناصر الواجهة =====================
+/* ===== عناصر الواجهة ===== */
 const presetEl=$("#preset"), datesBox=$("#datesBox"), fromEl=$("#from"), toEl=$("#to"), runEl=$("#run");
 const btnPrint=$("#btnPrint"), btnBlank=$("#btnBlank"), toggleNotes=$("#toggleNotes");
 const rowsEl=$("#rows"), headRowEl=$("#headRow"), metaEl=$("#meta"), loaderEl=$("#loader");
@@ -71,12 +64,12 @@ const lnkHome=$("#lnkHome");
 const analysisBtn=$("#btnAnalyticsPage"), reportPrintBtn=$("#btnReportPrintPage");
 const headRowPrint=$("#headRowPrint"), rowsPrint=$("#rowsPrint"), analysisContainer=$("#analysisContainer");
 
-// ===================== حالة عامة =====================
+/* ===== حالة عامة ===== */
 let parentId="", childId="", childInfo=null;
 let limits = { severeLow:55, normalMin:70, normalMax:180, severeHigh:300 };
 let currentDataByDay = {};
 
-// ===================== مساعدات =====================
+/* ===== مساعدات ===== */
 const setLoader = (v)=> loaderEl.style.display = v ? "flex" : "none";
 const num = (x)=> (x==null || isNaN(+x)) ? null : +(+x).toFixed(1);
 const classify = (v)=>{
@@ -88,7 +81,7 @@ const classify = (v)=>{
   return "b-sevhigh";
 };
 
-// ===================== بانر الطفل =====================
+/* ===== بانر الطفل ===== */
 function calcAge(birthISO){
   if(!birthISO) return "—";
   const b = new Date(birthISO), n = new Date();
@@ -122,7 +115,7 @@ async function loadChild(){
   return c;
 }
 
-// يحاول استنتاج parent من child لو لم يُمرَّر في الرابط
+/* يستنتج parent من child لو لم يُمرّر */
 async function tryResolveParentFromChildId(){
   if (!db || !childId || parentId) return;
   try {
@@ -138,7 +131,7 @@ async function tryResolveParentFromChildId(){
   }
 }
 
-// ===================== Firestore: القياسات =====================
+/* ===== Firestore: القياسات ===== */
 async function fetchMeasurements(fromISO, toISO){
   if (!db || !parentId) return [];
   const col = collection(db, "parents", parentId, "measurements");
@@ -196,7 +189,7 @@ function groupByDay(list){
   return byDay;
 }
 
-// ===================== بناء الجدول =====================
+/* ===== بناء الجدول ===== */
 function buildHead(targetRow){
   targetRow.innerHTML = "";
   const thDate = document.createElement("th");
@@ -278,7 +271,7 @@ function renderRows(tbody, byDay){
   tbody.appendChild(frag);
 }
 
-// ===================== بناء التقرير =====================
+/* ===== بناء التقرير ===== */
 async function buildReport(fromISO, toISO){
   setLoader(true);
   try {
@@ -300,7 +293,7 @@ async function buildReport(fromISO, toISO){
   }
 }
 
-// ===================== العروض داخل الصفحة =====================
+/* ===== العروض داخل الصفحة ===== */
 window.showView = function(which){
   const reportSec=$("#reportView"), analysisSec=$("#analysisView"), printSec=$("#printView");
   [reportSec,analysisSec,printSec].forEach(el=>el?.classList.add("hidden"));
@@ -321,7 +314,7 @@ function buildAnalysis(){
   analysisContainer.innerHTML = `<div class="badge b-ok">متوسط القياسات: ${count ? (total/count).toFixed(1) : "—"}</div>`;
 }
 
-// ===================== واجهة المستخدم =====================
+/* ===== واجهة المستخدم ===== */
 function applyPreset(val){
   const today = new Date(); let from=null, to=null;
   if (val==="custom"){ datesBox.classList.remove("hidden"); fromEl.focus(); return; }
@@ -366,7 +359,7 @@ function wireUI(){
   if (lnkHome) lnkHome.href = parentId ? `parent.html?parent=${encodeURIComponent(parentId)}` : "parent.html";
 }
 
-// شريط التنقّل (يمرّر ?parent&child)
+/* شريط التنقّل (يمرّر دائمًا ?parent&child) */
 function buildNav(){
   const nav = [
     ["parent.html","الرئيسية","page"],
@@ -394,7 +387,7 @@ function buildNav(){
   }
 }
 
-// ===================== بدء التشغيل =====================
+/* ===== بدء التشغيل ===== */
 async function main(){
   try {
     parentId = qparam("parent") || sessionStorage.getItem("lastParent") || "";
@@ -416,7 +409,7 @@ async function main(){
     runEl.click();                             // بناء التقرير مباشرة
   } catch (err) {
     console.error(err);
-    metaEl.textContent = "حدثت مشكلة في التهيئة. تأكدي من ملف Firebase.";
+    metaEl.textContent = "حدثت مشكلة في التهيئة. تأكدي من إعداد Firebase.";
   }
 }
 document.addEventListener("DOMContentLoaded", main);
