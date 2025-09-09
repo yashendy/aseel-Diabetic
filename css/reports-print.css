@@ -1,74 +1,56 @@
-/* css/reports-print.css (v5) */
-:root{
-  --bg:#f5f8ff; --card:#fff; --border:#e6eef7;
-  --text:#333; --muted:#667;
-  --ok:#2e7d32; --warn:#fb8c00; --danger:#c62828;
-  --chip:#eff4ff; --brand:#4f46e5;
+/* reports-print.css */
+body {
+  font-family: Arial, sans-serif;
+  direction: rtl;
+  margin: 20px;
 }
 
-*{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,Tahoma,Arial}
-.container{max-width:1200px;margin:auto;padding:16px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
-.tiny{font-size:12px}.small{font-size:13px}.muted{color:var(--muted)}
-.gap8{gap:8px}.wrap{flex-wrap:wrap}
-
-.top .head-grid{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
-.chips{display:flex;gap:8px;margin-top:6px}
-.chip{background:var(--chip);border:1px solid var(--border);padding:2px 8px;border-radius:999px}
-.qr-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
-
-.filters .row{display:flex;gap:10px;margin-top:10px;align-items:flex-end}
-.field{display:flex;flex-direction:column;gap:6px}
-.field>label{font-size:12px;color:var(--muted)}
-.field.grow{flex:1}
-input,select{padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff}
-
-.btn{padding:10px 12px;border:none;border-radius:10px;background:var(--brand);color:#fff;cursor:pointer}
-.btn.secondary{background:#e0e7ff;color:#1f2a6b}
-.btn.outline{background:#fff;color:var(--brand);border:1px solid var(--brand)}
-.btn:hover{opacity:.96}
-
-.table-head{display:flex;justify-content:space-between;align-items:center;margin:8px 0}
-.badge{border:1px solid var(--border);padding:2px 10px;border-radius:999px;background:#f7fbff;font-size:12px}
-.badge.ok{background:#e8f5e9;border-color:#c8e6c9;color:var(--ok)}
-.badge.warn{background:#fff8e1;border-color:#ffecb3;color:var(--warn)}
-.badge.danger{background:#ffebee;border-color:#ffcdd2;color:var(--danger)}
-
-.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}
-.table{width:100%;border-collapse:collapse}
-.table th,.table td{border-left:1px solid var(--border);border-bottom:1px solid var(--border);padding:10px;text-align:center}
-.table thead th{background:#f0f6ff}
-.table td .dose{display:block;font-size:11px;color:#555;margin-top:4px}
-.table td .note{display:block;font-size:11px;color:#999}
-.table .low{background:#ffebee}
-.table .high{background:#fff8e1}
-.table .okv{background:#e8f5e9}
-
-.empty{padding:20px;text-align:center;color:var(--muted)}
-
-.switch{display:flex;align-items:center;gap:6px}
-.switch input{accent-color:var(--brand)}
-.hidden{display:none}
-
-/* شريط الملاحظات أعلى التقرير */
-.notes-bar{display:flex;gap:8px;align-items:center}
-.notes-bar strong{color:#111}
-
-/* Editable for manual mode */
-.table td[contenteditable="true"]{
-  outline:1px dashed #ced6e0; min-width:60px; min-height:28px;
+.controls {
+  margin-bottom: 20px;
 }
-.table td[contenteditable="true"]:focus{
-  outline:2px solid var(--brand); background:#fff;
-}
-.table td:empty::after{ content:" "; }
 
-/* طباعة */
-@media print{
-  body{background:#fff}
-  .top .filters, .btn, .switch, .legend .badge{display:none !important}
-  .card{border:none;padding:0}
-  .container{padding:0}
-  .table td[contenteditable="true"]{ outline:none; }
+.controls label {
+  margin-right: 10px;
+}
+
+#reportTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#reportTable th, #reportTable td {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: center;
+}
+
+/* التلوين حسب Hypo/Hyper */
+.cell-hypo {
+  background-color: #ffe5e5;
+  color: #b30000;
+}
+.cell-normal {
+  background-color: #f5f5f5;
+}
+.cell-hyper {
+  background-color: #fff0cc;
+  color: #995c00;
+}
+
+/* السهام */
+.arrow-up {
+  color: #009900;
+  font-size: 0.8em;
+  margin-right: 4px;
+}
+.arrow-down {
+  color: #cc0000;
+  font-size: 0.8em;
+  margin-right: 4px;
+}
+
+@media print {
+  .controls {
+    display: none;
+  }
 }
