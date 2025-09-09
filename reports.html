@@ -3,72 +3,80 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>تقارير الطفل</title>
+  <title>التقارير</title>
   <link rel="stylesheet" href="./css/reports.css">
+  <style>
+    /* تأكيد وجود .hidden لو مش متضافة في ملف CSS */
+    .hidden { display: none !important; }
+  </style>
 </head>
-<body>
-
-  <!-- الهيدر القديم (نعرض الاسم/الميتا فقط) -->
-  <div id="childBanner" class="card child-info" style="display:none">
+<body class="notes-hidden">
+  <!-- بانر الطفل -->
+  <section id="childBanner" class="card child-info">
     <div class="head">
       <h1 id="bannerName">—</h1>
-      <p id="bannerMeta" class="muted small">—</p>
+      <p id="metaHead" class="muted small">—</p>
     </div>
+  </section>
+
+  <!-- شريط تنقل الصفحات -->
+  <div class="card no-print">
+    <div id="childNav" class="row"></div>
   </div>
 
-  <!-- تنقّل -->
-  <div class="card">
-    <div class="row" id="childNav"></div>
-  </div>
+  <!-- أدوات التحكم -->
+  <section class="card controls no-print">
+    <div class="actions">
+      <label class="toggle-notes">
+        <input id="toggleNotes" type="checkbox" checked>
+        <span>إظهار الملاحظات/الجرعات</span>
+      </label>
 
-  <!-- أدوات الفترة + الأزرار -->
-  <div class="card controls no-print">
+      <a id="btnAnalyticsPage" class="btn success">التحاليل</a>
+      <a id="btnReportPrintPage" class="btn warning">صفحة طباعة التقرير</a>
+      <a id="btnPrint" class="btn gray">طباعة</a>
+      <a id="btnBlank" class="btn danger">ورقة فارغة (7 أيام)</a>
+      <a id="lnkHome" class="btn gray">رجوع</a>
+    </div>
+
     <div class="range">
       <div class="filter">
-        <label>المدى السريع</label>
+        <label for="preset">المدى السريع</label>
         <select id="preset">
           <option value="7">أسبوع</option>
           <option value="14">14 يوم</option>
           <option value="30">شهر</option>
           <option value="90">3 شهور</option>
-          <option value="90_only">90 يوم</option>
+          <option value="90_only">90 فقط</option>
           <option value="custom">مخصّص</option>
         </select>
       </div>
 
       <div id="datesBox" class="dates hidden">
         <div class="filter">
-          <label>من</label>
+          <label for="from">من</label>
           <input id="from" type="date">
         </div>
         <div class="filter">
-          <label>إلى</label>
+          <label for="to">إلى</label>
           <input id="to" type="date">
         </div>
+        <button id="run" class="btn primary">عرض</button>
       </div>
-
-      <label class="toggle-notes">
-        <input id="toggleNotes" type="checkbox" checked>
-        <span>إظهار الملاحظات/الجرعات</span>
-      </label>
     </div>
-
-    <div class="actions">
-      <a id="lnkHome" class="btn gray">رجوع</a>
-      <a id="btnReportPrintPage" class="btn warning" target="_blank" rel="noopener">صفحة طباعة التقرير</a>
-      <a id="btnAnalyticsPage" class="btn success" target="_blank" rel="noopener">التحاليل</a>
-      <button id="btnBlank" class="btn gray">ورقة فارغة (7 أيام)</button>
-      <button id="btnPrint" class="btn danger">طباعة</button>
-      <button id="run" class="btn primary">عرض</button>
-    </div>
-  </div>
+  </section>
 
   <!-- وصف الفترة -->
-  <div id="meta" class="container small muted">—</div>
+  <div id="meta" class="container small muted"></div>
 
-  <!-- الجدول القديم -->
-  <section class="card table" id="tableSection">
-    <div class="legend small">
+  <!-- مؤشر تحميل -->
+  <div id="loader" class="loader card">جاري التحميل…</div>
+
+  <!-- === العروض الثلاثة داخل نفس الصفحة === -->
+  <!-- 1) عرض التقرير الأساسي -->
+  <section id="reportView" class="card">
+    <!-- أسطورة الألوان -->
+    <div class="legend no-print">
       <span class="badge b-sevlow">هبوط شديد</span>
       <span class="badge b-low">هبوط</span>
       <span class="badge b-ok">طبيعي</span>
@@ -76,31 +84,51 @@
       <span class="badge b-sevhigh">ارتفاع شديد</span>
     </div>
 
+    <!-- الجدول -->
     <div class="table-wrap">
-      <table id="rep" aria-label="جدول التقارير">
+      <table id="rep" class="table" aria-label="تقرير قياسات">
         <thead>
-          <tr>
-            <th>التاريخ</th>
-            <th>الاستيقاظ</th>
-            <th>ق.الفطار</th>
-            <th>ب.الفطار</th>
-            <th>ق.الغدا</th>
-            <th>ب.الغدا</th>
-            <th>ق.العشا</th>
-            <th>ب.العشا</th>
-            <th>سناك</th>
-            <th>ق.النوم</th>
-            <th>أثناء النوم</th>
+          <tr id="headRow">
+            <!-- يُبنى ديناميكيًا -->
           </tr>
         </thead>
         <tbody id="rows">
-          <tr><td colspan="10" class="center muted">اختر المدى ثم اضغط عرض.</td></tr>
+          <!-- يُملأ ديناميكيًا -->
         </tbody>
       </table>
     </div>
   </section>
 
-  <div id="loader" class="loader" style="display:none">جاري التحميل…</div>
+  <!-- 2) عرض التحليلات داخل نفس الصفحة -->
+  <section id="analysisView" class="card hidden">
+    <div class="center">
+      <h2>التحاليل</h2>
+      <p class="muted">يتم توليد التحليلات من نفس البيانات المختارة.</p>
+      <div style="margin:12px 0">
+        <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
+        <button class="btn primary" id="btnRecalcAnalysis">إعادة حساب التحليلات</button>
+      </div>
+      <div id="analysisContainer">—</div>
+    </div>
+  </section>
+
+  <!-- 3) عرض الطباعة داخل نفس الصفحة -->
+  <section id="printView" class="card hidden">
+    <div class="center">
+      <h2>صفحة طباعة التقرير</h2>
+      <p class="muted">نفس الجدول أدناه بتنسيق أنظف للطباعة.</p>
+      <div style="margin:12px 0">
+        <button class="btn gray no-print" onclick="showView('report')">رجوع للتقرير</button>
+        <button class="btn warning no-print" onclick="window.print()">طباعة</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="repPrint" class="table">
+        <thead><tr id="headRowPrint"></tr></thead>
+        <tbody id="rowsPrint"></tbody>
+      </table>
+    </div>
+  </section>
 
   <script type="module" src="./js/reports.js"></script>
 </body>
