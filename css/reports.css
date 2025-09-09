@@ -1,68 +1,95 @@
-:root{
-  --bg:#f7f8fb; --card:#fff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb;
-  --brand:#2563eb; --green:#10b981; --orange:#f59e0b; --red:#ef4444; --gray:#6b7280;
-  --sevLow:#2563eb; --low:#0ea5e9; --ok:#10b981; --high:#f59e0b; --sevHigh:#ef4444;
-}
-*{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,Arial,sans-serif}
-.container{max-width:1120px;margin:16px auto;padding:0 12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:14px auto;max-width:1120px}
-.small{font-size:12px}
-.muted{color:var(--muted)}
-.center{text-align:center}
-.hidden{display:none!important}
-
-.child-info{display:grid;gap:8px}
-.head h1{margin:0 0 4px}
-
-.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-.range{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-.dates{display:flex;gap:12px;flex-wrap:wrap}
-.filter label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
-.filter input,.filter select{min-width:160px;padding:8px;border:1px solid var(--line);border-radius:10px;background:#fff}
-
-.toggle-notes{display:flex;gap:8px;align-items:center;color:var(--muted);}
-
-.actions{display:flex;gap:8px;flex-wrap:wrap}
-.btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer;text-decoration:none;color:inherit}
-.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
-.btn.success{background:var(--green);border-color:var(--green);color:#fff}
-.btn.warning{background:var(--orange);border-color:var(--orange);color:#fff}
-.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
-.btn.gray{background:#fff;border-color:var(--line);color:#111}
-
-.table-wrap{max-width:100%;overflow:auto;border-radius:10px;border:1px solid var(--line)}
-table{width:100%;border-collapse:collapse;font-size:14px}
-th,td{border:1px solid var(--line);padding:8px 10px;vertical-align:top;text-align:right}
-thead th{background:#f9fafb;position:sticky;top:0;z-index:1}
-td.date{background:#fbfdff;white-space:nowrap;font-weight:800}
-
-.legend{display:flex;gap:8px;align-items:center;margin:0 0 8px 0}
-.badge{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid transparent}
-.b-sevlow {background:#e0ecff;color:#1e3a8a;border-color:#c7dbff}
-.b-low    {background:#e0f2fe;color:#075985;border-color:#bae6fd}
-.b-ok     {background:#e8fff1;color:#065f46;border-color:#b7f4cd}
-.b-high   {background:#fff7ed;color:#9a3412;border-color:#fed7aa}
-.b-sevhigh{background:#ffe4e6;color:#9f1239;border-color:#fecdd3}
-
-.value-line{display:flex;align-items:center;gap:6px}
-.state-dot{font-weight:900}
-.dot-up{color:var(--high)}
-.dot-down{color:var(--low)}
-.arrow{font-size:12px;opacity:.9}
-
-.note-line{color:var(--muted);white-space:pre-wrap}
-.dose-line{color:var(--muted)}
-.notes-hidden .note-line,
-.notes-hidden .dose-line{display:none}
-
-.loader{
-  position:fixed;inset-inline:0;bottom:14px;margin:auto;width:230px;text-align:center;
-  background:#111827;color:#fff;padding:10px 12px;border-radius:10px;opacity:.92;z-index:9999
+body {
+  font-family: "Cairo", sans-serif;
+  direction: rtl;
+  background: #fff;
+  color: #000;
+  margin: 0;
+  padding: 1rem;
 }
 
-@media print{
-  .controls,.actions,.legend{display:none!important}
-  .card{box-shadow:none;border:none;margin:0 0 8mm}
-  table{font-size:12px}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.controls label {
+  margin-inline: 0.5rem;
+}
+
+.controls button {
+  margin-inline: 0.5rem;
+}
+
+.period {
+  margin: 1rem 0;
+  font-weight: bold;
+}
+
+#reportTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#reportTable th, #reportTable td {
+  border: 1px solid #ccc;
+  padding: 4px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+#reportTable th {
+  background: #eee;
+}
+
+.low { background: #fdd; }
+.high { background: #ffd; }
+.okv { background: #dfd; }
+
+.arrow.up { color: green; }
+.arrow.down { color: red; }
+
+.cell-note {
+  font-size: 0.75rem;
+  color: #333;
+}
+
+/* إخفاء التبويبات/المساحات الفارغة من القالب */
+.app-tabs,
+.main-tabs,
+.page-tabs,
+.topbar,
+header .tabs,
+header .nav,
+header .nav-tabs,
+header .nav-pills,
+[role="tablist"] {
+  display: none !important;
+}
+
+body { padding-top: 0 !important; }
+.container { margin-top: 0 !important; }
+
+@media print {
+  .controls, .notes textarea, #applyBtn, #blankBtn, #printBtn, #backBtn {
+    display: none !important;
+  }
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  #reportTable th, #reportTable td {
+    font-size: 0.7rem;
+    padding: 2px;
+  }
+  @page {
+    size: A4 landscape;
+    margin: 1cm;
+  }
 }
