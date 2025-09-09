@@ -1,547 +1,198 @@
-/* التقارير — ملف JS كامل ومحدّث
-   - يقرأ من Firestore: parents/{parent}/children/{child}/measurements
-   - يُظهر بيانات الطفل تحت شريط التنقّل + نسخة للطباعة
-   - زر "عرض" دائم الظهور
-   - الملاحظات/التصحيح أسفل كل قياس مع خيار إظهار/إخفاء
-   - صفحة طباعة: شبكة واضحة + وضع أفقي + خيار إظهار الملاحظات + نموذج فارغ
-   - التحاليل: Doughnut (هبوط/طبيعي/ارتفاع) + متوسط + ملخص ذكي + مقارنة بين فترتين
-   - حماية كاملة من مراجع Firestore غير الصالحة + استنتاج parent من child
-*/
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>التقارير</title>
+  <link rel="stylesheet" href="./css/reports.css">
+  <style>
+    .hidden{display:none!important}
+    /* إخفاء سطور الملاحظات/الجرعات عند إغلاق الخيار */
+    .notes-hidden .note-line,
+    .notes-hidden .dose-line { display:none; }
 
-/* استيراد Firestore من موديولك */
-import { db } from "./firebase-config.js";
+    /* بطاقة معلومات الطفل أسفل التنقّل */
+    .info-card{margin-top:8px}
+    .info-card .mini{font-size:13px; line-height:1.7}
+    .info-card b{font-weight:700}
 
-import {
-  doc, getDoc,
-  collection, query, where, orderBy, getDocs,
-  collectionGroup, documentId
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+    /* نسخة الطباعة: شبكة واضحة */
+    #printView .table.print-grid th,
+    #printView .table.print-grid td { border:1px solid #e6e6e6; }
+    #printView .table.print-grid { border-collapse:collapse; }
 
-/* ===== أدوات عامة ===== */
-const $  = (s, p=document)=> p.querySelector(s);
-const $$ = (s, p=document)=> Array.from(p.querySelectorAll(s));
-const fmtISO = (d)=> d.toISOString().slice(0,10);
-const addDays = (d,n)=>{ const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()+n); return x; };
-function qparam(name){ const u = new URL(location.href); return u.searchParams.get(name) || ""; }
-function linkWithParams(href, extra = {}) {
-  const qs = new URLSearchParams();
-  if (parentId) qs.set("parent", parentId);
-  if (childId)  qs.set("child", childId);
-  for (const [k,v] of Object.entries(extra)) if (v != null) qs.set(k, v);
-  return href + (href.includes("?") ? "&" : "?") + qs.toString();
-}
+    /* ترويسة الطباعة */
+    .print-header{font-size:12px; margin-bottom:6px}
+    .print-controls{margin:12px 0}
 
-/* ===== عناصر الواجهة ===== */
-const presetEl=$("#preset"), datesBox=$("#datesBox"), fromEl=$("#from"), toEl=$("#to"), runEl=$("#run");
-const btnPrint=$("#btnPrint"), btnBlank=$("#btnBlank"), toggleNotes=$("#toggleNotes");
-const rowsEl=$("#rows"), headRowEl=$("#headRow"), metaEl=$("#meta"), loaderEl=$("#loader");
-const childNav=$("#childNav"), childBanner=$("#childBanner"), bannerName=$("#bannerName"), metaHead=$("#metaHead");
-const lnkHome=$("#lnkHome");
-const analysisBtn=$("#btnAnalyticsPage"), reportPrintBtn=$("#btnReportPrintPage");
-const headRowPrint=$("#headRowPrint"), rowsPrint=$("#rowsPrint");
-const childInfoCard=$("#childInfoCard"), childInfoContent=$("#childInfoContent");
-const printHeader=$("#printHeader");
-const hypoInput=$("#hypoInput"), hyperInput=$("#hyperInput");
-const analysisNumbers=$("#analysisNumbers"), smartSummary=$("#smartSummary");
-const doughnutCanvas = $("#doughnutChart");
-const btnCompare=$("#btnCompare"), cmpFrom=$("#cmpFrom"), cmpTo=$("#cmpTo");
-const chkPrintNotes=$("#chkPrintNotes"), btnPrintPDF=$("#btnPrintPDF"), btnPrintBlank=$("#btnPrintBlank");
+    /* دايمًا خليه لطيف */
+    .muted{opacity:.8}
 
-/* ===== حالة عامة ===== */
-let parentId="", childId="", childDoc=null;
-let limits = { severeLow:55/18, normalMin:70/18, normalMax:180/18, severeHigh:300/18 }; // mmol/L
-let currentDataByDay = {};
-let chartInst = null;
-
-/* ===== فترات اليوم (تشمل ق.النوم) ===== */
-const COLS = [
-  ["WAKE","الاستيقاظ"],
-  ["PRE_BREAKFAST","ق.الفطار"],
-  ["POST_BREAKFAST","ب.الفطار"],
-  ["PRE_LUNCH","ق.الغدا"],
-  ["POST_LUNCH","ب.الغدا"],
-  ["PRE_DINNER","ق.العشا"],
-  ["POST_DINNER","ب.العشا"],
-  ["SNACK","سناك"],
-  ["PRE_SLEEP","ق.النوم"],
-  ["DURING_SLEEP","أثناء النوم"],
-];
-
-const SLOT_ALIAS = {
-  WAKE:["WAKE","UPON_WAKE","UPONWAKE"],
-  PRE_BREAKFAST:["PRE_BREAKFAST","PRE_BF","PREBREAKFAST"],
-  POST_BREAKFAST:["POST_BREAKFAST","POST_BF","POSTBREAKFAST"],
-  PRE_LUNCH:["PRE_LUNCH","PRELUNCH"],
-  POST_LUNCH:["POST_LUNCH","POSTLUNCH"],
-  PRE_DINNER:["PRE_DINNER","PREDINNER"],
-  POST_DINNER:["POST_DINNER","POSTDINNER"],
-  SNACK:["SNACK"],
-  PRE_SLEEP:["PRE_SLEEP","BEFORE_SLEEP","BEFORESLEEP","PRE-SLEEP"],
-  DURING_SLEEP:["DURING_SLEEP","NIGHT"]
-};
-function normalizeSlotKey(k){
-  const x = String(k||"").toUpperCase();
-  for (const std in SLOT_ALIAS) if (SLOT_ALIAS[std].includes(x)) return std;
-  return null;
-}
-
-/* ===== مساعدات ===== */
-const setLoader = (v)=> loaderEl && (loaderEl.style.display = v ? "flex" : "none");
-const round1 = (n)=> (Number.isFinite(+n) ? Math.round(+n*10)/10 : null);
-
-/* تحويل أي قيمة إلى mmol/L */
-function toMmol(rec){
-  if (typeof rec?.value_mmol === "number") return rec.value_mmol;
-  if (typeof rec?.value === "number" && (rec?.unit||"").toLowerCase()==="mmol/l") return rec.value;
-  const mgdl = (typeof rec?.value_mgdl === "number") ? rec.value_mgdl
-              : (typeof rec?.value === "number" ? rec.value : null);
-  return (mgdl==null) ? null : (mgdl/18);
-}
-
-/* تصنيف قيمة واحدة وفق حدود الطفل */
-function classifyByLimits(v){
-  if (!Number.isFinite(v)) return "b-ok";
-  if (limits.severeLow!=null && v <= limits.severeLow) return "b-sevlow";
-  if (limits.normalMin!=null && v <  limits.normalMin) return "b-low";
-  if (limits.severeHigh!=null && v >= limits.severeHigh) return "b-sevhigh";
-  if (limits.normalMax!=null && v >  limits.normalMax) return "b-high";
-  return "b-ok";
-}
-
-/* ===== بطاقة بيانات الطفل ===== */
-function renderChildInfoCard(c){
-  if (!c) return;
-  const ageTxt = (()=> {
-    const dob = c?.birthDate || c?.dob; if(!dob) return "—";
-    const b = new Date(dob), n=new Date();
-    let y=n.getFullYear()-b.getFullYear(), m=n.getMonth()-b.getMonth(), d=n.getDate()-b.getDate();
-    if (d<0) m--; if (m<0){ y--; m+=12; }
-    return y>0 ? `${y} سنة${m?` و${m} شهر`:''}` : `${m} شهر`;
-  })();
-  const carb = c?.carbRatio ?? c?.carb ?? "—";
-  const corr = c?.correctionFactor ?? c?.correction ?? "—";
-  const gender = c?.gender ?? "—";
-  const weight = (c?.weight!=null)? `${c.weight} كجم` : "—";
-  const height = (c?.height!=null)? `${c.height} سم` : "—";
-  const device = c?.device ?? "—";
-  const basal  = c?.insulin?.basal ?? c?.basal ?? "—";
-  const bolus  = c?.insulin?.bolus ?? c?.bolus ?? "—";
-  const nmin = c?.normalRange?.min ?? round1(limits.normalMin);
-  const nmax = c?.normalRange?.max ?? round1(limits.normalMax);
-
-  childInfoContent.innerHTML = `
-    <b>الاسم:</b> ${c?.name || "—"} •
-    <b>العمر:</b> ${ageTxt} •
-    <b>الجنس:</b> ${gender} •
-    <b>الوزن:</b> ${weight} •
-    <b>الطول:</b> ${height} •
-    <b>الجهاز:</b> ${device} •
-    <b>الإنسولين</b>: <b>Basal:</b> ${basal} • <b>Bolus:</b> ${bolus} •
-    <b>النطاق:</b> ${nmin}–${nmax} mmol/L •
-    <b>CR:</b> ${carb} g/U • <b>CF:</b> ${corr} mmol/L/U
-  `;
-
-  childInfoCard.classList.remove("hidden");
-  printHeader.textContent = childInfoContent.textContent; // نسخة للطباعة
-}
-
-/* ===== رأس الجدول ===== */
-function buildHead(row){
-  row.innerHTML = "";
-  const thDate = document.createElement("th");
-  thDate.textContent="التاريخ";
-  thDate.className="date";
-  row.appendChild(thDate);
-  for (const [,label] of COLS){
-    const th=document.createElement("th");
-    th.textContent=label;
-    row.appendChild(th);
-  }
-}
-function emptyRows(tbody, txt="لا توجد بيانات ضمن المدى المحدد"){
-  tbody.innerHTML = `<tr><td colspan="${COLS.length+1}" class="center muted">${txt}</td></tr>`;
-}
-
-/* ===== الصفوف (القيمة + الملاحظات/الجرعات تحت كل قياس) ===== */
-function renderRows(tbody, byDay){
-  const days = Object.keys(byDay).sort();
-  if (!days.length){ emptyRows(tbody); return; }
-  const frag = document.createDocumentFragment();
-
-  for (const d of days){
-    const tr = document.createElement("tr");
-
-    const tdDate = document.createElement("td");
-    tdDate.className="date";
-    tdDate.textContent=d;
-    tr.appendChild(tdDate);
-
-    const prev = byDay[fmtISO(addDays(new Date(d),-1))] || {};
-
-    for (const [slot] of COLS){
-      const td = document.createElement("td");
-      const rec = byDay[d]?.[slot]; const prevRec = prev?.[slot];
-
-      if (rec){
-        const mmol = toMmol(rec); const v = round1(mmol);
-        const cls = classifyByLimits(mmol);
-
-        const val = document.createElement("div"); val.className="value-line";
-        const b = document.createElement("b"); b.textContent = (v!=null ? v.toFixed(1) : "—");
-        const dot = document.createElement("span"); dot.className=`state-dot ${cls}`; dot.textContent="●";
-        val.appendChild(b); val.appendChild(dot); td.appendChild(val);
-
-        if (rec?.bolusDose!=null || rec?.correctionDose!=null){
-          const dl = document.createElement("div"); dl.className="dose-line";
-          const parts=[]; if(rec.bolusDose!=null) parts.push(`جرعة: ${rec.bolusDose}U`);
-          if(rec.correctionDose!=null) parts.push(`تصحيح: ${rec.correctionDose}U`);
-          dl.textContent = parts.join(" • "); td.appendChild(dl);
-        }
-        if (rec?.notes || rec?.hypoTreatment){
-          const nl = document.createElement("div"); nl.className="note-line";
-          nl.textContent = rec.notes || rec.hypoTreatment || ""; td.appendChild(nl);
-        }
-      } else {
-        td.textContent="—";
-      }
-
-      tr.appendChild(td);
+    @media print{
+      .no-print{display:none!important}
+      @page{ size: A4 landscape; margin:10mm; }
+      .print-header{font-size:12px}
     }
+  </style>
+  <!-- Chart.js للتحاليل -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body class="notes-hidden">
+  <!-- بانر أعلى الصفحة (موجود مسبقًا) -->
+  <section id="childBanner" class="card child-info">
+    <div class="head">
+      <h1 id="bannerName">—</h1>
+      <p id="metaHead" class="muted small">—</p>
+    </div>
+  </section>
 
-    frag.appendChild(tr);
-  }
+  <!-- شريط تنقّل الصفحات -->
+  <div class="card no-print">
+    <div id="childNav" class="row"></div>
+  </div>
 
-  tbody.innerHTML=""; tbody.appendChild(frag);
-}
+  <!-- بطاقة بيانات الطفل تحت التنقّل -->
+  <section id="childInfoCard" class="card info-card no-print hidden">
+    <div id="childInfoContent" class="mini"></div>
+  </section>
 
-/* ===== جلب بيانات الطفل + الحدود ===== */
-async function loadChild(){
-  if (!db || !parentId || !childId) {
-    bannerName.textContent = "الطفل";
-    if (metaHead) metaHead.textContent = "—";
-    return null;
-  }
-  const ref = doc(db, "parents", parentId, "children", childId);
-  const snap = await getDoc(ref);
-  childDoc = snap.exists() ? snap.data() : {};
-  bannerName.textContent = childDoc?.name || "الطفل";
+  <!-- أدوات التحكم -->
+  <section class="card controls no-print">
+    <div class="actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <label class="toggle-notes" title="إظهار الملاحظات وجرعات التصحيح تحت كل قياس">
+        <input id="toggleNotes" type="checkbox" checked>
+        <span>إظهار الملاحظات/الجرعات</span>
+      </label>
 
-  // metaHead القديم
-  const ageTxt = (()=> {
-    const dob = childDoc?.birthDate || childDoc?.dob; if(!dob) return "—";
-    const b = new Date(dob), n=new Date();
-    let y=n.getFullYear()-b.getFullYear(), m=n.getMonth()-b.getMonth(), d=n.getDate()-b.getDate();
-    if (d<0) m--; if (m<0){ y--; m+=12; }
-    return y>0 ? `${y} سنة${m?` و${m} شهر`:''}` : `${m} شهر`;
-  })();
-  if (metaHead) {
-    const carb = childDoc?.carbRatio ?? childDoc?.carb ?? "—";
-    const corr = childDoc?.correctionFactor ?? childDoc?.correction ?? "—";
-    metaHead.textContent = `العمر: ${ageTxt} • معامل الكارب: ${carb} • التصحيحي: ${corr}`;
-  }
+      <a id="btnAnalyticsPage" class="btn success">التحاليل</a>
+      <a id="btnReportPrintPage" class="btn warning">صفحة طباعة التقرير</a>
+      <a id="btnPrint" class="btn gray">طباعة</a>
+      <a id="btnBlank" class="btn danger">ورقة فارغة (7 أيام)</a>
+      <a id="lnkHome" class="btn gray">رجوع</a>
 
-  // حدود الطفل (إن وُجدت)
-  if (childDoc?.normalRange){
-    if (childDoc.normalRange.min!=null) limits.normalMin = +childDoc.normalRange.min;
-    if (childDoc.normalRange.max!=null) limits.normalMax = +childDoc.normalRange.max;
-    if (childDoc.normalRange.severeLow!=null) limits.severeLow = +childDoc.normalRange.severeLow;
-    if (childDoc.normalRange.severeHigh!=null) limits.severeHigh = +childDoc.normalRange.severeHigh;
-  }
+      <!-- زر عرض دائم الظهور -->
+      <button id="run" class="btn primary">عرض</button>
+    </div>
 
-  renderChildInfoCard(childDoc);
-
-  // تعبئة حقول Hypo/Hyper الافتراضية للتحاليل
-  hypoInput.value  = (limits.normalMin ?? 3.9).toFixed(1);
-  hyperInput.value = (limits.normalMax ?? 10.0).toFixed(1);
-}
-
-/* ===== استنتاج parent من child لو ناقص ===== */
-async function ensureParentFromChild() {
-  if (!db || parentId || !childId) return;
-
-  // documentId داخل collectionGroup لازم يستقبل المسار الكامل داخل المجموعة
-  const q = query(
-    collectionGroup(db, "children"),
-    where(documentId(), "==", `children/${childId}`)
-  );
-
-  const snaps = await getDocs(q);
-  if (!snaps.empty) {
-    const s = snaps.docs[0];
-    parentId = s.ref.parent.parent.id;
-    sessionStorage.setItem("lastParent", parentId);
-  }
-}
-
-/* ===== القياسات: نفس مسار النسخة القديمة ===== */
-async function fetchAggregated(fromISO, toISO){
-  if (!db || !parentId || !childId) return {};
-  const col = collection(db, "parents", parentId, "children", childId, "measurements");
-  const qy = query(
-    col,
-    where("date", ">=", fromISO),
-    where("date", "<=", toISO),
-    orderBy("date","asc"),
-    orderBy("when","asc")
-  );
-  const snap = await getDocs(qy);
-
-  const byDay = {};
-  snap.forEach(docSnap=>{
-    const r = docSnap.data();
-    const date = r?.date; if(!date) return;
-    const slot = normalizeSlotKey(r?.slotKey || r?.slot || r?.period || r?.timeSlot);
-    if(!slot) return;
-    (byDay[date] ||= {});
-    const prev = byDay[date][slot];
-    const currTs = r?.when?.toMillis ? r.when.toMillis() : (r?.when || 0);
-    const prevTs = prev?.when?.toMillis ? prev.when.toMillis() : (prev?.when || 0);
-    if(!prev || currTs >= prevTs) byDay[date][slot] = r;
-  });
-  return byDay;
-}
-
-/* ===== بناء التقرير ===== */
-async function buildReport(fromISO, toISO){
-  setLoader(true);
-  try{
-    metaEl.textContent = `من ${fromISO} إلى ${toISO}`;
-    buildHead(headRowEl); buildHead(headRowPrint);
-    rowsEl.innerHTML = `<tr><td colspan="${COLS.length+1}" class="center muted">جاري التحميل…</td></tr>`;
-    const byDay = await fetchAggregated(fromISO, toISO);
-    currentDataByDay = byDay;
-    renderRows(rowsEl, byDay);
-    renderRows(rowsPrint, byDay);
-    if (!Object.keys(byDay).length){
-      emptyRows(rowsEl);
-      emptyRows(rowsPrint);
-    }
-  }catch(e){
-    console.error(e);
-    emptyRows(rowsEl, "حدث خطأ أثناء تحميل البيانات");
-  }finally{
-    setLoader(false);
-  }
-}
-
-/* ===== التحاليل ===== */
-function computeStats(byDay, hypo, hyper){
-  let hypoC=0, normC=0, hyperC=0, sum=0, cnt=0;
-  const perSlotCounts = {};
-  for (const day of Object.values(byDay)){
-    for (const [slot, rec] of Object.entries(day)){
-      const v = toMmol(rec);
-      if (v==null) continue;
-      cnt++; sum += v;
-      if (v < hypo){ hypoC++; perSlotCounts[slot]=(perSlotCounts[slot]||0)+1; }
-      else if (v > hyper){ hyperC++; perSlotCounts[slot]=(perSlotCounts[slot]||0)+1; }
-      else { normC++; }
-    }
-  }
-  const avg = cnt ? +(sum/cnt).toFixed(1) : null;
-  const tir = cnt ? Math.round((normC/cnt)*100) : 0;
-  let worstSlot=null, wVal=0;
-  for (const [s,c] of Object.entries(perSlotCounts)){ if(c>wVal){wVal=c; worstSlot=s;} }
-  return {hypo:hypoC, normal:normC, hyper:hyperC, avg, tir, worstSlot, total:cnt};
-}
-
-function buildAnalytics(){
-  const ChartLib = window.Chart;
-  if (!currentDataByDay || !Object.keys(currentDataByDay).length) {
-    analysisNumbers.innerHTML = `<div class="muted">لا توجد بيانات لعرض التحاليل.</div>`;
-    smartSummary.textContent = "";
-    if (chartInst) { chartInst.destroy(); chartInst=null; }
-    return;
-  }
-  const hypo  = parseFloat(hypoInput.value)  || 3.9;
-  const hyper = parseFloat(hyperInput.value) || 10.0;
-
-  const st = computeStats(currentDataByDay, hypo, hyper);
-
-  analysisNumbers.innerHTML = `
-    <div class="badge b-ok">المتوسط: ${st.avg ?? "—"} mmol/L</div>
-    <div class="badge b-ok">ضمن النطاق: ${st.tir}%</div>
-    <div class="badge b-low">هبوط: ${st.hypo}</div>
-    <div class="badge b-high">ارتفاع: ${st.hyper}</div>
-  `;
-
-  const tips = [];
-  if (st.tir < 60) tips.push("النطاق منخفض — راجعي أهداف الوجبات والتصحيح.");
-  if (st.hypo > st.hyper) tips.push("الهبوطات أكثر من الارتفاعات — فكري في تقليل جرعات الوجبات أو التصحيح.");
-  if (st.hyper > st.hypo) tips.push("الارتفاعات أعلى — ربما نحتاج زيادة طفيفة في التصحيح أو مراجعة الكارب.");
-  if (st.worstSlot) tips.push(`أكثر فترة خروجًا: ${COLS.find(c=>c[0]===st.worstSlot)?.[1] || st.worstSlot}.`);
-  smartSummary.textContent = tips.join(" ");
-
-  if (chartInst) chartInst.destroy();
-  chartInst = new ChartLib(doughnutCanvas.getContext("2d"), {
-    type: "doughnut",
-    data: {
-      labels: ["هبوط", "طبيعي", "ارتفاع"],
-      datasets: [{ data: [st.hypo, st.normal, st.hyper] }]
-    },
-    options: { responsive:true, plugins:{ legend:{ position:"bottom" } } }
-  });
-}
-
-/* مقارنة فترتين */
-async function buildComparison(){
-  const f = cmpFrom.value, t = cmpTo.value;
-  if (!f || !t){ $("#compareArea").innerHTML = `<div class="muted">اختاري فترة ثانية ثم اضغطي "قارن".</div>`; return; }
-  const other = await fetchAggregated(f, t);
-  const hypo  = parseFloat(hypoInput.value)  || 3.9;
-  const hyper = parseFloat(hyperInput.value) || 10.0;
-
-  const A = computeStats(currentDataByDay, hypo, hyper);
-  const B = computeStats(other,             hypo, hyper);
-
-  const diffAvg = (A.avg!=null && B.avg!=null) ? (A.avg - B.avg).toFixed(1) : "—";
-  const diffTir = (A.tir - B.tir);
-
-  $("#compareArea").innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-      <div class="card"><b>الفترة الحالية</b>
-        <div>متوسط: ${A.avg ?? "—"}</div>
-        <div>ضمن النطاق: ${A.tir}%</div>
-        <div>هبوط/طبيعي/ارتفاع: ${A.hypo}/${A.normal}/${A.hyper}</div>
+    <div class="range" style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div class="filter">
+        <label for="preset">المدى السريع</label>
+        <select id="preset">
+          <option value="7">أسبوع</option>
+          <option value="14">14 يوم</option>
+          <option value="30">شهر</option>
+          <option value="90">3 شهور</option>
+          <option value="90_only">90 فقط</option>
+          <option value="custom">مخصّص</option>
+        </select>
       </div>
-      <div class="card"><b>الفترة المقارنة</b>
-        <div>متوسط: ${B.avg ?? "—"}</div>
-        <div>ضمن النطاق: ${B.tir}%</div>
-        <div>هبوط/طبيعي/ارتفاع: ${B.hypo}/${B.normal}/${B.hyper}</div>
-      </div>
-      <div class="card"><b>الفروقات</b>
-        <div>Δ متوسط: ${diffAvg}</div>
-        <div>Δ ضمن النطاق: ${diffTir > 0 ? "+"+diffTir : diffTir}%</div>
+
+      <div id="datesBox" class="dates hidden" style="display:flex;gap:12px">
+        <div class="filter">
+          <label for="from">من</label>
+          <input id="from" type="date">
+        </div>
+        <div class="filter">
+          <label for="to">إلى</label>
+          <input id="to" type="date">
+        </div>
       </div>
     </div>
-  `;
-}
+  </section>
 
-/* ===== بدائل الطباعة ===== */
-function syncPrintNotes(){
-  const pv = $("#printView");
-  pv.classList.toggle("notes-hidden", !chkPrintNotes.checked);
-}
+  <!-- وصف الفترة -->
+  <div id="meta" class="container small muted"></div>
 
-/* ===== واجهة المستخدم ===== */
-function applyPreset(val){
-  const custom = (val==="custom");
-  datesBox.classList.toggle("hidden", !custom);
-  if (custom) return;
-  const today = new Date();
-  let days = 7;
-  if (val==="14") days=14; else if (val==="30") days=30; else if(val==="90"||val==="90_only") days=90;
-  const to = fmtISO(today), from = fmtISO(addDays(today, -(days-1)));
-  fromEl.value = from; toEl.value = to;
-}
+  <!-- مؤشر تحميل -->
+  <div id="loader" class="loader card">جاري التحميل…</div>
 
-function wireUI(){
-  toggleNotes?.addEventListener("change", ()=>{
-    document.body.classList.toggle("notes-hidden", !toggleNotes.checked);
-  });
+  <!-- 1) التقرير -->
+  <section id="reportView" class="card">
+    <div class="legend no-print">
+      <span class="badge b-sevlow">هبوط شديد</span>
+      <span class="badge b-low">هبوط</span>
+      <span class="badge b-ok">طبيعي</span>
+      <span class="badge b-high">ارتفاع</span>
+      <span class="badge b-sevhigh">ارتفاع شديد</span>
+    </div>
+    <div class="table-wrap">
+      <table id="rep" class="table" aria-label="تقرير قياسات">
+        <thead><tr id="headRow"></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
 
-  presetEl?.addEventListener("change", ()=> applyPreset(presetEl.value));
+  <!-- 2) التحاليل -->
+  <section id="analysisView" class="card hidden">
+    <div class="center">
+      <h2>التحاليل</h2>
+      <p class="muted">التوزيع (هبوط/طبيعي/ارتفاع) يعتمد على حدود Hypo/Hyper أدناه.</p>
 
-  runEl?.addEventListener("click", ()=>{
-    const v = presetEl?.value || "7";
-    if (v!=="custom") applyPreset(v);
-    const fromISO = fromEl.value || fmtISO(addDays(new Date(), -6));
-    const toISO   = toEl.value   || fmtISO(new Date());
-    buildReport(fromISO, toISO);
-    showView("report");
-  });
+      <div class="no-print" style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:10px 0;">
+        <div>
+          <label for="hypoInput" class="muted">Hypo</label><br>
+          <input id="hypoInput" type="number" step="0.1" style="width:120px">
+        </div>
+        <div>
+          <label for="hyperInput" class="muted">Hyper</label><br>
+          <input id="hyperInput" type="number" step="0.1" style="width:120px">
+        </div>
+        <button id="btnRecalcAnalysis" class="btn primary">إعادة حساب التحاليل</button>
+      </div>
 
-  // الطباعة
-  btnPrint?.addEventListener("click", ()=> window.print());
-  btnPrintPDF?.addEventListener("click", ()=> window.print());
-  chkPrintNotes?.addEventListener("change", syncPrintNotes);
+      <div style="max-width:720px;margin:auto">
+        <canvas id="doughnutChart" height="180"></canvas>
+      </div>
 
-  btnPrintBlank?.addEventListener("click", ()=>{
-    const start=new Date();
-    const days=Array.from({length:7},(_,i)=>fmtISO(addDays(start,i)));
-    const byDay={}; days.forEach(d=>byDay[d]={});
-    currentDataByDay=byDay;
-    buildHead(headRowPrint);
-    renderRows(rowsPrint, byDay);
-  });
+      <div id="analysisNumbers" style="margin-top:10px"></div>
+      <div id="smartSummary" class="muted" style="margin-top:8px"></div>
 
-  // التقرير الفارغ (في العرض الرئيسي)
-  btnBlank?.addEventListener("click", ()=>{
-    const start=new Date();
-    const days=Array.from({length:7},(_,i)=>fmtISO(addDays(start,i)));
-    const byDay={}; days.forEach(d=>byDay[d]={});
-    currentDataByDay=byDay;
-    buildHead(headRowEl); buildHead(headRowPrint);
-    renderRows(rowsEl, byDay); renderRows(rowsPrint, byDay);
-    metaEl.textContent = "ورقة فارغة للأسبوع القادم";
-  });
+      <hr class="no-print" style="margin:16px 0; opacity:.2">
 
-  // التنقل بين العروض
-  analysisBtn?.addEventListener("click", (e)=>{ e.preventDefault(); showView("analysis"); buildAnalytics(); });
-  reportPrintBtn?.addEventListener("click", (e)=>{ e.preventDefault(); showView("print"); });
+      <div class="no-print" style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap">
+        <div>
+          <label class="muted">قارن من</label><br>
+          <input id="cmpFrom" type="date" style="width:150px">
+        </div>
+        <div>
+          <label class="muted">إلى</label><br>
+          <input id="cmpTo" type="date" style="width:150px">
+        </div>
+        <button id="btnCompare" class="btn gray">قارن الفترتين</button>
+      </div>
 
-  $("#btnRecalcAnalysis")?.addEventListener("click", ()=> buildAnalytics());
-  btnCompare?.addEventListener("click", ()=> buildComparison());
+      <div id="compareArea" style="margin-top:12px"></div>
 
-  // زر رجوع
-  if (lnkHome) lnkHome.href = parentId ? `parent.html?parent=${encodeURIComponent(parentId)}` : "parent.html";
-}
+      <div style="margin-top:12px">
+        <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
+      </div>
+    </div>
+  </section>
 
-/* ===== تبديل العروض ===== */
-window.showView = function(which){
-  const reportSec=$("#reportView"), analysisSec=$("#analysisView"), printSec=$("#printView");
-  [reportSec,analysisSec,printSec].forEach(el=>el?.classList.add("hidden"));
-  if (which==="analysis"){ analysisSec?.classList.remove("hidden"); }
-  else if (which==="print"){ printSec?.classList.remove("hidden"); syncPrintNotes(); }
-  else { reportSec?.classList.remove("hidden"); }
-};
+  <!-- 3) نسخة الطباعة -->
+  <section id="printView" class="card hidden">
+    <div class="print-header" id="printHeader">—</div>
 
-/* ===== التنقّل ===== */
-function buildNav(){
-  if(!childNav) return;
-  childNav.innerHTML = "";
-  const items = [
-    ["parent.html","الرئيسية"],
-    ["measurements.html","قياسات السكر"],
-    ["meals.html","الوجبات"],
-    ["reports.html","التقارير"],
-    ["#","التحاليل", "view:analysis"],
-    ["visits.html","الزيارات الطبية"],
-  ];
-  for (const it of items){
-    const [href,label,type] = it;
-    const a = document.createElement("a");
-    a.className="btn gray"; a.textContent=label;
-    if (type==="view:analysis"){ a.href="#"; a.addEventListener("click",(e)=>{e.preventDefault(); showView("analysis"); buildAnalytics();}); }
-    else { a.href = linkWithParams(href); }
-    childNav.appendChild(a);
-  }
-}
+    <div class="no-print print-controls" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <label>
+        <input id="chkPrintNotes" type="checkbox" checked>
+        <span>إظهار الملاحظات/التصحيح</span>
+      </label>
+      <button class="btn warning" id="btnPrintPDF">طباعة PDF</button>
+      <button class="btn danger" id="btnPrintBlank">نموذج فارغ</button>
+      <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
+    </div>
 
-/* ===== بدء التشغيل ===== */
-async function start(){
-  parentId = qparam("parent") || sessionStorage.getItem("lastParent") || "";
-  childId  = qparam("child")  || sessionStorage.getItem("lastChild")  || "";
+    <div class="table-wrap">
+      <table id="repPrint" class="table print-grid">
+        <thead><tr id="headRowPrint"></tr></thead>
+        <tbody id="rowsPrint"></tbody>
+      </table>
+    </div>
+  </section>
 
-  await ensureParentFromChild();
-
-  if (parentId) sessionStorage.setItem("lastParent", parentId);
-  if (childId)  sessionStorage.setItem("lastChild",  childId);
-
-  buildNav();
-  wireUI();
-
-  if (!parentId || !childId) {
-    metaEl.textContent = "يجب تحديد الطفل (parent & child) لعرض البيانات.";
-    return;
-  }
-
-  childBanner.style.display = "block";
-  await loadChild();
-
-  presetEl.value = "7";
-  applyPreset("7");
-  runEl.click(); // يبني التقرير مباشرة
-}
-
-document.addEventListener("DOMContentLoaded", start);
+  <!-- موديول الصفحة (يستورد db من firebase-config.js) -->
+  <script type="module" src="./js/reports.js"></script>
+</body>
+</html>
