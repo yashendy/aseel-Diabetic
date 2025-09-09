@@ -1,19 +1,21 @@
-/* التقارير – صفحة واحدة مع تبديل العروض + Firestore */
+/* التقارير – صفحة واحدة مع تبديل العروض + استرجاع بيانات Firestore */
 
 // ===================== Firebase (تهيئة آمنة) =====================
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, doc, getDoc, collection, query, where, orderBy, getDocs
+  getFirestore, doc, getDoc,
+  collection, collectionGroup,
+  query, where, orderBy, getDocs,
+  documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-let app, db;
+let app = null, db = null;
 try {
   const cfg = getApps().length ? null : (window.firebaseConfig || null);
   app = getApps().length ? getApp() : (cfg ? initializeApp(cfg) : null);
-  db = app ? getFirestore(app) : null;
+  db  = app ? getFirestore(app) : null;
 } catch (e) {
   console.warn("Firebase init warning:", e);
-  app = null; db = null;
 }
 
 // ===================== أدوات عامة =====================
@@ -54,13 +56,13 @@ const SLOT_ALIAS = {
   PRE_SLEEP:["PRE_SLEEP","BEFORE_SLEEP","BEFORESLEEP","PRE-SLEEP"],
   DURING_SLEEP:["DURING_SLEEP","NIGHT"]
 };
-const SLOT_MAP = (()=>{ const m={}; for (const [k,arr] of Object.entries(SLOT_ALIAS)) arr.forEach(a=>m[a.toUpperCase()]=k); return m; })();
+const SLOT_MAP = (()=>{ const m={}; for (const [k,a] of Object.entries(SLOT_ALIAS)) a.forEach(x=>m[x.toUpperCase()]=k); return m; })();
 
 // ===================== تواريخ =====================
 const fmtISO = (d)=> d.toISOString().slice(0,10); // كما كان
 const addDays = (d, n)=> { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate()+n); return x; };
 
-// ===================== عناصر واجهة =====================
+// ===================== عناصر الواجهة =====================
 const presetEl=$("#preset"), datesBox=$("#datesBox"), fromEl=$("#from"), toEl=$("#to"), runEl=$("#run");
 const btnPrint=$("#btnPrint"), btnBlank=$("#btnBlank"), toggleNotes=$("#toggleNotes");
 const rowsEl=$("#rows"), headRowEl=$("#headRow"), metaEl=$("#meta"), loaderEl=$("#loader");
@@ -69,7 +71,7 @@ const lnkHome=$("#lnkHome");
 const analysisBtn=$("#btnAnalyticsPage"), reportPrintBtn=$("#btnReportPrintPage");
 const headRowPrint=$("#headRowPrint"), rowsPrint=$("#rowsPrint"), analysisContainer=$("#analysisContainer");
 
-// ===================== حالة =====================
+// ===================== حالة عامة =====================
 let parentId="", childId="", childInfo=null;
 let limits = { severeLow:55, normalMin:70, normalMax:180, severeHigh:300 };
 let currentDataByDay = {};
@@ -96,7 +98,7 @@ function calcAge(birthISO){
 }
 
 async function loadChild(){
-  if (!db) { bannerName.textContent="الطفل"; metaHead.textContent="—"; return null; }
+  if (!db || !parentId || !childId) { bannerName.textContent="الطفل"; metaHead.textContent="—"; return null; }
   const ref = doc(db, "parents", parentId, "children", childId);
   const snap = await getDoc(ref);
   if (!snap.exists()) { bannerName.textContent="الطفل"; metaHead.textContent="—"; return null; }
@@ -120,9 +122,25 @@ async function loadChild(){
   return c;
 }
 
+// يحاول استنتاج parent من child لو لم يُمرَّر في الرابط
+async function tryResolveParentFromChildId(){
+  if (!db || !childId || parentId) return;
+  try {
+    const q = query(collectionGroup(db, "children"), where(documentId(), "==", childId));
+    const snaps = await getDocs(q);
+    if (!snaps.empty) {
+      const s = snaps.docs[0];
+      parentId = s.ref.parent.parent.id;
+      sessionStorage.setItem("lastParent", parentId);
+    }
+  } catch (e) {
+    console.warn("resolve parent failed:", e);
+  }
+}
+
 // ===================== Firestore: القياسات =====================
 async function fetchMeasurements(fromISO, toISO){
-  if (!db) return [];
+  if (!db || !parentId) return [];
   const col = collection(db, "parents", parentId, "measurements");
 
   // المحاولة 1: حقل تاريخ ISO
@@ -343,7 +361,6 @@ function wireUI(){
 
   analysisBtn?.addEventListener("click", (e)=>{ e.preventDefault(); showView("analysis"); });
   reportPrintBtn?.addEventListener("click", (e)=>{ e.preventDefault(); showView("print"); });
-
   $("#btnRecalcAnalysis")?.addEventListener("click", ()=> buildAnalysis());
 
   if (lnkHome) lnkHome.href = parentId ? `parent.html?parent=${encodeURIComponent(parentId)}` : "parent.html";
@@ -383,16 +400,20 @@ async function main(){
     parentId = qparam("parent") || sessionStorage.getItem("lastParent") || "";
     childId  = qparam("child")  || sessionStorage.getItem("lastChild")  || "";
 
+    if (!parentId && childId) {               // يستنتج الـ parent إذا كان مفقودًا
+      await tryResolveParentFromChildId();
+    }
+
     if (parentId) sessionStorage.setItem("lastParent", parentId);
-    if (childId)  sessionStorage.setItem("lastChild", childId);
+    if (childId)  sessionStorage.setItem("lastChild",  childId);
 
     childBanner.style.display = "block";
-    await loadChild();           // اسم الطفل + بياناته
+    await loadChild();                         // اسم الطفل + بياناته
 
-    wireUI();                    // تفعيل كل الأزرار
-    buildNav();                  // شريط التنقّل
-    applyPreset("14");           // افتراضي
-    runEl.click();               // بناء التقرير مباشرة
+    wireUI();                                  // تفعيل الأزرار
+    buildNav();                                // شريط التنقّل
+    applyPreset("14");                         // افتراضي
+    runEl.click();                             // بناء التقرير مباشرة
   } catch (err) {
     console.error(err);
     metaEl.textContent = "حدثت مشكلة في التهيئة. تأكدي من ملف Firebase.";
