@@ -1,504 +1,294 @@
-// js/child-edit.js — إعداد الطفل (Parent/Doctor Role-aware)
-// يعمل مع قواعد Firestore الحالية بدون تعديل
-
-import { db } from "./firebase-config.js";
+// child-edit.js — صفحة إعداد الطفل (بيانات شخصية/إكلينيكية فقط)
+import { db } from "../firebase-config.js";
 import {
-  doc, getDoc, setDoc, updateDoc, serverTimestamp,
-  collectionGroup, query, where, getDocs, documentId
+  doc, getDoc, setDoc, collectionGroup, query, where, getDocs,
+  documentId, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import {
-  getAuth, onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* ========= أدوات DOM ========= */
-const el = (id)=>document.getElementById(id);
-const childIdBadge = el("childIdBadge");
-const loader = el("loader");
-const toast = el("toast");
-const linkStatus = el("linkStatus");
-const doctorState = el("doctorState");
+/* ===== DOM ===== */
+const $ = (s,p=document)=>p.querySelector(s);
 
-const fields = {
-  // أساسية
-  name: el("f_name"),
-  gender: el("f_gender"),
-  birthDate: el("f_birthDate"),
-  unit: el("f_unit"),              // نكتب دائمًا glucoseUnit
-  deviceName: el("f_deviceName"),  // يfallback إلى device
-  weightKg: el("f_weightKg"),
-  heightCm: el("f_heightCm"),
+const hdrName = $("#hdrName");
+const roleBadge = $("#roleBadge");
+const statusEl = $("#status");
+const loader = $("#loader");
+const saveBtn = $("#btnSave");
 
-  // أنسولين
-  basalType: el("f_basalType"),    // نكتب أيضًا Top-level للطبيب
-  bolusType: el("f_bolusType"),
-  longInsulin: el("f_longInsulin"),
-  longTime: el("f_longTime"),
-  longUnits: el("f_longUnits"),
-
-  // Carb & Correction
-  carbRatio: el("f_carbRatio"),
-  correctionFactor: el("f_correctionFactor"),
-
-  // Net carbs
-  useNetCarbs: el("f_useNetCarbs"),
-  netCarbRule: el("f_netCarbRule"),
-
-  // Carb Targets
-  carb_b_min: el("f_carb_b_min"), carb_b_max: el("f_carb_b_max"),
-  carb_l_min: el("f_carb_l_min"), carb_l_max: el("f_carb_l_max"),
-  carb_d_min: el("f_carb_d_min"), carb_d_max: el("f_carb_d_max"),
-  carb_s_min: el("f_carb_s_min"), carb_s_max: el("f_carb_s_max"),
-
-  // Ranges (mmol/L)
-  norm_min: el("f_norm_min"),
-  norm_max: el("f_norm_max"),
-  severeLow: el("f_severeLow"),
-  severeHigh: el("f_severeHigh"),
-
-  // Hypo/Hyper (للعرض والحفظ لدى وليّ الأمر)
-  hypo: el("f_hypo"),
-  hyper: el("f_hyper"),
-
-  // مشاركة الطبيب
-  shareDoctor: el("f_shareDoctor"),
-  linkCode: el("f_linkCode"),
-
-  // أزرار
-  btnSave: el("btnSave"),
-  btnBack: el("btnBack"),
-  btnLinkDoctor: el("btnLinkDoctor"),
-  btnUnlinkDoctor: el("btnUnlinkDoctor"),
+/* بطاقة مختصرة */
+const CARD = {
+  name:$("#c_name"), age:$("#c_age"), gender:$("#c_gender"), unit:$("#c_unit"),
+  cr:$("#c_cr"), cf:$("#c_cf"), basal:$("#c_basal"), bolus:$("#c_bolus"),
+  device:$("#c_device"), height:$("#c_height"), weight:$("#c_weight"),
+  bmi:$("#c_bmi"), doctor:$("#c_doctor"), share:$("#c_share"), updated:$("#c_updated"),
 };
 
-/* ========= حالة عامة ========= */
-let currentUser = null;
-let parentId = null;
-let childId  = null;
-let userRole = "parent"; // parent | doctor | admin | ...
-let childData = null;
+/* حقول النموذج */
+const F = {
+  name:$("#f_name"), gender:$("#f_gender"), birthDate:$("#f_birthDate"), unit:$("#f_unit"),
+  heightCm:$("#f_heightCm"), weightKg:$("#f_weightKg"),
+  carbRatio:$("#f_carbRatio"), correctionFactor:$("#f_correctionFactor"),
+  basalType:$("#f_basalType"), bolusType:$("#f_bolusType"),
+  device:$("#f_device"),
 
-/* ========= أدوات مساعدة ========= */
-const num = (v)=> (v===''||v===null||v===undefined) ? null : Number(v);
-const clampNull = (v)=> (v===''||v===null||v===undefined) ? null : Number(v);
-const qs = (k)=> new URLSearchParams(location.search).get(k) || "";
-const showLoader = (v=true)=> loader?.classList.toggle("hidden", !v);
-function showToast(msg="تم"){ if(!toast) return; const box = toast.querySelector(".msg") || toast; box.textContent = msg; toast.classList.remove("hidden"); setTimeout(()=>toast.classList.add("hidden"), 1800); }
-function setStatus(msg, ok=false){ if(!linkStatus) return; linkStatus.textContent = msg; linkStatus.className = "status " + (ok ? "ok" : "err"); }
-function clearStatus(){ setStatus("", true); }
-function setDoctorBadge(uid, name){
-  if (!doctorState) return;
-  if (uid) { doctorState.textContent = name ? `مرتبط: ${name}` : `مرتبط (${uid})`; }
-  else { doctorState.textContent = "غير مرتبط"; }
-}
-async function fetchUserDoc(uid){
-  try{
-    const s = await getDoc(doc(db,"users",uid));
-    return s.exists() ? s.data() : null;
-  }catch{ return null; }
-}
-function saveContextToStorage(pid, cid){
-  try{ sessionStorage.setItem("lastParent", pid||""); sessionStorage.setItem("lastChild", cid||""); }catch{}
-}
-function readContextFromStorage(){
-  try{
-    return {
-      parent: sessionStorage.getItem("lastParent") || "",
-      child:  sessionStorage.getItem("lastChild")  || ""
-    };
-  }catch{ return {parent:"", child:""}; }
-}
+  hypo:$("#f_hypo"), hyper:$("#f_hyper"), severeLow:$("#f_severeLow"), severeHigh:$("#f_severeHigh"),
 
-/* ========= تمكين/تعطيل الحقول حسب الدور ========= */
-function isOwner(){ return currentUser && parentId && currentUser.uid === parentId; }
+  cb_min:$("#f_carb_b_min"), cb_max:$("#f_carb_b_max"),
+  cl_min:$("#f_carb_l_min"), cl_max:$("#f_carb_l_max"),
+  cd_min:$("#f_carb_d_min"), cd_max:$("#f_carb_d_max"),
+  cs_min:$("#f_carb_s_min"), cs_max:$("#f_carb_s_max"),
 
-function applyRolePermissions(){
-  const doctorMode = (userRole === "doctor" && !isOwner());
+  share:$("#shareToggle"),
+  bmiValue:$("#bmiValue"),
+};
 
-  // أزرار الربط تظهر للمالك/الأدمن فقط
-  if (fields.btnLinkDoctor)  fields.btnLinkDoctor.disabled  = !isOwner() && userRole !== "admin";
-  if (fields.btnUnlinkDoctor)fields.btnUnlinkDoctor.disabled= !isOwner() && userRole !== "admin";
-  if (fields.linkCode)       fields.linkCode.disabled       = !isOwner() && userRole !== "admin";
+/* ===== حالة عامة ===== */
+let authUser=null, userRole="parent", parentId="", childId="";
+let childData=null;
 
-  // عناصر تُعطّل للطبيب
-  const disableIfDoctor = [
-    fields.deviceName, fields.weightKg, fields.heightCm,
-    fields.useNetCarbs, fields.netCarbRule,
-    fields.longInsulin, fields.longTime, fields.longUnits,
-    fields.shareDoctor,
-    fields.hypo, fields.hyper // الطبيب لا يغيّر هذه الحقول مباشرة (يستخدم normalRange)
-  ];
-  disableIfDoctor.forEach(inp => inp && (inp.disabled = doctorMode));
+const setStatus=(txt,ok=null)=>{
+  if(!statusEl) return;
+  statusEl.textContent=txt||"";
+  statusEl.className="status"+(ok===true?" ok": ok===false?" err":"");
+};
+const showLoader=(v)=> loader?.classList.toggle("hidden", !v);
 
-  // عناصر مسموحة للطبيب حسب القواعد
-  const enableIfDoctor = [
-    fields.name, fields.gender, fields.birthDate,
-    fields.unit, fields.carbRatio, fields.correctionFactor,
-    fields.basalType, fields.bolusType,
-    fields.norm_min, fields.norm_max, fields.severeLow, fields.severeHigh,
-    fields.carb_b_min, fields.carb_b_max,
-    fields.carb_l_min, fields.carb_l_max,
-    fields.carb_d_min, fields.carb_d_max,
-    fields.carb_s_min, fields.carb_s_max,
-  ];
-  enableIfDoctor.forEach(inp => inp && (inp.disabled = false));
+/* ===== مُساعدات ===== */
+const qs=(k)=> new URL(location.href).searchParams.get(k)||"";
+const vNum=(x)=>{ const n=Number(x); return Number.isFinite(n)? n : null; };
+
+const ageStr = (dob)=>{
+  if(!dob) return "—";
+  const b=new Date(dob), n=new Date();
+  let y=n.getFullYear()-b.getFullYear(), m=n.getMonth()-b.getMonth(), d=n.getDate()-b.getDate();
+  if(d<0)m--; if(m<0){y--; m+=12;}
+  return y>0? `${y} سنة${m?` و${m} شهر`:''}` : `${m} شهر`;
+};
+const calcBMI = ()=>{
+  const h = vNum(F.heightCm?.value); const w = vNum(F.weightKg?.value);
+  if (!h || !w || h<=0) return null;
+  const m = h/100; return +(w/(m*m)).toFixed(1);
+};
+
+async function fetchRole(uid){
+  const snap = await getDoc(doc(db,"users",uid));
+  return snap.exists()? (snap.data().role || "parent") : "parent";
 }
 
-/* ========= استنتاج parentId من childId (للطبيب عند غياب parent=) ========= */
+/* لو معايا child فقط، استنتج parent عبر collectionGroup */
 async function ensureParentFromChildIfMissing(){
   if (parentId || !childId) return;
   try{
-    const qy = query(
-      collectionGroup(db, "children"),
-      where(documentId(), "==", `children/${childId}`)
+    const q = query(
+      collectionGroup(db,"children"),
+      where(documentId(),"==",`children/${childId}`)
     );
-    const snaps = await getDocs(qy);
-    if (!snaps.empty){
-      const s = snaps.docs[0];
-      parentId = s.ref.parent.parent.id;
-      saveContextToStorage(parentId, childId);
+    const snaps = await getDocs(q);
+    if(!snaps.empty){
+      parentId = snaps.docs[0].ref.parent.parent.id;
+      sessionStorage.setItem("lastParent", parentId);
+      sessionStorage.setItem("lastChild", childId);
     }
-  }catch{ /* تحسين تجربة فقط */ }
+  }catch(e){ console.warn("resolve parent via cg error", e); }
 }
 
-/* ========= قراءة الطفل ========= */
+/* ===== تحميل وملء البيانات ===== */
 async function loadChild(){
-  if (!parentId || !childId){
-    setStatus("يجب تحديد الطفل (parent & child).", false);
-    return;
-  }
-  showLoader(true);
-  try{
-    const ref = doc(db, "parents", parentId, "children", childId);
-    const snap = await getDoc(ref);
-    childData = snap.exists() ? snap.data() : {};
+  const ref = doc(db,"parents",parentId,"children",childId);
+  const s = await getDoc(ref);
+  childData = s.exists()? s.data() : {};
 
-    // اسم الطفل في الشارة + عنوان الصفحة
-    const displayName = childData?.name || childId || "—";
-    if (childIdBadge) childIdBadge.textContent = displayName;
-    document.title = `إعدادات ${displayName}`;
+  const name = childData?.name || childId || "—";
+  hdrName.textContent = name;
+  document.title = `إعدادات ${name}`;
 
-    // أساسية (قراءة مرنة)
-    if (fields.name)       fields.name.value       = childData?.name || "";
-    if (fields.gender)     fields.gender.value     = childData?.gender || "";
-    if (fields.birthDate)  fields.birthDate.value  = childData?.birthDate || "";
-    const unitVal = childData?.glucoseUnit || childData?.unit || "";
-    if (fields.unit)       fields.unit.value       = unitVal;
-    const deviceVal = childData?.deviceName ?? childData?.device ?? "";
-    if (fields.deviceName) fields.deviceName.value = deviceVal;
-    if (fields.weightKg)   fields.weightKg.value   = childData?.weightKg ?? childData?.weight ?? "";
-    if (fields.heightCm)   fields.heightCm.value   = childData?.heightCm ?? childData?.height ?? "";
+  // بطاقة
+  CARD.name.textContent   = name;
+  CARD.gender.textContent = childData?.gender || "—";
+  CARD.unit.textContent   = childData?.glucoseUnit || childData?.unit || "—";
+  CARD.age.textContent    = ageStr(childData?.birthDate);
+  CARD.cr.textContent     = childData?.carbRatio ?? "—";
+  CARD.cf.textContent     = childData?.correctionFactor ?? "—";
+  CARD.basal.textContent  = childData?.insulin?.basalType ?? childData?.basalType ?? "—";
+  CARD.bolus.textContent  = childData?.insulin?.bolusType ?? childData?.bolusType ?? "—";
+  CARD.device.textContent = childData?.device || childData?.deviceName || "—";
+  CARD.height.textContent = childData?.heightCm ?? childData?.height ?? "—";
+  CARD.weight.textContent = childData?.weightKg ?? childData?.weight ?? "—";
+  const bmi = calcBMI() ?? (()=>{
+    const h = childData?.heightCm ?? childData?.height;
+    const w = childData?.weightKg ?? childData?.weight;
+    if(!h || !w) return null;
+    const m=h/100; return +(w/(m*m)).toFixed(1);
+  })();
+  CARD.bmi.textContent = bmi ?? "—";
+  CARD.doctor.textContent = childData?.assignedDoctorInfo?.name || childData?.assignedDoctor || "—";
+  CARD.share.textContent  = (childData?.sharingConsent===true || childData?.sharingConsent?.doctor===true) ? "مفعل" : "معطّل";
+  CARD.updated.textContent= childData?.updatedAt?.toDate?.()?.toLocaleString?.() || "—";
 
-    // أنسولين (قراءة مرنة)
-    if (fields.basalType)  fields.basalType.value  = childData?.insulin?.basalType ?? childData?.basalType ?? "";
-    if (fields.bolusType)  fields.bolusType.value  = childData?.insulin?.bolusType ?? childData?.bolusType ?? "";
-    if (fields.longInsulin)fields.longInsulin.value= childData?.longActingDose?.insulin ?? "";
-    if (fields.longTime)   fields.longTime.value   = childData?.longActingDose?.time ?? "";
-    if (fields.longUnits)  fields.longUnits.value  = childData?.longActingDose?.units ?? "";
+  // نموذج
+  F.name.value = childData?.name||"";
+  F.gender.value = childData?.gender||"";
+  F.birthDate.value = childData?.birthDate||"";
+  F.unit.value = childData?.glucoseUnit || childData?.unit || "";
 
-    // Carb/Correction
-    if (fields.carbRatio)        fields.carbRatio.value        = childData?.carbRatio ?? "";
-    if (fields.correctionFactor) fields.correctionFactor.value = childData?.correctionFactor ?? "";
+  F.heightCm.value = childData?.heightCm ?? childData?.height ?? "";
+  F.weightKg.value = childData?.weightKg ?? childData?.weight ?? "";
+  F.bmiValue.textContent = calcBMI() ?? "—";
 
-    // Net carbs
-    if (fields.useNetCarbs) fields.useNetCarbs.checked = !!childData?.useNetCarbs;
-    if (fields.netCarbRule) fields.netCarbRule.value   = childData?.mealsDoses?.netCarbRule || "";
+  F.carbRatio.value = childData?.carbRatio ?? "";
+  F.correctionFactor.value = childData?.correctionFactor ?? "";
+  F.basalType.value = childData?.insulin?.basalType ?? childData?.basalType ?? "";
+  F.bolusType.value = childData?.insulin?.bolusType ?? childData?.bolusType ?? "";
+  F.device.value = childData?.device || childData?.deviceName || "";
 
-    // Carb targets
-    const b = childData?.carbTargets?.breakfast || {};
-    const l = childData?.carbTargets?.lunch     || {};
-    const d = childData?.carbTargets?.dinner    || {};
-    const s = childData?.carbTargets?.snack     || {};
-    if (fields.carb_b_min) fields.carb_b_min.value = b.min ?? "";
-    if (fields.carb_b_max) fields.carb_b_max.value = b.max ?? "";
-    if (fields.carb_l_min) fields.carb_l_min.value = l.min ?? "";
-    if (fields.carb_l_max) fields.carb_l_max.value = l.max ?? "";
-    if (fields.carb_d_min) fields.carb_d_min.value = d.min ?? "";
-    if (fields.carb_d_max) fields.carb_d_max.value = d.max ?? "";
-    if (fields.carb_s_min) fields.carb_s_min.value = s.min ?? "";
-    if (fields.carb_s_max) fields.carb_s_max.value = s.max ?? "";
+  const nr = childData?.normalRange || {};
+  F.hypo.value       = nr.min ?? childData?.hypoLevel ?? "";
+  F.hyper.value      = nr.max ?? childData?.hyperLevel ?? "";
+  F.severeLow.value  = nr.severeLow ?? "";
+  F.severeHigh.value = nr.severeHigh ?? "";
 
-    // Ranges + Hypo/Hyper
-    const nr = childData?.normalRange || {};
-    if (fields.norm_min)   fields.norm_min.value    = nr.min ?? "";
-    if (fields.norm_max)   fields.norm_max.value    = nr.max ?? "";
-    if (fields.severeLow)  fields.severeLow.value   = nr.severeLow ?? "";
-    if (fields.severeHigh) fields.severeHigh.value  = nr.severeHigh ?? "";
+  F.cb_min.value = childData?.carbTargets?.breakfast?.min ?? "";
+  F.cb_max.value = childData?.carbTargets?.breakfast?.max ?? "";
+  F.cl_min.value = childData?.carbTargets?.lunch?.min ?? "";
+  F.cl_max.value = childData?.carbTargets?.lunch?.max ?? "";
+  F.cd_min.value = childData?.carbTargets?.dinner?.min ?? "";
+  F.cd_max.value = childData?.carbTargets?.dinner?.max ?? "";
+  F.cs_min.value = childData?.carbTargets?.snack?.min ?? "";
+  F.cs_max.value = childData?.carbTargets?.snack?.max ?? "";
 
-    // Hypo/Hyper (لو غير مخزنين، نعرض حدود الطبيعي)
-    const hypoV  = childData?.hypoLevel  ?? nr.min ?? "";
-    const hyperV = childData?.hyperLevel ?? nr.max ?? "";
-    if (fields.hypo)  fields.hypo.value  = hypoV;
-    if (fields.hyper) fields.hyper.value = hyperV;
-
-    // حالة الربط
-    const assignedDoctor = childData?.assignedDoctor || null;
-    const assignedName   = childData?.assignedDoctorInfo?.name || null;
-    setDoctorBadge(assignedDoctor, assignedName);
-
-    clearStatus();
-  }catch(e){
-    console.error(e);
-    setStatus("تعذر قراءة بيانات الطفل.", false);
-  }finally{
-    showLoader(false);
-  }
+  // مشاركة الطبيب
+  const sharing = (childData?.sharingConsent===true || childData?.sharingConsent?.doctor===true);
+  if (F.share) F.share.checked = !!sharing;
 }
 
-/* ========= بناء الكائنات من الواجهة ========= */
-function buildCarbTargetsFromUI(){
-  const v = (x)=> clampNull(x?.value);
+/* ===== صلاحيات ===== */
+function applyPermissions(){
+  roleBadge.textContent = (userRole==="doctor")? "طبيب" : (userRole==="admin"?"أدمن":"وليّ أمر");
+
+  const isParent = (userRole==="parent" || userRole==="admin");
+  const isDoctor = (userRole==="doctor");
+
+  // الجهاز + المشاركة: وليّ الأمر فقط
+  if (F.device) F.device.disabled = !isParent;
+  if (F.share)  F.share.disabled  = !isParent;
+
+  // باقي الحقول: مسموحة للطبيب والولي
+  const allow = (isParent || isDoctor);
+  [
+    F.name,F.gender,F.birthDate,F.unit,
+    F.heightCm,F.weightKg,
+    F.carbRatio,F.correctionFactor,
+    F.basalType,F.bolusType,
+    F.hypo,F.hyper,F.severeLow,F.severeHigh,
+    F.cb_min,F.cb_max,F.cl_min,F.cl_max,F.cd_min,F.cd_max,F.cs_min,F.cs_max,
+  ].forEach(el => el && (el.disabled = !allow));
+
+  // زر حفظ
+  saveBtn.disabled = !allow && !isParent;
+}
+
+/* ===== تحققات ===== */
+function checkRanges(){
+  const severeLow  = vNum(F.severeLow.value);
+  const hypo       = vNum(F.hypo.value);
+  const hyper      = vNum(F.hyper.value);
+  const severeHigh = vNum(F.severeHigh.value);
+
+  const ok =
+    (severeLow  == null || hypo  == null || severeLow  <= hypo)  &&
+    (hypo       == null || hyper == null || hypo       <= hyper) &&
+    (hyper      == null || severeHigh == null || hyper      <= severeHigh);
+
+  const box = $("#rangeError");
+  if (!ok){ box.classList.remove("hidden"); }
+  else { box.classList.add("hidden"); }
+  return ok;
+}
+
+["input","change"].forEach(evt=>{
+  F.heightCm?.addEventListener(evt,()=>{ F.bmiValue.textContent = calcBMI() ?? "—"; });
+  F.weightKg?.addEventListener(evt,()=>{ F.bmiValue.textContent = calcBMI() ?? "—"; });
+  F.hypo?.addEventListener(evt,checkRanges);
+  F.hyper?.addEventListener(evt,checkRanges);
+  F.severeLow?.addEventListener(evt,checkRanges);
+  F.severeHigh?.addEventListener(evt,checkRanges);
+});
+
+/* ===== حفظ ===== */
+function buildPayload(){
   return {
-    breakfast: { min: v(fields.carb_b_min), max: v(fields.carb_b_max) },
-    lunch:     { min: v(fields.carb_l_min), max: v(fields.carb_l_max) },
-    dinner:    { min: v(fields.carb_d_min), max: v(fields.carb_d_max) },
-    snack:     { min: v(fields.carb_s_min), max: v(fields.carb_s_max) },
-  };
-}
-function buildNormalRangeFromUI(){
-  return {
-    min:        clampNull(fields.norm_min?.value),
-    max:        clampNull(fields.norm_max?.value),
-    severeLow:  clampNull(fields.severeLow?.value),
-    severeHigh: clampNull(fields.severeHigh?.value),
-  };
-}
+    name: F.name.value?.trim() || null,
+    gender: F.gender.value || null,
+    birthDate: F.birthDate.value || null,
+    glucoseUnit: F.unit.value || null,
 
-/* ========= Payload وليّ الأمر ========= */
-function buildPayloadParent(){
-  const payload = {
-    name: fields.name?.value?.trim() || null,
-    gender: fields.gender?.value || null,
-    birthDate: fields.birthDate?.value || null,
+    heightCm: vNum(F.heightCm.value),
+    weightKg: vNum(F.weightKg.value),
 
-    glucoseUnit: fields.unit?.value || null,
-    unit: fields.unit?.value || null, // توافق
+    carbRatio: vNum(F.carbRatio.value),
+    correctionFactor: vNum(F.correctionFactor.value),
+    basalType: F.basalType.value || null,
+    bolusType: F.bolusType.value || null,
 
-    deviceName: fields.deviceName?.value || null,
-    device: fields.deviceName?.value || null,     // توافق
-    weightKg: num(fields.weightKg?.value),
-    heightCm: num(fields.heightCm?.value),
+    device: F.device.disabled ? (childData?.device||null) : (F.device.value?.trim() || null),
 
-    insulin: {
-      basalType: fields.basalType?.value || null,
-      bolusType: fields.bolusType?.value || null,
-    },
-    basalType: fields.basalType?.value || null, // Top-level
-    bolusType: fields.bolusType?.value || null,
-
-    longActingDose: {
-      insulin: fields.longInsulin?.value || null,
-      time: fields.longTime?.value || null,
-      units: num(fields.longUnits?.value),
+    normalRange: {
+      min:        vNum(F.hypo.value),
+      max:        vNum(F.hyper.value),
+      severeLow:  vNum(F.severeLow.value),
+      severeHigh: vNum(F.severeHigh.value),
     },
 
-    carbRatio: num(fields.carbRatio?.value),
-    correctionFactor: num(fields.correctionFactor?.value),
-
-    useNetCarbs: !!fields.useNetCarbs?.checked,
-    mealsDoses: {
-      netCarbRule: fields.netCarbRule?.value || null
+    carbTargets: {
+      breakfast:{min:vNum(F.cb_min.value),max:vNum(F.cb_max.value)},
+      lunch:{min:vNum(F.cl_min.value),max:vNum(F.cl_max.value)},
+      dinner:{min:vNum(F.cd_min.value),max:vNum(F.cd_max.value)},
+      snack:{min:vNum(F.cs_min.value),max:vNum(F.cs_max.value)},
     },
 
-    carbTargets: buildCarbTargetsFromUI(),
-
-    normalRange: buildNormalRangeFromUI(),
-
-    // حفظ hypo/hyper دعمًا للصفحات الأخرى
-    hypoLevel: clampNull(fields.hypo?.value),
-    hyperLevel: clampNull(fields.hyper?.value),
-
-    // مشاركة (لو ظاهرة)
-    sharingConsent: (fields.shareDoctor ? !!fields.shareDoctor.checked : (childData?.sharingConsent ?? false)),
+    // مشاركة الطبيب (وليّ الأمر فقط)
+    sharingConsent: F.share?.disabled ? childData?.sharingConsent ?? null :
+      (F.share.checked ? {doctor:true} : {doctor:false}),
 
     updatedAt: serverTimestamp(),
   };
-  return payload;
 }
 
-/* ========= Payload الطبيب ========= */
-function buildPayloadDoctor(){
-  // الطبيب يرسل فقط المفاتيح المسموح بها في القواعد
-  const nr = buildNormalRangeFromUI();
-  // لو الطبيب غيّر hypo/hyper في الواجهة، نسقطهما على normalRange (المسموح بها)
-  if (fields.hypo && fields.hypo.value !== "")   nr.min = clampNull(fields.hypo.value);
-  if (fields.hyper && fields.hyper.value !== "") nr.max = clampNull(fields.hyper.value);
-
-  const payload = {
-    name: fields.name?.value?.trim() || null,
-    gender: fields.gender?.value || null,
-    birthDate: fields.birthDate?.value || null,
-
-    glucoseUnit: fields.unit?.value || null,
-
-    carbRatio: num(fields.carbRatio?.value),
-    correctionFactor: num(fields.correctionFactor?.value),
-
-    carbTargets: buildCarbTargetsFromUI(),
-    normalRange: nr,
-
-    // Top-level فقط
-    bolusType: fields.bolusType?.value || null,
-    basalType: fields.basalType?.value || null,
-
-    updatedAt: serverTimestamp(),
-  };
-  return payload;
-}
-
-/* ========= حفظ ========= */
 async function save(){
-  if (!parentId || !childId){
-    setStatus("يجب تحديد الطفل (parent & child).", false);
-    return;
-  }
-  showLoader(true);
+  if (!checkRanges()){ setStatus("تحقّق من ترتيب حدود الجلوكوز.", false); return; }
   try{
-    const ref = doc(db, "parents", parentId, "children", childId);
-    const payload = (isOwner() || userRole === "admin") ? buildPayloadParent() : buildPayloadDoctor();
-    await setDoc(ref, payload, { merge: true });
-
-    // تحديث الشارة والعنوان لو الاسم تغيّر
-    const newName = fields.name?.value?.trim();
-    if (newName && childIdBadge) childIdBadge.textContent = newName;
-    if (newName) document.title = `إعدادات ${newName}`;
-
-    setStatus("تم الحفظ.", true);
-    showToast("تم الحفظ");
+    setStatus("جارٍ الحفظ…"); showLoader(true);
+    await setDoc(doc(db,"parents",parentId,"children",childId), buildPayload(), {merge:true});
+    setStatus("تم الحفظ بنجاح.", true);
+    await loadChild();
   }catch(e){
     console.error(e);
-    setStatus("تعذر الحفظ.", false);
-  }finally{
-    showLoader(false);
-  }
+    setStatus("تعذر الحفظ (الصلاحيات/الاتصال).", false);
+  }finally{ showLoader(false); }
 }
+saveBtn?.addEventListener("click", save);
 
-/* ========= ربط/فك الطبيب ========= */
-async function linkDoctor(){
-  try{
-    if (!currentUser || !parentId || !childId) {
-      setStatus("يجب تحديد الطفل وتسجيل الدخول.", false);
-      return;
-    }
-    if (!isOwner() && userRole !== "admin") {
-      showToast("الربط يتم من حساب وليّ الأمر فقط.");
-      return;
-    }
-
-    const code = fields.linkCode?.value?.trim();
-    if (!code){ setStatus("أدخلي كود الربط أولًا.", false); return; }
-
-    // لا تربطي لو مربوط أصلًا بطبيب آخر
-    const childRef = doc(db, "parents", parentId, "children", childId);
-    const cur = await getDoc(childRef);
-    const curData = cur.exists() ? cur.data() : {};
-    if (curData?.assignedDoctor && curData.assignedDoctor !== currentUser.uid){
-      setStatus("الطفل مربوط بطبيب بالفعل. فضّلي الربط الحالي أولًا.", false);
-      return;
-    }
-
-    showLoader(true);
-
-    // 1) الكود
-    const codeRef = doc(db, "linkCodes", code);
-    const codeSnap = await getDoc(codeRef);
-    if (!codeSnap.exists()) { setStatus("الكود غير صحيح.", false); return; }
-
-    const codeData = codeSnap.data();
-    if (codeData.used === true) { setStatus("تم استخدام هذا الكود من قبل.", false); return; }
-    const doctorId = codeData.doctorId;
-    if (!doctorId) { setStatus("الكود لا يحتوي مُعرّف الطبيب.", false); return; }
-
-    // 2) تحديث الطفل
-    await updateDoc(childRef, {
-      assignedDoctor: doctorId,
-      assignedDoctorInfo: { uid: doctorId },
-      sharingConsent: { doctor: true },
-      updatedAt: serverTimestamp(),
-    });
-
-    // 3) تعليم الكود
-    await updateDoc(codeRef, {
-      used: true,
-      doctorId,
-      parentId: currentUser.uid,
-      usedAt: serverTimestamp(),
-    });
-
-    setDoctorBadge(doctorId, null);
-    setStatus("تم ربط الطبيب بنجاح.", true);
-    showToast("تم ربط الطبيب");
-  } catch (e){
-    console.error(e);
-    setStatus("تعذر ربط الطبيب. تحققي من الصلاحيات أو الكود.", false);
-  } finally{
-    showLoader(false);
-  }
-}
-
-async function unlinkDoctor(){
-  try{
-    if (!currentUser || !parentId || !childId) {
-      setStatus("يجب تحديد الطفل وتسجيل الدخول.", false);
-      return;
-    }
-    if (!isOwner() && userRole !== "admin") {
-      showToast("فك الربط يتم من حساب وليّ الأمر فقط.");
-      return;
-    }
-
-    const ok = window.confirm("هل تريدين فك ربط الطبيب من هذا الطفل؟");
-    if (!ok) return;
-
-    showLoader(true);
-
-    const childRef = doc(db, "parents", parentId, "children", childId);
-    await updateDoc(childRef, {
-      assignedDoctor: null,
-      assignedDoctorInfo: null,
-      sharingConsent: false, // أو { doctor:false }
-      updatedAt: serverTimestamp(),
-    });
-
-    setDoctorBadge(null, null);
-    setStatus("تم فك الربط.", true);
-    showToast("تم فك ربط الطبيب");
-  } catch (e){
-    console.error(e);
-    setStatus("تعذر فك الربط.", false);
-  } finally{
-    showLoader(false);
-  }
-}
-
-/* ========= ربط الأحداث ========= */
-fields.btnSave?.addEventListener("click", save);
-fields.btnBack?.addEventListener("click", ()=>history.back());
-fields.btnLinkDoctor?.addEventListener("click", linkDoctor);
-fields.btnUnlinkDoctor?.addEventListener("click", unlinkDoctor);
-
-/* ========= تهيئة ========= */
-(function init(){
+/* ===== init ===== */
+(async function init(){
   const auth = getAuth();
-  onAuthStateChanged(auth, async (user)=>{
-    if (!user){ location.href = "/login.html"; return; }
-    currentUser = user;
+  onAuthStateChanged(auth, async (u)=>{
+    if(!u){ location.href="login.html"; return; }
+    authUser = u;
 
-    // اجلب الدور
-    const udoc = await fetchUserDoc(user.uid);
-    userRole = udoc?.role || "parent";
+    // دور المستخدم
+    userRole = await fetchRole(u.uid);
 
-    // IDs من الرابط أو الذاكرة
-    const ctx = readContextFromStorage();
-    parentId = qs("parent") || ctx.parent || (userRole === "parent" ? user.uid : "");
-    childId  = qs("child")  || ctx.child  || "";
+    // معرفات السياق
+    parentId = qs("parent") || sessionStorage.getItem("lastParent") || (userRole==="parent" ? u.uid : "");
+    childId  = qs("child")  || sessionStorage.getItem("lastChild")  || "";
+    if (!parentId && childId) await ensureParentFromChildIfMissing();
 
-    // للطبيب: استنتج parentId من childId لو ناقص
-    if (!parentId && childId && userRole === "doctor") {
-      await ensureParentFromChildIfMissing();
-    }
+    sessionStorage.setItem("lastParent", parentId||"");
+    sessionStorage.setItem("lastChild",  childId||"");
 
-    saveContextToStorage(parentId, childId);
-    applyRolePermissions();
+    applyPermissions();
     await loadChild();
+
+    setStatus("—");
   });
 })();
