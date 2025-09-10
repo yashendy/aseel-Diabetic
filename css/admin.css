@@ -1,14 +1,18 @@
 :root{
-  --bg: #d1b3ff;
-  --bg2: #cdb4db;
-  --card: rgba(255,255,255,.04);
-  --card-border: rgba(255,255,255,.08);
-  --text: #e9eefc;
-  --muted: #a7b1d0;
-  --primary: #6aa9ff;
-  --primary-2: #3e86ff;
-  --danger: #ff6b6b;
-  --success: #3ddc97;
+  --bg: #0B1020;       /* خلفية أساسية داكنة */
+  --bg2: #141A2E;      /* خلفية ثانوية */
+  --card: rgba(255,255,255,.04);  /* خلفية الكارت */
+  --card-border: rgba(255,255,255,.08); /* حدود الكارت */
+
+  --text: #E9EEFC;       /* النص الأساسي */
+  --muted: #A7B1D0;      /* النص الثانوي */
+
+  --primary: #00BFA6;    /* الأزرق البحري الأساسي */
+  --primary-2: #009E85;  /* عند التحويم */
+  --info: #4DEEEA;       /* معلومات / أكسنت */
+  --success: #2EF876;    /* نجاح */
+  --danger: #FF6B6B;     /* خطأ / تحذير */
+
   --shadow: 0 10px 30px rgba(0,0,0,.35);
   --radius: 16px;
 }
