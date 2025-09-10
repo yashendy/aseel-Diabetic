@@ -109,8 +109,7 @@ async function loadChild(){
   const dName  = childData?.assignedDoctorInfo?.name || childData?.doctorName || childData?.assignedDoctor || "غير مرتبط";
   const dEmail = childData?.assignedDoctorInfo?.email || "";
   CARD.doctor.textContent  = dName;
-  CARD.docEmail.textContent= dEmail? `(${dEmail})` : "";
-
+  
   // بطاقة: باقي الحقول
   CARD.name.textContent   = name;
   CARD.gender.textContent = childData?.gender || "—";
