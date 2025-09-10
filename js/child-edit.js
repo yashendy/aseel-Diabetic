@@ -1,4 +1,4 @@
-// js/child-edit.js — إعداد الطفل (Role-aware: Parent / Doctor)
+// js/child-edit.js — إعداد الطفل (Parent/Doctor Role-aware)
 // يعمل مع قواعد Firestore الحالية بدون تعديل
 
 import { db } from "./firebase-config.js";
@@ -71,11 +71,10 @@ const fields = {
 };
 
 /* ========= حالة عامة ========= */
-let auth = null;
 let currentUser = null;
 let parentId = null;
 let childId  = null;
-let userRole = "parent"; // parent | doctor | admin | doctor-pending...
+let userRole = "parent"; // parent | doctor | admin | ...
 let childData = null;
 
 /* ========= أدوات مساعدة ========= */
@@ -144,7 +143,7 @@ function applyRolePermissions(){
   enableIfDoctor.forEach(inp => inp && (inp.disabled = false));
 }
 
-/* ========= استنتاج parentId من childId (مفيد للطبيب عند غياب parent=) ========= */
+/* ========= استنتاج parentId من childId (للطبيب عند غياب parent=) ========= */
 async function ensureParentFromChildIfMissing(){
   if (parentId || !childId) return;
   try{
@@ -158,9 +157,7 @@ async function ensureParentFromChildIfMissing(){
       parentId = s.ref.parent.parent.id;
       saveContextToStorage(parentId, childId);
     }
-  }catch(e){
-    // تجاهل؛ فقط تحسين تجربة للطبيب
-  }
+  }catch{ /* تحسين تجربة فقط */ }
 }
 
 /* ========= قراءة الطفل ========= */
@@ -174,7 +171,11 @@ async function loadChild(){
     const ref = doc(db, "parents", parentId, "children", childId);
     const snap = await getDoc(ref);
     childData = snap.exists() ? snap.data() : {};
-    if (childIdBadge) childIdBadge.textContent = childId || "—";
+
+    // اسم الطفل في الشارة + عنوان الصفحة
+    const displayName = childData?.name || childId || "—";
+    if (childIdBadge) childIdBadge.textContent = displayName;
+    document.title = `إعدادات ${displayName}`;
 
     // أساسية (قراءة مرنة)
     if (fields.name)       fields.name.value       = childData?.name || "";
@@ -223,7 +224,7 @@ async function loadChild(){
     if (fields.severeLow)  fields.severeLow.value   = nr.severeLow ?? "";
     if (fields.severeHigh) fields.severeHigh.value  = nr.severeHigh ?? "";
 
-    // Hypo/Hyper (لو غير مخزنين، اعرض حدود الطبيعي)
+    // Hypo/Hyper (لو غير مخزنين، نعرض حدود الطبيعي)
     const hypoV  = childData?.hypoLevel  ?? nr.min ?? "";
     const hyperV = childData?.hyperLevel ?? nr.max ?? "";
     if (fields.hypo)  fields.hypo.value  = hypoV;
@@ -306,7 +307,7 @@ function buildPayloadParent(){
     hypoLevel: clampNull(fields.hypo?.value),
     hyperLevel: clampNull(fields.hyper?.value),
 
-    // مشاركة (لو ظاهرة في الواجهة)
+    // مشاركة (لو ظاهرة)
     sharingConsent: (fields.shareDoctor ? !!fields.shareDoctor.checked : (childData?.sharingConsent ?? false)),
 
     updatedAt: serverTimestamp(),
@@ -318,8 +319,8 @@ function buildPayloadParent(){
 function buildPayloadDoctor(){
   // الطبيب يرسل فقط المفاتيح المسموح بها في القواعد
   const nr = buildNormalRangeFromUI();
-  // لو الطبيب غيّر حقول hypo/hyper في الواجهة، نُسقطها على normalRange (لا نحفظ hypoLevel/hyperLevel)
-  if (fields.hypo && fields.hypo.value !== "") nr.min = clampNull(fields.hypo.value);
+  // لو الطبيب غيّر hypo/hyper في الواجهة، نسقطهما على normalRange (المسموح بها)
+  if (fields.hypo && fields.hypo.value !== "")   nr.min = clampNull(fields.hypo.value);
   if (fields.hyper && fields.hyper.value !== "") nr.max = clampNull(fields.hyper.value);
 
   const payload = {
@@ -355,6 +356,12 @@ async function save(){
     const ref = doc(db, "parents", parentId, "children", childId);
     const payload = (isOwner() || userRole === "admin") ? buildPayloadParent() : buildPayloadDoctor();
     await setDoc(ref, payload, { merge: true });
+
+    // تحديث الشارة والعنوان لو الاسم تغيّر
+    const newName = fields.name?.value?.trim();
+    if (newName && childIdBadge) childIdBadge.textContent = newName;
+    if (newName) document.title = `إعدادات ${newName}`;
+
     setStatus("تم الحفظ.", true);
     showToast("تم الحفظ");
   }catch(e){
@@ -366,7 +373,6 @@ async function save(){
 }
 
 /* ========= ربط/فك الطبيب ========= */
-// ربط الطبيب يتم من حساب وليّ الأمر أو الأدمن فقط، ويقرأ الكود من input#f_linkCode
 async function linkDoctor(){
   try{
     if (!currentUser || !parentId || !childId) {
@@ -392,7 +398,7 @@ async function linkDoctor(){
 
     showLoader(true);
 
-    // 1) التحقق من الكود
+    // 1) الكود
     const codeRef = doc(db, "linkCodes", code);
     const codeSnap = await getDoc(codeRef);
     if (!codeSnap.exists()) { setStatus("الكود غير صحيح.", false); return; }
@@ -402,15 +408,15 @@ async function linkDoctor(){
     const doctorId = codeData.doctorId;
     if (!doctorId) { setStatus("الكود لا يحتوي مُعرّف الطبيب.", false); return; }
 
-    // 2) تحديث مستند الطفل
+    // 2) تحديث الطفل
     await updateDoc(childRef, {
       assignedDoctor: doctorId,
-      assignedDoctorInfo: { uid: doctorId }, // يمكن لاحقًا ملؤها عبر Cloud Function
+      assignedDoctorInfo: { uid: doctorId },
       sharingConsent: { doctor: true },
       updatedAt: serverTimestamp(),
     });
 
-    // 3) تعليم الكود كمستخدم
+    // 3) تعليم الكود
     await updateDoc(codeRef, {
       used: true,
       doctorId,
@@ -424,7 +430,7 @@ async function linkDoctor(){
   } catch (e){
     console.error(e);
     setStatus("تعذر ربط الطبيب. تحققي من الصلاحيات أو الكود.", false);
-  } finally {
+  } finally{
     showLoader(false);
   }
 }
@@ -449,7 +455,7 @@ async function unlinkDoctor(){
     await updateDoc(childRef, {
       assignedDoctor: null,
       assignedDoctorInfo: null,
-      sharingConsent: false,       // أو { doctor:false }
+      sharingConsent: false, // أو { doctor:false }
       updatedAt: serverTimestamp(),
     });
 
@@ -459,7 +465,7 @@ async function unlinkDoctor(){
   } catch (e){
     console.error(e);
     setStatus("تعذر فك الربط.", false);
-  } finally {
+  } finally{
     showLoader(false);
   }
 }
@@ -471,13 +477,13 @@ fields.btnLinkDoctor?.addEventListener("click", linkDoctor);
 fields.btnUnlinkDoctor?.addEventListener("click", unlinkDoctor);
 
 /* ========= تهيئة ========= */
-(async function init(){
-  auth = getAuth();
+(function init(){
+  const auth = getAuth();
   onAuthStateChanged(auth, async (user)=>{
     if (!user){ location.href = "/login.html"; return; }
     currentUser = user;
 
-    // اجلب الدور من users/{uid}
+    // اجلب الدور
     const udoc = await fetchUserDoc(user.uid);
     userRole = udoc?.role || "parent";
 
