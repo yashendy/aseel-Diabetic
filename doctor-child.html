@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>ملف الطفل</title>
-  <link rel="stylesheet" href="./css/doctor-child.css" />
+  <link rel="stylesheet" href="./doctor-child.css" />
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -12,6 +12,10 @@
 
   <header class="page-header">
     <h1>إعدادات الطفل <span id="childTitle" class="pill"></span></h1>
+    <nav class="header-actions">
+      <a class="btn ghost" href="reports.html">تقارير الطفل</a>
+      <a class="btn ghost" href="index.html">رجوع</a>
+    </nav>
   </header>
 
   <!-- بطاقة معلومات الطفل -->
@@ -61,6 +65,7 @@
       <label class="ml8"><input id="toggleNotes" type="checkbox" checked /> إظهار الملاحظات/الجرعات</label>
 
       <button id="run" class="btn primary">عرض</button>
+      <button id="exportCsv" class="btn ghost">تصدير Excel (CSV)</button>
     </div>
   </section>
 
@@ -69,7 +74,12 @@
     <h2>التحاليل</h2>
     <div class="analytics">
       <div class="badges" id="analysisNumbers"></div>
-      <canvas id="doughnutChart" height="140"></canvas>
+
+      <!-- الدائرة الصغيرة داخل بطاقة -->
+      <div class="chart-box">
+        <canvas id="doughnutChart"></canvas>
+      </div>
+
       <div id="smartSummary" class="muted"></div>
     </div>
   </section>
@@ -79,9 +89,9 @@
     <h2>القياسات</h2>
     <div id="measureMeta" class="muted"></div>
     <div class="legend">
-      <span><span class="dot dot-low"></span> هبوط</span>
+      <span><span class="dot dot-low"></span> هبوط (≤ SL)</span>
       <span><span class="dot dot-ok"></span> طبيعي</span>
-      <span><span class="dot dot-high"></span> ارتفاع</span>
+      <span><span class="dot dot-high"></span> ارتفاع (≥ SH)</span>
     </div>
     <div class="table-wrap">
       <table class="grid">
@@ -127,7 +137,7 @@
       <label>Correction Factor <input id="f_correctionFactor" type="number" step="0.1"/></label>
 
       <label>نوع القاعدي (Basal) <input id="f_basalType"/></label>
-      <label>نوع السريع (Bolus) <input id="f_bolusType"/></label>
+      <label>نوع البلعة (Bolus) <input id="f_bolusType"/></label>
 
       <label>الطول (سم) <input id="f_heightCm" type="number" step="0.1"/></label>
       <label>الوزن (كجم) <input id="f_weightKg" type="number" step="0.1"/></label>
@@ -135,7 +145,6 @@
       <label>المدى الطبيعي (min) <input id="f_hypo" type="number" step="0.1" /></label>
       <label>المدى الطبيعي (max) <input id="f_hyper" type="number" step="0.1" /></label>
 
-      <!-- الحدود الشديدة -->
       <label>هبوط شديد (Severe Low) <input id="f_severeLow" type="number" step="0.1" /></label>
       <label>ارتفاع شديد (Severe High) <input id="f_severeHigh" type="number" step="0.1" /></label>
     </div>
@@ -158,6 +167,6 @@
 
   <div id="loader" class="loader hidden">تحميل ⏳</div>
 
-  <script type="module" src="./js/doctor-child.js"></script>
+  <script type="module" src="./doctor-child.js"></script>
 </body>
 </html>
