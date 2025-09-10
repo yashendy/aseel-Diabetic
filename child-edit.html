@@ -46,7 +46,7 @@
         <div><b>BMI:</b> <span id="c_bmi">—</span></div>
       </div>
       <div class="grid3 muted">
-        <div><b>الطبيب:</b> <span id="c_doctor">—</span></div>
+        <div><b>الطبيب:</b> <span id="c_doctor">—</span> <small id="c_docEmail"></small></div>
         <div><b>المشاركة:</b> <span id="c_share">—</span></div>
         <div><b>آخر تحديث:</b> <span id="c_updated">—</span></div>
       </div>
@@ -135,10 +135,15 @@
         <label>Severe High
           <input id="f_severeHigh" type="number" step="0.1" />
         </label>
+        <label class="critical">Critical Low (تدخّل فوري)
+          <input id="f_criticalLow" type="number" step="0.1" />
+        </label>
+        <label class="critical">Critical High (تدخّل فوري)
+          <input id="f_criticalHigh" type="number" step="0.1" />
+        </label>
       </div>
       <p class="hint">
-        التصنيف في التقارير يعتمد على <b>Severe Low</b> و <b>Severe High</b>، ويجب أن يكون الترتيب منطقيًا:
-        Severe&nbsp;Low ≤ Hypo ≤ Hyper ≤ Severe&nbsp;High.
+        الترتيب الموصى به: <b>Critical Low</b> ≤ Severe Low ≤ Hypo ≤ Hyper ≤ Severe High ≤ <b>Critical High</b>.
       </p>
       <div id="rangeError" class="error hidden">تحقّق من ترتيب القيم.</div>
     </section>
@@ -150,29 +155,29 @@
         <div>
           <h3>فطار</h3>
           <div class="pair">
-            <input id="f_carb_b_min" type="number" step="1" placeholder="من" />
-            <input id="f_carb_b_max" type="number" step="1" placeholder="إلى" />
+            <input id="f_carb_b_min" type="number" inputmode="numeric" pattern="\d*" placeholder="من" />
+            <input id="f_carb_b_max" type="number" inputmode="numeric" pattern="\d*" placeholder="إلى" />
           </div>
         </div>
         <div>
           <h3>غدا</h3>
           <div class="pair">
-            <input id="f_carb_l_min" type="number" step="1" placeholder="من" />
-            <input id="f_carb_l_max" type="number" step="1" placeholder="إلى" />
+            <input id="f_carb_l_min" type="number" inputmode="numeric" pattern="\d*" placeholder="من" />
+            <input id="f_carb_l_max" type="number" inputmode="numeric" pattern="\d*" placeholder="إلى" />
           </div>
         </div>
         <div>
           <h3>عشا</h3>
           <div class="pair">
-            <input id="f_carb_d_min" type="number" step="1" placeholder="من" />
-            <input id="f_carb_d_max" type="number" step="1" placeholder="إلى" />
+            <input id="f_carb_d_min" type="number" inputmode="numeric" pattern="\d*" placeholder="من" />
+            <input id="f_carb_d_max" type="number" inputmode="numeric" pattern="\d*" placeholder="إلى" />
           </div>
         </div>
         <div>
           <h3>سناك</h3>
           <div class="pair">
-            <input id="f_carb_s_min" type="number" step="1" placeholder="من" />
-            <input id="f_carb_s_max" type="number" step="1" placeholder="إلى" />
+            <input id="f_carb_s_min" type="number" inputmode="numeric" pattern="\d*" placeholder="من" />
+            <input id="f_carb_s_max" type="number" inputmode="numeric" pattern="\d*" placeholder="إلى" />
           </div>
         </div>
       </div>
@@ -182,14 +187,14 @@
     <section class="card">
       <h2>الطبيب والخصوصية</h2>
       <div class="grid3">
-        <div><b>الطبيب المرتبط:</b> <span id="docName">—</span> <small id="docEmail" class="muted"></small></div>
+        <div><b>الطبيب المرتبط:</b> <span id="docName">غير مرتبط</span> <small id="docEmail" class="muted"></small></div>
         <div class="share-wrap">
           <label class="switch">
             <input id="shareToggle" type="checkbox" />
             <span>مشاركة البيانات مع الطبيب (وليّ الأمر فقط)</span>
           </label>
         </div>
-        <div class="muted"><b>ملاحظة:</b> يمكن إلغاء المشاركة لأي وقت من هنا.</div>
+        <div class="muted"><b>ملاحظة:</b> يمكن إلغاء المشاركة في أي وقت.</div>
       </div>
     </section>
 
