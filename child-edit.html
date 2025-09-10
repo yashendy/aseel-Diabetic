@@ -35,71 +35,10 @@
       <div><b>آخر تحديث:</b> <span id="c_updated">—</span></div>
     </div>
   </section>
-
-  <!-- تحكّم الفترة -->
-  <section class="controls">
-    <div class="controls-row">
-      <label>المدى السريع</label>
-      <select id="preset">
-        <option value="7">7 أيام</option>
-        <option value="14">14 يوم</option>
-        <option value="30">30 يوم</option>
-        <option value="90">90 يوم</option>
-        <option value="custom">مخصص</option>
-      </select>
-
-      <div id="datesBox" class="hidden">
-        <label>من</label><input id="from" type="date" />
-        <label>إلى</label><input id="to" type="date" />
-      </div>
-
-      <label class="ml8"><input id="toggleNotes" type="checkbox" checked /> إظهار الملاحظات/الجرعات</label>
-
-      <button id="run" class="btn primary">عرض</button>
-    </div>
-  </section>
-
-  <!-- التحليلات -->
-  <section class="card">
-    <h2>التحاليل</h2>
-    <div class="analytics">
-      <div class="badges" id="analysisNumbers"></div>
-      <canvas id="doughnutChart" height="140"></canvas>
-      <div id="smartSummary" class="muted"></div>
-    </div>
-  </section>
-
-  <!-- القياسات -->
-  <section class="card">
-    <h2>القياسات</h2>
-    <div id="measureMeta" class="muted"></div>
-    <div class="legend">
-      <span><span class="dot dot-low"></span> هبوط</span>
-      <span><span class="dot dot-ok"></span> طبيعي</span>
-      <span><span class="dot dot-high"></span> ارتفاع</span>
-    </div>
-    <div class="table-wrap">
-      <table class="grid">
-        <thead><tr id="mHeadRow"></tr></thead>
-        <tbody id="mRows"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- الوجبات -->
-  <section class="card">
-    <h2>الوجبات</h2>
-    <div class="table-wrap">
-      <table class="grid">
-        <thead><tr id="mealHeadRow"></tr></thead>
-        <tbody id="mealRows"></tbody>
-      </table>
-    </div>
-  </section>
-
+ 
   <!-- نموذج تعديل للطبيب (المسموح فقط) -->
   <section class="card">
-    <h2>تعديل إعدادات (صلاحيات الطبيب)</h2>
+    <h2> البيانات </h2>
     <div class="form-grid">
       <label>الاسم <input id="f_name" /></label>
       <label>الجنس
