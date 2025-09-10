@@ -50,7 +50,7 @@ html,body{margin:0;padding:0;font-family:"Tajawal",system-ui,-apple-system,Segoe
 .goals h3{margin:0 0 6px 0}
 .pair{display:flex;gap:8px}
 .pair input{
-  width:6ch;               /* يكفي حتى 3 أرقام */
+  width:15ch;               /* يكفي حتى 3 أرقام */
   padding:8px 20px;
   text-align:center;
   border:1px solid var(--ring);
