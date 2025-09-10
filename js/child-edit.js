@@ -1,5 +1,5 @@
 // child-edit.js — صفحة إعداد الطفل (بيانات شخصية/إكلينيكية فقط)
-import { db } from "../firebase-config.js";
+import { db } from "..js/firebase-config.js";
 import {
   doc, getDoc, setDoc, collectionGroup, query, where, getDocs,
   documentId, serverTimestamp
