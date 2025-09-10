@@ -1,4 +1,4 @@
-// doctor-child.js — صفحة الطبيب/ولي الأمر مع تقرير ووجبات وتحليلات
+// doctor-child.js — نسخة مُصحّحة
 import { db } from "./firebase-config.js";
 import {
   doc, getDoc, setDoc, collection, query, where, orderBy, getDocs,
@@ -50,22 +50,26 @@ const setStatus=(t,ok=false)=>{ if(!statusEl) return; statusEl.textContent=t||""
 /* ============ تواريخ ============ */
 const fmtISO = (d)=> d.toISOString().slice(0,10);
 const addDays=(d,n)=>{ const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()+n); return x; };
+
 function applyPreset(v){
+  if(!datesBox) return;
   datesBox.classList.toggle("hidden", v!=="custom");
   if(v==="custom") return;
   const today=new Date(); let days=7;
   if(v==="14") days=14; else if(v==="30") days=30; else if(v==="90") days=90;
-  toEl.value=fmtISO(today); fromEl.value=fmtISO(addDays(today,-(days-1)));
+  if (toEl)   toEl.value  = fmtISO(today);
+  if (fromEl) fromEl.value= fmtISO(addDays(today,-(days-1)));
 }
-presetEl.addEventListener("change",()=>applyPreset(presetEl.value));
-runEl.addEventListener("click",()=>{
-  const v=presetEl.value||"7"; if(v!=="custom") applyPreset(v);
-  const from=fromEl.value||fmtISO(addDays(new Date(),-6));
-  const to  =toEl.value  ||fmtISO(new Date());
+
+/* اربطي الأحداث فقط لو العناصر موجودة */
+if (presetEl) presetEl.addEventListener("change",()=>applyPreset(presetEl.value));
+if (runEl) runEl.addEventListener("click",()=>{
+  const v=presetEl?.value||"7"; if(v!=="custom") applyPreset(v);
+  const from= fromEl?.value || fmtISO(addDays(new Date(),-6));
+  const to  = toEl?.value   || fmtISO(new Date());
   buildAll(from, to);
 });
-toggleNotes.addEventListener("change",()=>{
-  // إعادة بناء صفوف القياسات فقط على حسب إظهار/إخفاء الملاحظات
+if (toggleNotes) toggleNotes.addEventListener("change",()=>{
   renderMeasurementRows(mRows, currentDataByDay);
 });
 
@@ -126,77 +130,97 @@ async function fetchRole(uid){
 }
 function isOwner(){ return authUser && parentId && authUser.uid===parentId; }
 
+/* استرجاع معرفات parent/child بشكل قوي */
+async function resolveIds(){
+  const url=new URL(location.href);
+  parentId = url.searchParams.get("parent") || sessionStorage.getItem("lastParent") || "";
+  childId  = url.searchParams.get("child")  || sessionStorage.getItem("lastChild")  || "";
+
+  // لو معايا child فقط: استخرج الـ parent عبر collectionGroup (docId == childId)
+  if (!parentId && childId){
+    try{
+      const qy=query(collectionGroup(db,"children"), where(documentId(),"==", childId));
+      const snaps=await getDocs(qy);
+      if(!snaps.empty) parentId = snaps.docs[0].ref.parent.parent.id;
+    }catch(e){ console.warn("resolveIds cg error", e); }
+  }
+
+  // خزّن لصفحات تانية
+  sessionStorage.setItem("lastParent", parentId || "");
+  sessionStorage.setItem("lastChild",  childId  || "");
+}
+
 async function loadChild(){
   const ref=doc(db,"parents",parentId,"children",childId);
   const s=await getDoc(ref);
   childData = s.exists()? s.data(): {};
-  const name = childData?.name || childId;
-  childTitle.textContent=name; document.title=`ملف ${name}`;
+  const name = childData?.name || childId || "—";
+  if (childTitle) { childTitle.textContent=name; }
+  document.title=`ملف ${name}`;
 
-  // limits من الداتا
   const nr=childData?.normalRange||{};
   limits.min = (nr.min ?? childData?.hypoLevel ?? limits.min);
   limits.max = (nr.max ?? childData?.hyperLevel ?? limits.max);
   limits.severeLow  = (nr.severeLow  ?? limits.severeLow);
   limits.severeHigh = (nr.severeHigh ?? limits.severeHigh);
 
-  // بطاقة
-  CARD.name.textContent = name || "—";
-  CARD.gender.textContent = childData?.gender || "—";
-  CARD.unit.textContent   = childData?.glucoseUnit || childData?.unit || "—";
-  CARD.age.textContent = (()=> {
+  CARD?.name && (CARD.name.textContent = name);
+  CARD?.gender && (CARD.gender.textContent = childData?.gender || "—");
+  CARD?.unit   && (CARD.unit.textContent   = childData?.glucoseUnit || childData?.unit || "—");
+
+  CARD?.age && (CARD.age.textContent = (()=> {
     const dob=childData?.birthDate; if(!dob) return "—";
     const b=new Date(dob), n=new Date(); let y=n.getFullYear()-b.getFullYear(), m=n.getMonth()-b.getMonth(), d=n.getDate()-b.getDate(); if(d<0)m--; if(m<0){y--;m+=12;}
     return y>0? `${y} سنة${m?` و${m} شهر`:''}` : `${m} شهر`;
-  })();
+  })());
 
-  CARD.range.textContent = `${round1(limits.min)}–${round1(limits.max)} mmol/L`
-    +(limits.severeLow||limits.severeHigh? ` (شديد: ${round1(limits.severeLow)||"—"} / ${round1(limits.severeHigh)||"—"})`:"");
+  CARD?.range && (CARD.range.textContent =
+    `${round1(limits.min)}–${round1(limits.max)} mmol/L` +
+    (limits.severeLow||limits.severeHigh? ` (شديد: ${round1(limits.severeLow)||"—"} / ${round1(limits.severeHigh)||"—"})`:"")
+  );
 
-  CARD.cr.textContent = (childData?.carbRatio ?? "—");
-  CARD.cf.textContent = (childData?.correctionFactor ?? "—");
-  CARD.basal.textContent = (childData?.insulin?.basalType ?? childData?.basalType ?? "—");
-  CARD.bolus.textContent = (childData?.insulin?.bolusType ?? childData?.bolusType ?? "—");
-  CARD.device.textContent= (childData?.deviceName ?? childData?.device ?? "—");
-  CARD.weight.textContent= (childData?.weightKg ?? childData?.weight ?? "—");
-  CARD.height.textContent= (childData?.heightCm ?? childData?.height ?? "—");
-  CARD.doc.textContent   = childData?.assignedDoctorInfo?.name || childData?.assignedDoctor || "—";
-  CARD.share.textContent = (childData?.sharingConsent===true || childData?.sharingConsent?.doctor===true) ? "مفعل" : "معطّل";
-  CARD.updated.textContent = childData?.updatedAt?.toDate?.()?.toLocaleString?.() || "—";
+  CARD?.cr && (CARD.cr.textContent = (childData?.carbRatio ?? "—"));
+  CARD?.cf && (CARD.cf.textContent = (childData?.correctionFactor ?? "—"));
+  CARD?.basal && (CARD.basal.textContent = (childData?.insulin?.basalType ?? childData?.basalType ?? "—"));
+  CARD?.bolus && (CARD.bolus.textContent = (childData?.insulin?.bolusType ?? childData?.bolusType ?? "—"));
+  CARD?.device&& (CARD.device.textContent= (childData?.deviceName ?? childData?.device ?? "—"));
+  CARD?.weight&& (CARD.weight.textContent= (childData?.weightKg ?? childData?.weight ?? "—"));
+  CARD?.height&& (CARD.height.textContent= (childData?.heightCm ?? childData?.height ?? "—"));
+  CARD?.doc   && (CARD.doc.textContent   = childData?.assignedDoctorInfo?.name || childData?.assignedDoctor || "—");
+  CARD?.share && (CARD.share.textContent = (childData?.sharingConsent===true || childData?.sharingConsent?.doctor===true) ? "مفعل" : "معطّل");
+  CARD?.updated && (CARD.updated.textContent = childData?.updatedAt?.toDate?.()?.toLocaleString?.() || "—");
 
-  // ملء نموذج الطبيب
-  F.name.value=childData?.name||"";
-  F.gender.value=childData?.gender||"";
-  F.birthDate.value=childData?.birthDate||"";
-  F.unit.value= childData?.glucoseUnit || childData?.unit || "";
-  F.carbRatio.value= childData?.carbRatio ?? "";
-  F.correctionFactor.value= childData?.correctionFactor ?? "";
-  F.basalType.value= childData?.insulin?.basalType ?? childData?.basalType ?? "";
-  F.bolusType.value= childData?.insulin?.bolusType ?? childData?.bolusType ?? "";
-  F.heightCm.value= childData?.heightCm ?? childData?.height ?? "";
-  F.weightKg.value= childData?.weightKg ?? childData?.weight ?? "";
+  // نموذج الطبيب
+  F.name      && (F.name.value = childData?.name||"");
+  F.gender    && (F.gender.value = childData?.gender||"");
+  F.birthDate && (F.birthDate.value = childData?.birthDate||"");
+  F.unit      && (F.unit.value = childData?.glucoseUnit || childData?.unit || "");
+  F.carbRatio && (F.carbRatio.value = childData?.carbRatio ?? "");
+  F.correctionFactor && (F.correctionFactor.value = childData?.correctionFactor ?? "");
+  F.basalType && (F.basalType.value = childData?.insulin?.basalType ?? childData?.basalType ?? "");
+  F.bolusType && (F.bolusType.value = childData?.insulin?.bolusType ?? childData?.bolusType ?? "");
+  F.heightCm  && (F.heightCm.value = childData?.heightCm ?? childData?.height ?? "");
+  F.weightKg  && (F.weightKg.value = childData?.weightKg ?? childData?.weight ?? "");
 
-  F.hypo.value = limits.min ?? "";
-  F.hyper.value= limits.max ?? "";
-  F.severeLow.value  = limits.severeLow ?? "";
-  F.severeHigh.value = limits.severeHigh ?? "";
+  F.hypo       && (F.hypo.value       = limits.min ?? "");
+  F.hyper      && (F.hyper.value      = limits.max ?? "");
+  F.severeLow  && (F.severeLow.value  = limits.severeLow ?? "");
+  F.severeHigh && (F.severeHigh.value = limits.severeHigh ?? "");
 
-  F.carb_b_min.value = childData?.carbTargets?.breakfast?.min ?? "";
-  F.carb_b_max.value = childData?.carbTargets?.breakfast?.max ?? "";
-  F.carb_l_min.value = childData?.carbTargets?.lunch?.min ?? "";
-  F.carb_l_max.value = childData?.carbTargets?.lunch?.max ?? "";
-  F.carb_d_min.value = childData?.carbTargets?.dinner?.min ?? "";
-  F.carb_d_max.value = childData?.carbTargets?.dinner?.max ?? "";
-  F.carb_s_min.value = childData?.carbTargets?.snack?.min ?? "";
-  F.carb_s_max.value = childData?.carbTargets?.snack?.max ?? "";
+  F.carb_b_min && (F.carb_b_min.value = childData?.carbTargets?.breakfast?.min ?? "");
+  F.carb_b_max && (F.carb_b_max.value = childData?.carbTargets?.breakfast?.max ?? "");
+  F.carb_l_min && (F.carb_l_min.value = childData?.carbTargets?.lunch?.min ?? "");
+  F.carb_l_max && (F.carb_l_max.value = childData?.carbTargets?.lunch?.max ?? "");
+  F.carb_d_min && (F.carb_d_min.value = childData?.carbTargets?.dinner?.min ?? "");
+  F.carb_d_max && (F.carb_d_max.value = childData?.carbTargets?.dinner?.max ?? "");
+  F.carb_s_min && (F.carb_s_min.value = childData?.carbTargets?.snack?.min ?? "");
+  F.carb_s_max && (F.carb_s_max.value = childData?.carbTargets?.snack?.max ?? "");
 }
 
 /* ============ صلاحيات الطبيب ============ */
 function applyPermissions(){
-  const doctorMode = (userRole==="doctor" && !isOwner());
-  // لا يوجد حقل جهاز في النموذج (عرض فقط)،
-  // الوزن/الطول مسموح للطبيب
-  const enableIfDoctor = [
+  // لا حاجة لتعطيل شيء هنا؛ الجهاز غير موجود في النموذج من الأساس
+  [
     F.name,F.gender,F.birthDate,F.unit,
     F.carbRatio,F.correctionFactor,
     F.basalType,F.bolusType,
@@ -206,12 +230,12 @@ function applyPermissions(){
     F.carb_l_min,F.carb_l_max,
     F.carb_d_min,F.carb_d_max,
     F.carb_s_min,F.carb_s_max,
-  ];
-  enableIfDoctor.forEach(x=>x && (x.disabled=false));
+  ].forEach(x=> x && (x.disabled=false));
 }
 
 /* ============ القياسات ============ */
 function buildHead(row, cols){
+  if(!row) return;
   row.innerHTML="";
   const th=document.createElement("th"); th.textContent="التاريخ"; row.appendChild(th);
   for (const [,label] of cols){ const t=document.createElement("th"); t.textContent=label; row.appendChild(t); }
@@ -231,8 +255,10 @@ async function fetchMeasurements(fromISO,toISO){
   return by;
 }
 function renderMeasurementRows(tbody, byDay){
+  if(!tbody) return;
   const days=Object.keys(byDay).sort();
   if(!days.length){ tbody.innerHTML=`<tr><td colspan="${COLS.length+1}" class="muted">لا توجد بيانات ضمن المدى</td></tr>`; return; }
+  const showNotes = !!(toggleNotes?.checked);
   const frag=document.createDocumentFragment();
   for(const d of days){
     const tr=document.createElement("tr");
@@ -245,7 +271,7 @@ function renderMeasurementRows(tbody, byDay){
         const line=document.createElement("div"); line.className="value-line";
         line.innerHTML=`<b>${v!=null? v.toFixed(1):"—"}</b><span class="state-dot ${cls}">●</span>`;
         td.appendChild(line);
-        if (toggleNotes.checked) {
+        if (showNotes) {
           if (rec?.bolusDose!=null || rec?.correctionDose!=null){
             const dl=document.createElement("div"); dl.className="dose-line";
             const parts=[]; if(rec.bolusDose!=null) parts.push(`جرعة: ${rec.bolusDose}U`);
@@ -297,11 +323,13 @@ async function fetchMeals(fromISO,toISO){
   return by;
 }
 function buildMealHead(row){
+  if(!row) return;
   row.innerHTML="";
   const th=document.createElement("th"); th.textContent="التاريخ"; row.appendChild(th);
   for(const [,lbl] of MEAL_COLS){ const t=document.createElement("th"); t.textContent=lbl; row.appendChild(t); }
 }
 function renderMealRows(tbody, byDay){
+  if(!tbody) return;
   const days=Object.keys(byDay).sort();
   if(!days.length){ tbody.innerHTML=`<tr><td colspan="${MEAL_COLS.length+1}" class="muted">لا توجد وجبات ضمن المدى</td></tr>`; return; }
   const frag=document.createDocumentFragment();
@@ -352,75 +380,77 @@ function computeStats(byDay){
 }
 function buildAnalytics(){
   if (!Object.keys(currentDataByDay).length){
-    analysisNumbers.innerHTML=`<div class="muted">لا توجد بيانات لعرض التحاليل.</div>`;
+    if(analysisNumbers) analysisNumbers.innerHTML=`<div class="muted">لا توجد بيانات لعرض التحاليل.</div>`;
     if(chartInst){ chartInst.destroy(); chartInst=null; }
-    smartSummary.textContent=""; return;
+    if(smartSummary) smartSummary.textContent="";
+    return;
   }
   const st = computeStats(currentDataByDay);
   const pct = (n,t)=> t? Math.round(n*1000/t)/10 : 0;
   const pHypo=pct(st.hypo,st.total), pHyper=pct(st.hyper,st.total); let pNorm=+(100-pHypo-pHyper).toFixed(1); if(pNorm<0) pNorm=0;
 
-  analysisNumbers.innerHTML = `
-    <span class="badge ok">المتوسط: ${st.avg ?? "—"} mmol/L</span>
-    <span class="badge ok">TIR: ${pNorm}%</span>
-    <span class="badge low">هبوط: ${pHypo}%</span>
-    <span class="badge ok">طبيعي: ${pNorm}%</span>
-    <span class="badge high">ارتفاع: ${pHyper}%</span>
-  `;
+  if(analysisNumbers){
+    analysisNumbers.innerHTML = `
+      <span class="badge ok">المتوسط: ${st.avg ?? "—"} mmol/L</span>
+      <span class="badge ok">TIR: ${pNorm}%</span>
+      <span class="badge low">هبوط: ${pHypo}%</span>
+      <span class="badge ok">طبيعي: ${pNorm}%</span>
+      <span class="badge high">ارتفاع: ${pHyper}%</span>
+    `;
+  }
 
-  if(chartInst) chartInst.destroy();
-  chartInst = new Chart(doughnutCanvas.getContext("2d"), {
-    type:"doughnut",
-    data:{ labels:["هبوط","طبيعي","ارتفاع"], datasets:[{ data:[pHypo,pNorm,pHyper] }] },
-    options:{ responsive:true, plugins:{ legend:{position:"bottom"}, tooltip:{callbacks:{label:(c)=>`${c.label}: ${c.parsed}%`}}}}
-  });
+  if(doughnutCanvas){
+    if(chartInst) chartInst.destroy();
+    chartInst = new Chart(doughnutCanvas.getContext("2d"), {
+      type:"doughnut",
+      data:{ labels:["هبوط","طبيعي","ارتفاع"], datasets:[{ data:[pHypo,pNorm,pHyper] }] },
+      options:{ responsive:true, plugins:{ legend:{position:"bottom"}, tooltip:{callbacks:{label:(c)=>`${c.label}: ${c.parsed}%`}}}}
+    });
+  }
 
   const tips=[];
   if (pNorm<60) tips.push("ضمن النطاق أقل من 60% — راجعي أهداف الوجبات والتصحيح.");
   if (pHypo>pHyper) tips.push("الهبوطات أعلى — قللي جرعات الوجبة/التصحيح بحذر.");
   if (pHyper>pHypo) tips.push("الارتفاعات أعلى — راجعي CR/CF.");
   if (st.worstSlot){ const ar = COLS.find(c=>c[0]===st.worstSlot)?.[1] || st.worstSlot; tips.push(`أكثر فترة خروجًا: ${ar}.`); }
-  smartSummary.textContent = tips.join(" ");
+  if(smartSummary) smartSummary.textContent = tips.join(" ");
 }
 
 /* ============ الحفظ (صلاحيات الطبيب) ============ */
 function vNum(x){ const n=Number(x); return Number.isFinite(n)? n : null; }
 function buildDoctorPayload(){
   const payload = {
-    name: F.name.value?.trim()||null,
-    gender: F.gender.value || null,
-    birthDate: F.birthDate.value || null,
-    glucoseUnit: F.unit.value || null,
+    name: F.name?.value?.trim()||null,
+    gender: F.gender?.value || null,
+    birthDate: F.birthDate?.value || null,
+    glucoseUnit: F.unit?.value || null,
 
-    carbRatio: vNum(F.carbRatio.value),
-    correctionFactor: vNum(F.correctionFactor.value),
+    carbRatio: vNum(F.carbRatio?.value),
+    correctionFactor: vNum(F.correctionFactor?.value),
 
     carbTargets:{
-      breakfast:{min:vNum(F.carb_b_min.value),max:vNum(F.carb_b_max.value)},
-      lunch:{min:vNum(F.carb_l_min.value),max:vNum(F.carb_l_max.value)},
-      dinner:{min:vNum(F.carb_d_min.value),max:vNum(F.carb_d_max.value)},
-      snack:{min:vNum(F.carb_s_min.value),max:vNum(F.carb_s_max.value)},
+      breakfast:{min:vNum(F.carb_b_min?.value),max:vNum(F.carb_b_max?.value)},
+      lunch:{min:vNum(F.carb_l_min?.value),max:vNum(F.carb_l_max?.value)},
+      dinner:{min:vNum(F.carb_d_min?.value),max:vNum(F.carb_d_max?.value)},
+      snack:{min:vNum(F.carb_s_min?.value),max:vNum(F.carb_s_max?.value)},
     },
 
-    // الأربعة حدود كاملة
     normalRange:{
-      min:       vNum(F.hypo.value),
-      max:       vNum(F.hyper.value),
-      severeLow: vNum(F.severeLow.value),
-      severeHigh:vNum(F.severeHigh.value),
+      min:       vNum(F.hypo?.value),
+      max:       vNum(F.hyper?.value),
+      severeLow: vNum(F.severeLow?.value),
+      severeHigh:vNum(F.severeHigh?.value),
     },
 
-    basalType: F.basalType.value || null,
-    bolusType: F.bolusType.value || null,
+    basalType: F.basalType?.value || null,
+    bolusType: F.bolusType?.value || null,
 
-    // وزن/طول للطبيب
-    heightCm: vNum(F.heightCm.value),
-    weightKg: vNum(F.weightKg.value),
+    heightCm: vNum(F.heightCm?.value),
+    weightKg: vNum(F.weightKg?.value),
 
     updatedAt: serverTimestamp(),
   };
 
-  // تحديث حدود التصنيف محليًا
   limits.min = payload.normalRange.min ?? limits.min;
   limits.max = payload.normalRange.max ?? limits.max;
   limits.severeLow  = payload.normalRange.severeLow  ?? limits.severeLow;
@@ -436,13 +466,12 @@ async function saveDoctor(){
     await setDoc(ref, buildDoctorPayload(), {merge:true});
     setStatus("تم الحفظ.",true);
     await loadChild();
-    // إعادة بناء التحليلات على الحدود الجديدة
     buildAnalytics();
     renderMeasurementRows(mRows, currentDataByDay);
   }catch(e){ console.error(e); setStatus("تعذر الحفظ.",false); }
   finally{ showLoader(false); }
 }
-F.save.addEventListener("click", saveDoctor);
+if (F.save) F.save.addEventListener("click", saveDoctor);
 
 /* ============ بناء الكل ============ */
 function buildMHead(){ buildHead(mHeadRow, COLS); }
@@ -450,7 +479,7 @@ function buildMealsHead(){ buildMealHead(mealHeadRow); }
 async function buildAll(fromISO,toISO){
   showLoader(true);
   try{
-    measureMeta.textContent=`من ${fromISO} إلى ${toISO}`;
+    if(measureMeta) measureMeta.textContent=`من ${fromISO} إلى ${toISO}`;
     buildMHead(); buildMealsHead();
 
     currentDataByDay = await fetchMeasurements(fromISO,toISO);
@@ -470,20 +499,7 @@ async function buildAll(fromISO,toISO){
     authUser=u;
 
     // ids
-    const url=new URL(location.href);
-    parentId = url.searchParams.get("parent") || sessionStorage.getItem("lastParent") || "";
-    childId  = url.searchParams.get("child")  || sessionStorage.getItem("lastChild")  || "";
-
-    // للطبيب قد لا نملك parent => استخرج parent عبر child
-    if(!parentId && childId){
-      try{
-        const qy=query(collectionGroup(db,"children"), where(documentId(),"==",`children/${childId}`));
-        const snaps=await getDocs(qy); if(!snaps.empty) parentId = snaps.docs[0].ref.parent.parent.id;
-      }catch{}
-    }
-    // خزّن
-    sessionStorage.setItem("lastParent",parentId||"");
-    sessionStorage.setItem("lastChild",childId||"");
+    await resolveIds();
 
     // الدور
     userRole = await fetchRole(u.uid);
@@ -492,7 +508,11 @@ async function buildAll(fromISO,toISO){
     applyPermissions();
 
     // افتراضي: أسبوع
-    presetEl.value="7"; applyPreset("7");
-    runEl.click();
+    const defaultPreset = presetEl?.value || "7";
+    applyPreset(defaultPreset);
+    // شغّل القراءة مرة واحدة
+    const from = fromEl?.value || fmtISO(addDays(new Date(),-6));
+    const to   = toEl?.value   || fmtISO(new Date());
+    buildAll(from,to);
   });
 })();
