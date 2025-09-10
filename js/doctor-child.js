@@ -1,4 +1,4 @@
-// doctor-child.js — صفحة الطبيب/ولي الأمر مع تقرير ووجبات وتحليلات
+// doctor-child.js — صفحة الطبيب/ولي الأمر مع تقرير ووجبات وتحليلات + تصدير CSV + تصنيف SL/SH + ألوان موحّدة
 import { db } from "./firebase-config.js";
 import {
   doc, getDoc, setDoc, collection, query, where, orderBy, getDocs,
@@ -19,7 +19,8 @@ const CARD = {
   doc:$("#c_doc"), share:$("#c_share"), updated:$("#c_updated"),
 };
 
-const presetEl=$("#preset"), datesBox=$("#datesBox"), fromEl=$("#from"), toEl=$("#to"), runEl=$("#run");
+const presetEl=$("#preset"), datesBox=$("#datesBox"), fromEl=$("#from"), toEl=$("#to"),
+      runEl=$("#run"), exportBtn=$("#exportCsv");
 const toggleNotes=$("#toggleNotes");
 const analysisNumbers=$("#analysisNumbers"), smartSummary=$("#smartSummary");
 const doughnutCanvas=$("#doughnutChart");
@@ -61,7 +62,7 @@ function applyPreset(v){
   if (fromEl) fromEl.value= fmtISO(addDays(today,-(days-1)));
 }
 
-/* اربطي الأحداث فقط لو العناصر موجودة */
+/* أربطي الأحداث بحذر */
 if (presetEl) presetEl.addEventListener("change",()=>applyPreset(presetEl.value));
 if (runEl) runEl.addEventListener("click",()=>{
   const v=presetEl?.value||"7"; if(v!=="custom") applyPreset(v);
@@ -71,6 +72,11 @@ if (runEl) runEl.addEventListener("click",()=>{
 });
 if (toggleNotes) toggleNotes.addEventListener("change",()=>{
   renderMeasurementRows(mRows, currentDataByDay);
+});
+if (exportBtn) exportBtn.addEventListener("click", ()=>{
+  const from= fromEl?.value || fmtISO(addDays(new Date(),-6));
+  const to  = toEl?.value   || fmtISO(new Date());
+  exportCsvAll(from, to);
 });
 
 /* ============ تقسيم الأوقات ============ */
@@ -104,8 +110,16 @@ function normSlot(k){
   return null;
 }
 
-/* ============ حدود التصنيف ============ */
-let limits = { min:3.9, max:10.0, severeLow:3.0, severeHigh:16.7 }; // mmol/L
+/* ============ حدود التصنيف: نعتمد Severe Low/High =========== */
+let limits = {
+  min:3.9, max:10.0,
+  severeLow:3.0, severeHigh:16.7,
+  lowBound:null, highBound:null
+};
+function refreshBounds(){
+  limits.lowBound  = (limits.severeLow  ?? limits.min);
+  limits.highBound = (limits.severeHigh ?? limits.max);
+}
 const round1=(n)=> Number.isFinite(+n)? Math.round(+n*10)/10 : null;
 function toMmol(rec){
   if (typeof rec?.value_mmol === "number") return rec.value_mmol;
@@ -116,10 +130,8 @@ function toMmol(rec){
 }
 function classify(v){
   if(!Number.isFinite(v)) return "b-ok";
-  if(limits.severeLow!=null && v<=limits.severeLow) return "b-sevlow";
-  if(limits.min!=null && v<limits.min) return "b-low";
-  if(limits.severeHigh!=null && v>=limits.severeHigh) return "b-sevhigh";
-  if(limits.max!=null && v>limits.max) return "b-high";
+  if(limits.lowBound  != null && v <= limits.lowBound ) return "b-low";
+  if(limits.highBound != null && v >= limits.highBound) return "b-high";
   return "b-ok";
 }
 
@@ -127,45 +139,6 @@ function classify(v){
 async function fetchRole(uid){
   const s=await getDoc(doc(db,"users",uid));
   return s.exists()? (s.data().role||"parent") : "parent";
-}
-function isOwner(){ return authUser && parentId && authUser.uid===parentId; }
-
-/* (اختياري) إنشاء بطاقة الطفل تلقائيًا إذا مفقودة */
-function ensureChildCard(){
-  if (document.getElementById("c_name")) return; // موجود
-  const holder=document.createElement("section");
-  holder.className="card"; holder.id="childCard";
-  holder.innerHTML=`
-    <div class="card-row">
-      <div><b>الاسم:</b> <span id="c_name">—</span></div>
-      <div><b>العمر:</b> <span id="c_age">—</span></div>
-      <div><b>الجنس:</b> <span id="c_gender">—</span></div>
-      <div><b>الوحدة:</b> <span id="c_unit">—</span></div>
-    </div>
-    <div class="card-row">
-      <div><b>النطاق:</b> <span id="c_range">—</span></div>
-      <div><b>CR:</b> <span id="c_cr">—</span></div>
-      <div><b>CF:</b> <span id="c_cf">—</span></div>
-      <div><b>الجهاز:</b> <span id="c_device">—</span></div>
-    </div>
-    <div class="card-row">
-      <div><b>Basal:</b> <span id="c_basal">—</span></div>
-      <div><b>Bolus:</b> <span id="c_bolus">—</span></div>
-      <div><b>الوزن:</b> <span id="c_weight">—</span></div>
-      <div><b>الطول:</b> <span id="c_height">—</span></div>
-    </div>
-    <div class="card-row muted">
-      <div><b>الطبيب المرتبط:</b> <span id="c_doc">—</span></div>
-      <div><b>المشاركة:</b> <span id="c_share">—</span></div>
-      <div><b>آخر تحديث:</b> <span id="c_updated">—</span></div>
-    </div>`;
-  document.body.insertBefore(holder, document.querySelector(".controls") || null);
-
-  // أعد ربط مؤشرات CARD بعد إنشاء البلوك
-  CARD.name=$("#c_name");  CARD.age=$("#c_age");   CARD.gender=$("#c_gender"); CARD.unit=$("#c_unit");
-  CARD.range=$("#c_range");CARD.cr=$("#c_cr");     CARD.cf=$("#c_cf");         CARD.device=$("#c_device");
-  CARD.basal=$("#c_basal");CARD.bolus=$("#c_bolus");CARD.weight=$("#c_weight");CARD.height=$("#c_height");
-  CARD.doc=$("#c_doc");    CARD.share=$("#c_share");CARD.updated=$("#c_updated");
 }
 
 /* استرجاع معرفات parent/child بشكل قوي */
@@ -183,7 +156,6 @@ async function resolveIds(){
     }catch(e){ console.warn("resolveIds cg error", e); }
   }
 
-  // خزّن لصفحات تانية
   sessionStorage.setItem("lastParent", parentId || "");
   sessionStorage.setItem("lastChild",  childId  || "");
 }
@@ -193,15 +165,18 @@ async function loadChild(){
   const s=await getDoc(ref);
   childData = s.exists()? s.data(): {};
   const name = childData?.name || childId || "—";
-  if (childTitle) { childTitle.textContent=name; }
+  childTitle && (childTitle.textContent=name);
   document.title=`ملف ${name}`;
 
+  // حدود من الداتا
   const nr=childData?.normalRange||{};
-  limits.min = (nr.min ?? childData?.hypoLevel ?? limits.min);
-  limits.max = (nr.max ?? childData?.hyperLevel ?? limits.max);
+  limits.min        = (nr.min        ?? childData?.hypoLevel  ?? limits.min);
+  limits.max        = (nr.max        ?? childData?.hyperLevel ?? limits.max);
   limits.severeLow  = (nr.severeLow  ?? limits.severeLow);
   limits.severeHigh = (nr.severeHigh ?? limits.severeHigh);
+  refreshBounds();
 
+  // بطاقة
   CARD?.name && (CARD.name.textContent = name);
   CARD?.gender && (CARD.gender.textContent = childData?.gender || "—");
   CARD?.unit   && (CARD.unit.textContent   = childData?.glucoseUnit || childData?.unit || "—");
@@ -213,8 +188,7 @@ async function loadChild(){
   })());
 
   CARD?.range && (CARD.range.textContent =
-    `${round1(limits.min)}–${round1(limits.max)} mmol/L` +
-    (limits.severeLow||limits.severeHigh? ` (شديد: ${round1(limits.severeLow)||"—"} / ${round1(limits.severeHigh)||"—"})`:"")
+    `${round1(limits.lowBound)}–${round1(limits.highBound)} mmol/L (شديد)`
   );
 
   CARD?.cr && (CARD.cr.textContent = (childData?.carbRatio ?? "—"));
@@ -242,8 +216,8 @@ async function loadChild(){
 
   F.hypo       && (F.hypo.value       = limits.min ?? "");
   F.hyper      && (F.hyper.value      = limits.max ?? "");
-  F.severeLow  && (F.severeLow.value  = limits.severeLow ?? "");
-  F.severeHigh && (F.severeHigh.value = limits.severeHigh ?? "");
+  F.severeLow  && (F.severeLow.value  = limits.lowBound  ?? "");
+  F.severeHigh && (F.severeHigh.value = limits.highBound ?? "");
 
   F.carb_b_min && (F.carb_b_min.value = childData?.carbTargets?.breakfast?.min ?? "");
   F.carb_b_max && (F.carb_b_max.value = childData?.carbTargets?.breakfast?.max ?? "");
@@ -406,8 +380,9 @@ function computeStats(byDay){
     for(const [slot,rec] of Object.entries(day)){
       const v=toMmol(rec); if(v==null) continue;
       cnt++; sum+=v;
-      if(v<limits.min){ hypo++; perSlot[slot]=(perSlot[slot]||0)+1; }
-      else if(v>limits.max){ hyper++; perSlot[slot]=(perSlot[slot]||0)+1; }
+      const c=classify(v);
+      if(c==="b-low"){ hypo++; perSlot[slot]=(perSlot[slot]||0)+1; }
+      else if(c==="b-high"){ hyper++; perSlot[slot]=(perSlot[slot]||0)+1; }
       else normal++;
     }
   }
@@ -417,9 +392,9 @@ function computeStats(byDay){
 }
 function buildAnalytics(){
   if (!Object.keys(currentDataByDay).length){
-    if(analysisNumbers) analysisNumbers.innerHTML=`<div class="muted">لا توجد بيانات لعرض التحاليل.</div>`;
+    analysisNumbers && (analysisNumbers.innerHTML=`<div class="muted">لا توجد بيانات لعرض التحاليل.</div>`);
     if(chartInst){ chartInst.destroy(); chartInst=null; }
-    if(smartSummary) smartSummary.textContent="";
+    smartSummary && (smartSummary.textContent="");
     return;
   }
   const st = computeStats(currentDataByDay);
@@ -440,17 +415,34 @@ function buildAnalytics(){
     if(chartInst) chartInst.destroy();
     chartInst = new Chart(doughnutCanvas.getContext("2d"), {
       type:"doughnut",
-      data:{ labels:["هبوط","طبيعي","ارتفاع"], datasets:[{ data:[pHypo,pNorm,pHyper] }] },
-      options:{ responsive:true, plugins:{ legend:{position:"bottom"}, tooltip:{callbacks:{label:(c)=>`${c.label}: ${c.parsed}%`}}}}
+      data:{
+        labels:["هبوط","طبيعي","ارتفاع"],
+        datasets:[{
+          data:[pHypo,pNorm,pHyper],
+          backgroundColor:["#60a5fa","#22c55e","#ef4444"], // Low/OK/High
+          borderColor:["#dbeafe","#dcfce7","#fee2e2"],
+          borderWidth:1
+        }]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,   // يملأ .chart-box
+        cutout:"68%",
+        plugins:{
+          legend:{ position:"bottom", labels:{ boxWidth:10, boxHeight:10, padding:8, font:{ size:11 } } },
+          tooltip:{ callbacks:{ label:(c)=>`${c.label}: ${c.parsed}%` } }
+        },
+        layout:{ padding:0 }
+      }
     });
   }
 
   const tips=[];
   if (pNorm<60) tips.push("ضمن النطاق أقل من 60% — راجعي أهداف الوجبات والتصحيح.");
-  if (pHypo>pHyper) tips.push("الهبوطات أعلى — قللي جرعات الوجبة/التصحيح بحذر.");
+  if (pHypo>pHyper) tips.push("الهبوطات أعلى — قلّلي جرعات الوجبة/التصحيح بحذر.");
   if (pHyper>pHypo) tips.push("الارتفاعات أعلى — راجعي CR/CF.");
   if (st.worstSlot){ const ar = COLS.find(c=>c[0]===st.worstSlot)?.[1] || st.worstSlot; tips.push(`أكثر فترة خروجًا: ${ar}.`); }
-  if(smartSummary) smartSummary.textContent = tips.join(" ");
+  smartSummary && (smartSummary.textContent = tips.join(" "));
 }
 
 /* ============ الحفظ (صلاحيات الطبيب) ============ */
@@ -488,10 +480,12 @@ function buildDoctorPayload(){
     updatedAt: serverTimestamp(),
   };
 
+  // عدّلي الحدود المحلية + فعّلي SL/SH
   limits.min = payload.normalRange.min ?? limits.min;
   limits.max = payload.normalRange.max ?? limits.max;
   limits.severeLow  = payload.normalRange.severeLow  ?? limits.severeLow;
   limits.severeHigh = payload.normalRange.severeHigh ?? limits.severeHigh;
+  refreshBounds();
 
   return payload;
 }
@@ -505,10 +499,82 @@ async function saveDoctor(){
     await loadChild();
     buildAnalytics();
     renderMeasurementRows(mRows, currentDataByDay);
-  }catch(e){ console.error(e); setStatus("تعذر الحفظ.",false); }
+  }catch(e){ console.error(e); setStatus("تعذر الحفظ. الصلاحيات أو الحقول.",false); }
   finally{ showLoader(false); }
 }
 if (F.save) F.save.addEventListener("click", saveDoctor);
+
+/* ============ تصدير CSV (Excel) ============ */
+function downloadCsv(filename, rows){
+  // BOM علشان العربي يبان صح في Excel
+  const BOM = "\uFEFF";
+  const csv = rows.map(r => r.map(c => {
+    if (c==null) return "";
+    const s = String(c).replace(/"/g,'""');
+    return /[",\n]/.test(s) ? `"${s}"` : s;
+  }).join(",")).join("\n");
+  const blob = new Blob([BOM + csv], {type:"text/csv;charset=utf-8;"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function exportCsvMeasurements(from,to){
+  const header = ["التاريخ", ...COLS.map(c=>c[1])];
+  const days = Object.keys(currentDataByDay).sort();
+  const rows = [header];
+
+  if (!days.length){
+    rows.push(["لا توجد بيانات ضمن المدى"]);
+  }else{
+    for (const d of days){
+      const line=[d];
+      for (const [slot] of COLS){
+        const rec=currentDataByDay[d]?.[slot];
+        if(rec){
+          const mmol = round1(toMmol(rec));
+          line.push(mmol!=null? mmol.toFixed(1):"");
+        }else line.push("");
+      }
+      rows.push(line);
+    }
+  }
+  const name = childData?.name || childId || "child";
+  downloadCsv(`${name}_${from}_to_${to}_measurements.csv`, rows);
+}
+
+function exportCsvMeals(from,to){
+  const header = ["التاريخ", ...MEAL_COLS.map(c=>c[1])];
+  const days = Object.keys(currentMealsByDay).sort();
+  const rows = [header];
+
+  if (!days.length){
+    rows.push(["لا توجد وجبات ضمن المدى"]);
+  }else{
+    for (const d of days){
+      const line=[d];
+      for (const [slot] of MEAL_COLS){
+        const m=currentMealsByDay[d]?.[slot];
+        if(m){
+          // نعرض إجمالي الكارب + عدد الوجبات
+          const txt = `${m.carbs||0}g x${m.count}`;
+          line.push(txt);
+        }else line.push("");
+      }
+      rows.push(line);
+    }
+  }
+  const name = childData?.name || childId || "child";
+  downloadCsv(`${name}_${from}_to_${to}_meals.csv`, rows);
+}
+
+function exportCsvAll(from,to){
+  exportCsvMeasurements(from,to);
+  exportCsvMeals(from,to);
+}
 
 /* ============ بناء الكل ============ */
 function buildMHead(){ buildHead(mHeadRow, COLS); }
@@ -516,7 +582,7 @@ function buildMealsHead(){ buildMealHead(mealHeadRow); }
 async function buildAll(fromISO,toISO){
   showLoader(true);
   try{
-    if(measureMeta) measureMeta.textContent=`من ${fromISO} إلى ${toISO}`;
+    measureMeta && (measureMeta.textContent=`من ${fromISO} إلى ${toISO}`);
     buildMHead(); buildMealsHead();
 
     currentDataByDay = await fetchMeasurements(fromISO,toISO);
@@ -535,23 +601,14 @@ async function buildAll(fromISO,toISO){
     if(!u){ location.href="/login.html"; return; }
     authUser=u;
 
-    // ids
     await resolveIds();
-
-    // تأكّد من وجود بطاقة الطفل (لو حد حذفها في HTML)
-    ensureChildCard();
-
-    // الدور
     userRole = await fetchRole(u.uid);
 
     await loadChild();
     applyPermissions();
 
     // افتراضي: أسبوع
-    const defaultPreset = presetEl?.value || "7";
-    applyPreset(defaultPreset);
-    // شغّل القراءة مرة واحدة
-    const from = fromEl?.value || fmtISO(addDays(new Date(),-6));
+    const from = fromEl?.value || fmtISO(addDays(new Date(), -6));
     const to   = toEl?.value   || fmtISO(new Date());
     buildAll(from,to);
   });
