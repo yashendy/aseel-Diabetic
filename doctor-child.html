@@ -2,89 +2,162 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>بيانات الطفل — دكتور</title>
-  <!-- … محتوى doctor-child.html القديم كما هو … -->
-
-<!-- أزرار جديدة تحت بيانات الطفل -->
-<div id="child-actions" style="display:flex; gap:8px; margin:8px 0;">
-  <button id="btnOpenAnalytics" class="btn ghost">تحليل القياسات 📈</button>
-  <button id="btnOpenReport" class="btn ghost">تقرير/طباعة 🖨️</button>
-</div>
-
-<!-- … باقي الصفحة كما هي … -->
-
-  <link rel="stylesheet" href="css/meals.css" />
-  <style>
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
-    .muted{color:#667}
-    .cardx{border:1px solid #e6eef7;border-radius:12px;padding:12px;margin:8px 0}
-    .table{width:100%;border-collapse:collapse}
-    .table th,.table td{border-bottom:1px solid #eee;padding:6px}
-  </style>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ملف الطفل</title>
+  <link rel="stylesheet" href="./doctor-child.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <div class="container">
-    <div class="card">
-      <a class="secondary" href="doctor-dashboard.html">⬅︎ رجوع</a>
-      <h2 id="title">الطفل</h2>
-      <div id="meta" class="muted"></div>
+
+  <header class="page-header">
+    <h1>إعدادات الطفل <span id="childTitle" class="pill"></span></h1>
+  </header>
+
+  <!-- بطاقة معلومات الطفل -->
+  <section class="card" id="childCard">
+    <div class="card-row">
+      <div><b>الاسم:</b> <span id="c_name">—</span></div>
+      <div><b>العمر:</b> <span id="c_age">—</span></div>
+      <div><b>الجنس:</b> <span id="c_gender">—</span></div>
+      <div><b>الوحدة:</b> <span id="c_unit">—</span></div>
+    </div>
+    <div class="card-row">
+      <div><b>النطاق:</b> <span id="c_range">—</span></div>
+      <div><b>CR:</b> <span id="c_cr">—</span></div>
+      <div><b>CF:</b> <span id="c_cf">—</span></div>
+      <div><b>الجهاز:</b> <span id="c_device">—</span></div>
+    </div>
+    <div class="card-row">
+      <div><b>Basal:</b> <span id="c_basal">—</span></div>
+      <div><b>Bolus:</b> <span id="c_bolus">—</span></div>
+      <div><b>الوزن:</b> <span id="c_weight">—</span></div>
+      <div><b>الطول:</b> <span id="c_height">—</span></div>
+    </div>
+    <div class="card-row muted">
+      <div><b>الطبيب المرتبط:</b> <span id="c_doc">—</span></div>
+      <div><b>المشاركة:</b> <span id="c_share">—</span></div>
+      <div><b>آخر تحديث:</b> <span id="c_updated">—</span></div>
+    </div>
+  </section>
+
+  <!-- تحكّم الفترة -->
+  <section class="controls">
+    <div class="controls-row">
+      <label>المدى السريع</label>
+      <select id="preset">
+        <option value="7">7 أيام</option>
+        <option value="14">14 يوم</option>
+        <option value="30">30 يوم</option>
+        <option value="90">90 يوم</option>
+        <option value="custom">مخصص</option>
+      </select>
+
+      <div id="datesBox" class="hidden">
+        <label>من</label><input id="from" type="date" />
+        <label>إلى</label><input id="to" type="date" />
+      </div>
+
+      <label class="ml8"><input id="toggleNotes" type="checkbox" checked /> إظهار الملاحظات/الجرعات</label>
+
+      <button id="run" class="btn primary">عرض</button>
+    </div>
+  </section>
+
+  <!-- التحليلات -->
+  <section class="card">
+    <h2>التحاليل</h2>
+    <div class="analytics">
+      <div class="badges" id="analysisNumbers"></div>
+      <canvas id="doughnutChart" height="140"></canvas>
+      <div id="smartSummary" class="muted"></div>
+    </div>
+  </section>
+
+  <!-- القياسات -->
+  <section class="card">
+    <h2>القياسات</h2>
+    <div id="measureMeta" class="muted"></div>
+    <div class="legend">
+      <span><span class="dot dot-low"></span> هبوط</span>
+      <span><span class="dot dot-ok"></span> طبيعي</span>
+      <span><span class="dot dot-high"></span> ارتفاع</span>
+    </div>
+    <div class="table-wrap">
+      <table class="grid">
+        <thead><tr id="mHeadRow"></tr></thead>
+        <tbody id="mRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- الوجبات -->
+  <section class="card">
+    <h2>الوجبات</h2>
+    <div class="table-wrap">
+      <table class="grid">
+        <thead><tr id="mealHeadRow"></tr></thead>
+        <tbody id="mealRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- نموذج تعديل للطبيب (المسموح فقط) -->
+  <section class="card">
+    <h2>تعديل بيانات الطفل (للدكتور)</h2>
+    <div class="form-grid">
+      <label>الاسم <input id="f_name" /></label>
+      <label>الجنس
+        <select id="f_gender">
+          <option value="">—</option>
+          <option value="male">ذكر</option>
+          <option value="female">أنثى</option>
+        </select>
+      </label>
+      <label>تاريخ الميلاد <input id="f_birthDate" type="date" /></label>
+      <label>الوحدة
+        <select id="f_unit">
+          <option value="">—</option>
+          <option value="mmol/L">mmol/L</option>
+          <option value="mg/dL">mg/dL</option>
+        </select>
+      </label>
+
+      <label>Carb Ratio <input id="f_carbRatio" type="number" step="0.1"/></label>
+      <label>Correction Factor <input id="f_correctionFactor" type="number" step="0.1"/></label>
+
+      <label>نوع القاعدي (Basal) <input id="f_basalType"/></label>
+      <label>نوع السريع (Bolus) <input id="f_bolusType"/></label>
+
+      <label>الطول (سم) <input id="f_heightCm" type="number" step="0.1"/></label>
+      <label>الوزن (كجم) <input id="f_weightKg" type="number" step="0.1"/></label>
+
+      <label>المدى الطبيعي (min) <input id="f_hypo" type="number" step="0.1" /></label>
+      <label>المدى الطبيعي (max) <input id="f_hyper" type="number" step="0.1" /></label>
+
+      <!-- الحدود الشديدة -->
+      <label>هبوط شديد (Severe Low) <input id="f_severeLow" type="number" step="0.1" /></label>
+      <label>ارتفاع شديد (Severe High) <input id="f_severeHigh" type="number" step="0.1" /></label>
     </div>
 
-    <!-- نموذج تعديل بيانات الطفل (الحقول المسموح بها للدكتور) -->
-    <section class="card">
-      <h3>تعديل بيانات الطفل (للدكتور)</h3>
-      <div class="grid">
-        <div class="field"><label>الوحدة</label>
-          <select id="glucoseUnit">
-            <option value="mg/dL">mg/dL</option>
-            <option value="mmol">mmol/L</option>
-          </select>
-        </div>
-        <div class="field"><label>Carb Ratio</label><input id="carbRatio" type="number" step="any"></div>
-        <div class="field"><label>Correction Factor</label><input id="correctionFactor" type="number" step="any"></div>
-        <div class="field"><label>نوع البولس</label><input id="bolusType"></div>
-        <div class="field"><label>نوع القاعدي</label><input id="basalType"></div>
+    <div class="form-grid">
+      <div>
+        <div class="legend small">أهداف الكارب (جرام)</div>
+        <label>فطار: من <input id="f_carb_b_min" type="number" step="1"/> إلى <input id="f_carb_b_max" type="number" step="1"/></label>
+        <label>غدا: من <input id="f_carb_l_min" type="number" step="1"/> إلى <input id="f_carb_l_max" type="number" step="1"/></label>
+        <label>عشا: من <input id="f_carb_d_min" type="number" step="1"/> إلى <input id="f_carb_d_max" type="number" step="1"/></label>
+        <label>سناك: من <input id="f_carb_s_min" type="number" step="1"/> إلى <input id="f_carb_s_max" type="number" step="1"/></label>
       </div>
+    </div>
 
-      <div class="grid" style="margin-top:8px">
-        <div class="field"><label>المدى الطبيعي (min)</label><input id="nMin" type="number" step="any"></div>
-        <div class="field"><label>المدى الطبيعي (max)</label><input id="nMax" type="number" step="any"></div>
-      </div>
+    <div class="actions">
+      <button id="btnSave" class="btn success">حفظ التعديلات</button>
+      <span id="status" class="status"></span>
+    </div>
+  </section>
 
-      <h4>أهداف الكارب</h4>
-      <div class="grid">
-        <div class="field"><label>فطار min</label><input id="bMin" type="number" step="any"></div>
-        <div class="field"><label>فطار max</label><input id="bMax" type="number" step="any"></div>
-        <div class="field"><label>غدا min</label><input id="lMin" type="number" step="any"></div>
-        <div class="field"><label>غدا max</label><input id="lMax" type="number" step="any"></div>
-        <div class="field"><label>عشا min</label><input id="dMin" type="number" step="any"></div>
-        <div class="field"><label>عشا max</label><input id="dMax" type="number" step="any"></div>
-      </div>
+  <div id="loader" class="loader hidden">تحميل ⏳</div>
 
-      <div class="top-actions">
-        <button id="saveBtn">حفظ التعديلات</button>
-        <span id="msg" class="muted"></span>
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>آخر الوجبات</h3>
-      <table class="table" id="mealsTbl">
-        <thead><tr><th>التاريخ</th><th>النوع</th><th>كارب (g)</th><th>جرعة مقترحة</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </section>
-
-    <section class="card">
-      <h3>آخر القياسات</h3>
-      <table class="table" id="measTbl">
-        <thead><tr><th>التاريخ</th><th>الوقت</th><th>النوع</th><th>القيمة</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </section>
-  </div>
-
-  <script type="module" src="js/doctor-child.js"></script>
+  <script type="module" src="./doctor-child.js"></script>
 </body>
 </html>
