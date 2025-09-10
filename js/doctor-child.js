@@ -552,7 +552,7 @@ async function buildAll(fromISO,toISO){
     applyPreset(defaultPreset);
     // شغّل القراءة مرة واحدة
     const from = fromEl?.value || fmtISO(addDays(new Date(),-6));
-    const to   = toEl?.value   || fmtISO(new Date()));
+    const to   = toEl?.value   || fmtISO(new Date());
     buildAll(from,to);
   });
 })();
