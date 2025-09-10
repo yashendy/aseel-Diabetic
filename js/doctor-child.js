@@ -1,4 +1,4 @@
-// doctor-child.js — نسخة مُصحّحة
+// doctor-child.js — صفحة الطبيب/ولي الأمر مع تقرير ووجبات وتحليلات
 import { db } from "./firebase-config.js";
 import {
   doc, getDoc, setDoc, collection, query, where, orderBy, getDocs,
@@ -130,6 +130,44 @@ async function fetchRole(uid){
 }
 function isOwner(){ return authUser && parentId && authUser.uid===parentId; }
 
+/* (اختياري) إنشاء بطاقة الطفل تلقائيًا إذا مفقودة */
+function ensureChildCard(){
+  if (document.getElementById("c_name")) return; // موجود
+  const holder=document.createElement("section");
+  holder.className="card"; holder.id="childCard";
+  holder.innerHTML=`
+    <div class="card-row">
+      <div><b>الاسم:</b> <span id="c_name">—</span></div>
+      <div><b>العمر:</b> <span id="c_age">—</span></div>
+      <div><b>الجنس:</b> <span id="c_gender">—</span></div>
+      <div><b>الوحدة:</b> <span id="c_unit">—</span></div>
+    </div>
+    <div class="card-row">
+      <div><b>النطاق:</b> <span id="c_range">—</span></div>
+      <div><b>CR:</b> <span id="c_cr">—</span></div>
+      <div><b>CF:</b> <span id="c_cf">—</span></div>
+      <div><b>الجهاز:</b> <span id="c_device">—</span></div>
+    </div>
+    <div class="card-row">
+      <div><b>Basal:</b> <span id="c_basal">—</span></div>
+      <div><b>Bolus:</b> <span id="c_bolus">—</span></div>
+      <div><b>الوزن:</b> <span id="c_weight">—</span></div>
+      <div><b>الطول:</b> <span id="c_height">—</span></div>
+    </div>
+    <div class="card-row muted">
+      <div><b>الطبيب المرتبط:</b> <span id="c_doc">—</span></div>
+      <div><b>المشاركة:</b> <span id="c_share">—</span></div>
+      <div><b>آخر تحديث:</b> <span id="c_updated">—</span></div>
+    </div>`;
+  document.body.insertBefore(holder, document.querySelector(".controls") || null);
+
+  // أعد ربط مؤشرات CARD بعد إنشاء البلوك
+  CARD.name=$("#c_name");  CARD.age=$("#c_age");   CARD.gender=$("#c_gender"); CARD.unit=$("#c_unit");
+  CARD.range=$("#c_range");CARD.cr=$("#c_cr");     CARD.cf=$("#c_cf");         CARD.device=$("#c_device");
+  CARD.basal=$("#c_basal");CARD.bolus=$("#c_bolus");CARD.weight=$("#c_weight");CARD.height=$("#c_height");
+  CARD.doc=$("#c_doc");    CARD.share=$("#c_share");CARD.updated=$("#c_updated");
+}
+
 /* استرجاع معرفات parent/child بشكل قوي */
 async function resolveIds(){
   const url=new URL(location.href);
@@ -219,7 +257,6 @@ async function loadChild(){
 
 /* ============ صلاحيات الطبيب ============ */
 function applyPermissions(){
-  // لا حاجة لتعطيل شيء هنا؛ الجهاز غير موجود في النموذج من الأساس
   [
     F.name,F.gender,F.birthDate,F.unit,
     F.carbRatio,F.correctionFactor,
@@ -501,6 +538,9 @@ async function buildAll(fromISO,toISO){
     // ids
     await resolveIds();
 
+    // تأكّد من وجود بطاقة الطفل (لو حد حذفها في HTML)
+    ensureChildCard();
+
     // الدور
     userRole = await fetchRole(u.uid);
 
@@ -512,7 +552,7 @@ async function buildAll(fromISO,toISO){
     applyPreset(defaultPreset);
     // شغّل القراءة مرة واحدة
     const from = fromEl?.value || fmtISO(addDays(new Date(),-6));
-    const to   = toEl?.value   || fmtISO(new Date());
+    const to   = toEl?.value   || fmtISO(new Date()));
     buildAll(from,to);
   });
 })();
