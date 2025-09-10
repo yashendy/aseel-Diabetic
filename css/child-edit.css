@@ -51,7 +51,7 @@ html,body{margin:0;padding:0;font-family:"Tajawal",system-ui,-apple-system,Segoe
 .pair{display:flex;gap:8px}
 .pair input{
   width:6ch;               /* يكفي حتى 3 أرقام */
-  padding:8px 10px;
+  padding:8px 20px;
   text-align:center;
   border:1px solid var(--ring);
   border-radius:10px;
