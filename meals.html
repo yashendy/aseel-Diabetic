@@ -1,56 +1,0 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>إدارة الوجبات</title>
-  <link rel="stylesheet" href="./css/meals.css" />
-</head>
-<body>
-
-  <!-- شريط علوي -->
-  <header class="topbar">
-    <h1 class="title">إدارة الوجبات</h1>
-  </header>
-
-  <main class="container">
-    <!-- جدول الوجبات -->
-    <section class="card">
-      <h2>الأصناف المختارة</h2>
-      <table id="mealsTable">
-        <thead>
-          <tr>
-            <th>الصنف</th>
-            <th>الكمية</th>
-            <th>الكارب</th>
-            <th>السعرات</th>
-            <th>البروتين</th>
-            <th>الدهون</th>
-            <th>خيارات</th>
-          </tr>
-        </thead>
-        <tbody id="mealsBody">
-          <!-- الصفوف تُبنى من JS -->
-        </tbody>
-      </table>
-    </section>
-  </main>
-
-  <!-- ===== مودال البدائل الصحية ===== -->
-  <div id="altModal" class="modal hidden" aria-modal="true" role="dialog">
-    <div class="modal-body" role="document">
-      <div class="modal-header">
-        <h3>🔁 بدائل صحّية للصنف</h3>
-        <button id="altClose" class="close" aria-label="إغلاق">✕</button>
-      </div>
-      <div id="altList" class="picker-grid"></div>
-      <div id="altEmpty" class="empty hidden">لا توجد بدائل مناسبة وفق الأنظمة الحالية.</div>
-    </div>
-  </div>
-
-  <!-- سكربتات -->
-  <script type="module" src="./js/nutrition-utils.js"></script>
-  <script type="module" src="./js/diet-rules.js"></script>
-  <script type="module" src="./js/meals.js"></script>
-</body>
-</html>
