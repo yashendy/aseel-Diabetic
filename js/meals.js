@@ -1,7 +1,7 @@
 // ===== meals.js كامل =====
 
 import { getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
-import { PUBLIC_FOOD } from "./firebase.js";
+import { PUBLIC_FOOD } from "./firebase-config.js";
 import { calcServingFrom100g, scoreHealth, scoreFit, formatMacroLine } from "./nutrition-utils.js";
 import { isAllowedForProfile, dietBoostForProfile } from "./diet-rules.js";
 
