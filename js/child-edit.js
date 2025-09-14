@@ -1,8 +1,8 @@
-// ===== Firebase (عدّلي المسارات إن لزم) =====
+// ===== Firebase (v12.1.0 مثل firebase-config.js) =====
 import {
   doc, getDoc, setDoc, updateDoc
-} from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
-import { db, auth } from "./firebase.js";
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { db, auth } from "./firebase-config.js";
 
 // ===== DOM helpers =====
 const $  = (s,r=document)=>r.querySelector(s);
@@ -57,7 +57,7 @@ const devTypeEl=$("#f_deviceType");
 const devModelEl=$("#f_deviceModel");
 const insulinNotesEl=$("#f_insulinNotes");
 
-// Chips
+// Chips wrappers
 const injSitesWrap = $("#injectionSitesInput");
 const allergiesWrap=$("#allergiesInput");
 const preferredWrap=$("#preferredInput");
@@ -109,7 +109,7 @@ function chipInput(wrap){
     if(e.key==="Backspace" && !input.value){ wrap.querySelector(".chip:last-of-type")?.remove(); }
   });
   wrap?.addEventListener("click", ()=>input?.focus());
-  return { get:()=>[...wrap.querySelectorAll(".chip .t")].map(n=>n.textContent), set:(arr)=>{ [...wrap.querySelectorAll(".chip")].forEach(x=>x.remove()); (arr||[]).forEach(add); } };
+  return { get:()=>[...wrap.querySelectorAll(".chip .t")].map(n=>n.textContent), set:(arr)=>{ [...wrap.querySelectorAll(".chip")].forEach(x=>x.remove()); (arr||[]).forEach(v=>{ const c=document.createElement("span"); c.className="chip"; c.innerHTML=`<span class="t">${v}</span><button class="x">✕</button>`; wrap.insertBefore(c,input); c.querySelector(".x").addEventListener("click",()=>c.remove()); }); } };
 }
 const allergies = chipInput(allergiesWrap);
 const preferred = chipInput(preferredWrap);
@@ -220,13 +220,9 @@ function updateNormalBadge(c){
     hdrUpdated.textContent = fmtDate(child.updated);
 
     if(roleBadge) roleBadge.textContent = child.role || "وليّ أمر";
-    // doctor link
     await fillDoctorLink(child);
 
-    // Normal range
     updateNormalBadge(child);
-
-    // listeners
     attachValidation();
 
     status("✅ تم التحميل");
@@ -236,7 +232,7 @@ function updateNormalBadge(c){
   }
 })();
 
-// ===== fill doctor link =====
+// doctor link
 async function fillDoctorLink(c){
   try{
     const did = c.assignedDoctorId || c.doctorId;
@@ -253,7 +249,7 @@ async function fillDoctorLink(c){
   }
 }
 
-// ===== diet flags helpers =====
+// diet flags helpers
 function applyDietFlags(arr){
   const set = new Set(arr||[]);
   flagsInputs.forEach(i=> i.checked = set.has(i.value));
@@ -262,7 +258,7 @@ function collectDietFlags(){
   return flagsInputs.filter(i=> i.checked).map(i=> i.value);
 }
 
-// ===== validation & hints =====
+// validation & hints
 function validateGlucoseOrder(){
   const a=n0(f_criticalLow.value), b=n0(f_severeLow.value), c=n0(f_hypo.value),
         d=n0(f_hyper.value),      e=n0(f_severeHigh.value), f=n0(f_criticalHigh.value);
@@ -288,7 +284,7 @@ function attachValidation(){
   });
 }
 
-// ===== save =====
+// save
 $("#btnSave")?.addEventListener("click", saveChild);
 
 async function saveChild(){
@@ -310,7 +306,7 @@ async function saveChild(){
       heightCm: n(hEl.value),
       weightKg: n(wEl.value),
 
-      // Glucose limits (flat)
+      // Glucose limits
       criticalLow:  n(f_criticalLow.value),
       severeLow:    n(f_severeLow.value),
       hypo:         n(f_hypo.value),
@@ -332,7 +328,6 @@ async function saveChild(){
       glucoseTargets: {
         ...(child.glucoseTargets||{}),
         targetPref: targetPrefEl.value || "max"
-        // normal: [min,max] — لو هتضيفي إدخال يدوي لاحقًا
       },
       carbRatioByMeal: {
         b: n(crB.value), l: n(crL.value), d: n(crD.value), s: n(crS.value)
