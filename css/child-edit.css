@@ -20,7 +20,9 @@ a{color:var(--primary);text-decoration:none}
 .card-title{margin:0 0 10px;font-size:18px}
 .sub-title{margin:6px 0 8px;font-size:15px;color:#334155}
 
-.summary-grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.summary-grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.sum-item{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
 .form-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));min-width:0}
 .field input,.field select,.field textarea{width:100%}
 .field input,.field select,.field textarea{border:1px solid var(--card-border);border-radius:10px;padding:8px 10px;min-width:0;background:#fff;outline:none}
@@ -30,10 +32,9 @@ a{color:var(--primary);text-decoration:none}
 .chip{display:inline-flex;align-items:center;gap:6px;background:#e2e8f0;border-radius:999px;padding:6px 10px;font-size:12px}
 .badge{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid var(--card-border);background:#fff}
 
-#card-diet .diet-flags{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
-#card-diet .diet-flags label{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--card-border);border-radius:999px;background:#fff;cursor:pointer;font-size:13px;line-height:1;transition:background .15s,border-color .15s,box-shadow .15s}
-#card-diet .diet-flags input{accent-color:var(--primary)}
-#card-diet .diet-flags label:hover{background:#f8fafc;border-color:#cbd5e1;box-shadow:0 1px 6px rgba(2,6,23,.06)}
+#card-diet .diet-rows .diet-row{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0}
+#card-diet .diet-rows label{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--card-border);border-radius:999px;background:#fff;cursor:pointer;font-size:13px;line-height:1}
+#card-diet .diet-rows input{accent-color:var(--primary)}
 
 .chip-input{display:flex;flex-wrap:wrap;gap:8px;padding:8px;border:1px dashed var(--card-border);border-radius:12px;background:#fff;min-height:44px}
 .chip-input input{border:none;outline:none;min-width:160px;flex:1 1 160px;font-size:14px}
@@ -46,12 +47,19 @@ a{color:var(--primary);text-decoration:none}
 .glucose-grid .high input{background:#ffedd5}
 
 .normal-row{display:flex;align-items:center;gap:8px;margin:8px 0}
-.meal-goals-grid,.per-meal-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
-.mini-card{border:1px solid var(--card-border);border-radius:12px;padding:10px;background:#fff}
+.meal-goals-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.per-meal-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.mini-card{border:1px solid var(--card-border);border-radius:12px;padding:12px;background:#fff}
 .mini-title{font-weight:700;margin-bottom:6px}
-.mini-grid{display:grid;gap:8px;grid-template-columns:1fr 1fr}
+.mini-grid.one{display:grid;gap:8px;grid-template-columns:1fr} /* CF فوق CR (عمودي) */
+.mini-grid.two{display:grid;gap:8px;grid-template-columns:1fr 1fr} /* من/إلى */
+.mini-card label{font-size:12px;color:#475569;display:grid;gap:6px}
 .mini-card input{text-align:center}
 .mini-err{color:#b91c1c;min-height:16px;font-size:12px}
+
+.diet-layout{display:grid;grid-template-columns: 2fr 3fr; gap:16px}
+.diet-caption{font-weight:700;margin-bottom:6px;color:#334155}
+.diet-left .form-grid .field{min-width:240px}
 
 .tiny{font-size:12px}.muted{color:var(--muted)}.warn{color:#b45309}.hidden{display:none}
 .status-row{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:10px}
@@ -59,4 +67,10 @@ a{color:var(--primary);text-decoration:none}
 .modal{position:fixed;inset:0;background:rgba(2,6,23,.55);display:flex;align-items:center;justify-content:center;z-index:200}
 .modal.hidden{display:none}
 .modal-body{background:#fff;border-radius:14px;box-shadow:var(--shadow);padding:16px;width:min(90vw,560px);border:1px solid var(--card-border)}
-@media (max-width:520px){.topbar .title{font-size:16px}}
+
+@media (max-width:900px){
+  .diet-layout{grid-template-columns:1fr}
+}
+@media (max-width:520px){
+  .topbar .title{font-size:16px}
+}
