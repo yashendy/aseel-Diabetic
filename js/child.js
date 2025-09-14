@@ -87,7 +87,7 @@ function calcAge(bd){
 function loader(show){ loaderEl && loaderEl.classList.toggle('hidden', !show); }
 function setText(el, v){ if(el) el.textContent = (v==null || v==='') ? '—' : v; }
 function setHref(el, url){ if(el) el.href = url; }
-function fmt(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function fmt(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${d.getDate().toString().padStart(2,'0')}`; }
 function dayDiff(a,b){ return Math.ceil((a-b)/86400000); }
 function addMonths(date, m=4){
   const d = new Date(date);
@@ -168,7 +168,11 @@ onAuthStateChanged(auth, async (user)=>{
     setHref(goFoodItems,    `food-items.html?child=${encodeURIComponent(childId)}`);
     setHref(goReports,      `reports.html?child=${encodeURIComponent(childId)}`);
     setHref(goVisits,       `visits.html?child=${encodeURIComponent(childId)}`);
-    setHref(goChildEdit,    `child-edit.html?child=${encodeURIComponent(childId)}`);
+
+    // ✅ تعديل رابط "بيانات الطفل" ليمرر parentId + id + تخزينهما كـ fallback
+    localStorage.setItem('selectedParentId', user.uid);
+    localStorage.setItem('selectedChildId',  childId);
+    setHref(goChildEdit, `child-edit.html?parentId=${encodeURIComponent(user.uid)}&id=${encodeURIComponent(childId)}`);
 
     // إحصائيات اليوم
     const today = todayStr();
