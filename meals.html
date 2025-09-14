@@ -1,204 +1,175 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>إدارة الوجبات</title>
-
-  <link rel="icon" href="./favicon.png" />
-  <link rel="stylesheet" href="./css/admin.css" />
   <link rel="stylesheet" href="./css/meals.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="left">
-      <a href="index.html" class="btn ghost">الرئيسية</a>
-      <a id="backChild" href="#" class="btn ghost">الطفل</a>
-    </div>
-    <div class="center"><h1 class="title">إدارة الوجبات</h1></div>
-    <div class="right"><span id="hdrChildName" class="badge">—</span></div>
-  </header>
 
-  <main class="container">
-    <!-- ملخص -->
-    <section class="card" id="card-summary">
-      <h2 class="card-title">ملخص الطفل</h2>
-      <div class="summary-grid">
-        <div class="sum-item"><b>الاسم:</b> <span id="s_name">—</span></div>
-        <div class="sum-item"><b>الوحدة:</b> <span id="s_unit">—</span></div>
-        <div class="sum-item"><b>CR عام:</b> <span id="s_cr">—</span></div>
-        <div class="sum-item"><b>CF عام:</b> <span id="s_cf">—</span></div>
-        <div class="sum-item"><b>المدى الطبيعي:</b> <span id="s_normal">—</span></div>
-        <div class="sum-item"><b>هدف التصحيح:</b> <span id="s_targetPref">—</span></div>
-      </div>
-      <div id="goalChips" class="chips-row" aria-label="نطاقات الكارب"></div>
-    </section>
+<header class="topbar">
+  <div class="brand">إدارة الوجبات</div>
+  <a class="btn ghost" href="./child.html" id="backBtn">الطفل</a>
+</header>
 
-    <!-- إدخال الوجبة -->
-    <section class="card" id="card-meal">
-      <h2 class="card-title">إضافة/حساب وجبة</h2>
+<main class="container">
 
-      <div class="form-grid">
-        <label class="field">نوع الوجبة
-          <select id="mealType">
-            <option value="breakfast">فطار</option>
-            <option value="lunch">غدا</option>
-            <option value="dinner">عشا</option>
-            <option value="snack">سناك</option>
-          </select>
-        </label>
-
-        <label class="field">قراءة السكر الحالية
-          <input id="glucoseNow" type="number" step="0.1" placeholder="مثال: 6.2 أو 110" />
-          <span class="tiny muted" id="unitHint">—</span>
-        </label>
-
-        <label class="field">جرام/وحدة (اختياري)
-          <input id="gramsPerPortion" type="number" step="0.1" placeholder="مثال: 15" />
-          <span class="tiny muted">لو أدخلتِه + اخترتِ الكمية، هنحسب الكارب تلقائيًا</span>
-        </label>
-
-        <label class="field">الكمية (وحدات)
-          <input id="portions" type="number" step="0.25" min="0" placeholder="0.25 / 0.5 / 1 ..." />
-          <span class="tiny muted">الخطوة 0.25</span>
-        </label>
-
-        <label class="field">كارب الوجبة (جرام)
-          <input id="carbs" type="number" step="0.1" placeholder="النتيجة أو إدخال يدوي" />
-          <span class="tiny muted">لو أدخلتِ الكمية + الجرام/وحدة، يتحسب تلقائيًا ويمكن تعديلُه</span>
-        </label>
-      </div>
-
-      <div class="mini-grid three">
-        <div class="stat">
-          <div class="k">CR المستخدم</div>
-          <div class="v" id="crUsed">—</div>
-          <div class="t tiny" id="crSource">—</div>
-        </div>
-        <div class="stat">
-          <div class="k">CF المستخدم</div>
-          <div class="v" id="cfUsed">—</div>
-          <div class="t tiny" id="cfSource">—</div>
-        </div>
-        <div class="stat">
-          <div class="k">هدف التصحيح</div>
-          <div class="v" id="targetValue">—</div>
-          <div class="t tiny">من الإعدادات</div>
-        </div>
-      </div>
-
-      <div class="calc-grid">
-        <div class="calc-card">
-          <div class="label">جرعة الوجبة (من الكارب)</div>
-          <div class="value" id="doseMeal">—</div>
-          <div class="note tiny">carbs ÷ CR</div>
-        </div>
-        <div class="calc-card">
-          <div class="label">جرعة التصحيح</div>
-          <div class="value" id="doseCorr">—</div>
-          <div class="note tiny">(glucoseNow − target) ÷ CF</div>
-        </div>
-        <div class="calc-card total">
-          <div class="label">الإجمالي</div>
-          <div class="value" id="doseTotal">—</div>
-          <div class="note tiny">تقريب لأقرب 0.05 وحدة</div>
-        </div>
-      </div>
-
-      <div class="range-row">
-        <span class="badge">نطاق كارب الوجبة: <b id="rangeText">—</b></span>
-        <span class="tiny muted" id="rangeHint">—</span>
-      </div>
-
-      <div class="actions">
-        <button id="btnSave" class="btn primary">💾 حفظ الوجبة</button>
-        <span id="status" class="tiny muted">—</span>
-      </div>
-    </section>
-
-    <!-- سلة الوجبة -->
-    <section class="card" id="card-basket">
-      <h2 class="card-title">الأصناف المختارة للوجبة</h2>
-
-      <div class="basket-actions">
-        <button id="btnOpenLibrary" class="btn">+ إضافة صنف من المكتبة</button>
-        <button id="btnSuggestAI" class="btn ghost">🤖 اقترح بدائل</button>
-        <button id="btnAutoFit" class="btn ghost" title="اضبط المقادير لتناسب الهدف">🤖 اضبط المقادير</button>
-        <span id="fitHint" class="tiny muted">—</span>
-        <span class="flex-spacer"></span>
-        <button id="btnSavePreset" class="btn">💾 حفظ كوجبة جاهزة</button>
-        <button id="btnLoadPreset" class="btn ghost">📚 تحميل وجبة جاهزة</button>
-      </div>
-
-      <div class="basket-table-wrap">
-        <table class="basket-table" id="basketTable" aria-label="سلة الوجبة">
-          <thead>
-            <tr>
-              <th>الصنف</th>
-              <th>الكمية (وحدات)</th>
-              <th>جرام/وحدة</th>
-              <th>الكارب (جم)</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="basketBody"><tr class="empty"><td colspan="5">لا توجد أصناف بعد</td></tr></tbody>
-          <tfoot>
-            <tr>
-              <td colspan="3" class="total-label">إجمالي الكارب</td>
-              <td id="basketTotal" class="total-value">0</td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      <p class="tiny muted">يُستخدم إجمالي الكارب تلقائيًا في حساب الجرعة.</p>
-    </section>
-
-    <!-- مودال مكتبة الأصناف -->
-    <div id="libModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="libTitle">
-      <div class="modal-body lib-body">
-        <div class="lib-head">
-          <h3 id="libTitle">مكتبة الأصناف</h3>
-          <button id="libClose" class="btn">✕</button>
-        </div>
-
-        <div class="lib-controls">
-          <input id="libSearch" placeholder="ابحث باسم الصنف…" />
-          <label class="tiny"><input type="checkbox" id="libFilterDiet"> احترام أنظمة الطفل</label>
-          <label class="tiny"><input type="checkbox" id="libFilterAllergy" checked> استبعاد الحساسيّات</label>
-        </div>
-
-        <div id="libList" class="lib-list" aria-live="polite"></div>
-      </div>
+  <!-- لوحة الملخص -->
+  <section class="summary">
+    <div class="card">
+      <div class="title">قراءة السكر الحالية</div>
+      <div class="value"><input id="glucoseNow" type="number" step="0.1" placeholder="110 أو 6.2" /></div>
+      <div class="hint" id="glucoseUnit">mmol/L</div>
     </div>
 
-    <!-- مودال بدائل AI -->
-    <div id="aiModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
-      <div class="modal-body lib-body">
-        <div class="lib-head">
-          <h3 id="aiTitle">🤖 بدائل مقترحة</h3>
-          <button id="aiClose" class="btn">✕</button>
-        </div>
-        <div id="aiList" class="lib-list" aria-live="polite">جارٍ التحليل…</div>
-      </div>
+    <div class="card">
+      <div class="title">هدف التصحيح</div>
+      <div class="value" id="targetText">—</div>
+      <div class="hint">من إعدادات الطفل</div>
     </div>
 
-    <!-- مودال الوجبات الجاهزة -->
-    <div id="presetModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="presetTitle">
-      <div class="modal-body lib-body">
-        <div class="lib-head">
-          <h3 id="presetTitle">📚 الوجبات المحفوظة</h3>
-          <button id="presetClose" class="btn">✕</button>
-        </div>
-        <div class="lib-controls">
-          <input id="presetName" placeholder="اسم لحفظ الوجبة الحالية…" />
-          <button id="presetSaveNow" class="btn">حفظ</button>
-        </div>
-        <div id="presetList" class="lib-list" aria-live="polite">—</div>
-      </div>
+    <div class="card">
+      <div class="title">CR (معادل الكارب)</div>
+      <div class="value" id="crText">—</div>
+      <div class="hint" id="crSource">عام/حسب الوجبة</div>
     </div>
-  </main>
 
-  <script type="module" src="./js/meals.js"></script>
+    <div class="card">
+      <div class="title">CF/ISF (معامل التصحيح)</div>
+      <div class="value" id="cfText">—</div>
+      <div class="hint">عام/حسب الوجبة</div>
+    </div>
+  </section>
+
+  <!-- نوع الوجبة + كارب الوجبة -->
+  <section class="bar">
+    <div class="group">
+      <label>نوع الوجبة</label>
+      <select id="mealType">
+        <option value="breakfast">فطار</option>
+        <option value="lunch">غدا</option>
+        <option value="dinner">عشا</option>
+        <option value="snack">سناك</option>
+      </select>
+    </div>
+
+    <div class="group">
+      <label>كارب الوجبة (جرام)</label>
+      <input id="carbsTotal" type="number" step="0.1" placeholder="يُحتسب تلقائيًا" readonly />
+      <div class="hint">لو أضفتِ الحصص/جرام/وحدة، يتحسب تلقائيًا.</div>
+    </div>
+
+    <div class="group target-pill">
+      <div id="rangeText">—</div>
+      <span id="rangeBadge" class="badge">—</span>
+      <button id="btnEditRange" class="btn ghost sm">تعديل النطاق</button>
+    </div>
+  </section>
+
+  <!-- أزرار عامة -->
+  <section class="actions">
+    <button id="btnOpenLib" class="btn">إضافة صنف من المكتبة</button>
+    <button id="btnAutoFit" class="btn warn">تعديل المقادير (0.25)</button>
+    <button id="btnSuggest" class="btn ghost">اقتراح بدائل 🤖</button>
+
+    <div class="spacer"></div>
+
+    <button id="btnSavePreset" class="btn ghost">حفظ كوجبة جاهزة 🗂️</button>
+    <button id="btnLoadPreset" class="btn ghost">تحميل وجبة جاهزة</button>
+  </section>
+
+  <!-- جدول السلة -->
+  <section class="basket">
+    <h3>الأصناف المختارة للوجبة</h3>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>الصنف</th>
+            <th>الكمية (وحدات)</th>
+            <th>جرام/وحدة</th>
+            <th>الكارب (جم)</th>
+            <th>حذف</th>
+          </tr>
+        </thead>
+        <tbody id="basketBody">
+          <tr class="empty"><td colspan="5">لا توجد أصناف بعد</td></tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" class="total-label">إجمالي الكارب</td>
+            <td id="basketTotal">0.0</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="status-line">
+      <span id="fitHint"></span>
+    </div>
+  </section>
+
+  <!-- الجرعات -->
+  <section class="doses">
+    <div class="card big">
+      <div class="title">جرعة الكارب</div>
+      <div class="value" id="doseCarb">0.00</div>
+      <div class="hint">Carbs ÷ CR</div>
+    </div>
+    <div class="card big">
+      <div class="title">جرعة التصحيح</div>
+      <div class="value" id="doseCorr">0.00</div>
+      <div class="hint">(glucoseNow − target) ÷ CF</div>
+    </div>
+    <div class="card big">
+      <div class="title">إجمالي الجرعة</div>
+      <div class="value" id="doseTotal">0.00</div>
+      <div class="hint">أُقرب لأقرب 0.05</div>
+    </div>
+  </section>
+
+</main>
+
+<!-- نافذة المكتبة -->
+<div class="modal" id="libModal" hidden>
+  <div class="overlay" data-close="#libModal"></div>
+  <div class="sheet">
+    <div class="sheet-head">
+      <h4>المكتبة</h4>
+      <button class="btn ghost" data-close="#libModal">إغلاق</button>
+    </div>
+    <div class="lib-list" id="libList"></div>
+  </div>
+</div>
+
+<!-- نافذة تعديل النطاق -->
+<div class="modal" id="rangeModal" hidden>
+  <div class="overlay" data-close="#rangeModal"></div>
+  <div class="sheet">
+    <div class="sheet-head">
+      <h4>تعديل النطاق (هذه الوجبة فقط)</h4>
+      <button class="btn ghost" data-close="#rangeModal">إغلاق</button>
+    </div>
+    <div class="form-rows">
+      <div class="row">
+        <label>الحد الأدنى (جم)</label>
+        <input type="number" step="0.1" id="rangeMinInput" />
+      </div>
+      <div class="row">
+        <label>الحد الأعلى (جم)</label>
+        <input type="number" step="0.1" id="rangeMaxInput" />
+      </div>
+      <div class="row">
+        <button id="rangeSave" class="btn">حفظ</button>
+      </div>
+      <small class="muted">لن يغيّر هذا إعدادات الطفل — فقط لهذه الوجبة.</small>
+    </div>
+  </div>
+</div>
+
+<script src="./js/meals.js"></script>
+<!-- (اختياري) ملف الذكاء الصناعي إن وجد -->
+<script src="./js/ai.js" defer></script>
 </body>
 </html>
