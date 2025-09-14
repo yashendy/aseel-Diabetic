@@ -8,7 +8,7 @@ const setStatus=t=>{const el=$("#status"); if(el) el.textContent=t||"—";};
 
 // Header
 const roleBadge=$("#roleBadge"), doctorLink=$("#doctorLink");
-const hdrName=$("#hdrName"), hdrCivil=$("#hdrCivil"), hdrAge=$("#hdrAge"), hdrUnit=$("#hdrUnit"), hdrUpdated=$("#hdrUpdated"), hdrDietChips=$("#hdrDietChips");
+const hdrName=$("#hdrName"), hdrCivil=$("#hdrCivil"), hdrAge=$("#hdrAge"), hdrUnit=$("#hdrUnit"), hdrUpdated=$("#hdrUpdated"), hdrDietChips=$("#hdrDietChips"), hdrDoctor=$("#hdrDoctor");
 
 // Identity
 const nameEl=$("#f_name"), civilEl=$("#f_civilId"), genderEl=$("#f_gender"), bdateEl=$("#f_birthDate"), unitEl=$("#f_unit"), hEl=$("#f_heightCm"), wEl=$("#f_weightKg");
@@ -32,7 +32,8 @@ const basalEl=$("#f_basalType"), bolusEl=$("#f_bolusType"), devTypeEl=$("#f_devi
 
 // Diet & chips
 const injSitesWrap=$("#injectionSitesInput"), allergiesWrap=$("#allergiesInput"), preferredWrap=$("#preferredInput"), dislikedWrap=$("#dislikedInput");
-const flagWrap=$("#dietFlags"), flagsInputs=$$(".diet-flag",flagWrap);
+const flagWrap=$("#dietFlags") || document; // (لم نعد نستخدمه مباشرة بعد التقسيم لثلاث سطور)
+const flagsInputs=$$(".diet-flag");
 
 // Buttons
 const btnSave=$("#btnSave"), loader=$("#loader"), unitChangeWarn=$("#unitChangeWarn");
@@ -41,11 +42,11 @@ const btnSave=$("#btnSave"), loader=$("#loader"), unitChangeWarn=$("#unitChangeW
 const n=v=>Number.isFinite(+v)?+v:null; const n0=v=>Number.isFinite(+v)?+v:0;
 const fmtDate=ms=>{try{if(!ms)return"—";const d=new Date(ms);return d.toLocaleString('ar')}catch{return"—"}};
 const calcAge=dStr=>{if(!dStr)return"—";const d=new Date(dStr);if(isNaN(d))return"—";const years=Math.floor((Date.now()-d.getTime())/(365.25*24*3600*1000));return `${years} سنة`;};
-const arrayPair=(a,b)=> (n(a)==null && n(b)==null) ? null : [n(a),n(b)];
+const valNumOrNull=v=>Number.isFinite(+v)?+v:null;
 
 function fillDietSummary(flags=[]) {
   if(!hdrDietChips) return; hdrDietChips.innerHTML="";
-  const map={halal:"حلال",vegetarian:"نباتي",vegan:"نباتي صارم",gluten_free:"خالٍ من الجلوتين",lactose_free:"خالٍ من اللاكتوز",low_sugar:"قليل السكر",low_carb:"قليل الكارب",low_fat:"قليل الدهون",low_sodium:"قليل الصوديوم",low_satfat:"دهون مشبعة قليلة"};
+  const map={halal:"حلال",vegetarian:"نباتي",vegan:"نباتي صارم",gluten_free:"خالٍ من الجلوتين",lactose_free:"خالٍ من اللاكتوز",low_sugar:"قليل السكر",low_carb:"قليل الكارب",low_fat:"قليل الدهون",low_sodium:"قليل الصوديوم",low_satfat:"دهون مشبعة قليلة",med_diet:"متوسطية"};
   (flags||[]).forEach(f=>{const s=document.createElement("span"); s.className="chip"; s.textContent=map[f]||f; hdrDietChips.appendChild(s);});
 }
 function chipInput(wrap){
@@ -61,8 +62,8 @@ const allergies=chipInput(allergiesWrap), preferred=chipInput(preferredWrap), di
 
 // ===== Resolve IDs & refs =====
 const qs=new URLSearchParams(location.search);
-const parentId= qs.get("parentId") || localStorage.getItem("selectedParentId") || (auth?.currentUser?.uid ?? null);
-const childId = qs.get("id")       || localStorage.getItem("selectedChildId") || null;
+const parentId= qs.get("parentId") || qs.get("parent") || localStorage.getItem("selectedParentId") || (auth?.currentUser?.uid ?? null);
+const childId = qs.get("id")       || qs.get("child")  || localStorage.getItem("selectedChildId") || null;
 const childRef=(parentId && childId)? doc(db,"parents",parentId,"children",childId):null;
 let child={}, originalUnit=null;
 
@@ -70,7 +71,7 @@ let child={}, originalUnit=null;
 async function getCurrentUserRole(){ try{ if(!auth?.currentUser?.uid) return "parent"; const uref=doc(db,"users",auth.currentUser.uid); const usnap=await getDoc(uref); return usnap.exists()?(usnap.data().role||"parent"):"parent"; }catch{return "parent";}}
 
 // Normal range
-function computeNormalRange(unit,custom){ if(Array.isArray(custom)&&custom.length===2&&custom[0]!=null&&custom[1]!=null){return {min:+custom[0],max:+custom[1],source:"custom"}}
+function computeNormalRange(unit,custom){ if(custom&&custom.min!=null&&custom.max!=null){return {min:+custom.min,max:+custom.max,source:"custom"}}
   if(unit==="mmol/L") return {min:3.5,max:7,source:"default"}; if(unit==="mg/dL") return {min:63,max:126,source:"default"}; return {min:null,max:null,source:"unknown"};}
 function updateNormalBadge(c){ if(!normalBadge||!normalHint) return; const unit=unitEl.value||c?.unit||c?.glucoseUnit||""; const custom=c?.glucoseTargets?.normal||c?.normalRange; const nrm=computeNormalRange(unit,custom);
   const text=(nrm.min==null||nrm.max==null)?"—":`${nrm.min}–${nrm.max} ${unit||""}`; normalBadge.textContent=`المدى الطبيعي: ${text}`; normalHint.textContent=nrm.source==="custom"?"معروض من القيم المخصصة.":"يُحسب تلقائيًا حسب الوحدة (3.5–7 mmol/L أو 63–126 mg/dL).";}
@@ -95,16 +96,16 @@ function updateNormalBadge(c){ if(!normalBadge||!normalHint) return; const unit=
     f_severeHigh.value  = child.severeHigh  ?? "";
     f_criticalHigh.value= child.criticalHigh?? child.criticalHighLevel ?? "";
 
-    // ✅ Carb targets: read from carbTargets OR legacy carbGoals
+    // ✅ Carb targets: {min,max} أو شكل قديم
     const ct = child.carbTargets || child.carbGoals || {};
-    g_b_min.value = ct.breakfast?.[0] ?? ct.b?.[0] ?? "";
-    g_b_max.value = ct.breakfast?.[1] ?? ct.b?.[1] ?? "";
-    g_l_min.value = ct.lunch    ?. [0] ?? ct.l?.[0] ?? "";
-    g_l_max.value = ct.lunch    ?. [1] ?? ct.l?.[1] ?? "";
-    g_d_min.value = ct.dinner   ?. [0] ?? ct.d?.[0] ?? "";
-    g_d_max.value = ct.dinner   ?. [1] ?? ct.d?.[1] ?? "";
-    g_s_min.value = ct.snack    ?. [0] ?? ct.s?.[0] ?? "";
-    g_s_max.value = ct.snack    ?. [1] ?? ct.s?.[1] ?? "";
+    const b = ct.breakfast || (ct.b ? { min: ct.b?.[0], max: ct.b?.[1] } : null);
+    const l = ct.lunch     || (ct.l ? { min: ct.l?.[0], max: ct.l?.[1] } : null);
+    const d = ct.dinner    || (ct.d ? { min: ct.d?.[0], max: ct.d?.[1] } : null);
+    const s = ct.snack     || (ct.s ? { min: ct.s?.[0], max: ct.s?.[1] } : null);
+    g_b_min.value = b?.min ?? ""; g_b_max.value = b?.max ?? "";
+    g_l_min.value = l?.min ?? ""; g_l_max.value = l?.max ?? "";
+    g_d_min.value = d?.min ?? ""; g_d_max.value = d?.max ?? "";
+    g_s_min.value = s?.min ?? ""; g_s_max.value = s?.max ?? "";
 
     // Insulin
     crEl.value=child.carbRatio??""; cfEl.value=child.correctionFactor??""; targetPrefEl.value=child?.glucoseTargets?.targetPref||"max";
@@ -114,7 +115,8 @@ function updateNormalBadge(c){ if(!normalBadge||!normalHint) return; const unit=
     insulinNotesEl.value=child.insulinNotes||""; injSites.set(child.injectionSites||[]);
 
     // Diet
-    applyDietFlags(child.dietaryFlags||[]); allergies.set(child.allergies||[]); preferred.set(child.preferred||[]); disliked.set(child.disliked||[]);
+    const dietFlags = child.dietaryFlags || [];
+    applyDietFlags(dietFlags); allergies.set(child.allergies||[]); preferred.set(child.preferred||[]); disliked.set(child.disliked||[]);
 
     // Header
     if(hdrName) hdrName.textContent=child.name||"—";
@@ -123,19 +125,18 @@ function updateNormalBadge(c){ if(!normalBadge||!normalHint) return; const unit=
     if(hdrUnit) hdrUnit.textContent=unitEl.value||"—";
     if(hdrUpdated) hdrUpdated.textContent=fmtDate(child.updated||child.updatedAt);
     if(roleBadge) roleBadge.textContent=child.role||"وليّ أمر";
-    await fillDoctorLink(child);
+    await fillDoctorInfo(child);
 
     updateNormalBadge(child); attachValidation();
     setStatus("✅ تم التحميل");
   }catch(e){ console.error(e); setStatus("❌ خطأ أثناء التحميل"); }
 })();
 
-async function fillDoctorLink(c){
-  try{
-    const did=c.assignedDoctor||c.assignedDoctorId||c.doctorId;
-    if(did){ if(doctorLink){ doctorLink.textContent=c.doctorName||c.assignedDoctorInfo?.name||"الطبيب المعالج"; doctorLink.href=`doctor-dashboard.html?id=${encodeURIComponent(did)}`; } }
-    else { if(doctorLink){ doctorLink.textContent="—"; doctorLink.href="#"; } }
-  }catch{ if(doctorLink){ doctorLink.textContent="—"; doctorLink.href="#"; } }
+async function fillDoctorInfo(c){
+  const did = c.assignedDoctor || c.assignedDoctorId || c.doctorId;
+  const dname = c.doctorName || c.assignedDoctorInfo?.name || "—";
+  if(doctorLink){ doctorLink.textContent = dname; doctorLink.href = did ? `doctor-dashboard.html?id=${encodeURIComponent(did)}` : "#"; }
+  if(hdrDoctor){ hdrDoctor.textContent = dname; }
 }
 function applyDietFlags(arr){ const set=new Set(arr||[]); flagsInputs.forEach(i=> i.checked=set.has(i.value)); }
 function collectDietFlags(){ return flagsInputs.filter(i=>i.checked).map(i=>i.value); }
@@ -159,11 +160,15 @@ function attachValidation(){
 }
 
 function buildCarbTargetsFromUI(){
-  const breakfast=arrayPair(g_b_min.value,g_b_max.value);
-  const lunch=arrayPair(g_l_min.value,g_l_max.value);
-  const dinner=arrayPair(g_d_min.value,g_d_max.value);
-  const snack=arrayPair(g_s_min.value,g_s_max.value);
-  const obj={}; if(breakfast) obj.breakfast=breakfast; if(lunch) obj.lunch=lunch; if(dinner) obj.dinner=dinner; if(snack) obj.snack=snack;
+  const breakfast = { min: valNumOrNull(g_b_min.value), max: valNumOrNull(g_b_max.value) };
+  const lunch     = { min: valNumOrNull(g_l_min.value), max: valNumOrNull(g_l_max.value) };
+  const dinner    = { min: valNumOrNull(g_d_min.value), max: valNumOrNull(g_d_max.value) };
+  const snack     = { min: valNumOrNull(g_s_min.value), max: valNumOrNull(g_s_max.value) };
+  const obj={};
+  if(breakfast.min!=null || breakfast.max!=null) obj.breakfast=breakfast;
+  if(lunch.min!=null     || lunch.max!=null)     obj.lunch=lunch;
+  if(dinner.min!=null    || dinner.max!=null)    obj.dinner=dinner;
+  if(snack.min!=null     || snack.max!=null)     obj.snack=snack;
   return Object.keys(obj).length?obj:null;
 }
 function fullPayloadCommon(){
@@ -171,16 +176,28 @@ function fullPayloadCommon(){
   return {
     name:(nameEl.value||"").trim()||null, civilId:(civilEl.value||"").trim()||null, gender:genderEl.value||null, birthDate:bdateEl.value||null,
     unit:unitEl.value||null, glucoseUnit:unitEl.value||null, heightCm:n(hEl.value), weightKg:n(wEl.value),
+
     criticalLow:n(f_criticalLow.value), severeLow:n(f_severeLow.value), hypo:n(f_hypo.value), hyper:n(f_hyper.value), severeHigh:n(f_severeHigh.value), criticalHigh:n(f_criticalHigh.value),
-    carbTargets,                       // ✅ صيغة القواعد
-    carbGoals: carbTargets ? { b:carbTargets.breakfast, l:carbTargets.lunch, d:carbTargets.dinner, s:carbTargets.snack } : null, // توافق قديم
+
+    carbTargets, // الرسمي
+    // توافق خلفي
+    carbGoals: carbTargets ? {
+      b: carbTargets.breakfast ? [carbTargets.breakfast.min, carbTargets.breakfast.max] : null,
+      l: carbTargets.lunch     ? [carbTargets.lunch.min,     carbTargets.lunch.max]     : null,
+      d: carbTargets.dinner    ? [carbTargets.dinner.min,    carbTargets.dinner.max]    : null,
+      s: carbTargets.snack     ? [carbTargets.snack.min,     carbTargets.snack.max]     : null,
+    } : null,
+
     carbRatio:n(crEl.value), correctionFactor:n(cfEl.value),
     glucoseTargets:{...(child.glucoseTargets||{}), targetPref:targetPrefEl.value||"max"},
     carbRatioByMeal:{b:n(crB.value),l:n(crL.value),d:n(crD.value),s:n(crS.value)},
     correctionFactorByMeal:{b:n(cfB.value),l:n(cfL.value),d:n(cfD.value),s:n(cfS.value)},
+
     basalType:(basalEl.value||"").trim()||null, bolusType:(bolusEl.value||"").trim()||null, deviceType:devTypeEl.value||null, deviceModel:(devModelEl.value||"").trim()||null,
     injectionSites:injSites.get(), insulinNotes:(insulinNotesEl.value||"").trim()||null,
+
     dietaryFlags:collectDietFlags(), allergies:allergies.get(), preferred:preferred.get(), disliked:disliked.get(),
+
     parentId, updated:now, updatedAt:now
   };
 }
@@ -192,7 +209,7 @@ function doctorAllowedPayloadFrom(full){
     basalType:full.basalType, bolusType:full.bolusType,
     heightCm:full.heightCm, weightKg:full.weightKg,
     criticalLow:full.criticalLow, severeLow:full.severeLow, hypo:full.hypo, hyper:full.hyper, severeHigh:full.severeHigh, criticalHigh:full.criticalHigh,
-    carbTargets:full.carbTargets,                   // ✅ مطابق للـ Rules
+    carbTargets:full.carbTargets,
     assignedDoctorInfo: child.assignedDoctorInfo || null
   };
 }
