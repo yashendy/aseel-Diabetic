@@ -15,12 +15,12 @@
     <div class="center"><h1 class="title">إعدادات الطفل</h1></div>
     <div class="right">
       <span id="roleBadge" class="badge">—</span>
-      <a id="doctorLink" class="tiny link" href="#">—</a>
+      <a id="doctorLink" class="tiny link" href="#" title="صفحة الطبيب">—</a>
     </div>
   </header>
 
   <main class="container">
-
+    <!-- ملخص -->
     <section class="card" id="card-summary">
       <h2 class="card-title">الملخص السريع</h2>
       <div class="summary-grid">
@@ -29,10 +29,12 @@
         <div class="sum-item"><b>العمر:</b> <span id="hdrAge">—</span></div>
         <div class="sum-item"><b>الوحدة:</b> <span id="hdrUnit">—</span></div>
         <div class="sum-item"><b>آخر تحديث:</b> <span id="hdrUpdated">—</span></div>
+        <div class="sum-item"><b>الطبيب:</b> <span id="hdrDoctor">—</span></div>
       </div>
       <div id="hdrDietChips" class="chips-row" aria-label="الأنظمة المفعّلة"></div>
     </section>
 
+    <!-- الهوية -->
     <section class="card" id="card-identity">
       <h2 class="card-title">الهوية والمعلومات الأساسية</h2>
       <div class="form-grid">
@@ -51,6 +53,7 @@
       <p id="unitChangeWarn" class="tiny warn hidden">⚠️ تغيير الوحدة لا يحوّل القيم تلقائيًا.</p>
     </section>
 
+    <!-- الحدود -->
     <section class="card" id="card-glucose">
       <h2 class="card-title">قياسات السكر (الحدود)</h2>
       <div class="form-grid glucose-grid">
@@ -63,44 +66,44 @@
       </div>
       <div class="normal-row">
         <div class="badge" id="normalBadge">المدى الطبيعي: —</div>
-        <div class="muted tiny" id="normalHint">يُحسب تلقائيًا حسب الوحدة، أو من القيم المخصصة إن وجدت.</div>
+        <div class="muted tiny" id="normalHint">يُحسب تلقائيًا حسب الوحدة، أو من القيم المخصصة إن وُجدت.</div>
       </div>
       <div class="tiny muted" id="glOrderHint">الترتيب الموصى به: Critical Low ≤ Severe Low ≤ Hypo ≤ Hyper ≤ Severe High ≤ Critical High</div>
     </section>
 
-    <!-- ✅ أهداف الكارب بصيغة carbTargets: breakfast/lunch/dinner/snack -->
+    <!-- أهداف الكارب -->
     <section class="card" id="card-carb-goals">
       <h2 class="card-title">أهداف الكارب للوجبات (جرام)</h2>
       <div class="meal-goals-grid">
         <div class="mini-card">
           <div class="mini-title">فطار</div>
-          <div class="mini-grid">
-            <input id="f_carb_b_min" type="number" step="0.1" placeholder="من" />
-            <input id="f_carb_b_max" type="number" step="0.1" placeholder="إلى" />
+          <div class="mini-grid two">
+            <label>من<input id="f_carb_b_min" type="number" step="0.1" placeholder="من" /></label>
+            <label>إلى<input id="f_carb_b_max" type="number" step="0.1" placeholder="إلى" /></label>
           </div>
           <div class="mini-err tiny" id="err_b"></div>
         </div>
         <div class="mini-card">
           <div class="mini-title">غدا</div>
-          <div class="mini-grid">
-            <input id="f_carb_l_min" type="number" step="0.1" placeholder="من" />
-            <input id="f_carb_l_max" type="number" step="0.1" placeholder="إلى" />
+          <div class="mini-grid two">
+            <label>من<input id="f_carb_l_min" type="number" step="0.1" placeholder="من" /></label>
+            <label>إلى<input id="f_carb_l_max" type="number" step="0.1" placeholder="إلى" /></label>
           </div>
           <div class="mini-err tiny" id="err_l"></div>
         </div>
         <div class="mini-card">
           <div class="mini-title">عشا</div>
-          <div class="mini-grid">
-            <input id="f_carb_d_min" type="number" step="0.1" placeholder="من" />
-            <input id="f_carb_d_max" type="number" step="0.1" placeholder="إلى" />
+          <div class="mini-grid two">
+            <label>من<input id="f_carb_d_min" type="number" step="0.1" placeholder="من" /></label>
+            <label>إلى<input id="f_carb_d_max" type="number" step="0.1" placeholder="إلى" /></label>
           </div>
           <div class="mini-err tiny" id="err_d"></div>
         </div>
         <div class="mini-card">
           <div class="mini-title">سناك</div>
-          <div class="mini-grid">
-            <input id="f_carb_s_min" type="number" step="0.1" placeholder="من" />
-            <input id="f_carb_s_max" type="number" step="0.1" placeholder="إلى" />
+          <div class="mini-grid two">
+            <label>من<input id="f_carb_s_min" type="number" step="0.1" placeholder="من" /></label>
+            <label>إلى<input id="f_carb_s_max" type="number" step="0.1" placeholder="إلى" /></label>
           </div>
           <div class="mini-err tiny" id="err_s"></div>
         </div>
@@ -108,12 +111,14 @@
       <p class="tiny muted">يُستخدم هذا النطاق تلقائيًا في صفحة الوجبات؛ ويمكن تعديل النطاق مؤقتًا هناك دون تغيير هذه القيم.</p>
     </section>
 
+    <!-- الأنسولين والجهاز -->
     <section class="card" id="card-insulin">
       <h2 class="card-title">الأنسولين والجهاز</h2>
+
       <h3 class="sub-title">المعاملات العامة</h3>
       <div class="form-grid">
         <label class="field">معادل الكارب (CR)<input id="f_carbRatio" type="number" step="0.1" placeholder="جرام/وحدة" /></label>
-        <label class="field">معامل التصحيحي (CF/ISF)<input id="f_correctionFactor" type="number" step="0.1" placeholder="mg/dL لكل وحدة أو mmol/L لكل وحدة" /></label>
+        <label class="field">معامل التصحيح (CF/ISF)<input id="f_correctionFactor" type="number" step="0.1" placeholder="mg/dL أو mmol/L لكل وحدة" /></label>
         <label class="field">هدف التصحيح
           <select id="f_targetPref">
             <option value="max">الحد الأعلى للمدى الطبيعي (موصى به)</option>
@@ -124,10 +129,38 @@
 
       <h3 class="sub-title">حسب الوجبة (اختياري)</h3>
       <div class="per-meal-grid">
-        <div class="mini-card"><div class="mini-title">فطار</div><div class="mini-grid"><input id="f_cr_b" type="number" step="0.1" placeholder="CR" /><input id="f_cf_b" type="number" step="0.1" placeholder="CF" /></div></div>
-        <div class="mini-card"><div class="mini-title">غدا</div><div class="mini-grid"><input id="f_cr_l" type="number" step="0.1" placeholder="CR" /><input id="f_cf_l" type="number" step="0.1" placeholder="CF" /></div></div>
-        <div class="mini-card"><div class="mini-title">عشا</div><div class="mini-grid"><input id="f_cr_d" type="number" step="0.1" placeholder="CR" /><input id="f_cf_d" type="number" step="0.1" placeholder="CF" /></div></div>
-        <div class="mini-card"><div class="mini-title">سناك</div><div class="mini-grid"><input id="f_cr_s" type="number" step="0.1" placeholder="CR" /><input id="f_cf_s" type="number" step="0.1" placeholder="CF" /></div></div>
+        <!-- فطار -->
+        <div class="mini-card">
+          <div class="mini-title">فطار</div>
+          <div class="mini-grid one">
+            <label>CF (معامل التصحيح)<input id="f_cf_b" type="number" step="0.1" placeholder="CF" /></label>
+            <label>CR (معادل الكارب)<input id="f_cr_b" type="number" step="0.1" placeholder="CR" /></label>
+          </div>
+        </div>
+        <!-- غدا -->
+        <div class="mini-card">
+          <div class="mini-title">غدا</div>
+          <div class="mini-grid one">
+            <label>CF (معامل التصحيح)<input id="f_cf_l" type="number" step="0.1" placeholder="CF" /></label>
+            <label>CR (معادل الكارب)<input id="f_cr_l" type="number" step="0.1" placeholder="CR" /></label>
+          </div>
+        </div>
+        <!-- عشا -->
+        <div class="mini-card">
+          <div class="mini-title">عشا</div>
+          <div class="mini-grid one">
+            <label>CF (معامل التصحيح)<input id="f_cf_d" type="number" step="0.1" placeholder="CF" /></label>
+            <label>CR (معادل الكارب)<input id="f_cr_d" type="number" step="0.1" placeholder="CR" /></label>
+          </div>
+        </div>
+        <!-- سناك -->
+        <div class="mini-card">
+          <div class="mini-title">سناك</div>
+          <div class="mini-grid one">
+            <label>CF (معامل التصحيح)<input id="f_cf_s" type="number" step="0.1" placeholder="CF" /></label>
+            <label>CR (معادل الكارب)<input id="f_cr_s" type="number" step="0.1" placeholder="CR" /></label>
+          </div>
+        </div>
       </div>
 
       <h3 class="sub-title">أنواع الأنسولين والجهاز</h3>
@@ -149,31 +182,48 @@
       </div>
     </section>
 
+    <!-- الأنظمة الغذائية والحساسيات -->
     <section class="card" id="card-diet">
       <h2 class="card-title">الأنظمة الغذائية والحساسيات</h2>
-      <div class="form-grid">
-        <div class="field">
-          <label>أنظمة غذائية</label>
-          <div class="diet-flags" id="dietFlags">
-            <label><input type="checkbox" class="diet-flag" value="halal"> حلال</label>
-            <label><input type="checkbox" class="diet-flag" value="vegetarian"> نباتي</label>
-            <label><input type="checkbox" class="diet-flag" value="vegan"> نباتي صارم</label>
-            <label><input type="checkbox" class="diet-flag" value="gluten_free"> خالٍ من الجلوتين</label>
-            <label><input type="checkbox" class="diet-flag" value="lactose_free"> خالٍ من اللاكتوز</label>
-            <label><input type="checkbox" class="diet-flag" value="low_sugar"> قليل السكر</label>
-            <label><input type="checkbox" class="diet-flag" value="low_carb"> قليل الكارب</label>
-            <label><input type="checkbox" class="diet-flag" value="low_fat"> قليل الدهون</label>
-            <label><input type="checkbox" class="diet-flag" value="low_sodium"> قليل الصوديوم</label>
-            <label><input type="checkbox" class="diet-flag" value="low_satfat"> دهون مشبعة قليلة</label>
+
+      <div class="diet-layout">
+        <div class="diet-left">
+          <div class="form-grid">
+            <div class="field"><label>حساسيات (Enter)</label><div class="chip-input" id="allergiesInput"><input type="text" placeholder="peanut, lactose, egg..." /></div></div>
+            <div class="field"><label>مفضلات (Enter)</label><div class="chip-input" id="preferredInput"><input type="text" placeholder="تفاح، زبادي..." /></div></div>
+            <div class="field"><label>غير مفضلات (Enter)</label><div class="chip-input" id="dislikedInput"><input type="text" placeholder="سبانخ..." /></div></div>
           </div>
         </div>
-        <div class="field"><label>حساسيات (Enter)</label><div class="chip-input" id="allergiesInput"><input type="text" placeholder="peanut, lactose, egg..." /></div></div>
-        <div class="field"><label>مفضلات (Enter)</label><div class="chip-input" id="preferredInput"><input type="text" placeholder="تفاح، زبادي..." /></div></div>
-        <div class="field"><label>غير مفضلات (Enter)</label><div class="chip-input" id="dislikedInput"><input type="text" placeholder="سبانخ..." /></div></div>
+
+        <div class="diet-right">
+          <div class="diet-caption">أنظمة غذائية</div>
+          <!-- ٣ سطور -->
+          <div class="diet-rows">
+            <div class="diet-row">
+              <label><input type="checkbox" class="diet-flag" value="halal"> حلال</label>
+              <label><input type="checkbox" class="diet-flag" value="vegetarian"> نباتي</label>
+              <label><input type="checkbox" class="diet-flag" value="vegan"> نباتي صارم</label>
+              <label><input type="checkbox" class="diet-flag" value="gluten_free"> خالٍ من الجلوتين</label>
+            </div>
+            <div class="diet-row">
+              <label><input type="checkbox" class="diet-flag" value="lactose_free"> خالٍ من اللاكتوز</label>
+              <label><input type="checkbox" class="diet-flag" value="low_sugar"> قليل السكر</label>
+              <label><input type="checkbox" class="diet-flag" value="low_carb"> قليل الكارب</label>
+              <label><input type="checkbox" class="diet-flag" value="low_fat"> قليل الدهون</label>
+            </div>
+            <div class="diet-row">
+              <label><input type="checkbox" class="diet-flag" value="low_sodium"> قليل الصوديوم</label>
+              <label><input type="checkbox" class="diet-flag" value="low_satfat"> دهون مشبعة قليلة</label>
+              <label><input type="checkbox" class="diet-flag" value="med_diet"> متوسطية (اختياري)</label>
+            </div>
+          </div>
+        </div>
       </div>
+
       <p class="tiny muted">تُستخدم هذه الإعدادات لترشيح الأصناف والبدائل في صفحة الوجبات.</p>
     </section>
 
+    <!-- ملاحظات -->
     <section class="card" id="card-notes">
       <h2 class="card-title">ملاحظات وبيانات إدارية</h2>
       <div class="form-grid">
