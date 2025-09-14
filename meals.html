@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>وجبات الطفل</title>
+  <title>إدارة الوجبات</title>
 
   <link rel="icon" href="./favicon.png" />
   <link rel="stylesheet" href="./css/admin.css" />
@@ -20,7 +20,7 @@
   </header>
 
   <main class="container">
-    <!-- ملخص سريع -->
+    <!-- ملخص -->
     <section class="card" id="card-summary">
       <h2 class="card-title">ملخص الطفل</h2>
       <div class="summary-grid">
@@ -34,7 +34,7 @@
       <div id="goalChips" class="chips-row" aria-label="نطاقات الكارب"></div>
     </section>
 
-    <!-- مُدخلات الوجبة -->
+    <!-- إدخال الوجبة -->
     <section class="card" id="card-meal">
       <h2 class="card-title">إضافة/حساب وجبة</h2>
 
@@ -53,19 +53,19 @@
           <span class="tiny muted" id="unitHint">—</span>
         </label>
 
-        <label class="field">جرام/حصة (اختياري)
+        <label class="field">جرام/وحدة (اختياري)
           <input id="gramsPerPortion" type="number" step="0.1" placeholder="مثال: 15" />
-          <span class="tiny muted">لو أدخلتِه، هنحسب الكارب من الحصة × جرام/حصة</span>
+          <span class="tiny muted">لو أدخلتِه + اخترتِ الكمية، هنحسب الكارب تلقائيًا</span>
         </label>
 
-        <label class="field">المقدار (حصة)
+        <label class="field">الكمية (وحدات)
           <input id="portions" type="number" step="0.25" min="0" placeholder="0.25 / 0.5 / 1 ..." />
-          <span class="tiny muted">الخطوة 0.25 — تقدري لحد 0.25 من المقدار</span>
+          <span class="tiny muted">الخطوة 0.25</span>
         </label>
 
         <label class="field">كارب الوجبة (جرام)
           <input id="carbs" type="number" step="0.1" placeholder="النتيجة أو إدخال يدوي" />
-          <span class="tiny muted">لو أدخلتِ الحصص + جرام/حصة، ده يتحسب تلقائيًا ويمكن تعديلُه</span>
+          <span class="tiny muted">لو أدخلتِ الكمية + الجرام/وحدة، يتحسب تلقائيًا ويمكن تعديلُه</span>
         </label>
       </div>
 
@@ -116,13 +116,18 @@
       </div>
     </section>
 
-    <!-- سلة الوجبة من المكتبة -->
+    <!-- سلة الوجبة -->
     <section class="card" id="card-basket">
       <h2 class="card-title">الأصناف المختارة للوجبة</h2>
 
       <div class="basket-actions">
         <button id="btnOpenLibrary" class="btn">+ إضافة صنف من المكتبة</button>
         <button id="btnSuggestAI" class="btn ghost">🤖 اقترح بدائل</button>
+        <button id="btnAutoFit" class="btn ghost" title="اضبط المقادير لتناسب الهدف">🤖 اضبط المقادير</button>
+        <span id="fitHint" class="tiny muted">—</span>
+        <span class="flex-spacer"></span>
+        <button id="btnSavePreset" class="btn">💾 حفظ كوجبة جاهزة</button>
+        <button id="btnLoadPreset" class="btn ghost">📚 تحميل وجبة جاهزة</button>
       </div>
 
       <div class="basket-table-wrap">
@@ -130,8 +135,8 @@
           <thead>
             <tr>
               <th>الصنف</th>
-              <th>الكمية (حصة)</th>
-              <th>جرام/حصة</th>
+              <th>الكمية (وحدات)</th>
+              <th>جرام/وحدة</th>
               <th>الكارب (جم)</th>
               <th></th>
             </tr>
@@ -146,7 +151,6 @@
           </tfoot>
         </table>
       </div>
-
       <p class="tiny muted">يُستخدم إجمالي الكارب تلقائيًا في حساب الجرعة.</p>
     </section>
 
@@ -168,7 +172,7 @@
       </div>
     </div>
 
-    <!-- مودال بدائل الذكاء الاصطناعي -->
+    <!-- مودال بدائل AI -->
     <div id="aiModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
       <div class="modal-body lib-body">
         <div class="lib-head">
@@ -176,6 +180,21 @@
           <button id="aiClose" class="btn">✕</button>
         </div>
         <div id="aiList" class="lib-list" aria-live="polite">جارٍ التحليل…</div>
+      </div>
+    </div>
+
+    <!-- مودال الوجبات الجاهزة -->
+    <div id="presetModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="presetTitle">
+      <div class="modal-body lib-body">
+        <div class="lib-head">
+          <h3 id="presetTitle">📚 الوجبات المحفوظة</h3>
+          <button id="presetClose" class="btn">✕</button>
+        </div>
+        <div class="lib-controls">
+          <input id="presetName" placeholder="اسم لحفظ الوجبة الحالية…" />
+          <button id="presetSaveNow" class="btn">حفظ</button>
+        </div>
+        <div id="presetList" class="lib-list" aria-live="polite">—</div>
       </div>
     </div>
   </main>
