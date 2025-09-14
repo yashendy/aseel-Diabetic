@@ -41,7 +41,9 @@
         <label class="field">الاسم الكامل<input id="f_name" autocomplete="off" /></label>
         <label class="field">الرقم المدني / الوطني<input id="f_civilId" autocomplete="off" /></label>
         <label class="field">الجنس
-          <select id="f_gender"><option value="">—</option><option value="male">ذكر</option><option value="female">أنثى</option></select>
+          <select id="f_gender">
+            <option value="">—</option><option value="male">ذكر</option><option value="female">أنثى</option>
+          </select>
         </label>
         <label class="field">تاريخ الميلاد<input id="f_birthDate" type="date" /></label>
         <label class="field">وحدة سكر الدم
@@ -77,7 +79,7 @@
       <div class="meal-goals-grid">
         <div class="mini-card">
           <div class="mini-title">فطار</div>
-          <div class="mini-grid two">
+          <div class="mini-grid one">
             <label>من<input id="f_carb_b_min" type="number" step="0.1" placeholder="من" /></label>
             <label>إلى<input id="f_carb_b_max" type="number" step="0.1" placeholder="إلى" /></label>
           </div>
@@ -85,7 +87,7 @@
         </div>
         <div class="mini-card">
           <div class="mini-title">غدا</div>
-          <div class="mini-grid two">
+          <div class="mini-grid one">
             <label>من<input id="f_carb_l_min" type="number" step="0.1" placeholder="من" /></label>
             <label>إلى<input id="f_carb_l_max" type="number" step="0.1" placeholder="إلى" /></label>
           </div>
@@ -93,7 +95,7 @@
         </div>
         <div class="mini-card">
           <div class="mini-title">عشا</div>
-          <div class="mini-grid two">
+          <div class="mini-grid one">
             <label>من<input id="f_carb_d_min" type="number" step="0.1" placeholder="من" /></label>
             <label>إلى<input id="f_carb_d_max" type="number" step="0.1" placeholder="إلى" /></label>
           </div>
@@ -101,7 +103,7 @@
         </div>
         <div class="mini-card">
           <div class="mini-title">سناك</div>
-          <div class="mini-grid two">
+          <div class="mini-grid one">
             <label>من<input id="f_carb_s_min" type="number" step="0.1" placeholder="من" /></label>
             <label>إلى<input id="f_carb_s_max" type="number" step="0.1" placeholder="إلى" /></label>
           </div>
@@ -112,7 +114,7 @@
     </section>
 
     <!-- الأنسولين والجهاز -->
-    <section class="card" id="card-insulin">
+    <section class="card insulin-card" id="card-insulin">
       <h2 class="card-title">الأنسولين والجهاز</h2>
 
       <h3 class="sub-title">المعاملات العامة</h3>
@@ -129,7 +131,6 @@
 
       <h3 class="sub-title">حسب الوجبة (اختياري)</h3>
       <div class="per-meal-grid">
-        <!-- فطار -->
         <div class="mini-card">
           <div class="mini-title">فطار</div>
           <div class="mini-grid one">
@@ -137,7 +138,6 @@
             <label>CR (معادل الكارب)<input id="f_cr_b" type="number" step="0.1" placeholder="CR" /></label>
           </div>
         </div>
-        <!-- غدا -->
         <div class="mini-card">
           <div class="mini-title">غدا</div>
           <div class="mini-grid one">
@@ -145,7 +145,6 @@
             <label>CR (معادل الكارب)<input id="f_cr_l" type="number" step="0.1" placeholder="CR" /></label>
           </div>
         </div>
-        <!-- عشا -->
         <div class="mini-card">
           <div class="mini-title">عشا</div>
           <div class="mini-grid one">
@@ -153,7 +152,6 @@
             <label>CR (معادل الكارب)<input id="f_cr_d" type="number" step="0.1" placeholder="CR" /></label>
           </div>
         </div>
-        <!-- سناك -->
         <div class="mini-card">
           <div class="mini-title">سناك</div>
           <div class="mini-grid one">
@@ -180,6 +178,11 @@
         </div>
         <label class="field">ملاحظات الأنسولين<textarea id="f_insulinNotes" rows="3" placeholder="ملاحظات عامة"></textarea></label>
       </div>
+
+      <!-- ✅ صورة أماكن الحقن -->
+      <div class="injection-guide" aria-hidden="true">
+        <img src="images/body.jpeg" alt="Injection sites" />
+      </div>
     </section>
 
     <!-- الأنظمة الغذائية والحساسيات -->
@@ -197,7 +200,6 @@
 
         <div class="diet-right">
           <div class="diet-caption">أنظمة غذائية</div>
-          <!-- ٣ سطور -->
           <div class="diet-rows">
             <div class="diet-row">
               <label><input type="checkbox" class="diet-flag" value="halal"> حلال</label>
