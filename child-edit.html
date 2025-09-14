@@ -4,28 +4,31 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>إعدادات الطفل</title>
-  <!-- ثيم عام (اختياري لكنه مفضّل) -->
+  <!-- favicon لمنع 404 -->
+  <link rel="icon" href="./favicon.png" />
+  <!-- ثيم عام (اختياري) -->
   <link rel="stylesheet" href="./css/admin.css" />
-  <!-- تنسيقات خاصة بصفحة الطفل -->
+  <!-- تنسيقات الصفحة -->
   <link rel="stylesheet" href="./css/child-edit.css" />
 </head>
 <body>
   <!-- Topbar -->
   <header class="topbar">
     <div class="left">
-      <a href="index.html" class="btn ghost" aria-label="عودة">الرئيسية</a>
+      <a href="index.html" class="btn ghost">الرئيسية</a>
     </div>
     <div class="center">
       <h1 class="title">إعدادات الطفل</h1>
     </div>
     <div class="right">
-      <button id="btnSave" class="btn primary" aria-label="حفظ">حفظ</button>
+      <span id="roleBadge" class="badge">—</span>
+      <a id="doctorLink" class="tiny link" href="#">—</a>
     </div>
   </header>
 
   <main class="container">
 
-    <!-- بطاقة: ملخص سريع -->
+    <!-- ملخص سريع -->
     <section class="card" id="card-summary">
       <h2 class="card-title">الملخص السريع</h2>
       <div class="summary-grid">
@@ -38,7 +41,7 @@
       <div id="hdrDietChips" class="chips-row" aria-label="الأنظمة المفعّلة"></div>
     </section>
 
-    <!-- بطاقة: الهوية والمعلومات الأساسية -->
+    <!-- الهوية الأساسية -->
     <section class="card" id="card-identity">
       <h2 class="card-title">الهوية والمعلومات الأساسية</h2>
       <div class="form-grid">
@@ -75,9 +78,10 @@
       <p id="unitChangeWarn" class="tiny warn hidden">⚠️ تغيير الوحدة لا يحوّل القيم تلقائيًا.</p>
     </section>
 
-    <!-- بطاقة: قياسات السكر (الحدود) + المدى الطبيعي -->
+    <!-- قياسات السكر (حدود) + المدى الطبيعي -->
     <section class="card" id="card-glucose">
       <h2 class="card-title">قياسات السكر (الحدود)</h2>
+
       <div class="form-grid glucose-grid">
         <label class="field critical">هبوط حَرِج
           <input id="f_criticalLow" type="number" step="0.1" />
@@ -106,7 +110,7 @@
       <div class="tiny muted" id="glOrderHint">الترتيب الموصى به: Critical Low ≤ Severe Low ≤ Hypo ≤ Hyper ≤ Severe High ≤ Critical High</div>
     </section>
 
-    <!-- بطاقة: أهداف الكارب للوجبات -->
+    <!-- أهداف الكارب للوجبات -->
     <section class="card" id="card-carb-goals">
       <h2 class="card-title">أهداف الكارب للوجبات (جرام)</h2>
       <div class="meal-goals-grid">
@@ -146,7 +150,7 @@
       <p class="tiny muted">يُستخدم هذا النطاق تلقائيًا في صفحة الوجبات؛ ويمكن تعديل النطاق مؤقتًا هناك دون تغيير هذه القيم.</p>
     </section>
 
-    <!-- بطاقة: الأنسولين والجهاز -->
+    <!-- الأنسولين والجهاز -->
     <section class="card" id="card-insulin">
       <h2 class="card-title">الأنسولين والجهاز</h2>
 
@@ -156,7 +160,7 @@
           <input id="f_carbRatio" type="number" step="0.1" placeholder="جرام/وحدة" />
         </label>
         <label class="field">معامل التصحيحي (CF/ISF)
-          <input id="f_correctionFactor" type="number" step="0.1" placeholder="mg/dL لكل وحدة أو mmol/L لكل وحدة حسب الوحدة" />
+          <input id="f_correctionFactor" type="number" step="0.1" placeholder="mg/dL لكل وحدة أو mmol/L لكل وحدة" />
         </label>
         <label class="field">هدف التصحيح
           <select id="f_targetPref">
@@ -222,7 +226,7 @@
 
       <div class="form-grid">
         <div class="field">
-          <label>مواقع الحقن (اضغطي Enter لكل موقع)</label>
+          <label>مواقع الحقن (Enter لكل موقع)</label>
           <div class="chip-input" id="injectionSitesInput">
             <input type="text" placeholder="abdomen, thigh, arm..." />
           </div>
@@ -233,7 +237,7 @@
       </div>
     </section>
 
-    <!-- بطاقة: الأنظمة الغذائية والحساسيات والتفضيلات -->
+    <!-- الأنظمة والحساسيات -->
     <section class="card" id="card-diet">
       <h2 class="card-title">الأنظمة الغذائية والحساسيات</h2>
       <div class="form-grid">
@@ -277,7 +281,7 @@
       <p class="tiny muted">تُستخدم هذه الإعدادات لترشيح الأصناف والبدائل في صفحة الوجبات.</p>
     </section>
 
-    <!-- بطاقة: الملاحظات والإدارة -->
+    <!-- الملاحظات -->
     <section class="card" id="card-notes">
       <h2 class="card-title">ملاحظات وبيانات إدارية</h2>
       <div class="form-grid">
@@ -291,7 +295,11 @@
       </div>
     </section>
 
-    <div class="status-row"><span id="status" class="tiny muted">—</span></div>
+    <!-- أزرار الحالة -->
+    <div class="status-row">
+      <button id="btnSave" class="btn primary">💾 حفظ</button>
+      <span id="status" class="tiny muted">—</span>
+    </div>
   </main>
 
   <!-- لودر -->
