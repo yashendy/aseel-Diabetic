@@ -17,7 +17,7 @@ const nameEl=$("#f_name"), civilEl=$("#f_civilId"), genderEl=$("#f_gender"), bda
 const f_criticalLow=$("#f_criticalLow"), f_severeLow=$("#f_severeLow"), f_hypo=$("#f_hypo"), f_hyper=$("#f_hyper"), f_severeHigh=$("#f_severeHigh"), f_criticalHigh=$("#f_criticalHigh");
 const normalBadge=$("#normalBadge"), normalHint=$("#normalHint"), glOrderHint=$("#glOrderHint");
 
-// Carb goals UI (breakfast/lunch/dinner/snack)
+// Carb goals UI
 const g_b_min=$("#f_carb_b_min"), g_b_max=$("#f_carb_b_max");
 const g_l_min=$("#f_carb_l_min"), g_l_max=$("#f_carb_l_max");
 const g_d_min=$("#f_carb_d_min"), g_d_max=$("#f_carb_d_max");
@@ -32,7 +32,6 @@ const basalEl=$("#f_basalType"), bolusEl=$("#f_bolusType"), devTypeEl=$("#f_devi
 
 // Diet & chips
 const injSitesWrap=$("#injectionSitesInput"), allergiesWrap=$("#allergiesInput"), preferredWrap=$("#preferredInput"), dislikedWrap=$("#dislikedInput");
-const flagWrap=$("#dietFlags") || document; // (لم نعد نستخدمه مباشرة بعد التقسيم لثلاث سطور)
 const flagsInputs=$$(".diet-flag");
 
 // Buttons
@@ -44,11 +43,6 @@ const fmtDate=ms=>{try{if(!ms)return"—";const d=new Date(ms);return d.toLocale
 const calcAge=dStr=>{if(!dStr)return"—";const d=new Date(dStr);if(isNaN(d))return"—";const years=Math.floor((Date.now()-d.getTime())/(365.25*24*3600*1000));return `${years} سنة`;};
 const valNumOrNull=v=>Number.isFinite(+v)?+v:null;
 
-function fillDietSummary(flags=[]) {
-  if(!hdrDietChips) return; hdrDietChips.innerHTML="";
-  const map={halal:"حلال",vegetarian:"نباتي",vegan:"نباتي صارم",gluten_free:"خالٍ من الجلوتين",lactose_free:"خالٍ من اللاكتوز",low_sugar:"قليل السكر",low_carb:"قليل الكارب",low_fat:"قليل الدهون",low_sodium:"قليل الصوديوم",low_satfat:"دهون مشبعة قليلة",med_diet:"متوسطية"};
-  (flags||[]).forEach(f=>{const s=document.createElement("span"); s.className="chip"; s.textContent=map[f]||f; hdrDietChips.appendChild(s);});
-}
 function chipInput(wrap){
   const input=wrap?.querySelector("input");
   function add(t){t=(t||"").trim(); if(!t)return; const exists=[...wrap.querySelectorAll(".chip .t")].some(n=>n.textContent===t); if(exists)return;
@@ -59,6 +53,12 @@ function chipInput(wrap){
   return {get:()=>[...wrap.querySelectorAll(".chip .t")].map(n=>n.textContent), set:(arr)=>{[...wrap.querySelectorAll(".chip")].forEach(x=>x.remove()); (arr||[]).forEach(add);} };
 }
 const allergies=chipInput(allergiesWrap), preferred=chipInput(preferredWrap), disliked=chipInput(dislikedWrap), injSites=chipInput(injSitesWrap);
+
+function fillDietSummary(flags=[]) {
+  if(!hdrDietChips) return; hdrDietChips.innerHTML="";
+  const map={halal:"حلال",vegetarian:"نباتي",vegan:"نباتي صارم",gluten_free:"خالٍ من الجلوتين",lactose_free:"خالٍ من اللاكتوز",low_sugar:"قليل السكر",low_carb:"قليل الكارب",low_fat:"قليل الدهون",low_sodium:"قليل الصوديوم",low_satfat:"دهون مشبعة قليلة",med_diet:"متوسطية"};
+  (flags||[]).forEach(f=>{const s=document.createElement("span"); s.className="chip"; s.textContent=map[f]||f; hdrDietChips.appendChild(s);});
+}
 
 // ===== Resolve IDs & refs =====
 const qs=new URLSearchParams(location.search);
@@ -214,7 +214,6 @@ function doctorAllowedPayloadFrom(full){
   };
 }
 
-// Save
 $("#btnSave")?.addEventListener("click",saveChild);
 async function saveChild(){
   try{
