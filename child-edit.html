@@ -4,15 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>إعدادات الطفل</title>
-  <!-- favicon لمنع 404 -->
+
+  <!-- تأمين الأيقونة لمنع 404 -->
   <link rel="icon" href="./favicon.png" />
-  <!-- ثيم عام (اختياري) -->
+
+  <!-- ثيم عام (لو موجود) -->
   <link rel="stylesheet" href="./css/admin.css" />
-  <!-- تنسيقات الصفحة -->
+  <!-- تنسيقات صفحة الطفل -->
   <link rel="stylesheet" href="./css/child-edit.css" />
 </head>
 <body>
-  <!-- Topbar -->
+  <!-- الشريط العلوي -->
   <header class="topbar">
     <div class="left">
       <a href="index.html" class="btn ghost">الرئيسية</a>
@@ -41,7 +43,7 @@
       <div id="hdrDietChips" class="chips-row" aria-label="الأنظمة المفعّلة"></div>
     </section>
 
-    <!-- الهوية الأساسية -->
+    <!-- الهوية والمعلومات الأساسية -->
     <section class="card" id="card-identity">
       <h2 class="card-title">الهوية والمعلومات الأساسية</h2>
       <div class="form-grid">
@@ -78,7 +80,7 @@
       <p id="unitChangeWarn" class="tiny warn hidden">⚠️ تغيير الوحدة لا يحوّل القيم تلقائيًا.</p>
     </section>
 
-    <!-- قياسات السكر (حدود) + المدى الطبيعي -->
+    <!-- قياسات السكر (الحدود) -->
     <section class="card" id="card-glucose">
       <h2 class="card-title">قياسات السكر (الحدود)</h2>
 
@@ -147,7 +149,7 @@
           <div class="mini-err tiny" id="err_s"></div>
         </div>
       </div>
-      <p class="tiny muted">يُستخدم هذا النطاق تلقائيًا في صفحة الوجبات؛ ويمكن تعديل النطاق مؤقتًا هناك دون تغيير هذه القيم.</p>
+      <p class="tiny muted">هذا النطاق يُستخدم تلقائيًا في صفحة الوجبات؛ ويمكن تعديل النطاق مؤقتًا هناك دون تغيير هذه القيم.</p>
     </section>
 
     <!-- الأنسولين والجهاز -->
@@ -237,7 +239,7 @@
       </div>
     </section>
 
-    <!-- الأنظمة والحساسيات -->
+    <!-- الأنظمة الغذائية والحساسيات -->
     <section class="card" id="card-diet">
       <h2 class="card-title">الأنظمة الغذائية والحساسيات</h2>
       <div class="form-grid">
@@ -302,7 +304,7 @@
     </div>
   </main>
 
-  <!-- لودر -->
+  <!-- لودر صغير -->
   <div id="loader" class="modal hidden" aria-hidden="true">
     <div class="modal-body">جارٍ الحفظ… ⏳</div>
   </div>
