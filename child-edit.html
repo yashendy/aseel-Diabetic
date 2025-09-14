@@ -4,207 +4,300 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>إعدادات الطفل</title>
+  <!-- ثيم عام (اختياري لكنه مفضّل) -->
+  <link rel="stylesheet" href="./css/admin.css" />
+  <!-- تنسيقات خاصة بصفحة الطفل -->
   <link rel="stylesheet" href="./css/child-edit.css" />
 </head>
 <body>
-
-  <!-- شريط علوي -->
+  <!-- Topbar -->
   <header class="topbar">
     <div class="left">
-      <a class="btn ghost" href="index.html">الرئيسية</a>
-      <a class="btn ghost" href="reports.html">التقارير</a>
+      <a href="index.html" class="btn ghost" aria-label="عودة">الرئيسية</a>
     </div>
     <div class="center">
-      <h1 class="title">إعدادات الطفل <span id="hdrName" class="pill">—</span></h1>
-      <small id="roleBadge" class="role">—</small>
+      <h1 class="title">إعدادات الطفل</h1>
     </div>
     <div class="right">
-      <button id="btnSave" class="btn primary">حفظ</button>
+      <button id="btnSave" class="btn primary" aria-label="حفظ">حفظ</button>
     </div>
   </header>
 
   <main class="container">
 
-    <!-- بطاقة مختصرة -->
-    <section class="card" id="summaryCard">
-      <div class="grid4">
-        <div><b>الاسم:</b> <span id="c_name">—</span></div>
-        <div><b>العمر:</b> <span id="c_age">—</span></div>
-        <div><b>الجنس:</b> <span id="c_gender">—</span></div>
-        <div><b>الوحدة:</b> <span id="c_unit">—</span></div>
+    <!-- بطاقة: ملخص سريع -->
+    <section class="card" id="card-summary">
+      <h2 class="card-title">الملخص السريع</h2>
+      <div class="summary-grid">
+        <div class="sum-item"><b>الاسم:</b> <span id="hdrName">—</span></div>
+        <div class="sum-item"><b>الرقم المدني:</b> <span id="hdrCivil">—</span></div>
+        <div class="sum-item"><b>العمر:</b> <span id="hdrAge">—</span></div>
+        <div class="sum-item"><b>الوحدة:</b> <span id="hdrUnit">—</span></div>
+        <div class="sum-item"><b>آخر تحديث:</b> <span id="hdrUpdated">—</span></div>
       </div>
-      <div class="grid4">
-        <div><b>CR:</b> <span id="c_cr">—</span></div>
-        <div><b>CF:</b> <span id="c_cf">—</span></div>
-        <div><b>Basal:</b> <span id="c_basal">—</span></div>
-        <div><b>Bolus:</b> <span id="c_bolus">—</span></div>
-      </div>
-      <div class="grid4">
-        <div><b>الجهاز:</b> <span id="c_device">—</span></div>
-        <div><b>الطول:</b> <span id="c_height">—</span></div>
-        <div><b>الوزن:</b> <span id="c_weight">—</span></div>
-        <div><b>BMI:</b> <span id="c_bmi">—</span></div>
-      </div>
-      <div class="grid3 muted">
-        <div><b>الطبيب:</b> <span id="c_doctor">—</span> </div>
-        <div><b>المشاركة:</b> <span id="c_share">—</span></div>
-        <div><b>آخر تحديث:</b> <span id="c_updated">—</span></div>
-      </div>
+      <div id="hdrDietChips" class="chips-row" aria-label="الأنظمة المفعّلة"></div>
     </section>
 
-    <!-- 1) الهوية -->
-    <section class="card">
-      <h2>البيانات</h2>
+    <!-- بطاقة: الهوية والمعلومات الأساسية -->
+    <section class="card" id="card-identity">
+      <h2 class="card-title">الهوية والمعلومات الأساسية</h2>
       <div class="form-grid">
-        <label>الاسم
+        <label class="field">الاسم الكامل
           <input id="f_name" autocomplete="off" />
         </label>
-        <label>الجنس
+        <label class="field">الرقم المدني / الوطني
+          <input id="f_civilId" autocomplete="off" />
+        </label>
+        <label class="field">الجنس
           <select id="f_gender">
             <option value="">—</option>
             <option value="male">ذكر</option>
             <option value="female">أنثى</option>
           </select>
         </label>
-        <label>تاريخ الميلاد
+        <label class="field">تاريخ الميلاد
           <input id="f_birthDate" type="date" />
         </label>
-        <label>الوحدة
+        <label class="field">وحدة سكر الدم
           <select id="f_unit">
             <option value="">—</option>
-            <option value="mmol/L">mmol/L</option>
             <option value="mg/dL">mg/dL</option>
+            <option value="mmol/L">mmol/L</option>
           </select>
         </label>
-      </div>
-    </section>
-
-    <!-- 2) القياسات الجسمية -->
-    <section class="card">
-      <h2>القياسات الجسمية</h2>
-      <div class="form-grid">
-        <label>الطول (سم)
+        <label class="field">الطول (سم)
           <input id="f_heightCm" type="number" step="0.1" />
         </label>
-        <label>الوزن (كجم)
+        <label class="field">الوزن (كجم)
           <input id="f_weightKg" type="number" step="0.1" />
         </label>
-        <div class="readonly">
-          <div class="note">BMI يُحسب تلقائيًا</div>
-          <div class="bmi"><span id="bmiValue">—</span></div>
-        </div>
       </div>
+      <p id="unitChangeWarn" class="tiny warn hidden">⚠️ تغيير الوحدة لا يحوّل القيم تلقائيًا.</p>
     </section>
 
-    <!-- 3) الإعدادات الطبية -->
-    <section class="card">
-      <h2>الإعدادات الطبية الأساسية</h2>
-      <div class="form-grid">
-        <label>معامل الكارب (CR)
-          <input id="f_carbRatio" type="number" step="0.1" />
-        </label>
-        <label>التصحيحي (CF)
-          <input id="f_correctionFactor" type="number" step="0.1" />
-        </label>
-        <label>نوع القاعدي (Basal)
-          <input id="f_basalType" />
-        </label>
-        <label>نوع البلعة (Bolus)
-          <input id="f_bolusType" />
-        </label>
-
-        <label class="parent-only">الجهاز 
-          <input id="f_device" />
-        </label>
-      </div>
-    </section>
-
-    <!-- 4) حدود الجلوكوز -->
-    <section class="card">
-      <h2>حدود الجلوكوز</h2>
-      <div class="form-grid">
-        <label>Hypo (min)
-          <input id="f_hypo" type="number" step="0.1" />
-        </label>
-        <label>Hyper (max)
-          <input id="f_hyper" type="number" step="0.1" />
-        </label>
-        <label>Severe Low
-          <input id="f_severeLow" type="number" step="0.1" />
-        </label>
-        <label>Severe High
-          <input id="f_severeHigh" type="number" step="0.1" />
-        </label>
-        <label class="critical">Critical Low (تدخّل فوري)
+    <!-- بطاقة: قياسات السكر (الحدود) + المدى الطبيعي -->
+    <section class="card" id="card-glucose">
+      <h2 class="card-title">قياسات السكر (الحدود)</h2>
+      <div class="form-grid glucose-grid">
+        <label class="field critical">هبوط حَرِج
           <input id="f_criticalLow" type="number" step="0.1" />
         </label>
-        <label class="critical">Critical High (تدخّل فوري)
+        <label class="field severe">هبوط شديد
+          <input id="f_severeLow" type="number" step="0.1" />
+        </label>
+        <label class="field low">هبوط
+          <input id="f_hypo" type="number" step="0.1" />
+        </label>
+        <label class="field high">ارتفاع
+          <input id="f_hyper" type="number" step="0.1" />
+        </label>
+        <label class="field severe">ارتفاع شديد
+          <input id="f_severeHigh" type="number" step="0.1" />
+        </label>
+        <label class="field critical">ارتفاع حَرِج
           <input id="f_criticalHigh" type="number" step="0.1" />
         </label>
       </div>
-      <p class="hint">
-        الترتيب الموصى به: <b>Critical Low</b> ≤ Severe Low ≤ Hypo ≤ Hyper ≤ Severe High ≤ <b>Critical High</b>.
-      </p>
-      <div id="rangeError" class="error hidden">تحقّق من ترتيب القيم.</div>
+
+      <div class="normal-row">
+        <div class="badge" id="normalBadge">المدى الطبيعي: —</div>
+        <div class="muted tiny" id="normalHint">يُحسب تلقائيًا حسب الوحدة، أو من القيم المخصصة إن وجدت.</div>
+      </div>
+      <div class="tiny muted" id="glOrderHint">الترتيب الموصى به: Critical Low ≤ Severe Low ≤ Hypo ≤ Hyper ≤ Severe High ≤ Critical High</div>
     </section>
 
-    <!-- 5) أهداف الكارب -->
-    <section class="card">
-      <h2>أهداف الكارب (جرام)</h2>
-      <div class="goals">
-        <div>
-          <h3>فطار</h3>
-          <div class="pair">
-            <input id="f_carb_b_min" type="number" inputmode="numeric" pattern="\d*" placeholder="من" />
-            <input id="f_carb_b_max" type="number" inputmode="numeric" pattern="\d*" placeholder="إلى" />
+    <!-- بطاقة: أهداف الكارب للوجبات -->
+    <section class="card" id="card-carb-goals">
+      <h2 class="card-title">أهداف الكارب للوجبات (جرام)</h2>
+      <div class="meal-goals-grid">
+        <div class="mini-card">
+          <div class="mini-title">فطار</div>
+          <div class="mini-grid">
+            <input id="f_carb_b_min" type="number" step="0.1" placeholder="من" />
+            <input id="f_carb_b_max" type="number" step="0.1" placeholder="إلى" />
+          </div>
+          <div class="mini-err tiny" id="err_b"></div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-title">غدا</div>
+          <div class="mini-grid">
+            <input id="f_carb_l_min" type="number" step="0.1" placeholder="من" />
+            <input id="f_carb_l_max" type="number" step="0.1" placeholder="إلى" />
+          </div>
+          <div class="mini-err tiny" id="err_l"></div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-title">عشا</div>
+          <div class="mini-grid">
+            <input id="f_carb_d_min" type="number" step="0.1" placeholder="من" />
+            <input id="f_carb_d_max" type="number" step="0.1" placeholder="إلى" />
+          </div>
+          <div class="mini-err tiny" id="err_d"></div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-title">سناك</div>
+          <div class="mini-grid">
+            <input id="f_carb_s_min" type="number" step="0.1" placeholder="من" />
+            <input id="f_carb_s_max" type="number" step="0.1" placeholder="إلى" />
+          </div>
+          <div class="mini-err tiny" id="err_s"></div>
+        </div>
+      </div>
+      <p class="tiny muted">يُستخدم هذا النطاق تلقائيًا في صفحة الوجبات؛ ويمكن تعديل النطاق مؤقتًا هناك دون تغيير هذه القيم.</p>
+    </section>
+
+    <!-- بطاقة: الأنسولين والجهاز -->
+    <section class="card" id="card-insulin">
+      <h2 class="card-title">الأنسولين والجهاز</h2>
+
+      <h3 class="sub-title">المعاملات العامة</h3>
+      <div class="form-grid">
+        <label class="field">معادل الكارب (CR)
+          <input id="f_carbRatio" type="number" step="0.1" placeholder="جرام/وحدة" />
+        </label>
+        <label class="field">معامل التصحيحي (CF/ISF)
+          <input id="f_correctionFactor" type="number" step="0.1" placeholder="mg/dL لكل وحدة أو mmol/L لكل وحدة حسب الوحدة" />
+        </label>
+        <label class="field">هدف التصحيح
+          <select id="f_targetPref">
+            <option value="max">الحد الأعلى للمدى الطبيعي (موصى به)</option>
+            <option value="mid">منتصف المدى الطبيعي</option>
+          </select>
+        </label>
+      </div>
+
+      <h3 class="sub-title">حسب الوجبة (اختياري)</h3>
+      <div class="per-meal-grid">
+        <div class="mini-card">
+          <div class="mini-title">فطار</div>
+          <div class="mini-grid">
+            <input id="f_cr_b" type="number" step="0.1" placeholder="CR" />
+            <input id="f_cf_b" type="number" step="0.1" placeholder="CF" />
           </div>
         </div>
-        <div>
-          <h3>غدا</h3>
-          <div class="pair">
-            <input id="f_carb_l_min" type="number" inputmode="numeric" pattern="\d*" placeholder="من" />
-            <input id="f_carb_l_max" type="number" inputmode="numeric" pattern="\d*" placeholder="إلى" />
+        <div class="mini-card">
+          <div class="mini-title">غدا</div>
+          <div class="mini-grid">
+            <input id="f_cr_l" type="number" step="0.1" placeholder="CR" />
+            <input id="f_cf_l" type="number" step="0.1" placeholder="CF" />
           </div>
         </div>
-        <div>
-          <h3>عشا</h3>
-          <div class="pair">
-            <input id="f_carb_d_min" type="number" inputmode="numeric" pattern="\d*" placeholder="من" />
-            <input id="f_carb_d_max" type="number" inputmode="numeric" pattern="\d*" placeholder="إلى" />
+        <div class="mini-card">
+          <div class="mini-title">عشا</div>
+          <div class="mini-grid">
+            <input id="f_cr_d" type="number" step="0.1" placeholder="CR" />
+            <input id="f_cf_d" type="number" step="0.1" placeholder="CF" />
           </div>
         </div>
-        <div>
-          <h3>سناك</h3>
-          <div class="pair">
-            <input id="f_carb_s_min" type="number" inputmode="numeric" pattern="\d*" placeholder="من" />
-            <input id="f_carb_s_max" type="number" inputmode="numeric" pattern="\d*" placeholder="إلى" />
+        <div class="mini-card">
+          <div class="mini-title">سناك</div>
+          <div class="mini-grid">
+            <input id="f_cr_s" type="number" step="0.1" placeholder="CR" />
+            <input id="f_cf_s" type="number" step="0.1" placeholder="CF" />
           </div>
+        </div>
+      </div>
+
+      <h3 class="sub-title">أنواع الأنسولين والجهاز</h3>
+      <div class="form-grid">
+        <label class="field">طويل المفعول (Basal)
+          <input id="f_basalType" />
+        </label>
+        <label class="field">سريع/وجبات (Bolus)
+          <input id="f_bolusType" />
+        </label>
+        <label class="field">نوع الجهاز
+          <select id="f_deviceType">
+            <option value="">—</option>
+            <option value="pen">قلم</option>
+            <option value="smart-pen">قلم ذكي</option>
+            <option value="pump">مضخة</option>
+            <option value="syringe">سرنجة</option>
+          </select>
+        </label>
+        <label class="field">موديل الجهاز
+          <input id="f_deviceModel" />
+        </label>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label>مواقع الحقن (اضغطي Enter لكل موقع)</label>
+          <div class="chip-input" id="injectionSitesInput">
+            <input type="text" placeholder="abdomen, thigh, arm..." />
+          </div>
+        </div>
+        <label class="field">ملاحظات الأنسولين
+          <textarea id="f_insulinNotes" rows="3" placeholder="ملاحظات عامة"></textarea>
+        </label>
+      </div>
+    </section>
+
+    <!-- بطاقة: الأنظمة الغذائية والحساسيات والتفضيلات -->
+    <section class="card" id="card-diet">
+      <h2 class="card-title">الأنظمة الغذائية والحساسيات</h2>
+      <div class="form-grid">
+        <div class="field">
+          <label>أنظمة غذائية</label>
+          <div class="diet-flags" id="dietFlags">
+            <label><input type="checkbox" class="diet-flag" value="halal"> حلال</label>
+            <label><input type="checkbox" class="diet-flag" value="vegetarian"> نباتي</label>
+            <label><input type="checkbox" class="diet-flag" value="vegan"> نباتي صارم</label>
+            <label><input type="checkbox" class="diet-flag" value="gluten_free"> خالٍ من الجلوتين</label>
+            <label><input type="checkbox" class="diet-flag" value="lactose_free"> خالٍ من اللاكتوز</label>
+            <label><input type="checkbox" class="diet-flag" value="low_sugar"> قليل السكر</label>
+            <label><input type="checkbox" class="diet-flag" value="low_carb"> قليل الكارب</label>
+            <label><input type="checkbox" class="diet-flag" value="low_fat"> قليل الدهون</label>
+            <label><input type="checkbox" class="diet-flag" value="low_sodium"> قليل الصوديوم</label>
+            <label><input type="checkbox" class="diet-flag" value="low_satfat"> دهون مشبعة قليلة</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>حساسيات (Enter)</label>
+          <div class="chip-input" id="allergiesInput">
+            <input type="text" placeholder="peanut, lactose, egg..." />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>مفضلات (Enter)</label>
+          <div class="chip-input" id="preferredInput">
+            <input type="text" placeholder="تفاح، زبادي..." />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>غير مفضلات (Enter)</label>
+          <div class="chip-input" id="dislikedInput">
+            <input type="text" placeholder="سبانخ..." />
+          </div>
+        </div>
+      </div>
+      <p class="tiny muted">تُستخدم هذه الإعدادات لترشيح الأصناف والبدائل في صفحة الوجبات.</p>
+    </section>
+
+    <!-- بطاقة: الملاحظات والإدارة -->
+    <section class="card" id="card-notes">
+      <h2 class="card-title">ملاحظات وبيانات إدارية</h2>
+      <div class="form-grid">
+        <label class="field">ملاحظات عامة
+          <textarea id="f_notes" rows="3" placeholder="ملاحظات اختيارية…"></textarea>
+        </label>
+        <div class="field">
+          <label>آخر تحديث</label>
+          <input id="f_updated" disabled />
         </div>
       </div>
     </section>
 
-    <!-- 6) الطبيب والخصوصية -->
-    <section class="card">
-      <h2>الطبيب والخصوصية</h2>
-      <div class="grid3">
-        <div><b>الطبيب المرتبط:</b> <span id="docName">غير مرتبط</span> <small id="docEmail" class="muted"></small></div>
-        <div class="share-wrap">
-          <label class="switch">
-            <input id="shareToggle" type="checkbox" />
-            <span> مشاركة البيانات مع الطبيب </span>
-          </label>
-        </div>
-        <div class="muted"><b>ملاحظة:</b> يمكن إلغاء المشاركة في أي وقت.</div>
-      </div>
-    </section>
-
-    <div class="status-row">
-      <span id="status" class="status">—</span>
-    </div>
-
+    <div class="status-row"><span id="status" class="tiny muted">—</span></div>
   </main>
 
-  <div id="loader" class="loader hidden">جارٍ الحفظ… ⏳</div>
+  <!-- لودر -->
+  <div id="loader" class="modal hidden" aria-hidden="true">
+    <div class="modal-body">جارٍ الحفظ… ⏳</div>
+  </div>
 
   <script type="module" src="./js/child-edit.js"></script>
 </body>
