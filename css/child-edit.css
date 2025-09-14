@@ -1,84 +1,47 @@
-:root{
-  --bg:#f7fbff;
-  --card:#fff;
-  --ink:#0f172a;
-  --muted:#6b7280;
-  --ring:#e5e7eb;
-  --shadow:0 10px 24px rgba(15,23,42,.06);
-  --radius:18px;
+/* تنسيقات مكملة للثيم العام admin.css، وتضمن ثبات البطاقات ومنع خروج الحقول */
 
-  --primary:#7c3aed;
-  --ok:#22c55e;
-  --danger:#ef4444;
+.card-title{margin:0 0 10px;font-size:18px}
+.sub-title{margin:6px 0 8px;font-size:15px;color:#334155}
 
-  --chip:#f1edff;
-  --chip-ink:#5b21b6;
-}
+.summary-grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.chips-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;font-family:"Tajawal",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:linear-gradient(180deg,#f9fbff,#fff)}
+.form-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.field input,.field select,.field textarea{width:100%}
 
-.topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.8);backdrop-filter:saturate(180%) blur(12px);display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--ring)}
-.topbar .btn{margin-inline:4px}
-.title{margin:0}
-.pill{background:var(--chip);color:var(--chip-ink);border-radius:999px;padding:4px 10px;margin-inline-start:8px}
-.role{display:block;color:var(--chip-ink);text-align:center;margin-top:2px}
+.status-row{text-align:center;margin:14px 0}
 
-.container{max-width:1100px;margin:16px auto;padding:0 12px}
-
-.card{background:var(--card);border:1px solid var(--ring);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin:12px 0}
-.card h2{margin:0 0 12px 0}
-.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.grid4>div,.grid3>div{background:#fafafa;border:1px solid var(--ring);border-radius:14px;padding:10px}
-.muted{color:var(--muted)}
-
-.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.form-grid label{display:flex;flex-direction:column;gap:6px;background:#fafafa;border:1px solid var(--ring);border-radius:14px;padding:10px}
-.form-grid input,.form-grid select{padding:10px;border:1px solid var(--ring);border-radius:10px;background:#fff}
-
-.readonly{display:flex;flex-direction:column;justify-content:center;background:#fdfdfd;border:1px dashed var(--ring);border-radius:14px;padding:10px}
-.readonly .note{color:var(--muted);font-size:13px}
-.readonly .bmi{margin-top:6px;font-weight:700}
-
-.hint{color:var(--muted);font-size:13px;margin:6px 2px}
-.error{color:var(--danger);font-weight:700}
+/* ألوان تحذيرية لطيفة */
+.warn{color:#b45309}
 .hidden{display:none}
 
-/* ===== أهداف الكارب: خانات صغيرة (حتى 3 أرقام) ===== */
-.goals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.goals h3{margin:0 0 6px 0}
-.pair{display:flex;gap:8px}
-.pair input{
-  width:15ch;               /* يكفي حتى 3 أرقام */
-  padding:8px 20px;
-  text-align:center;
-  border:1px solid var(--ring);
-  border-radius:10px;
-  background:#fff;
-}
+/* تلوين حدود سكر الدم */
+.glucose-grid .critical input{background:#fee2e2}
+.glucose-grid .severe input{background:#ffedd5}
+.glucose-grid .low input{background:#fef9c3}
+.glucose-grid .high input{background:#ffedd5}
 
-.share-wrap{display:flex;align-items:center;gap:10px}
-.switch{display:flex;align-items:center;gap:8px}
-.switch input{inline-size:18px;block-size:18px}
+.normal-row{display:flex;align-items:center;gap:8px;margin:8px 0}
+.badge{display:inline-block;padding:4px 10px;border-radius:999px;border:1px solid #e2e8f0;background:#ecfdf5}
 
-.btn{border:0;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:700}
-.btn.primary{background:var(--primary);color:#fff}
-.btn.ghost{background:#fff;border:1px solid var(--ring)}
-.btn:disabled{opacity:.6;cursor:not-allowed}
+/* بطاقات صغيرة داخل أهداف الكارب / CR/CF بالوجبات */
+.meal-goals-grid,
+.per-meal-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.mini-card{border:1px solid #e2e8f0;border-radius:12px;padding:10px;background:#fff}
+.mini-title{font-weight:700;margin-bottom:6px}
+.mini-grid{display:grid;gap:8px;grid-template-columns:1fr 1fr}
+.mini-err{color:#b91c1c;min-height:16px}
 
-.status-row{display:flex;justify-content:flex-start;align-items:center;margin:12px 0}
-.status{color:var(--muted)}
-.status.ok{color:var(--ok)}
-.status.err{color:var(--danger)}
+/* diet chips & inputs */
+.diet-flags{display:flex;flex-wrap:wrap;gap:8px}
+.diet-flags label{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #e2e8f0;border-radius:999px;background:#fff;cursor:pointer;font-size:13px}
+.diet-flags input{accent-color:#2563eb}
 
-.loader{position:fixed;inset:auto 16px 16px auto;background:#111827;color:#fff;padding:10px 12px;border-radius:10px;box-shadow:var(--shadow)}
+/* chip-input */
+.chip-input{display:flex;flex-wrap:wrap;gap:6px;padding:6px;border:1px dashed #e2e8f0;border-radius:10px;background:#fff}
+.chip-input input{border:none;outline:none;min-width:140px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#e2e8f0;border-radius:999px;padding:4px 8px;font-size:12px}
+.chip .x{cursor:pointer;border:none;background:transparent}
 
-.critical input{border-color:#fde68a;background:#fffbeb}
-
-@media (max-width:980px){
-  .grid4,.grid3,.form-grid,.goals{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
-@media (max-width:560px){
-  .grid4,.grid3,.form-grid,.goals{grid-template-columns:1fr}
-}
+/* Topbar تكيف */
+.topbar .title{font-size:18px}
