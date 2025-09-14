@@ -67,7 +67,7 @@ a{color:var(--primary);text-decoration:none}
 
 /* ✅ صورة أماكن الحقن بالركن تحت */
 .injection-guide{
-  position:absolute; bottom:10px; left:10px;
+  position:absolute; bottom:30px; left:30px;
   opacity:.95;
 }
 .injection-guide img{
