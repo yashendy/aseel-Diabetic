@@ -1,7 +1,6 @@
 :root{
   --bg:#f7fafc; --card:#fff; --muted:#8a8f98; --line:#e5e7eb;
   --chip:#eef2ff; --accent:#6366f1; --danger:#ef4444; --warn:#f59e0b;
-  --ok:#10b981;
   --radius:14px;
 }
 *{box-sizing:border-box}
