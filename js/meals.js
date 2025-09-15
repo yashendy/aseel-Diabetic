@@ -1,100 +1,139 @@
-// AI helper بدون export/module
-(function(){
-  const MealAI = {};
-
-  // محاولة استدعاء Gemini إن وُفر مفتاح بيئة في window.GEMINI_KEY (اختياري)
-  async function callGemini(prompt){
-    try{
-      const key = window.GEMINI_KEY; // ضعيه إن أردتِ
-      if(!key) throw new Error("no-key");
-      const res = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key="+key,
-        {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
+// ai.js - مساعد الذكاء: اقتراح بدائل + ضبط المقادير داخل نطاق الكارب
+export const MealAI = {
+  /**
+   * يقترح بدائل بناءً على العناصر الحالية والمكتبة والتفضيلات
+   * prefs = { diet:{halal,veg,lowcarb,lowfat,lowsod}, allergies[], likes[], dislikes[] }
+   * items = [{name, brand, carbs_g, gramsPerUnit, unit, tags[]}, ...]
+   */
+  async suggestAlternatives({ itemsLibrary, currentItems, prefs }) {
+    // 1) لو فيه مفتاح Gemini في النافذة، جرّب API (نص مقترح بالعربية)
+    const key = window?.GEMINI_KEY || null;
+    if (key) {
+      try {
+        const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + key, {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
           body: JSON.stringify({
-            contents:[{parts:[{text: prompt}]}],
-            generationConfig:{ temperature:0.2 }
+            contents: [{
+              parts: [{
+                text: buildPrompt(currentItems, prefs)
+              }]
+            }],
+            generationConfig: { temperature: 0.5, maxOutputTokens: 512 }
           })
-        }
-      );
-      if(!res.ok) throw new Error("bad-res");
-      const json = await res.json();
-      const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      return text;
-    }catch(e){
-      console.warn("AI call fallback:", e.message);
-      return null;
+        });
+        const data = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        return { type: "gemini", text };
+      } catch (e) {
+        console.warn("Gemini failed, fallback local", e);
+      }
     }
-  }
 
-  // اقتراح بدائل بسيطة محلية عند فشل الذكاء
-  function localAlternatives(items, lib, prefs){
-    // فلترة بناءً على حساسيات/أنظمة/غير مفضلات
-    const notAllowed = new Set((prefs?.allergies||[])
-      .concat(prefs?.dislikes||[]).map(s=>String(s).trim().toLowerCase()));
+    // 2) Fallback محلي ذكي بسيط
+    const filtered = itemsLibrary.filter(f => {
+      // حساسية / disliked
+      if (matchAny(f, prefs.allergies)) return false;
+      if (matchAny(f, prefs.dislikes)) return false;
 
-    const good = lib.filter(x=>{
-      const n = (x.name||"").toLowerCase();
-      if([...notAllowed].some(a => n.includes(a))) return false;
-      // احترام قليل الكارب: نفضّل عناصر كاربها أقل من المتوسط
-      if(prefs?.diet?.lowcarb && x.nutrPer100?.carbs_g > 15) return false;
+      // حلال
+      if (prefs.diet?.halal && f.tags?.includes("not-halal")) return false;
+
+      // نباتي
+      if (prefs.diet?.veg && !(f.tags?.includes("veg") || f.tags?.includes("vegan"))) return false;
+
+      // أنظمة غذائية
+      if (prefs.diet?.lowcarb && (f.carbs_g ?? 0) > 15) return false; // بسيط: 15g كارب حد أقصى للوحدة
+      if (prefs.diet?.lowfat && f.tags?.includes("high-fat")) return false;
+      if (prefs.diet?.lowsod && f.tags?.includes("high-sodium")) return false;
+
       return true;
     });
 
-    // اختر بديل/بديلين لكل عنصر خارج النطاق (بسيط)
-    return items.map(it=>{
-      const pick = good.find(g => g.id !== it.itemId) || null;
-      return { for: it.name, suggestion: pick?.name || "خيار فاكهة/خضار" };
-    });
-  }
+    // رتّب حسب المفضلات ثم الأقل كارب
+    const likedFirst = filtered.sort((a,b) => {
+      const la = includesAny(a, prefs.likes) ? -1 : 0;
+      const lb = includesAny(b, prefs.likes) ? -1 : 0;
+      if (la !== lb) return la - lb;
+      return (a.carbs_g ?? 0) - (b.carbs_g ?? 0);
+    }).slice(0, 12);
 
-  // تعديل المقادير للوصول للنطاق بخطوة 0.25
-  function adjustToRange(items, targetMin, targetMax, step){
-    step = step || 0.25;
-    // نجمع الكارب الحالي
-    const sumCarbs = items.reduce((s,it)=> s + (it.carbs || 0), 0);
-    if(sumCarbs >= targetMin && sumCarbs <= targetMax) return items;
+    const lines = likedFirst.map(f => `• ${f.name}${f.brand ? " ("+f.brand+")" : ""} — ${f.carbs_g ?? "?"}g كارب/وحدة`);
+    return { type: "local", text: lines.join("\n") };
 
-    const delta = (sumCarbs < targetMin) ? (targetMin - sumCarbs) : (sumCarbs - targetMax);
-    // وزّع التعديل على العناصر القابلة للتعديل
-    const adjustable = items.filter(it=> it.gramsPerUnit>0);
-    if(adjustable.length===0) return items;
+    // helpers
+    function buildPrompt(currentItems, prefs){
+      return [
+        "اقترح بدائل عربية مناسبة لهذه الوجبة لطفل سكري:",
+        "",
+        "العناصر الحالية:",
+        ...currentItems.map(i=>`- ${i.name} × ${i.qty} (${i.unit || "unit"}), كارب/وحدة=${i.carbs_g ?? "?"}`),
+        "",
+        "تفضيلات وأنظمة:",
+        `حلال=${!!prefs.diet?.halal}, نباتي=${!!prefs.diet?.veg}, قليل الكارب=${!!prefs.diet?.lowcarb}, قليل الدهون=${!!prefs.diet?.lowfat}, قليل الصوديوم=${!!prefs.diet?.lowsod}`,
+        `حساسيات: ${prefs.allergies?.join(", ") || "-"}`,
+        `مفضلات: ${prefs.likes?.join(", ") || "-"}`,
+        `غير مفضلات: ${prefs.dislikes?.join(", ") || "-"}`,
+        "",
+        "اقترح 8 بدائل كحد أقصى مع تفسير قصير جدًا لكل بديل."
+      ].join("\n");
+    }
+    function norm(s){return (s||"").toString().trim().toLowerCase()}
+    function matchAny(f, arr){
+      if (!arr?.length) return false;
+      const hay = [f.name, f.brand, ...(f.tags||[])].map(norm).join(" ");
+      return arr.some(x => hay.includes(norm(x)));
+    }
+    function includesAny(f, arr){
+      if (!arr?.length) return false;
+      const hay = [f.name, f.brand, ...(f.tags||[])].map(norm).join(" ");
+      return arr.some(x => hay.includes(norm(x)));
+    }
+  },
 
-    let remain = delta;
-    for(let i=0; i<adjustable.length && remain>1e-6; i++){
-      const it = adjustable[i];
-      // كارب لكل وحدة: gramsPerUnit * carbsPer100 / 100
-      const carbPerUnit = (it.gramsPerUnit || 0) * (it.carbsPer100 || 0) / 100;
-      if(carbPerUnit<=0) continue;
+  /**
+   * يضبط كميات العناصر بخطوة 0.25 لتقريب إجمالي الكارب داخل النطاق
+   * items = [{qty, carbsPerUnit}] -> يُعيد مصفوفة جديدة
+   */
+  adjustToRange({ items, totalCarbs, min, max }) {
+    if (!items?.length || (!min && !max)) return items;
+    const step = 0.25;
+    const clamp = v => Math.max(0, Math.round(v/step)*step);
 
-      const unitsNeeded = Math.round((remain / carbPerUnit) / step) * step;
-      const sign = (sumCarbs < targetMin) ? +1 : -1;
-      it.qty = Math.max(0, (it.qty || 0) + sign * unitsNeeded);
-      // recompute
-      it.grams = (it.qty || 0) * (it.gramsPerUnit || 0);
-      it.carbs = (it.grams || 0) * (it.carbsPer100 || 0) / 100;
+    // استهدف المنتصف داخل النطاق
+    const target = typeof min === "number" && typeof max === "number"
+      ? (min + max) / 2
+      : (min ?? max ?? totalCarbs);
 
-      // حدث المتبقي تقريبيًا
-      const used = Math.abs(unitsNeeded * carbPerUnit);
-      remain = Math.max(0, remain - used);
+    // لو الإجمالي صفر نحاول رفع عنصر مفضل
+    if (totalCarbs === 0) {
+      const idx = items.findIndex(x => (x.carbsPerUnit ?? 0) > 0);
+      if (idx >= 0) { items[idx].qty = clamp(items[idx].qty + step); }
+      return items;
+    }
+
+    let diff = target - totalCarbs; // موجب: نزوّد، سالب: نقلل
+    // وزّع الزيادة/النقص على العناصر القابلة للتعديل بالتساوي النسبي
+    const adjustable = items
+      .map((x, i) => ({i, c: x.carbsPerUnit ?? 0}))
+      .filter(o => o.c > 0);
+
+    if (!adjustable.length) return items;
+
+    const rounds = 200; // أمان
+    for (let r=0; r<rounds && Math.abs(diff) > 0.01; r++) {
+      for (const a of adjustable) {
+        const oneStepCarb = a.c * step;
+        if (diff > 0.01) {
+          items[a.i].qty = clamp(items[a.i].qty + step);
+          diff -= oneStepCarb;
+        } else if (diff < -0.01 && items[a.i].qty - step >= 0) {
+          items[a.i].qty = clamp(items[a.i].qty - step);
+          diff += oneStepCarb;
+        }
+        if (Math.abs(diff) <= 0.01) break;
+      }
     }
     return items;
   }
-
-  // اقتراح بدائل عبر Gemini إن أمكن وإلا محلي
-  MealAI.suggestAlternatives = async function({items, lib, prefs}){
-    const prompt = `لدينا قائمة طعام عربية للأطفال: ${items.map(i=>i.name).join(", ")}.
-    اقترح بدائل صحية وخالية من الحساسيات: ${(prefs?.allergies||[]).join(", ")}.
-    راعِ الأنظمة: ${JSON.stringify(prefs?.diet||{})}. أعد قائمة مختصرة (بالعربية) مع سبب موجز.`;
-
-    const text = await callGemini(prompt);
-    if(text) return text;
-    const local = localAlternatives(items, lib, prefs);
-    return "بدائل مقترحة:\n" + local.map(x=>`• ${x.for} → ${x.suggestion}`).join("\n");
-  };
-
-  MealAI.adjustToRange = adjustToRange;
-
-  window.MealAI = MealAI;
-})();
+};
