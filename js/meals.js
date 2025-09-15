@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 // ذكاء اصطناعي (لو عندك ملف ai.js في نفس المجلد)
-import { MealAI } from "./ai.js";
+import { MealAI } from "./js/ai.js";
 
 // =============== عناصر DOM ===============
 const qs = (s)=>document.querySelector(s);
