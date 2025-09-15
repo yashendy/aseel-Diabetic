@@ -1,8 +1,8 @@
-// js/meals.js — RTL Responsive + Manual reading + allergy/diet flags + manual dose aggregation
+// js/meals.js — Admin Library (read-only) + manual reading + allergy/diet flags + manual dose aggregation
 import { auth, db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs, addDoc,
-  query, where, orderBy, limit, serverTimestamp
+  query, orderBy, limit, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
@@ -86,47 +86,61 @@ async function loadChild(uid){
   const backBtn=$('backBtn'); backBtn && backBtn.addEventListener('click',()=>history.back());
 }
 
-/* ========= Food catalog ========= */
+/* ========= Admin Food catalog (read-only) ========= */
 function normalizeMeasures(d){
+  // يدعم measureQty (object) و measures[] و householdUnits[]
   if(Array.isArray(d?.measures)) return d.measures.filter(m=>m&&Number(m.grams)>0).map(m=>({name:m.name,grams:Number(m.grams)}));
   if(d?.measureQty && typeof d.measureQty==='object') return Object.entries(d.measureQty).filter(([n,g])=>n&&Number(g)>0).map(([n,g])=>({name:n,grams:Number(g)}));
   if(Array.isArray(d?.householdUnits)) return d.householdUnits.filter(m=>m&&Number(m.grams)>0).map(m=>({name:m.name,grams:Number(m.grams)}));
   return [];
 }
+function pickNumber(...candidates){
+  for(const v of candidates){ if(v!=null && !Number.isNaN(Number(v))) return Number(v); }
+  return 0;
+}
 function mapFood(s){
   const d={id:s.id,...s.data()};
-  const nutr=d.nutrPer100g||{carbs:0,fiber:0,cal:0,prot:0,fat:0,gi:null};
+  const nutr=d.nutrPer100g||{};
+  // يقبل cal_kcal و carbs_g وغيرها
+  const per100={
+    cal:   pickNumber(nutr.cal, nutr.cal_kcal, nutr.kcal),
+    carbs: pickNumber(nutr.carbs, nutr.carbs_g),
+    fat:   pickNumber(nutr.fat, nutr.fat_g),
+    fiber: pickNumber(nutr.fiber, nutr.fiber_g),
+    prot:  pickNumber(nutr.prot, nutr.protein, nutr.protein_g),
+    gi:    nutr.gi ?? null
+  };
   return {
-    id:d.id, name:d.name, brand:d.brand||null, category:d.category||'أخرى', imageUrl:d.imageUrl||'',
-    per100:{carbs:Number(nutr.carbs)||0,fiber:Number(nutr.fiber)||0,cal:Number(nutr.cal)||0,prot:Number(nutr.prot)||0,fat:Number(nutr.fat)||0,gi:nutr.gi??null},
+    id:d.id,
+    name:d.name || d.arName || d.enName || 'صنف',
+    brand:d.brand||null,
+    category:d.category||'أخرى',
+    imageUrl:d.imageUrl||'',
+    per100,
     measures: normalizeMeasures(d),
     allergens: Array.isArray(d.allergens)?d.allergens:[],
     dietTags: Array.isArray(d.dietTags)?d.dietTags:[],
     tags: Array.isArray(d.tags)?d.tags:[]
   };
 }
-// جرّب المسارات المسموح بها حسب القواعد
-function FOOD_CANDIDATES(uid){
-  return [
-    // إن كنت تحفظ الأصناف تحت الطفل
-    childRef ? collection(childRef,'foodItems') : null,
-    // مكتبة الأب
-    uid ? collection(db,'parents',uid,'foodItems') : null,
-    // مكتبة عامة (قواعدك تسمح read:true)
-    collection(db,'admin','global','foodItems')
-  ].filter(Boolean);
+function ADMIN_FOOD_COLLECTION(){
+  // مكتبة الأدمن العامة (read-only حسب قواعدك)
+  return collection(db,'admin','global','foodItems');
 }
 async function ensureFoodCache(){
   if(foodCache.length) return;
-  let loaded=false, lastErr=null;
-  for(const col of FOOD_CANDIDATES(currentUser?.uid||'')){
-    try{
-      const snap=await getDocs(query(col,orderBy('name')));
-      const arr=[]; snap.forEach(s=>arr.push(mapFood(s)));
-      if(arr.length){ foodCache=arr; loaded=true; break; }
-    }catch(e){ lastErr=e; }
+  let lastErr=null;
+  try{
+    // بدون orderBy لتفادي فهرسة غير موجودة؛ ترتيب بسيط حسب الاسم بعد التحميل
+    const snap=await getDocs(ADMIN_FOOD_COLLECTION());
+    const arr=[]; snap.forEach(s=>arr.push(mapFood(s)));
+    arr.sort((a,b)=> (a.name||'').localeCompare(b.name||'', 'ar',{numeric:true}));
+    foodCache=arr;
+  }catch(e){
+    lastErr=e; console.error(e);
+    toast('تعذّر تحميل مكتبة الأدمن (صلاحيات؟)','error');
+    foodCache=[];
   }
-  if(!loaded){ console.warn('تعذّر تحميل مكتبة الأصناف',lastErr); toast('تعذّر تحميل مكتبة الأصناف (صلاحيات أو فاضية).','error'); foodCache=[]; }
 }
 
 /* ========= Picker ========= */
@@ -379,7 +393,7 @@ async function boot(user){
   currentUser=user;
   await loadChild(user.uid);
   if(mealDateEl && !mealDateEl.value) mealDateEl.value=todayISO();
-  await ensureFoodCache();
+  await ensureFoodCache();           // ← الآن من مكتبة الأدمن فقط (قراءة)
   await loadMeasurementsOptions();
   wireEvents();
   renderItems(); recalcAll();
