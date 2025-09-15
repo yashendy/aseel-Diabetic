@@ -1,4 +1,4 @@
-// js/meals.js — صفحة الوجبات (Light + Firebase + AI) — نسخة مستقرة
+// js/meals.js — صفحة الوجبات (Light + Firebase + AI) — نسخة مستقرة مع توجيه تسجيل الدخول
 
 import { auth, db } from "./firebase-config.js";
 import { MealAI } from "./ai.js";
@@ -12,13 +12,13 @@ const qsa = (s)=>Array.from(document.querySelectorAll(s));
 
 const backBtn = qs("#backBtn");
 
-const kidNameEl = qs("#kidName") || qs("#childName");
-const pillCR    = qs("#pillCR")  || qs("#crPill");
-const pillCF    = qs("#pillCF")  || qs("#cfPill");
-const pillTarget= qs("#pillTarget") || qs("#targetPill");
+const kidNameEl  = qs("#kidName") || qs("#childName");
+const pillCR     = qs("#pillCR")  || qs("#crPill");
+const pillCF     = qs("#pillCF")  || qs("#cfPill");
+const pillTarget = qs("#pillTarget") || qs("#targetPill");
 
 const glucoseUnitPill = qs("#glucoseUnitPill") || qs("#unitBadge");
-const unitBadge       = qs("#unitBadge") || qs("#glucoseUnitPill");
+const unitBadge       = qs("#unitBadge")       || qs("#glucoseUnitPill");
 
 const glucoseNow    = qs("#glucoseNow");
 const mealType      = qs("#mealType");
@@ -85,8 +85,8 @@ const sum = arr => arr.reduce((a,b)=>a + ensureNum(b), 0);
 const round2 = n => Math.round(n * 100) / 100;
 const fmtDose = n => (Math.round(n * 20) / 20).toFixed(2); // دقة 0.05U
 
-// Chips آمنة: لا ترمي أخطاء لو العنصر غير موجود
 function chipify(inputEl, listEl, onChange){
+  // نسخة آمنة: لا ترمي لو عنصر ناقص
   if (!listEl) {
     if (inputEl) inputEl.addEventListener("keydown", e => { if (e.key === "Enter") e.preventDefault(); });
     return { addChip: ()=>{}, getValues: ()=>[] };
@@ -130,7 +130,7 @@ init().catch(err=>{
 });
 
 async function init(){
-  // تشخيص مبكر للمدخلات
+  // قراءة المعطيات من العنوان
   const url = new URL(location.href);
   childId  = url.searchParams.get("child");
   parentId = url.searchParams.get("parent") || null;
@@ -138,13 +138,19 @@ async function init(){
   console.log("[Meals] init:", { hasDB: !!db, childId, parentIdFromURL: parentId });
 
   if (!db) {
-    console.error("[Meals] Firestore db غير مُهيّأ. راجع firebase-config.js لتصدير db/auth.");
+    console.error("[Meals] Firestore db غير مُهيّأ. راجع firebase-config.js.");
     alert("لم يتم تهيئة قاعدة البيانات (db).");
     return;
   }
 
+  // انتظار حالة المستخدم — إن لم يكن مسجلاً: تحويل لصفحة الدخول ثم العودة
   const user = await waitForUser();
-  if (!user) { alert("يرجى تسجيل الدخول"); return; }
+  if (!user) {
+    const redirect = encodeURIComponent(location.href);
+    location.href = `admin.html?redirect=${redirect}`; // غيّر المسار لصفحة الدخول عندك إذا كان مختلفًا
+    return;
+  }
+
   if (!parentId) parentId = user.uid;
   if (!childId) { alert("المعطيات ناقصة: child"); return; }
 
@@ -169,7 +175,7 @@ async function loadChild(){
   if (kidNameEl) kidNameEl.textContent = childDoc.name || "طفل";
   state.unit = childDoc.glucoseUnit || "mg/dL";
   if (glucoseUnitPill) glucoseUnitPill.textContent = state.unit;
-  if (unitBadge) unitBadge.textContent = state.unit;
+  if (unitBadge)       unitBadge.textContent       = state.unit;
 
   state.ratios.cr.default = ensureNum(childDoc.carbRatio ?? childDoc.ratios?.cr?.default);
   state.ratios.cf.default = ensureNum(childDoc.correctionFactor ?? childDoc.ratios?.cf?.default);
