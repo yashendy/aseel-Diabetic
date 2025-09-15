@@ -526,3 +526,12 @@ async function onSaveMeal(){
     },
     dietSnapshot:{
       diet: state.prefs.diet,
+      allergies: allergiesCh.getValues(),
+      likes: likesCh.getValues(),
+      dislikes: dislikesCh.getValues()
+    },
+    name: mealName.value || null
+  };
+  await addDoc(mealsCol, data);
+  alert("تم حفظ الوجبة ✅");
+}
