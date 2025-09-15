@@ -211,4 +211,4 @@ auth.onAuthStateChanged(async (user) => {
   await loadChild();
   await loadFoodLibrary();
 });
-}
+ }
