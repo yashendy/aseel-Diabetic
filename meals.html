@@ -4,25 +4,33 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>وجبات الطفل</title>
-  <link rel="stylesheet" href="css/meals.css" />
-  <link rel="icon" href="favicon.png" />
+  <link rel="stylesheet" href="./css/meals.css" />
+  <link rel="icon" href="./favicon.png" />
 </head>
 <body>
+
+  <!-- هيدر -->
   <header class="topbar">
     <button id="backBtn" class="btn ghost" aria-label="رجوع">↩</button>
-    <div class="child-title">
-      <h1 id="childName">اسم الطفل</h1>
-      <div class="meta">
-        <span id="childGender"></span>
-        <span id="childBirth"></span>
-        <span id="glucoseUnitTag" class="tag">mg/dL</span>
+    <div class="child-tile">
+      <div class="avatar">🧒</div>
+      <div class="info">
+        <h1 id="kidName">—</h1>
+        <div class="sub">
+          <span id="kidMeta">—</span>
+          <span class="pill" id="glucoseUnitPill">mg/dL</span>
+        </div>
       </div>
     </div>
-    <div class="spacer"></div>
-    <button id="openPresetsBtn" class="btn">الوجبات الجاهزة</button>
+    <div class="right-meta">
+      <span class="pill">CR: <b id="pillCR">—</b></span>
+      <span class="pill">CF: <b id="pillCF">—</b></span>
+      <span class="pill">Target: <b id="pillTarget">—</b></span>
+    </div>
   </header>
 
   <main class="container">
+
     <!-- بطاقات سريعة -->
     <section class="cards">
       <article class="card">
@@ -37,47 +45,47 @@
       <article class="card">
         <div class="card-title">معامل الكارب (CR)</div>
         <div class="card-value">
-          <input type="number" id="crInput" inputmode="decimal" step="0.1" />
           <select id="mealType" aria-label="نوع الوجبة">
             <option value="breakfast">فطور</option>
             <option value="lunch">غداء</option>
             <option value="dinner">عشاء</option>
             <option value="snack">سناك</option>
           </select>
+          <input type="number" id="crInput" inputmode="decimal" step="0.1" />
         </div>
-        <small class="hint">ينطبق على الوجبة الحالية (يمكن أن يختلف حسب النوع)</small>
+        <small class="hint">ينطبق على الوجبة الحالية (يختلف حسب النوع)</small>
       </article>
 
       <article class="card">
         <div class="card-title">معامل التصحيح (CF)</div>
         <div class="card-value">
-          <input type="number" id="cfInput" inputmode="decimal" step="1" />
           <input type="number" id="targetGlucose" inputmode="decimal" placeholder="هدف الجلوكوز" />
+          <input type="number" id="cfInput" inputmode="decimal" step="1" />
         </div>
         <small class="hint">يُستخدم لتصحيح الارتفاع عن الهدف</small>
       </article>
     </section>
 
     <!-- نطاق الكارب للوجبة -->
-    <section class="range-card card">
-      <div class="card-title">نطاق كارب الوجبة</div>
+    <section class="card">
+      <div class="card-title with-btn">
+        <span>نطاق كارب الوجبة</span>
+        <button id="fitToRangeBtn" class="btn soft">ضبط المقادير 0.25</button>
+      </div>
       <div class="range-row">
         <input type="number" id="carbMin" step="1" inputmode="decimal" placeholder="حد أدنى" />
         <span>إلى</span>
         <input type="number" id="carbMax" step="1" inputmode="decimal" placeholder="حد أقصى" />
-        <button id="fitToRangeBtn" class="btn outline">ضبط المقادير 0.25</button>
       </div>
-      <div class="progress">
-        <div id="carbProgress" class="progress-bar" style="width:0%"></div>
-      </div>
+      <div class="progress"><div id="carbProgress" class="progress-bar"></div></div>
       <div class="range-info">
         <span>إجمالي الكارب: <b id="totalCarbs">0</b> جم</span>
-        <span class="tag" id="rangeState">خارج النطاق</span>
+        <span class="state" id="rangeState">خارج النطاق</span>
       </div>
     </section>
 
-    <!-- فلاتر الطفل -->
-    <section class="filters card">
+    <!-- تفضيلات -->
+    <section class="card">
       <div class="card-title">تفضيلات وأنظمة الطفل</div>
       <div class="diet-row">
         <label><input type="checkbox" id="dietHalal" /> حلال</label>
@@ -88,31 +96,32 @@
       </div>
       <div class="chips">
         <label>حساسيات</label>
-        <input id="allergiesInput" class="chips-input" placeholder="أدخل ثم اضغط Enter" />
+        <input id="allergiesInput" class="chips-input" placeholder="أدخل ثم Enter" />
         <div id="allergiesChips" class="chips-list"></div>
       </div>
       <div class="chips">
         <label>مفضلات</label>
-        <input id="likesInput" class="chips-input" placeholder="أدخل ثم اضغط Enter" />
+        <input id="likesInput" class="chips-input" placeholder="أدخل ثم Enter" />
         <div id="likesChips" class="chips-list"></div>
       </div>
       <div class="chips">
         <label>غير مفضلات</label>
-        <input id="dislikesInput" class="chips-input" placeholder="أدخل ثم اضغط Enter" />
+        <input id="dislikesInput" class="chips-input" placeholder="أدخل ثم Enter" />
         <div id="dislikesChips" class="chips-list"></div>
       </div>
     </section>
 
     <!-- شريط أدوات -->
     <section class="toolbar">
-      <button id="openLibraryBtn" class="btn">إضافة من المكتبة</button>
-      <button id="aiSuggestBtn" class="btn">اقتراح بدائل 🤖</button>
+      <button id="openLibraryBtn" class="btn primary">📚 إضافة من المكتبة</button>
+      <button id="aiSuggestBtn" class="btn">🤖 اقتراح بدائل</button>
       <div class="spacer"></div>
       <input id="mealName" class="text" placeholder="اسم الوجبة (اختياري)" />
-      <button id="saveMealBtn" class="btn primary">حفظ الوجبة</button>
+      <button id="openPresetsBtn" class="btn">الوجبات الجاهزة</button>
+      <button id="saveMealBtn" class="btn success">حفظ الوجبة</button>
     </section>
 
-    <!-- جدول العناصر -->
+    <!-- جدول الأصناف -->
     <section class="card">
       <div class="table-wrap">
         <table class="items">
@@ -158,7 +167,7 @@
   <!-- مودال المكتبة -->
   <dialog id="libraryModal" class="modal">
     <div class="modal-head">
-      <h3>مكتبة الأطعمة</h3>
+      <h3>📚 مكتبة الأطعمة</h3>
       <button class="btn ghost" data-close>✕</button>
     </div>
     <div id="libraryGrid" class="grid"></div>
@@ -167,13 +176,17 @@
   <!-- مودال الوجبات الجاهزة -->
   <dialog id="presetsModal" class="modal">
     <div class="modal-head">
-      <h3>الوجبات الجاهزة</h3>
+      <h3>🍽️ الوجبات الجاهزة</h3>
       <button class="btn ghost" data-close>✕</button>
     </div>
     <div id="presetsList" class="list"></div>
   </dialog>
 
-  <script type="module" src="js/ai.js"></script>
-  <script type="module" src="js/meals.js"></script>
+  <!-- سكربتات كـ Modules -->
+  <script>
+    /* اختياري: مفتاح Gemini إن وجد */
+    window.GEMINI_KEY = window.GEMINI_KEY || "";
+  </script>
+  <script type="module" src="./js/meals.js"></script>
 </body>
 </html>
