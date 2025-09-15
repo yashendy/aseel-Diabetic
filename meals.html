@@ -5,209 +5,196 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>إدارة الوجبات</title>
 
+  <!-- أيقونة -->
+  <link rel="icon" href="./favicon.ico">
+  <!-- خطوط بسيطة -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <!-- ستايل الصفحة -->
-  <link rel="stylesheet" href="./css/meals.css" />
-
-  <!-- (اختياري) Firebase Compat Global - يُفضّل وضعها مرة واحدة في layout العام
-  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore-compat.js"></script>
-  <script src="./js/firebase-config.js"></script>
-  -->
-
-  <!-- ذكاء اصطناعي Global -->
-  <script src="./js/ai.js"></script>
+  <link rel="stylesheet" href="./css/meals.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar__left">
-      <a class="btn btn-ghost" href="./child.html" title="العودة لبيانات الطفل">الطفل</a>
+
+  <!-- هيدر الطفل -->
+  <header class="page-header">
+    <div class="header-left">
+      <a class="btn ghost" id="backToChild" href="./child.html">الطفل</a>
+      <h1>إدارة الوجبات</h1>
     </div>
-    <h1 class="title">إدارة الوجبات <span id="childName" class="badge"></span></h1>
-    <div class="topbar__right">
-      <button id="btnOpenLib" class="btn btn-primary">إضافة من المكتبة</button>
+    <div class="kid-glance" id="kidGlance">
+      <!-- يمتلئ ديناميكياً -->
+      <div class="glance-pill"><span>الاسم</span><strong id="kidName">—</strong></div>
+      <div class="glance-pill"><span>CR</span><strong id="kidCR">—</strong></div>
+      <div class="glance-pill"><span>CF</span><strong id="kidCF">—</strong></div>
+      <div class="glance-pill"><span>هدف القياس</span><strong id="kidTarget">3.5–7</strong> <small>mmol/L</small></div>
     </div>
   </header>
 
-  <main class="layout">
-    <!-- العمود الرئيسي -->
-    <section class="main">
-      <!-- KPIs -->
-      <section class="cards">
-        <div class="card kpi">
-          <div class="kpi__label">قراءة السكر الحالية</div>
-          <div class="kpi__value"><input id="glucoseNow" class="input input-lg" type="number" step="0.1" placeholder="—" /></div>
-          <div class="kpi__hint"><span id="unitLabel">mmol/L</span></div>
-        </div>
-        <div class="card kpi">
-          <div class="kpi__label">CF/ISF</div>
-          <div class="kpi__value" id="kpiCF">—</div>
-          <div class="kpi__hint">حسب الوجبة/عام</div>
-        </div>
-        <div class="card kpi">
-          <div class="kpi__label">CR</div>
-          <div class="kpi__value" id="kpiCR">—</div>
-          <div class="kpi__hint">حسب الوجبة</div>
-        </div>
-      </section>
+  <!-- صف البطاقات المرجعية -->
+  <section class="ref-cards">
+    <div class="ref-card">
+      <div class="ref-title">قراءة السكر الحالية</div>
+      <div class="ref-value"><input id="glucoseNow" type="number" step="0.1" placeholder="—"></div>
+      <div class="ref-sub">mmol/L</div>
+    </div>
 
-      <!-- نوع الوجبة + كارب يدوي -->
-      <section class="card controls">
-        <div class="row">
-          <div class="col">
-            <label class="label">نوع الوجبة</label>
-            <select id="mealType" class="select">
-              <option value="breakfast">فطار</option>
-              <option value="lunch">غداء</option>
-              <option value="dinner">عشاء</option>
-              <option value="snack">سناك</option>
-            </select>
-          </div>
-          <div class="col">
-            <label class="label">كارب الوجبة (جم)</label>
-            <input id="manualCarbs" class="input" type="number" step="0.1" placeholder="لو أدخلتِ قيمة هنا سنعتمدها بدل حساب الجدول" />
-            <div class="muted">يمكنكِ تركه فارغًا وسيحسب تلقائيًا من الأصناف.</div>
-          </div>
-        </div>
+    <div class="ref-card">
+      <div class="ref-title">CF/ISF</div>
+      <div class="ref-value" id="cfValue">—</div>
+      <div class="ref-sub">حسب الوجبة/عام</div>
+    </div>
 
-        <!-- شريط النطاق -->
-        <div class="range">
-          <div class="range__head">
-            <span>نطاق الكارب</span>
-            <span id="rangeText" class="muted">—</span>
-          </div>
-          <div class="progress">
-            <div id="progressFill" class="progress__fill"></div>
-            <div id="progressKnob" class="progress__knob"></div>
-          </div>
-          <div class="legend">
-            <span class="chip chip--ok">داخل النطاق</span>
-            <span class="chip chip--warn">قريب من الحدود</span>
-            <span class="chip chip--bad">خارج النطاق</span>
-          </div>
-        </div>
+    <div class="ref-card">
+      <div class="ref-title">CR</div>
+      <div class="ref-value" id="crValue">—</div>
+      <div class="ref-sub">حسب الوجبة</div>
+    </div>
+  </section>
 
-        <div class="actions">
-          <button id="btnAI" class="btn btn-ghost">🤖 اقتراح بدائل</button>
-          <button id="btnAdjust" class="btn btn-ghost">🔧 تعديل المقادير (0.25)</button>
-          <div class="sep"></div>
-          <button id="btnLoadPreset" class="btn">📂 تحميل وجبة جاهزة</button>
-          <button id="btnSavePreset" class="btn">📁 حفظ كوجبة جاهزة</button>
-          <button id="btnSaveDraft" class="btn">📝 حفظ مسودة</button>
-          <button id="btnRestoreDraft" class="btn">↩️ استعادة مسودة</button>
-        </div>
-      </section>
-
-      <!-- جدول الأصناف -->
-      <section class="card">
-        <h3 class="card__title">الأصناف المختارة</h3>
-        <div class="table">
-          <div class="thead">
-            <div class="th th--sm">حذف</div>
-            <div class="th">الصنف</div>
-            <div class="th">الكمية (وحدات)</div>
-            <div class="th">جرام/وحدة</div>
-            <div class="th">الكارب (جم)</div>
-          </div>
-          <div id="itemsBody" class="tbody"></div>
-          <div class="tfoot">
-            <div class="td th--sm"></div>
-            <div class="td muted">إجمالي الكارب</div>
-            <div class="td"></div>
-            <div class="td"></div>
-            <div class="td"><span id="totalCarbs">0.0</span></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- بطاقات الجرعات -->
-      <section class="cards dose">
-        <div class="card dose__card">
-          <div class="card__title">جرعة الأكل</div>
-          <div class="dose__value" id="doseMeal">0.00</div>
-          <div class="card__hint">totalCarbs ÷ CR</div>
-        </div>
-        <div class="card dose__card">
-          <div class="card__title">جرعة التصحيح</div>
-          <div class="dose__value" id="doseCorrection">0.00</div>
-          <div class="card__hint">max(0, (glucose − target) ÷ CF)</div>
-        </div>
-        <div class="card dose__card dose__card--accent">
-          <div class="card__title">إجمالي الجرعة</div>
-          <div class="dose__value" id="doseTotal">0.00</div>
-          <div class="card__hint">تقريب 0.05U</div>
-        </div>
-      </section>
-
-      <div class="row end">
-        <button id="btnSaveMeal" class="btn btn-primary">💾 حفظ الوجبة</button>
+  <!-- إعدادات أعلى الجدول -->
+  <section class="meal-toolbar">
+    <div class="meal-row">
+      <div class="meal-type">
+        <label>نوع الوجبة</label>
+        <select id="mealType">
+          <option value="breakfast">فطار</option>
+          <option value="lunch">غداء</option>
+          <option value="dinner">عشاء</option>
+          <option value="snack">سناك</option>
+        </select>
       </div>
-    </section>
 
-    <!-- العمود الجانبي (Panel) -->
-    <aside class="side">
-      <section class="card panel">
-        <div class="panel__head">
-          <h3>شرح الحساب</h3>
-          <span id="confidence" class="conf conf--low">Low</span>
-        </div>
+      <div class="meal-target">
+        <label>كارب الوجبة (جرام)</label>
+        <input id="mealCarbGoal" type="number" step="1" placeholder="—">
+        <small>لو تركته فارغًا، بنحسب حسب الحصص/جرام/وحدة، ويمكن تعديله.</small>
+      </div>
+    </div>
 
-        <div class="switch">
-          <label>
-            <input type="checkbox" id="swNetCarbs" />
-            طرح الألياف من الكارب (صافي الكارب)
-          </label>
-        </div>
+    <!-- شريط النطاق -->
+    <div class="range-strip">
+      <div class="range-labels">
+        <span class="badge green" id="inRangeBadge">داخل النطاق</span>
+        <span class="badge amber" id="nearRangeBadge">قريب من الحدود</span>
+        <span class="badge red" id="outRangeBadge">خارج النطاق</span>
+      </div>
+      <div class="progress">
+        <div id="rangeProgress" class="progress-bar"></div>
+      </div>
 
-        <div class="panel__list" id="explainList">
-          <!-- تفاصيل: مدخلات، صيغ، قيم وسيطة -->
-        </div>
+      <div class="actions-inline">
+        <button class="btn pill" id="btnAdjust025">(0.25) تعديل المقادير</button>
+        <button class="btn ghost" id="btnAskAI">اقتراح بدائل 🤖</button>
+        <button class="btn ghost" id="btnOpenLib">إضافة صنف من المكتبة</button>
+        <button class="btn ghost" id="btnSavePreset">حفظ كوجبة جاهزة 📁</button>
+        <button class="btn ghost" id="btnLoadPreset">تحميل وجبة جاهزة</button>
+      </div>
+    </div>
+  </section>
 
-        <div class="panel__tips">
-          <h4>اختصارات</h4>
-          <ul>
-            <li><b>Alt+A</b>: فتح المكتبة</li>
-            <li><b>Alt+S</b>: حفظ الوجبة</li>
-            <li><b>Alt+D</b>: تعديل 0.25</li>
-            <li><b>Alt+P</b>: الـ Presets</li>
-          </ul>
-        </div>
-      </section>
-    </aside>
-  </main>
+  <!-- تفضيلات الطفل -->
+  <section class="filters">
+    <div class="filter-group">
+      <div class="filter-title">الأنظمة الغذائية</div>
+      <label><input type="checkbox" id="diet-halal"> حلال</label>
+      <label><input type="checkbox" id="diet-veg"> نباتي</label>
+      <label><input type="checkbox" id="diet-lowcarb"> قليل الكارب</label>
+      <label><input type="checkbox" id="diet-lowfat"> قليل الدهون</label>
+      <label><input type="checkbox" id="diet-lowsod"> قليل الصوديوم</label>
+    </div>
+    <div class="filter-group">
+      <div class="filter-title">(Enter) حساسيات</div>
+      <input type="text" id="allergiesInput" placeholder="مثال: peanut, lactose, egg">
+    </div>
+    <div class="filter-group">
+      <div class="filter-title">(Enter) مفضلات</div>
+      <input type="text" id="likesInput" placeholder="مثال: تفاح، زبادي...">
+    </div>
+    <div class="filter-group">
+      <div class="filter-title">(Enter) غير مفضلات</div>
+      <input type="text" id="dislikesInput" placeholder="مثال: سبانخ...">
+    </div>
+  </section>
 
-  <!-- مودال المكتبة -->
-  <div id="libModal" class="modal">
-    <div class="dialog">
-      <div class="dialog__head">
+  <!-- جدول الأصناف المختارة -->
+  <section class="items-card">
+    <div class="items-header">
+      <h3>الأصناف المختارة للوجبة</h3>
+    </div>
+    <div class="table">
+      <div class="row head">
+        <div>حذف</div>
+        <div>الصنف</div>
+        <div>الكمية (وحدات)</div>
+        <div>جرام/وحدة</div>
+        <div>الكارب (جم)</div>
+      </div>
+      <div id="itemsBody"></div>
+      <div class="row foot">
+        <div></div><div>إجمالي الكارب</div><div></div><div></div>
+        <div id="totalCarbsCell">0.0</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- بطاقات الجرعات -->
+  <section class="dose-cards">
+    <div class="dose-card">
+      <div class="dose-title">جرعة الأكل</div>
+      <div class="dose-value" id="mealDose">0.00</div>
+      <div class="dose-sub">totalCarbs ÷ CR</div>
+    </div>
+
+    <div class="dose-card">
+      <div class="dose-title">جرعة التصحيح</div>
+      <div class="dose-value" id="corrDose">0.00</div>
+      <div class="dose-sub">max(0, (glucoseNow − target) ÷ CF)</div>
+    </div>
+
+    <div class="dose-card highlight">
+      <div class="dose-title">إجمالي الجرعة</div>
+      <div class="dose-value" id="totalDose">0.00</div>
+      <div class="dose-sub">تقريب 0.05U</div>
+    </div>
+  </section>
+
+  <!-- أزرار حفظ -->
+  <section class="save-actions">
+    <input type="text" id="mealName" placeholder="اسم الوجبة (اختياري)">
+    <button class="btn primary" id="btnSaveMeal">حفظ الوجبة 💾</button>
+  </section>
+
+  <!-- مودال مكتبة الأصناف -->
+  <section id="libModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
         <h3>المكتبة</h3>
-        <div class="grow"></div>
-        <input id="libSearch" class="input" placeholder="ابحثي باسم الصنف..." />
-        <button class="btn btn-ghost" data-close>إغلاق</button>
+        <button class="btn ghost" id="closeLib">إغلاق</button>
       </div>
-      <div class="dialog__body">
-        <div id="libGrid" class="lib-grid"></div>
-      </div>
-    </div>
-  </div>
 
-  <!-- مودال الـ Presets -->
-  <div id="presetModal" class="modal">
-    <div class="dialog">
-      <div class="dialog__head">
-        <h3>الوجبات الجاهزة</h3>
-        <div class="grow"></div>
-        <button id="btnNewPreset" class="btn">+ حفظ كوجبة جاهزة</button>
-        <button class="btn btn-ghost" data-close>إغلاق</button>
-      </div>
-      <div class="dialog__body">
-        <input id="presetSearch" class="input" placeholder="بحث باسم الوجبة..." />
-        <div id="presetList" class="preset-list"></div>
-      </div>
+      <div class="lib-grid" id="libGrid"></div>
     </div>
-  </div>
+  </section>
 
-  <!-- سكربت منطق الصفحة -->
+  <!-- مودال التحميل من الجاهز -->
+  <section id="presetModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>تحميل وجبة جاهزة</h3>
+        <button class="btn ghost" id="closePreset">إغلاق</button>
+      </div>
+      <div id="presetList" class="preset-list"></div>
+    </div>
+  </section>
+
+  <!-- صور افتراضية -->
+  <img id="placeholderImg" src="./images/placeholder.png" class="hidden" alt="">
+
+  <!-- Firebase config (لازم قبله) -->
+  <script src="./firebase-config.js"></script>
+  <!-- AI بدون export -->
+  <script src="./js/ai.js"></script>
+  <!-- منطق الصفحة -->
   <script src="./js/meals.js"></script>
 </body>
 </html>
