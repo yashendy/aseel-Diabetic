@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>الوجبات</title>
-  <link rel="stylesheet" href="css/meals.css?v=rtl-responsive-1" />
+  <link rel="stylesheet" href="css/meals.css?v=adminlib-readonly" />
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
 </head>
 <body>
@@ -158,16 +158,14 @@
         <button id="printDayBtn" class="btn btn--ghost">🖨️ طباعة وجبات اليوم</button>
       </div>
 
-      <p class="muted tiny">
-        ⚠️ هذا تقدير إرشادي يعتمد على المدخلات ولا يعتبر نصيحة طبية.
-      </p>
+      <p class="muted tiny">⚠️ هذا تقدير إرشادي يعتمد على المدخلات ولا يعتبر نصيحة طبية.</p>
     </section>
 
     <!-- مودال اختيار صنف -->
     <div id="pickerModal" class="modal hidden" aria-modal="true" role="dialog">
       <div class="modal__body" role="document">
         <div class="modal__header">
-          <h3>اختيار صنف من المكتبة</h3>
+          <h3>اختيار صنف من مكتبة الأدمن</h3>
           <button id="closePicker" class="close" aria-label="إغلاق">✕</button>
         </div>
 
@@ -253,6 +251,6 @@
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   </div>
 
-  <script type="module" src="js/meals.js?v=rtl-responsive-1"></script>
+  <script type="module" src="js/meals.js?v=adminlib-readonly"></script>
 </body>
 </html>
