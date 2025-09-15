@@ -1,0 +1,51 @@
+/* css/analytics.css */
+:root{
+  --bg:#f7f9fc; --card:#fff; --border:#e6eef7; --text:#223; --muted:#667; --pri:#4F46E5;
+  --up:#16a34a; --down:#dc2626;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",system-ui; background:var(--bg); color:var(--text)}
+.container{max-width:1100px;margin:auto;padding:16px}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:16px}
+.row{display:flex;align-items:center}
+.wrap{flex-wrap:wrap}
+.space{justify-content:space-between}
+.gap{gap:10px}
+
+.tiny{font-size:12px}
+.muted{color:var(--muted)}
+.logo{font-size:24px;margin-inline-start:6px}
+
+.field{display:flex;flex-direction:column}
+.field label{font-size:12px;color:var(--muted);margin-bottom:4px}
+input[type="date"],select{padding:9px;border:1px solid var(--border);border-radius:10px;background:#fff}
+
+.btn{background:var(--pri);color:#fff;border:none;border-radius:10px;padding:10px 14px;cursor:pointer}
+.btn.secondary{background:#e9eef8;color:#222}
+.hidden{display:none}
+
+/* KPIs */
+.kpi{min-width:170px;flex:1}
+.kpi .label{color:var(--muted);font-size:13px}
+.kpi .value{font-size:22px;font-weight:700;margin-top:6px}
+.kpi .delta{font-size:12px;margin-top:4px}
+.kpi .delta.up{color:var(--up)}
+.kpi .delta.down{color:var(--down)}
+.kpi .delta.neutral{color:var(--muted)}
+
+.empty{padding:16px;text-align:center;color:var(--muted)}
+
+/* canvases أصغر */
+section.card canvas{margin-top:8px;max-height:260px}
+#dayChart{max-height:220px}
+
+/* شبكتان دائريتان جنب بعض */
+.charts-2{gap:16px;flex-wrap:wrap}
+.chartBox{flex:1;min-width:280px}
+.small-title{margin:0;font-size:13px;color:var(--muted)}
+
+/* AI summary */
+.ai{line-height:1.9;color:#1e293b}
+.ai strong{color:#111}
+.ai .tag{display:inline-block;padding:.15rem .5rem;border:1px solid var(--border);border-radius:999px;margin:.1rem .15rem}

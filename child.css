@@ -1,0 +1,78 @@
+:root{
+  --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#222; --muted:#666;
+  --primary:#4CAF50; --accent:#2196F3; --warn:#FB8C00; --danger:#E53935; --ok:#2E7D32;
+  --labs:#8E24AA;
+}
+
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Tahoma,Arial,sans-serif}
+.container{max-width:1200px;margin:auto;padding:16px}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 6px 16px rgba(0,0,0,.06)}
+.muted{color:var(--muted)}
+
+.child-header{position:relative}
+.back{position:absolute;left:12px;top:12px;color:#0D47A1;border:1px solid #cfe1ff;background:#E3F2FD;font-weight:600;border-radius:10px;padding:6px 12px;cursor:pointer}
+.back:hover{background:#BBDEFB;color:#08306b}
+
+.head-grid{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.chip{background:#f7fbff;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#444}
+
+.stats{display:flex;gap:12px;align-items:center}
+.stat{background:#f7fbff;border:1px solid var(--border);border-radius:12px;min-width:140px;text-align:center;padding:10px}
+.stat-num{font-size:22px;font-weight:800}
+.stat-label{font-size:12px;color:#555}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:16px}
+a.card.link{cursor:pointer}
+a.card.link:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(0,0,0,.09)}
+
+/* البطاقات الملوّنة */
+.card.measurements{border-left:6px solid #42A5F5}
+.card.meals{border-left:6px solid #66BB6A}
+.card.food{border-left:6px solid #FFA726}
+.card.reports{border-left:6px solid #7E57C2}
+.card.visits{border-left:6px solid #26C6DA}
+.card.child-edit{border-left:6px solid #EF5350}
+
+/* --- بطاقة التحاليل الطبية (ليست رابطًا كاملاً) --- */
+.card.labs{border-left:6px solid var(--labs)}
+.card.labs button{cursor:pointer}
+
+/* عناصر مساعدة */
+.pill{display:inline-block;padding:3px 8px;border:1px solid var(--border);border-radius:999px;background:#fff}
+.pill.ok{color:var(--ok);border-color:#bbf7d0;background:#ecfdf5}
+.pill.warn{color:#b45309;border-color:#fde68a;background:#fff7ed}
+.pill.bad{color:#991b1b;border-color:#fecaca;background:#fef2f2}
+
+.lab-stats{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px}
+.lab-stat{min-width:160px}
+.label{font-size:12px}
+.value{font-size:18px;font-weight:800}
+.value.tone{padding:2px 8px;border-radius:8px}
+.value.tone.good{background:#ecfdf5;color:#065f46}
+.value.tone.mid{background:#fff7ed;color:#92400e}
+.value.tone.bad{background:#fef2f2;color:#991b1b}
+
+.sparkline{margin-top:10px}
+.sparkline canvas{width:100%;max-height:60px}
+
+.progress{margin-top:12px}
+.progress-bar{height:8px;border:1px solid var(--border);border-radius:999px;overflow:hidden;background:#fff}
+.progress-bar #progressFill{height:100%;width:0%;background:linear-gradient(90deg,#8E24AA,#4F46E5)}
+
+.loader{position:fixed;inset:0;background:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;font-weight:700;z-index:1000}
+.hidden{display:none}
+
+/* أزرار */
+.btn{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:#f7fbff}
+.btn.ghost{background:#fff}
+.btn:hover{filter:brightness(.98)}
+
+/* مساعدات تخطيط */
+.row{display:flex;align-items:center}
+.row.gap{gap:10px}
+.row.space{justify-content:space-between}
+.mini-list{margin-top:6px;background:#f9fcff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;display:grid;gap:4px;font-size:13px}
+.mini-list .lbl{color:#555}
+.mini-list strong{font-weight:700;color:#111}

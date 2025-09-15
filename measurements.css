@@ -1,0 +1,58 @@
+:root{
+  --muted:#6b7280;
+  --border:#e5e7eb;
+  --bg:#f8fafc;
+  --ok:#dcfce7;
+  --low:#fee2e2;
+  --high:#fde68a;
+  --brand:#3b82f6;
+  --success:#22c55e;
+}
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Tahoma,Arial;margin:0;padding:20px;background:#f3f4f6;color:#0f172a}
+
+.card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 4px 12px rgba(0,0,0,.04);max-width:900px;margin:0 auto}
+.row{display:flex;gap:12px;align-items:center;margin:8px 0}
+.row label{min-width:120px}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.chip{padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:#f9fafb;font-size:12px}
+
+.btn{padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);cursor:pointer}
+.btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+
+.table-tools{max-width:1100px;margin:14px auto 0}
+.table-wrap{max-width:1100px;margin:10px auto 0}
+.table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.table th,.table td{border-bottom:1px solid var(--border);padding:10px;vertical-align:top}
+.table th{background:#f8fafc;font-weight:600}
+.row-actions button{border:none;background:transparent;cursor:pointer}
+.row-actions .delete{color:#ef4444}
+
+.severe-banner{background:#fee2e2;border:1px solid #fecaca;color:#991b1b;padding:8px 10px;border-radius:8px;margin-bottom:8px}
+
+.card.state-low{border-color:#fecaca;box-shadow:0 0 0 2px var(--low) inset}
+.card.state-high{border-color:#fde68a;box-shadow:0 0 0 2px var(--high) inset}
+.card.state-ok{border-color:#dcfce7;box-shadow:0 0 0 2px var(--ok) inset}
+.card.severe{animation:wobble .25s ease-in-out 0s 2}
+@keyframes wobble{0%{transform:translateX(0)}25%{transform:translateX(-3px)}50%{transform:translateX(3px)}100%{transform:translateX(0)}}
+
+.v-low{padding:2px 6px;border-radius:6px;background:#fee2e2}
+.v-in{padding:2px 6px;border-radius:6px;background:#dcfce7}
+.v-high{padding:2px 6px;border-radius:6px;background:#fde68a}
+
+/* بعد حذف عمود التاريخ:
+   الأعمدة: [الوقت(1), القيمة(2), جرعة(3), التصحيحي(4), ملاحظات(5), إجراءات(6)] */
+.table.hide-corr th:nth-child(4),
+.table.hide-corr td:nth-child(4){ display:none }
+
+/* طباعة PDF */
+@media print{
+  body{background:#fff}
+  .actions,.table-tools{display:none}
+  .card{box-shadow:none;border:none}
+  .table{border:none}
+}
