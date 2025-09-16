@@ -1,198 +1,163 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>التقارير</title>
-  <link rel="stylesheet" href="./css/reports.css">
-  <style>
-    .hidden{display:none!important}
-    /* إخفاء سطور الملاحظات/الجرعات عند إغلاق الخيار */
-    .notes-hidden .note-line,
-    .notes-hidden .dose-line { display:none; }
+  <link rel="stylesheet" href="reports.css" />
 
-    /* بطاقة معلومات الطفل أسفل التنقّل */
-    .info-card{margin-top:8px}
-    .info-card .mini{font-size:13px; line-height:1.7}
-    .info-card b{font-weight:700}
-
-    /* نسخة الطباعة: شبكة واضحة */
-    #printView .table.print-grid th,
-    #printView .table.print-grid td { border:1px solid #e6e6e6; }
-    #printView .table.print-grid { border-collapse:collapse; }
-
-    /* ترويسة الطباعة */
-    .print-header{font-size:12px; margin-bottom:6px}
-    .print-controls{margin:12px 0}
-
-    /* دايمًا خليه لطيف */
-    .muted{opacity:.8}
-
-    @media print{
-      .no-print{display:none!important}
-      @page{ size: A4 landscape; margin:10mm; }
-      .print-header{font-size:12px}
-    }
-  </style>
   <!-- Chart.js للتحاليل -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- html2pdf لتصدير PDF كخيار إضافي -->
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 </head>
-<body class="notes-hidden">
-  <!-- بانر أعلى الصفحة (موجود مسبقًا) -->
-  <section id="childBanner" class="card child-info">
-    <div class="head">
-      <h1 id="bannerName">—</h1>
-      <p id="metaHead" class="muted small">—</p>
-    </div>
-  </section>
+<body>
+  <div class="wrap">
 
-  <!-- شريط تنقّل الصفحات -->
-  <div class="card no-print">
-    <div id="childNav" class="row"></div>
+    <!-- شريط علوي -->
+    <header class="topbar">
+      <div class="left">
+        <button id="btnShow" class="btn btn--brand">عرض</button>
+        <button id="btnBack" class="btn btn--ghost">رجوع</button>
+        <button id="btnBlankWeek" class="btn btn--danger">ورقة فارغة (7 أيام)</button>
+        <button id="btnPrint" class="btn btn--ghost">طباعة</button>
+        <button id="btnPrintPage" class="btn btn--warn">صفحة طباعة التقرير</button>
+        <button id="btnAnalytics" class="btn btn--ok">التحاليل</button>
+      </div>
+
+      <div class="right">
+        <label class="chk">
+          <input type="checkbox" id="chkShowNotes" />
+          <span>إظهار الملاحظات/الجرعات</span>
+        </label>
+
+        <label class="zoom">
+          <span>تكبير الطباعة</span>
+          <input id="printZoom" type="range" min="0.85" max="1.2" step="0.05" value="1" />
+        </label>
+      </div>
+    </header>
+
+    <!-- أدوات الفترة -->
+    <section class="toolbar">
+      <div class="range">
+        <label class="field">
+          <span>من</span>
+          <input type="date" id="fromDate" />
+        </label>
+        <label class="field">
+          <span>إلى</span>
+          <input type="date" id="toDate" />
+        </label>
+
+        <div class="quick-range">
+          <button class="chip" data-days="7">أسبوع</button>
+          <button class="chip" data-days="14">أسبوعان</button>
+          <button class="chip" data-days="30">شهر</button>
+        </div>
+      </div>
+
+      <div class="meta chips" id="childChips">
+        <!-- يحَقنه JS: CR/CF/Bolus/Unit -->
+      </div>
+
+      <div class="actions">
+        <button id="btnExportPDF" class="btn btn--ghost">⤓ تصدير PDF</button>
+        <button id="btnExportCSV" class="btn btn--ghost">⤓ CSV</button>
+        <button id="btnExportXLSX" class="btn btn--ghost">⤓ Excel</button>
+      </div>
+    </section>
+
+    <!-- ملخص سريع -->
+    <section class="stats-bar" id="statsBar">
+      <div class="cards">
+        <div class="card"><span class="k">داخل النطاق</span><b id="stTIR">—</b></div>
+        <div class="card"><span class="k">المتوسط</span><b id="stAvg">—</b></div>
+        <div class="card"><span class="k">الانحراف (SD)</span><b id="stSD">—</b></div>
+        <div class="card"><span class="k">معامل التباين (CV)</span><b id="stCV">—</b></div>
+        <div class="card low"><span class="k">انخفاضات</span><b id="stLow">—</b></div>
+        <div class="card high"><span class="k">ارتفاعات</span><b id="stHigh">—</b></div>
+        <div class="card crit"><span class="k">حالات حرجة</span><b id="stCrit">—</b></div>
+      </div>
+      <div id="spark" class="spark"></div>
+    </section>
+
+    <!-- العروض -->
+    <main>
+      <!-- 1) التقرير (العادي) -->
+      <section id="view-report" class="view">
+        <!-- هذا هو جذر التصدير/الطباعة -->
+        <div id="reportRoot" class="sheet report-wrapper">
+
+          <header class="sheet-head">
+            <div class="line">
+              <b id="childName">الطفل</b> • <span id="childMeta" class="muted">—</span>
+            </div>
+            <div class="line muted">الفترة: <span id="periodFrom">—</span> → <span id="periodTo">—</span></div>
+          </header>
+
+          <!-- جدول التقرير -->
+          <div class="report-scroll">
+            <table id="reportTable" class="report-table">
+              <thead id="tblHead"></thead>
+              <tbody id="tblBody"></tbody>
+            </table>
+          </div>
+
+          <!-- دليل لوني بسيط -->
+          <div class="legend chips">
+            <span class="chip b-ok">داخل النطاق</span>
+            <span class="chip b-low">هبوط</span>
+            <span class="chip b-high">ارتفاع</span>
+            <span class="chip b-sevhigh">ارتفاع شديد</span>
+            <span class="chip b-crit">حرج</span>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 2) التحاليل -->
+      <section id="view-analytics" class="view hidden">
+        <div class="sheet">
+          <h3>التحاليل</h3>
+          <div class="grid-2">
+            <div class="panel">
+              <h4>نِسَب الحالات</h4>
+              <canvas id="pieStates" height="180"></canvas>
+            </div>
+            <div class="panel">
+              <h4>توزيع القيم زمنيًا</h4>
+              <canvas id="lineSeries" height="180"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3) ورقة فارغة (7 أيام) -->
+      <section id="view-blank-week" class="view hidden" aria-label="ورقة فارغة (7 أيام)">
+        <div class="sheet blank-sheet">
+          <header class="sheet-head">
+            <div class="line">
+              <b id="bkChildName">الطفل</b> • وحدة: <span id="bkUnit">mmol/L</span> •
+              CR: <span id="bkCR">—</span> • CF: <span id="bkCF">—</span>
+            </div>
+            <div class="line muted">خلال الفترة: <span id="bkFrom">—</span> → <span id="bkTo">—</span></div>
+          </header>
+
+          <h3 class="section-title">شبكة القياسات</h3>
+          <div id="bkGrid" class="blank-grid" role="table" aria-label="شبكة القياسات"></div>
+
+          <h3 class="section-title">ملاحظات / الوجبات / الجرعات التصحيحية</h3>
+          <div id="bkNotesGrid" class="blank-notes-grid" role="table" aria-label="شبكة الملاحظات"></div>
+        </div>
+      </section>
+
+    </main>
+
   </div>
 
-  <!-- بطاقة بيانات الطفل تحت التنقّل -->
-  <section id="childInfoCard" class="card info-card no-print hidden">
-    <div id="childInfoContent" class="mini"></div>
-  </section>
+  <div id="toast" class="toast" style="display:none"></div>
 
-  <!-- أدوات التحكم -->
-  <section class="card controls no-print">
-    <div class="actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-      <label class="toggle-notes" title="إظهار الملاحظات وجرعات التصحيح تحت كل قياس">
-        <input id="toggleNotes" type="checkbox" checked>
-        <span>إظهار الملاحظات/الجرعات</span>
-      </label>
-
-      <a id="btnAnalyticsPage" class="btn success">التحاليل</a>
-      <a id="btnReportPrintPage" class="btn warning">صفحة طباعة التقرير</a>
-      <a id="btnPrint" class="btn gray">طباعة</a>
-      <a id="btnBlank" class="btn danger">ورقة فارغة (7 أيام)</a>
-      <a id="lnkHome" class="btn gray">رجوع</a>
-
-      <!-- زر عرض دائم الظهور -->
-      <button id="run" class="btn primary">عرض</button>
-    </div>
-
-    <div class="range" style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-      <div class="filter">
-        <label for="preset">المدى السريع</label>
-        <select id="preset">
-          <option value="7">أسبوع</option>
-          <option value="14">14 يوم</option>
-          <option value="30">شهر</option>
-          <option value="90">3 شهور</option>
-          <option value="90_only">90 فقط</option>
-          <option value="custom">مخصّص</option>
-        </select>
-      </div>
-
-      <div id="datesBox" class="dates hidden" style="display:flex;gap:12px">
-        <div class="filter">
-          <label for="from">من</label>
-          <input id="from" type="date">
-        </div>
-        <div class="filter">
-          <label for="to">إلى</label>
-          <input id="to" type="date">
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- وصف الفترة -->
-  <div id="meta" class="container small muted"></div>
-
-  <!-- مؤشر تحميل -->
-  <div id="loader" class="loader card">جاري التحميل…</div>
-
-  <!-- 1) التقرير -->
-  <section id="reportView" class="card">
-    <div class="legend no-print">
-      <span class="badge b-sevlow">هبوط شديد</span>
-      <span class="badge b-low">هبوط</span>
-      <span class="badge b-ok">طبيعي</span>
-      <span class="badge b-high">ارتفاع</span>
-      <span class="badge b-sevhigh">ارتفاع شديد</span>
-    </div>
-    <div class="table-wrap">
-      <table id="rep" class="table" aria-label="تقرير قياسات">
-        <thead><tr id="headRow"></tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- 2) التحاليل -->
-  <section id="analysisView" class="card hidden">
-    <div class="center">
-      <h2>التحاليل</h2>
-      <p class="muted">التوزيع (هبوط/طبيعي/ارتفاع) يعتمد على حدود Hypo/Hyper أدناه.</p>
-
-      <div class="no-print" style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:10px 0;">
-        <div>
-          <label for="hypoInput" class="muted">Hypo</label><br>
-          <input id="hypoInput" type="number" step="0.1" style="width:120px">
-        </div>
-        <div>
-          <label for="hyperInput" class="muted">Hyper</label><br>
-          <input id="hyperInput" type="number" step="0.1" style="width:120px">
-        </div>
-        <button id="btnRecalcAnalysis" class="btn primary">إعادة حساب التحاليل</button>
-      </div>
-
-      <div style="max-width:720px;margin:auto">
-        <canvas id="doughnutChart" height="180"></canvas>
-      </div>
-
-      <div id="analysisNumbers" style="margin-top:10px"></div>
-      <div id="smartSummary" class="muted" style="margin-top:8px"></div>
-
-      <hr class="no-print" style="margin:16px 0; opacity:.2">
-
-      <div class="no-print" style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap">
-        <div>
-          <label class="muted">قارن من</label><br>
-          <input id="cmpFrom" type="date" style="width:150px">
-        </div>
-        <div>
-          <label class="muted">إلى</label><br>
-          <input id="cmpTo" type="date" style="width:150px">
-        </div>
-        <button id="btnCompare" class="btn gray">قارن الفترتين</button>
-      </div>
-
-      <div id="compareArea" style="margin-top:12px"></div>
-
-      <div style="margin-top:12px">
-        <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- 3) نسخة الطباعة -->
-  <section id="printView" class="card hidden">
-    <div class="print-header" id="printHeader">—</div>
-
-    <div class="no-print print-controls" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-      <label>
-        <input id="chkPrintNotes" type="checkbox" checked>
-        <span>إظهار الملاحظات/التصحيح</span>
-      </label>
-      <button class="btn warning" id="btnPrintPDF">طباعة PDF</button>
-      <button class="btn danger" id="btnPrintBlank">نموذج فارغ</button>
-      <button class="btn gray" onclick="showView('report')">رجوع للتقرير</button>
-    </div>
-
-    <div class="table-wrap">
-      <table id="repPrint" class="table print-grid">
-        <thead><tr id="headRowPrint"></tr></thead>
-        <tbody id="rowsPrint"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- موديول الصفحة (يستورد db من firebase-config.js) -->
-  <script type="module" src="./js/reports.js"></script>
+  <script type="module" src="reports.js"></script>
 </body>
 </html>
