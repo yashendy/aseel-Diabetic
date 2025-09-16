@@ -1,102 +1,115 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تحليلات الجلوكوز</title>
-  <link rel="stylesheet" href="analytics.css" />
-  <style>
-    body { font-family: system-ui, "Segoe UI", Tahoma; background:#fafafa; color:#111; }
-    .container { max-width: 1100px; margin: 24px auto; padding: 16px; }
-    .toolbar { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)) 1fr; gap: 12px; align-items: end; }
-    .toolbar .field { display:flex; gap:8px; align-items:center; }
-    .card { background:#fff; border-radius:16px; padding:16px; box-shadow:0 2px 16px rgba(0,0,0,.06); margin-top:16px; }
-    canvas { width:100%; height:380px; }
-    .row { display:grid; grid-template-columns: 1.6fr .9fr; gap:16px; }
-    .muted { color:#666; font-size:13px; }
-    .error { background:#ffe9e9; border:1px solid #ffb3b3; color:#b00020; padding:10px 12px; border-radius:10px; display:none; }
-    .spinner { display:none; }
-    .spinner::after { content:""; width:22px; height:22px; border-radius:50%; border:3px solid #ddd; border-top-color:#111; display:inline-block; animation:spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .legend { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-    .chip { padding:6px 10px; background:#f1f1f1; border-radius:999px; font-size:12px; }
-    .row h3 { margin:0 0 8px; }
-    .center { text-align:center; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2>منحنيات وتحليلات الجلوكوز</h2>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>التحاليل</title>
+  <link rel="stylesheet" href="./css/analytics.css" />
 
-    <div id="errBox" class="error"></div>
-
-    <div class="toolbar card">
-      <div class="field">
-        <label for="unitSelect">وحدة القياس:</label>
-        <select id="unitSelect">
-          <option value="mmol">mmol/L</option>
-          <option value="mgdl">mg/dL</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label for="rangeSel">المدى الزمني:</label>
-        <select id="rangeSel">
-          <option value="7d">7 أيام</option>
-          <option value="14d" selected>14 يوم</option>
-          <option value="30d">30 يوم</option>
-          <option value="90d">90 يوم</option>
-          <option value="2w">آخر أسبوعين</option>
-          <option value="2m">آخر شهرين</option>
-          <option value="this_w">هذا الأسبوع</option>
-          <option value="prev_w">الأسبوع الماضي</option>
-          <option value="this_m">هذا الشهر</option>
-          <option value="prev_m">الشهر الماضي</option>
-          <option value="custom">مخصص…</option>
-        </select>
-      </div>
-
-      <div class="field" id="customDates" style="display:none;">
-        <label>من:</label>
-        <input type="date" id="fromDate">
-        <label>إلى:</label>
-        <input type="date" id="toDate">
-        <button id="applyCustom">تطبيق</button>
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="card">
-        <h3>منحنى الجلوكوز حسب الأيام</h3>
-        <div class="muted">خطّان مرجعيان فقط: <b>Severe Low</b> و <b>Severe High</b> حسب إعدادات الطفل.</div>
-        <div class="center" style="margin:14px 0;">
-          <span class="spinner" id="spinnerLine"></span>
-        </div>
-        <canvas id="dayChart"></canvas>
-        <div class="legend" id="lineLegend"></div>
-      </div>
-
-      <div class="card">
-        <h3>التوزيع (TBR / TIR / TAR)</h3>
-        <div class="center" style="margin:14px 0;">
-          <span class="spinner" id="spinnerPie"></span>
-        </div>
-        <canvas id="rangePie" height="330"></canvas>
-        <div class="legend" id="pieLegend"></div>
-      </div>
-    </div>
-
-    <p class="muted">تلميح: غيّر الوحدة أو المدى الزمني وسيتم التحديث تلقائيًا.</p>
-  </div>
-
-  <!-- Chart.js + date adapter -->
+  <!-- Chart.js + adapter للوقت -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+</head>
+<body>
+  <div class="wrap">
+    <!-- شريط علوي -->
+    <header class="topbar">
+      <div class="left chips" id="childChips"></div>
 
-  <!-- Firebase config (يجب أن يهيّئ initializeApp ويُصدّر auth) -->
-  <script type="module" src="js/firebase-config.js"></script>
+      <div class="right controls">
+        <div class="range">
+          <label class="field">
+            <span>من</span>
+            <input type="date" id="fromDate">
+          </label>
+          <label class="field">
+            <span>إلى</span>
+            <input type="date" id="toDate">
+          </label>
 
-  <!-- سكربت التحليلات -->
-  <script type="module" src="analytics.js"></script>
+          <div class="quick-range">
+            <button class="chip" data-days="7">7 أيام</button>
+            <button class="chip" data-days="14">14</button>
+            <button class="chip" data-days="30">30</button>
+            <button class="chip" data-days="90">90</button>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>وحدة العرض</span>
+          <select id="unitSelect">
+            <option value="mmol/L">mmol/L</option>
+            <option value="mg/dL">mg/dL</option>
+          </select>
+        </label>
+
+        <div class="actions">
+          <button id="btnBack" class="btn btn--ghost">رجوع للتقرير</button>
+          <button id="btnRefresh" class="btn">تحديث</button>
+          <button id="btnSaveLine" class="btn">حفظ الرسم الزمني</button>
+          <button id="btnSavePie" class="btn">حفظ نسب النطاق</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ملخص -->
+    <section class="sheet meta">
+      <div class="line">
+        <strong id="childName">—</strong>
+        <span class="muted" id="childMeta">—</span>
+      </div>
+      <div class="line">
+        الفترة: <b id="periodFrom">—</b> إلى <b id="periodTo">—</b>
+      </div>
+      <div class="cards">
+        <div class="card"><span class="k">عدد القراءات</span><b id="stCount">—</b></div>
+        <div class="card"><span class="k">المتوسط</span><b id="stAvg">—</b></div>
+        <div class="card"><span class="k">الانحراف (SD)</span><b id="stSD">—</b></div>
+        <div class="card"><span class="k">CV%</span><b id="stCV">—</b></div>
+        <div class="card b-ok"><span class="k">TIR</span><b id="stTIR">—</b></div>
+        <div class="card b-low"><span class="k">TBR</span><b id="stTBR">—</b></div>
+        <div class="card b-high"><span class="k">TAR</span><b id="stTAR">—</b></div>
+      </div>
+    </section>
+
+    <!-- الرسوم -->
+    <main class="grid-2">
+      <!-- الرسم الزمني -->
+      <section class="panel">
+        <div class="panel-head">
+          <h3>الرسم الزمني للقراءات</h3>
+          <div id="lineLegend" class="legend"></div>
+        </div>
+
+        <div id="spinnerLine" class="spinner" hidden></div>
+        <div id="errLine" class="error" hidden></div>
+
+        <canvas id="dayChart" height="240" aria-label="الرسم الزمني"></canvas>
+
+        <div class="limits">
+          <span class="chip chip-dot dot-low">الحد الحرج المنخفض (Severe Low): <b id="sevLowLbl">—</b></span>
+          <span class="chip chip-dot dot-high">الحد الحرج المرتفع (Severe High): <b id="sevHighLbl">—</b></span>
+        </div>
+      </section>
+
+      <!-- نسب الوقت داخل/خارج النطاق -->
+      <section class="panel">
+        <div class="panel-head">
+          <h3>نِسَب الوقت داخل/خارج النطاق</h3>
+          <div id="pieLegend" class="legend"></div>
+        </div>
+
+        <div id="spinnerPie" class="spinner" hidden></div>
+        <div id="errPie" class="error" hidden></div>
+
+        <canvas id="rangePie" height="240" aria-label="نِسَب الوقت"></canvas>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" style="display:none"></div>
+  </div>
+
+  <!-- Firebase config (ESM يصدّر auth/db) -->
+  <script type="module" src="./js/analytics.js"></script>
 </body>
 </html>
