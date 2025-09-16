@@ -43,11 +43,15 @@
           </select>
         </label>
 
+        <label class="field chk">
+          <input type="checkbox" id="compareToggle">
+          <span>تفعيل المقارنة (الفترة السابقة)</span>
+        </label>
+
         <div class="actions">
           <button id="btnBack" class="btn btn--ghost">رجوع للتقرير</button>
           <button id="btnRefresh" class="btn">تحديث</button>
           <button id="btnSaveLine" class="btn">حفظ الرسم الزمني</button>
-          <button id="btnSavePie" class="btn">حفظ نسب النطاق</button>
         </div>
       </div>
     </header>
@@ -78,18 +82,17 @@
       <section class="panel">
         <div class="panel-head">
           <h3>الرسم الزمني للقراءات</h3>
-
-          <!-- ✅ سويتش وضع الرسم: زمني / متوسط الأيام -->
+          <!-- وضع الرسم -->
           <div class="seg" id="modeSeg">
-            <button class="seg-btn is-active" data-mode="series">زمني</button>
-            <button class="seg-btn" data-mode="avgday">متوسط الأيام</button>
+            <button class="seg-btn" data-mode="series">زمني</button>
+            <button class="seg-btn is-active" data-mode="avgbyday">متوسط كل يوم</button>
           </div>
         </div>
 
         <div id="spinnerLine" class="spinner"></div>
         <div id="errLine" class="error" style="display:none"></div>
 
-        <canvas id="dayChart" height="240" aria-label="الرسم الزمني"></canvas>
+        <canvas id="dayChart" height="260" aria-label="الرسم الزمني"></canvas>
 
         <div class="limits">
           <span class="chip chip-dot dot-low">الحد الحرج المنخفض (Severe Low): <b id="sevLowLbl">—</b></span>
@@ -101,13 +104,23 @@
       <section class="panel">
         <div class="panel-head">
           <h3>نِسَب الوقت داخل/خارج النطاق</h3>
-          <div id="pieLegend" class="legend"></div>
         </div>
 
-        <div id="spinnerPie" class="spinner"></div>
-        <div id="errPie" class="error" style="display:none"></div>
+        <div class="pies">
+          <div class="pieBox">
+            <div class="pieTitle">الفترة الحالية</div>
+            <div id="spinnerPieNow" class="spinner"></div>
+            <div id="errPieNow" class="error" style="display:none"></div>
+            <canvas id="rangePieNow" width="180" height="180"></canvas>
+          </div>
 
-        <canvas id="rangePie" height="240" aria-label="نِسَب الوقت"></canvas>
+          <div class="pieBox compareOnly">
+            <div class="pieTitle">الفترة السابقة</div>
+            <div id="spinnerPiePrev" class="spinner"></div>
+            <div id="errPiePrev" class="error" style="display:none"></div>
+            <canvas id="rangePiePrev" width="180" height="180"></canvas>
+          </div>
+        </div>
       </section>
     </main>
 
