@@ -78,7 +78,12 @@
       <section class="panel">
         <div class="panel-head">
           <h3>الرسم الزمني للقراءات</h3>
-          <div id="lineLegend" class="legend"></div>
+
+          <!-- ✅ سويتش وضع الرسم: زمني / متوسط الأيام -->
+          <div class="seg" id="modeSeg">
+            <button class="seg-btn is-active" data-mode="series">زمني</button>
+            <button class="seg-btn" data-mode="avgday">متوسط الأيام</button>
+          </div>
         </div>
 
         <div id="spinnerLine" class="spinner"></div>
