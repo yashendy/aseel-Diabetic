@@ -1,12 +1,13 @@
-/* meals.js — Pro build + Excel Export
+/* meals.js — Pro build (measurements by meal/date + upper-target correction in child's unit)
  * - Admin catalog (read-only) from admin/global/foodItems
+ * - Measurements lists (pre/post) filtered by meal type & date; display converted to child's unit ONLY for UI
  * - Accurate totals (grams/household), NetCarbs, GL (if GI exists)
  * - Auto doses (carb + correction + total) with manual override
- * - Pre-reading manual field priority
- * - Presets save/import by type (parent-owned) + repeat last meal by type
- * - AI dictionary (simple) "like before"
- * - Auto-Tuner (Adjust to range) + What-If preview
- * - CSV + Excel (.xlsx) export
+ * - Correction uses UPPER target (normalRange.max or hyperLevel) in CHILD'S UNIT (no internal conversion)
+ * - Manual pre-reading has priority
+ * - Presets save/import by type (parent-owned) + repeat last meal by type + templateName field
+ * - Therapy chips (CR/CF/Bolus) + Child Settings button
+ * - Auto-Tuner + What-If + CSV + Excel (.xlsx) export
  * - No HTML edits: everything is injected if missing
  * - Firestore paths & rules preserved exactly
  */
@@ -25,12 +26,24 @@ const qa = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 const esc = s => (s ?? '').toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const toNum = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const round1 = n => Math.round((Number(n)||0) * 10) / 10;
-const clamp = (x,min,max) => Math.max(min,Math.min(max,x));
 const todayISO = () => new Date().toISOString().slice(0,10);
 const mgdl2mmol = mg => mg / 18;
 const mmol2mgdl = mmol => mmol * 18;
 
-/* ============ DOM handles (will be ensured/injected) ============ */
+/* Date helpers */
+const sameDay = (d1, d2) => d1.getFullYear()===d2.getFullYear() && d1.getMonth()===d2.getMonth() && d1.getDate()===d2.getDate();
+function timeWindowForMeal(type){
+  // [startHour, endHour) local time windows (approx)
+  switch(type){
+    case 'فطار': return [4, 11];
+    case 'غدا' : return [11, 16];
+    case 'عشا' : return [16, 22];
+    case 'سناك': return [22, 28]; // night snacks
+    default: return [0, 24];
+  }
+}
+
+/* ============ DOM handles ============ */
 let childNameEl, childMetaEl, mealDateEl, mealTypeEl;
 let preReadingEl, preReadingManualEl, postReadingEl;
 let unitChipEl, carbProgress, carbStateEl;
@@ -46,13 +59,8 @@ let aiModal, aiClose, aiText, aiAnalyze, aiApply, aiResults;
 let presetModal, presetClose, presetGrid, presetTabs;
 let tunerModal, tunerApplyBtn, tunerCancelBtn, tunerList, tunerSeveritySel;
 let whatIfSlider, whatIfValue, whatIfResetBtn;
+let childSettingsBtn, templateNameEl, therapyChipsBar;
 let toastEl;
-
-function toast(msg,type='info'){
-  if(!toastEl){ toastEl=document.createElement('div'); toastEl.id='toast'; toastEl.className='toast'; document.body.appendChild(toastEl); }
-  toastEl.textContent=msg; toastEl.className=`toast ${type}`; toastEl.style.display='block';
-  clearTimeout(toastEl._t); toastEl._t=setTimeout(()=>{toastEl.style.display='none';},2500);
-}
 
 /* ============ State ============ */
 const params = new URLSearchParams(location.search);
@@ -65,14 +73,21 @@ let manualCarb=false, manualCorr=false, manualTotal=false;
 let presetsCache=[];
 let plannedChanges=[]; // auto-tuner proposed ops
 
-/* ============ Structure guards & injection (no HTML edits required) ============ */
+/* ============ Toast ============ */
+function toast(msg,type='info'){
+  if(!toastEl){ toastEl=document.createElement('div'); toastEl.id='toast'; toastEl.className='toast'; document.body.appendChild(toastEl); }
+  toastEl.textContent=msg; toastEl.className=`toast ${type}`; toastEl.style.display='block';
+  clearTimeout(toastEl._t); toastEl._t=setTimeout(()=>{toastEl.style.display='none';},2500);
+}
+
+/* ============ Injection (no HTML edits required) ============ */
 function ensureElById(id, creator){
   let el = $(id);
   if(!el){ el = creator(); el.id=id; }
   return el;
 }
 function ensureBasicSkeleton(){
-  // Try to map existing IDs; if missing, create minimal holders
+  // Header bits
   childNameEl = ensureElById('childName', ()=>{ const s=document.createElement('strong'); q('.container')?.prepend(s); return s; });
   childMetaEl = ensureElById('childMeta', ()=>{ const span=document.createElement('span'); childNameEl.after(span); return span; });
 
@@ -82,7 +97,7 @@ function ensureBasicSkeleton(){
   preReadingEl = ensureElById('preReading', ()=>{ const s=document.createElement('select'); q('.container')?.prepend(s); return s; });
   postReadingEl = ensureElById('postReading', ()=>{ const s=document.createElement('select'); q('.container')?.append(s); return s; });
 
-  // Manual pre-reading input inside same area
+  // Manual pre-reading input
   preReadingManualEl = $('preReadingManual');
   if(!preReadingManualEl){
     preReadingManualEl = document.createElement('input');
@@ -103,6 +118,18 @@ function ensureBasicSkeleton(){
   // Items table body
   itemsBodyEl = ensureElById('itemsBody', ()=>{ const div=document.createElement('div'); div.className='table__body'; q('.container')?.append(div); return div; });
 
+  // Template Name field (optional)
+  templateNameEl = $('mealTemplateName');
+  if(!templateNameEl){
+    const wrap = document.createElement('label');
+    wrap.className='field';
+    wrap.innerHTML = `<span>اسم الوجبة/القالب (اختياري)</span>
+                      <input type="text" id="mealTemplateName" placeholder="مثال: عشاء خفيف">`;
+    const anchor = itemsBodyEl || q('.container');
+    anchor?.parentElement?.insertBefore(wrap, anchor);
+    templateNameEl = $('mealTemplateName');
+  }
+
   // Summary fields
   tGramsEl = ensureElById('tGrams', ()=>{ const s=document.createElement('span'); q('.container')?.append(s); return s; });
   tCarbsEl = ensureElById('tCarbs', ()=>{ const s=document.createElement('span'); q('.container')?.append(s); return s; });
@@ -116,7 +143,7 @@ function ensureBasicSkeleton(){
   // Net carbs toggle
   useNetCarbsEl = ensureElById('useNetCarbs', ()=>{ const i=document.createElement('input'); i.type='checkbox'; q('.container')?.append(i); return i; });
 
-  // Dose fields block (inject if missing)
+  // Dose fields block
   carbDoseEl = $('carbDose'); corrDoseEl=$('corrDose'); totalDoseEl=$('totalDose'); appliedDoseEl=$('appliedDose');
   if(!carbDoseEl || !corrDoseEl || !totalDoseEl){
     const wrap = document.createElement('div'); wrap.className='dose-grid';
@@ -141,6 +168,26 @@ function ensureBasicSkeleton(){
   printDayBtn = ensureElById('printDayBtn', ()=>{ const b=document.createElement('button'); b.textContent='🖨️ طباعة وجبات اليوم'; resetMealBtn.after(b); return b; });
   exportCsvBtn = $('exportCsvBtn'); if(!exportCsvBtn){ exportCsvBtn=document.createElement('button'); exportCsvBtn.id='exportCsvBtn'; exportCsvBtn.textContent='⬇️ تصدير CSV'; printDayBtn.after(exportCsvBtn); }
   exportXlsxBtn = $('exportXlsxBtn'); if(!exportXlsxBtn){ exportXlsxBtn=document.createElement('button'); exportXlsxBtn.id='exportXlsxBtn'; exportXlsxBtn.textContent='⬇️ تصدير Excel'; exportCsvBtn.after(exportXlsxBtn); }
+
+  // Child Settings button
+  childSettingsBtn = $('childSettingsBtn');
+  if(!childSettingsBtn){
+    childSettingsBtn = document.createElement('a');
+    childSettingsBtn.id='childSettingsBtn';
+    childSettingsBtn.className='btn btn--link';
+    childSettingsBtn.textContent='إعداد الطفل';
+    (q('.goals__top') || q('.container')).prepend(childSettingsBtn);
+  }
+
+  // Therapy chips
+  therapyChipsBar = $('therapyChips');
+  if(!therapyChipsBar){
+    therapyChipsBar = document.createElement('div');
+    therapyChipsBar.id='therapyChips';
+    therapyChipsBar.style.display='flex';
+    therapyChipsBar.style.gap='8px';
+    (q('.goals__top') || q('.container')).appendChild(therapyChipsBar);
+  }
 
   // Picker modal
   pickerModal = $('pickerModal');
@@ -210,7 +257,7 @@ function ensureBasicSkeleton(){
       </div>`;
     document.body.appendChild(presetModal);
   }
-  presetClose=$('presetClose'); presetGrid=$('presetGrid'); presetTabs=qa('.preset-tabs .tab'); $('presetEmpty'); // keep ref
+  presetClose=$('presetClose'); presetGrid=$('presetGrid'); presetTabs=qa('.preset-tabs .tab'); $('presetEmpty');
 
   // Auto-Tuner modal
   tunerModal = $('tunerModal');
@@ -249,14 +296,26 @@ function ensureBasicSkeleton(){
   }
   whatIfSlider=$('whatIfSlider'); whatIfValue=$('whatIfValue'); whatIfResetBtn=$('whatIfResetBtn');
 
-  // Goal labels (if missing)
+  // Goal labels
   if(!$('goalType')){ const sp=document.createElement('span'); sp.id='goalType'; (q('.goals__top')||q('.container')).appendChild(sp); }
   if(!$('goalMin')){ const b=document.createElement('b'); b.id='goalMin'; (q('.goals__top')||q('.container')).appendChild(b); }
   if(!$('goalMax')){ const b=document.createElement('b'); b.id='goalMax'; (q('.goals__top')||q('.container')).appendChild(b); }
 }
 
-/* ============ Child targets & meta ============ */
+/* ============ Child meta & targets ============ */
 function applyUnitChip(){ const u=(childData?.insulinUnit||'U'); if(unitChipEl) unitChipEl.textContent=`وحدة: ${u}`; }
+function renderTherapyChips(){
+  const bar = therapyChipsBar; if(!bar) return;
+  const unit = childData?.glucoseUnit || 'mg/dL';
+  const cr = childData?.carbRatio ? `${childData.carbRatio} g/U` : '—';
+  const cf = childData?.correctionFactor ? `${childData.correctionFactor} ${unit}/U` : '—';
+  const bolus = childData?.bolusType || childData?.bolus || '—';
+  bar.innerHTML = `
+    <span class="chip">CR: ${cr}</span>
+    <span class="chip">CF: ${cf}</span>
+    <span class="chip">Bolus: ${esc(bolus)}</span>
+  `;
+}
 function getTargetRangeForType(type){
   const cd = childData||{};
   const t1 = cd.carbTargets || cd.targets || {};
@@ -276,6 +335,14 @@ function applyTargets(){
   $('goalMax').textContent=max||'—';
   recalcAll();
 }
+function getTargetUpper(){
+  const u=(childData?.glucoseUnit || 'mg/dL').toLowerCase();
+  let t = (childData?.normalRange && childData.normalRange.max != null)
+            ? Number(childData.normalRange.max)
+            : (childData?.hyperLevel != null ? Number(childData.hyperLevel) : NaN);
+  if(!Number.isFinite(t)) t = u.includes('mmol') ? 7 : 130; // safe default
+  return t;
+}
 
 /* ============ Load child & collections ============ */
 async function resolveChildRef(uid,cid){
@@ -291,10 +358,12 @@ async function loadChild(uid){
   childRef=ref; childData=data||{};
   childNameEl && (childNameEl.textContent=childData.displayName||childData.name||'الطفل');
   childMetaEl && (childMetaEl.textContent=`تاريخ الميلاد: ${childData?.birthDate||'—'} • نوع الإنسولين: ${childData?.basalType||'—'}`);
-  applyUnitChip(); applyTargets();
+  applyUnitChip(); renderTherapyChips(); applyTargets();
   mealsCol = collection(childRef,'meals');
   measurementsCol = collection(childRef,'measurements');
   presetsCol = collection(childRef,'presetMeals');
+  // activate child settings link
+  childSettingsBtn?.addEventListener('click', (e)=>{ e.preventDefault(); location.href = `child.html?child=${encodeURIComponent(childId)}`; });
 }
 
 /* ============ Admin Food catalog (read-only) ============ */
@@ -337,7 +406,7 @@ function violatesDiet(f){
   const rules=Array.isArray(childData?.specialDiet)?childData.specialDiet:[];
   if(!rules.length) return false;
   const tags=Array.isArray(f.dietTags)?f.dietTags:[];
-  return rules.some(r=>!tags.includes(r)); // صارم
+  return rules.some(r=>!tags.includes(r)); // strict
 }
 function getPref(itemId){ return (childData?.preferences||{})[itemId]; }
 
@@ -402,7 +471,6 @@ function addRowFromFood(f){
   };
   items.push(r); renderItems(); recalcAll();
 }
-
 function renderItems(){
   if(!itemsBodyEl) return;
   itemsBodyEl.innerHTML='';
@@ -467,6 +535,91 @@ function renderItems(){
   });
 }
 
+/* ============ Measurements (by meal + date, displayed in child's unit) ============ */
+function convertToChildUnit(value, unit){
+  const childUnit=(childData?.glucoseUnit || 'mg/dL').toLowerCase();
+  const u=(unit||childUnit).toLowerCase();
+  if(!Number.isFinite(Number(value))) return null;
+  const v=Number(value);
+  if(childUnit.includes('mmol') && u.includes('mg')) return mgdl2mmol(v);
+  if(childUnit.includes('mg') && u.includes('mmol')) return mmol2mgdl(v);
+  return v;
+}
+async function loadMeasurementsOptions(){
+  if(!measurementsCol) return;
+  const dateStr = mealDateEl?.value || todayISO();
+  const type = mealTypeEl?.value || 'فطار';
+
+  // clear
+  function clear(sel){ if(sel){ sel.innerHTML = `<option value="">—</option>`; } }
+  clear(preReadingEl); clear(postReadingEl);
+
+  const snap=await getDocs(query(measurementsCol, orderBy('ts','desc'), limit(200)));
+  const items=[];
+  snap.forEach(d=>{
+    const v=d.data();
+    if(!v?.ts?.toDate) return;
+    const ts=v.ts.toDate();
+    const unit=v.unit || v.glucoseUnit || 'mg/dL';
+    const val = convertToChildUnit(v.value ?? v.reading, unit);
+    if(val==null) return;
+    items.push({
+      val: val,
+      rawUnit: unit,
+      when: ts,
+      ctx: v.context || {},
+      labelTime: ts.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})
+    });
+  });
+
+  const targetDate = new Date(dateStr+'T00:00:00');
+  const [hStart,hEnd] = timeWindowForMeal(type);
+  const start = new Date(targetDate); start.setHours(hStart%24,0,0,0);
+  const end = new Date(targetDate); end.setHours(hEnd%24,0,0,0);
+  const postEnd = new Date(end.getTime() + 3*60*60*1000); // +3h window for post
+
+  const preList = [];
+  const postList = [];
+
+  for(const m of items){
+    if(!sameDay(m.when, targetDate)) continue;
+
+    // explicit context wins
+    const mt = m.ctx.mealType || m.ctx.forMeal;
+    const tmg = m.ctx.timing;
+    const mealMatch = !mt || mt===type;
+
+    if(mealMatch && (tmg==='قبل' || tmg==='pre')){
+      preList.push(m);
+      continue;
+    }
+    if(mealMatch && (tmg==='بعد' || tmg==='post')){
+      postList.push(m);
+      continue;
+    }
+
+    // implicit window based classification
+    if(m.when>=start && m.when<end){
+      preList.push(m);
+    }else if(m.when>=end && m.when<=postEnd){
+      postList.push(m);
+    }
+  }
+
+  function fillSelect(sel, list){
+    if(!sel) return;
+    list.sort((a,b)=>b.when-a.when);
+    for(const m of list){
+      const opt=document.createElement('option');
+      opt.value = String(round1(m.val));
+      opt.textContent = `${round1(m.val)} ${childData?.glucoseUnit||'mg/dL'} (${m.labelTime})`;
+      sel.appendChild(opt);
+    }
+  }
+  fillSelect(preReadingEl, preList);
+  fillSelect(postReadingEl, postList);
+}
+
 /* ============ Totals & Doses ============ */
 function usedCarbs(){
   const totalC=items.reduce((a,r)=>a+r.calc.carbs,0);
@@ -512,33 +665,27 @@ function recalcAll(){
     doseRangeEl && (doseRangeEl.textContent='—');
   }
 
-  computeAutoDoses(); // updates carb/corr/total/applied
+  computeAutoDoses(); // updates doses
 }
 
-/* Auto doses with manual override */
+/* Auto doses with manual override — correction in CHILD'S UNIT vs upper target */
 function computeAutoDoses(){
   const ratio=Number(childData?.carbRatio)||0;
   const cf=Number(childData?.correctionFactor)||0;
-  const unit=(childData?.glucoseUnit||'mg/dL').toLowerCase();
+  const unit = childData?.glucoseUnit || 'mg/dL'; // stay in child's unit
 
   const used=usedCarbs();
   const carbDose = ratio>0 ? used/ratio : 0;
 
+  // Pre reading: manual first, then select
   const preManual=(preReadingManualEl && preReadingManualEl.value!=='') ? Number(preReadingManualEl.value) : null;
-  let pre = preManual!=null ? preManual : (preReadingEl?.value?Number(preReadingEl.value):NaN);
+  const pre = (preManual!=null) ? preManual : (preReadingEl?.value ? Number(preReadingEl.value) : NaN);
 
-  const nr = childData?.normalRange || {};
-  let target = Number(childData?.target) || (nr && (nr.min!=null && nr.max!=null) ? (Number(nr.min)+Number(nr.max))/2 : NaN);
-  if(!Number.isFinite(target)) target = 110;
-
-  if(unit.includes('mmol')){
-    if(Number.isFinite(pre)) pre = mmol2mgdl(pre);
-    target = mmol2mgdl(target);
-  }
+  const targetUpper = getTargetUpper();
 
   let corrDose = 0;
-  if(cf>0 && Number.isFinite(pre) && pre>target){
-    corrDose = (pre - target) / cf;
+  if(cf>0 && Number.isFinite(pre) && pre > targetUpper){
+    corrDose = (pre - targetUpper) / cf;  // child's unit math (mmol/L or mg/dL)
   }
 
   const total = (carbDose + corrDose);
@@ -552,21 +699,6 @@ function computeAutoDoses(){
   }
 }
 
-/* ============ Measurements ============ */
-async function loadMeasurementsOptions(){
-  if(!measurementsCol) return;
-  const snap=await getDocs(query(measurementsCol, orderBy('ts','desc'), limit(50)));
-  function fill(sel){
-    if(!sel) return; sel.innerHTML=`<option value="">—</option>`;
-    snap.forEach(d=>{
-      const v=d.data(); const val=v?.value??v?.reading??''; const ts=v?.ts?.toDate?.()||null;
-      const when=ts?ts.toLocaleString('ar-EG'):'';
-      sel.insertAdjacentHTML('beforeend',`<option value="${esc(val)}">${esc(val)} ${when?`(${esc(when)})`:''}</option>`);
-    });
-  }
-  fill(preReadingEl); fill(postReadingEl);
-}
-
 /* ============ Save ============ */
 async function saveMeal(){
   if(!mealsCol){ toast('لم يتم تحميل الطفل','error'); return; }
@@ -575,6 +707,7 @@ async function saveMeal(){
   const payload={
     date: mealDateEl?.value || todayISO(),
     type: mealTypeEl?.value || 'فطار',
+    templateName: (templateNameEl?.value || null),
     items,
     preReading: preVal,
     postReading: postReadingEl?.value?Number(postReadingEl.value):null,
@@ -585,12 +718,13 @@ async function saveMeal(){
     suggestedDose: Number(suggestedDoseEl?.textContent)||0,
     appliedDose: appliedDoseEl?.value!=='' ? Number(appliedDoseEl.value) : null,
     notes: (mealNotesEl?.value||'').trim() || null,
-    // rationale snapshot (for review)
     doseRationale: {
       usedCarbs: usedCarbs(),
       ratio: Number(childData?.carbRatio)||null,
       correctionFactor: Number(childData?.correctionFactor)||null,
-      target: (childData?.target ?? (childData?.normalRange ? (Number(childData.normalRange.min||0)+Number(childData.normalRange.max||0))/2 : null)),
+      cfUnit: childData?.glucoseUnit || 'mg/dL',
+      targetUpper: getTargetUpper(),
+      preReading: preVal,
       unit: childData?.glucoseUnit || 'mg/dL'
     },
     createdAt: serverTimestamp()
@@ -659,6 +793,8 @@ function renderPresetList(list){
         per100:{...it.per100}, measures:Array.isArray(it.measures)?it.measures:[],
         calc:{carbs:0,fiber:0,cal:0,prot:0,fat:0,gl:0}
       }));
+      // fill templateName
+      if(templateNameEl) templateNameEl.value = p.title || '';
       renderItems(); recalcAll();
       presetModal?.classList.add('hidden'); document.body.style.overflow='';
       toast('تم استيراد القالب','success');
@@ -704,7 +840,7 @@ function aiSuggestFromText(text){
 }
 
 /* ============ Auto-Tuner (Adjust to range) ============ */
-function carbDensityOfRow(r){ return (r.per100?.carbs||0) / 100; } // g carbs per 1g
+function carbDensityOfRow(r){ return (r.per100?.carbs||0) / 100; }
 function gramsStep(r){
   if(Array.isArray(r.measures) && r.measures.length){
     const min = r.measures.reduce((m,x)=> Math.min(m, Number(x.grams)||Infinity), Infinity);
@@ -722,7 +858,6 @@ function proposeAdjustments(severity='balanced'){
   const deltaBelow = (min||used) - used;
 
   const prefs = childData?.preferences || {};
-  const prefWeight = (itemId)=> prefs[itemId]==='like' ? -0.5 : (prefs[itemId]==='dislike'? +0.5 : 0);
 
   const sim = items.map(r=>({ ...r, grams:r.grams, unit:r.unit, qty:r.qty, measure:r.measure }));
 
@@ -851,7 +986,6 @@ function exportCSV(){
 }
 
 /* ============ Export Excel (.xlsx) ============ */
-// تحميل SheetJS ديناميكيًا عند الطلب فقط
 async function ensureXLSX(){
   if(window.XLSX) return window.XLSX;
   await new Promise((resolve,reject)=>{
@@ -893,19 +1027,11 @@ async function exportXLSX(){
     const totalFat=items.reduce((a,r)=>a+r.calc.fat,0);
     const totalGL=items.reduce((a,r)=>a+(r.calc.gl||0),0);
 
-    // Readings normalization
-    const unitLower = unit.toLowerCase();
+    const targetUpper = getTargetUpper();
+    const cfUnit = unit;
+
     const preManual=(preReadingManualEl && preReadingManualEl.value!=='') ? Number(preReadingManualEl.value) : null;
-    let pre = preManual!=null ? preManual : (preReadingEl?.value?Number(preReadingEl.value):NaN);
-    let preMg = Number.isFinite(pre) ? (unitLower.includes('mmol') ? mmol2mgdl(pre) : pre) : null;
-
-    const nr = childData?.normalRange || {};
-    let target = Number(childData?.target) || (nr && (nr.min!=null && nr.max!=null) ? (Number(nr.min)+Number(nr.max))/2 : NaN);
-    if(!Number.isFinite(target)) target = 110;
-    const targetMg = unitLower.includes('mmol') ? mmol2mgdl(target) : target;
-
-    const ratio = Number(childData?.carbRatio)||0;
-    const cf = Number(childData?.correctionFactor)||0;
+    const pre = (preManual!=null) ? preManual : (preReadingEl?.value?Number(preReadingEl.value):null);
 
     const carbDose = toNum(carbDoseEl?.value)||0;
     const corrDose = toNum(corrDoseEl?.value)||0;
@@ -916,9 +1042,9 @@ async function exportXLSX(){
       ['Child', childData?.displayName || childData?.name || '—'],
       ['Date', date],
       ['Meal Type', type],
+      ['Template Name', (templateNameEl?.value||'') || '—'],
       ['Goal (g)', (min||0)+' - '+(max||0)],
       ['Used Carbs (g)', round1(used) + (useNetCarbsEl?.checked ? ' (net)' : ' (gross)')],
-      ['Totals'],
       ['Total Grams', round1(totalG)],
       ['Total Carbs (g)', round1(grossCarbs)],
       ['Total Fiber (g)', round1(fiber)],
@@ -929,10 +1055,10 @@ async function exportXLSX(){
       ['GL', round1(totalGL)],
       [],
       ['Dosing'],
-      ['Carb Ratio (g/U)', ratio || '—'],
-      ['Correction Factor (mg/dL/U)', cf || '—'],
-      ['Target (mg/dL)', round1(targetMg)],
-      ['Pre-Reading', preMg!=null ? `${round1(preMg)} mg/dL (${unitLower.includes('mmol')? round1(mgdl2mmol(preMg))+' mmol/L' : unit})` : '—'],
+      ['CR (g/U)', Number(childData?.carbRatio)||'—'],
+      [`CF (${cfUnit}/U)`, Number(childData?.correctionFactor)||'—'],
+      [`Target Upper (${cfUnit})`, round1(targetUpper)],
+      ['Pre-Reading', pre!=null ? `${round1(pre)} ${cfUnit}` : '—'],
       ['Carb Dose (U)', round1(carbDose)],
       ['Correction Dose (U)', round1(corrDose)],
       ['Total Dose (U)', round1(totalDose)],
@@ -971,10 +1097,12 @@ function wireEvents(){
   exportCsvBtn?.addEventListener('click',exportCSV);
   exportXlsxBtn?.addEventListener('click',exportXLSX);
 
-  mealTypeEl?.addEventListener('change',()=>{ applyTargets(); recalcAll(); });
+  mealTypeEl?.addEventListener('change',()=>{ applyTargets(); loadMeasurementsOptions().then(computeAutoDoses); });
+  mealDateEl?.addEventListener('change',()=>{ loadMeasurementsOptions().then(computeAutoDoses); });
   useNetCarbsEl?.addEventListener('change',recalcAll);
   preReadingEl?.addEventListener('change',computeAutoDoses);
   preReadingManualEl?.addEventListener('input',computeAutoDoses);
+  postReadingEl?.addEventListener('change',()=>{}); // reserved
 
   aiBtn?.addEventListener('click',()=>{ aiModal?.classList.remove('hidden'); document.body.style.overflow='hidden'; aiResults.innerHTML=''; aiApply.disabled=true; });
   aiClose?.addEventListener('click',()=>{ aiModal?.classList.add('hidden'); document.body.style.overflow=''; });
@@ -1020,6 +1148,7 @@ function wireEvents(){
   totalDoseEl?.addEventListener('input',()=>{ manualTotal = true; });
   appliedDoseEl?.addEventListener('input',()=>{ appliedDoseEl.dataset.touched = '1'; });
 
+  // Save shortcut
   window.addEventListener('keydown', (e)=>{
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); saveMeal(); }
   });
@@ -1031,7 +1160,7 @@ async function boot(user){
   currentUser=user;
   await loadChild(user.uid);
   if(mealDateEl && !mealDateEl.value) mealDateEl.value=todayISO();
-  await ensureFoodCache(); // Admin library (read-only)
+  await ensureFoodCache();
   await loadMeasurementsOptions();
   wireEvents();
   renderItems(); recalcAll();
