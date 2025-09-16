@@ -1,5 +1,5 @@
-// measurements.js — نسخة محسّنة (فلاتر + إحصائيات + بحث + اختصارات + Undo/Redo + Sparkline + Auto-slot-filter)
-// لا تعديل على HTML ولا القواعد. كل العناصر الجديدة تُحقن عبر JS.
+// measurements.js — نسخة محسّنة (فلاتر + إحصائيات + بحث + اختصارات + Undo/Redo + Sparkline + Panels ديناميكية)
+// لا تعديل على القواعد أو المسارات.
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -45,15 +45,20 @@ let dayPicker, slotSel, readingInp, unitSel, convertedBox, stateBadge, corrDoseV
 let childNameEl, childMetaEl, chipsBar, targetsChips, backToChildBtn;
 let gridEl, emptyEl, sortSel, liveToggle, toMealsBtn, saveBtn, exportCsvBtn, exportXlsxBtn;
 
-// injected
+// UI المحقونة
 let filtersBar, searchBox, statsBar, sparklineBox, undoBtn, redoBtn, autoSlotToggle;
+
+// Panels ديناميكية
+let actionsPanel, alertBarEl, corrRow, corrDoseInput, useAutoCorr;
+let hypoRow, hypoInput, notesRow, notesInput;
+let lastComputedCorr = 0;
 
 let currentUser=null, childRef=null, childData=null;
 let measCol=null;
 let unsubscribe=null; // onSnapshot
-let cache=[];         // raw (كل اليوم)
+let cache=[];         // raw data
 let filterState = { group:'ALL', state:'ALL', search:'', auto:false };
-let lastOps = [];     // stack للـ undo
+let lastOps = [];     // undo stack
 let redoStack = [];
 
 /* ---------- Boot ---------- */
@@ -62,6 +67,7 @@ onAuthStateChanged(auth, async (user)=>{
   currentUser=user;
   wireDom();
   injectUI();
+  ensureActionPanel();
   await loadChild(user.uid);
   applyChildUI();
   dayPicker.value = dayPicker.value || todayISO();
@@ -111,9 +117,8 @@ function injectUI(){
         <input id="searchBox" type="search" placeholder="بحث في القياسات (الوقت/النوع/الحالة/ملاحظات) — اضغط F للتركيز">
       </div>
     `;
-    // ضعها قبل table-head
     const tbl = document.querySelector('.table-wrap');
-    tbl?.insertBefore(head, tbl.firstChild);
+    tbl?.parentElement?.insertBefore(head, tbl);
   }
   filtersBar = $('filtersBar');
   searchBox = $('searchBox');
@@ -139,12 +144,85 @@ function injectUI(){
   }
   statsBar = $('statsBar'); sparklineBox=$('sparklineBox');
 
-  // Undo/Redo buttons near export
+  // Undo/Redo buttons
   if(!$('undoBtn')){
     undoBtn = document.createElement('button'); undoBtn.id='undoBtn'; undoBtn.className='btn btn--ghost'; undoBtn.textContent='↩️ تراجع';
     redoBtn = document.createElement('button'); redoBtn.id='redoBtn'; redoBtn.className='btn btn--ghost'; redoBtn.textContent='↪️ إعادة';
     exportXlsxBtn?.after(redoBtn); exportXlsxBtn?.after(undoBtn);
   }else{ undoBtn=$('undoBtn'); redoBtn=$('redoBtn'); }
+}
+
+/* ---------- Panels: alert + correction + hypo + notes ---------- */
+function ensureActionPanel(){
+  if (actionsPanel) return;
+  const toolbar = document.querySelector('.toolbar');
+  actionsPanel = document.createElement('div');
+  actionsPanel.id = 'actionsPanel';
+  actionsPanel.innerHTML = `
+    <div id="alertBar" class="alert" style="display:none;"></div>
+
+    <div id="corrRow" class="row-actions" style="display:none;">
+      <label class="field">
+        <span>جرعة التصحيح</span>
+        <input id="corrDoseInput" type="number" step="0.5" min="0" placeholder="مثال: 1.5">
+      </label>
+      <label class="field check">
+        <input id="useAutoCorr" type="checkbox" checked>
+        <span>استخدام الحسابي</span>
+      </label>
+    </div>
+
+    <div id="hypoRow" class="row-actions" style="display:none;">
+      <label class="field" style="grid-column:1/-1;">
+        <span>رفعنا بإيه؟</span>
+        <input id="hypoTreatment" type="text" placeholder="مثال: جلوكوز 15جم / عصير 100مل / تمر">
+      </label>
+      <div class="chips">
+        <button class="chip chip-suggest" data-val="جلوكوز 15جم">جلوكوز 15جم</button>
+        <button class="chip chip-suggest" data-val="عصير 100مل">عصير 100مل</button>
+        <button class="chip chip-suggest" data-val="٣ تمرات">٣ تمرات</button>
+      </div>
+    </div>
+
+    <div id="notesRow" class="row-actions">
+      <label class="field" style="grid-column:1/-1;">
+        <span>ملاحظات</span>
+        <textarea id="mNotes" rows="2" placeholder="اكتب أي ملاحظات مهمة..."></textarea>
+      </label>
+    </div>
+  `;
+  toolbar.after(actionsPanel);
+
+  alertBarEl     = document.getElementById('alertBar');
+  corrRow        = document.getElementById('corrRow');
+  corrDoseInput  = document.getElementById('corrDoseInput');
+  useAutoCorr    = document.getElementById('useAutoCorr');
+  hypoRow        = document.getElementById('hypoRow');
+  hypoInput      = document.getElementById('hypoTreatment');
+  notesRow       = document.getElementById('notesRow');
+  notesInput     = document.getElementById('mNotes');
+
+  actionsPanel.querySelectorAll('.chip-suggest').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ hypoInput.value = btn.dataset.val; });
+  });
+  useAutoCorr.addEventListener('change', ()=>{
+    if(useAutoCorr.checked){
+      corrDoseInput.value = String(round1(Math.max(0, lastComputedCorr)));
+      corrDoseInput.setAttribute('readonly','readonly');
+    }else{
+      corrDoseInput.removeAttribute('readonly');
+      corrDoseInput.focus();
+    }
+  });
+}
+const show = el => { if(el) el.style.display=''; };
+const hide = el => { if(el) el.style.display='none'; };
+function setAlert(type, text){
+  if(!alertBarEl) return;
+  if(!text){ hide(alertBarEl); alertBarEl.textContent=''; alertBarEl.className='alert'; return; }
+  alertBarEl.textContent = text;
+  alertBarEl.className = `alert ${type}`;
+  show(alertBarEl);
 }
 
 /* ---------- Child loading ---------- */
@@ -173,18 +251,18 @@ function applyChildUI(){
 
   // targets chips (both units)
   const u = (childData?.glucoseUnit || 'mg/dL');
-  const max = getTargetUpper();         // بوحدة الطفل
-  const min = getTargetLower();         // بوحدة الطفل إن توفّر
+  const max = getTargetUpper();
+  const min = getTargetLower();
   const sev = getSevereUpper();
-  const critL = getCriticalLow();
-  const critH = getCriticalHigh();
+  const cl = getCriticalLow();
+  const ch = getCriticalHigh();
 
   targetsChips.innerHTML = `
     ${Number.isFinite(min)? `<span class="chip">هبوط: <b class="tiny">${dualUnit(min,u)}</b></span>` : ''}
     <span class="chip">ارتفاع: <b class="tiny">${dualUnit(max,u)}</b></span>
     <span class="chip">ارتفاع شديد: <b class="tiny">${dualUnit(sev,u)}</b></span>
-    ${Number.isFinite(critL)? `<span class="chip err">هبوط حرج: <b class="tiny">${dualUnit(critL,u)}</b></span>` : ''}
-    ${Number.isFinite(critH)? `<span class="chip danger">ارتفاع حرج: <b class="tiny">${dualUnit(critH,u)}</b></span>` : ''}
+    ${Number.isFinite(cl)? `<span class="chip err">هبوط حرج: <b class="tiny">${dualUnit(cl,u)}</b></span>` : ''}
+    ${Number.isFinite(ch)? `<span class="chip danger">ارتفاع حرج: <b class="tiny">${dualUnit(ch,u)}</b></span>` : ''}
   `;
 
   backToChildBtn.addEventListener('click',()=>location.href=`child.html?child=${encodeURIComponent(childId)}`);
@@ -217,20 +295,16 @@ function getSevereUpper(){
   return t;
 }
 function getCriticalLow(){
-  const u=(childData?.glucoseUnit||'mg/dL').toLowerCase();
   let t =
     (childData?.normalRange && childData.normalRange.criticalLow != null) ? Number(childData.normalRange.criticalLow) :
     (childData?.criticalLowLevel != null ? Number(childData.criticalLowLevel) : NaN);
-  if(!Number.isFinite(t)) return NaN;
-  return t;
+  return Number.isFinite(t)? t : NaN;
 }
 function getCriticalHigh(){
-  const u=(childData?.glucoseUnit||'mg/dL').toLowerCase();
   let t =
     (childData?.normalRange && childData.normalRange.criticalHigh != null) ? Number(childData.normalRange.criticalHigh) :
     (childData?.criticalHighLevel != null ? Number(childData.criticalHighLevel) : NaN);
-  if(!Number.isFinite(t)) return NaN;
-  return t;
+  return Number.isFinite(t)? t : NaN;
 }
 function dualUnit(val, unit){
   if(!Number.isFinite(val)) return '—';
@@ -243,7 +317,12 @@ function dualUnit(val, unit){
 function updateDerived(){
   const unit = unitSel.value;
   const v = Number(readingInp.value);
-  if(!Number.isFinite(v)){ convertedBox.textContent='—'; stateBadge.textContent='—'; stateBadge.className='badge'; corrDoseView.textContent='0'; return; }
+  if(!Number.isFinite(v)){
+    convertedBox.textContent='—'; stateBadge.textContent='—'; stateBadge.className='badge';
+    corrDoseView.textContent='0';
+    if(actionsPanel){ hide(hypoRow); hide(corrRow); setAlert(null,null); }
+    return;
+  }
 
   const childUnit = childData?.glucoseUnit || 'mg/dL';
   const valueInChildUnit = childUnit===unit ? v : (childUnit.includes('mmol') ? mgdl2mmol(v) : mmol2mgdl(v));
@@ -252,7 +331,7 @@ function updateDerived(){
   const other = unit.includes('mmol') ? `${round1(mmol2mgdl(v))} mg/dL` : `${round1(mgdl2mmol(v))} mmol/L`;
   convertedBox.textContent = other;
 
-  // state (priority: critical low -> severe high -> critical high -> high -> low -> normal)
+  // state (أولوية: حرج منخفض → حرج مرتفع → شديد → مرتفع → منخفض → طبيعي)
   const min = getTargetLower();
   const upper = getTargetUpper();
   const severe = getSevereUpper();
@@ -272,6 +351,29 @@ function updateDerived(){
   const cf = Number(childData?.correctionFactor)||0;
   let corr=0;
   if(cf>0 && Number.isFinite(upper) && valueInChildUnit>upper) corr = (valueInChildUnit - upper) / cf;
+  lastComputedCorr = corr;
+
+  // ---- actions UI ----
+  ensureActionPanel();
+  setAlert(null, null);
+
+  if(st === 'هبوط' || st === 'هبوط حرج'){
+    show(hypoRow); hide(corrRow);
+    if(st === 'هبوط حرج') setAlert('danger', 'يجب التدخل السريع لمعالجة الهبوط');
+    else setAlert('warn', 'فضلاً قم بمعالجة الهبوط ثم دوّن ما استُخدم للرفع.');
+  }else if(st === 'ارتفاع' || st === 'ارتفاع شديد' || st === 'ارتفاع حرج'){
+    hide(hypoRow); show(corrRow);
+    if(useAutoCorr?.checked){
+      corrDoseInput.value = String(round1(Math.max(0,corr)));
+      corrDoseInput.setAttribute('readonly','readonly');
+    }
+    if(st === 'ارتفاع حرج') setAlert('danger', 'يجب معالجة الارتفاع بسرعة');
+    else if(st === 'ارتفاع شديد') setAlert('warn', 'القراءة أعلى من حد الارتفاع الشديد.');
+  }else{
+    hide(hypoRow); hide(corrRow);
+  }
+  show(notesRow);
+
   corrDoseView.textContent = String(round1(Math.max(0,corr)));
 }
 
@@ -295,7 +397,6 @@ function buildDayArray(){
       const when = x.when?.toDate ? x.when.toDate() : (x.ts?.toDate ? x.ts.toDate() : null);
       if(!when) return null;
       if(!sameDay(when,targetDate)) return null;
-      // pick value by child's unit
       let val = unit.includes('mmol') ? (x.value_mmol ?? x.value ?? (x.unit==='mg/dL'? mgdl2mmol(x.value): x.value)) 
                                       : (x.value_mgdl ?? x.value ?? (x.unit==='mmol/L'? mmol2mgdl(x.value) : x.value));
       val = Number(val);
@@ -317,7 +418,6 @@ function buildDayArray(){
 }
 
 function applyFilters(arr){
-  // auto filter by selected slot
   if(filterState.auto){
     const s = slotSel.value;
     if(/^PRE_/.test(s)) filterState.group='PRE';
@@ -367,7 +467,6 @@ function applyFilters(arr){
     });
   }
 
-  // sorting
   const s = sortSel.value || 'time-asc';
   if(s==='value-desc') out.sort((a,b)=>b.val-a.val);
   else if(s==='value-asc') out.sort((a,b)=>a.val-b.val);
@@ -381,11 +480,9 @@ function renderList(){
   const all = buildDayArray();
   const arr = applyFilters(all);
 
-  // stats (للنتائج المعروضة)
   renderStats(arr, unit);
   renderSparkline(arr);
 
-  // table
   gridEl.innerHTML='';
   if(!arr.length){ emptyEl.classList.remove('hidden'); return; }
   emptyEl.classList.add('hidden');
@@ -406,7 +503,6 @@ function renderList(){
     gridEl.appendChild(row);
   }
 }
-
 function statePill(st){
   let badge = 'ok', dot = 'state-norm';
   if(st === 'هبوط'){ badge='err'; dot='state-low'; }
@@ -477,12 +573,20 @@ async function saveMeasurement(){
   const valInChild = childUnit===unit ? v : (childUnit.includes('mmol') ? mgdl2mmol(v) : mmol2mgdl(v));
   const upper = getTargetUpper();
   const cf = Number(childData?.correctionFactor)||0;
+
+  // التصحيحي على upper
   let correctionDose = 0;
   if(cf>0 && Number.isFinite(upper) && valInChild>upper) correctionDose = (valInChild - upper)/cf;
 
-  // optional extra fields (لو حقنتها في واجهة تانية)
-  const notes = ($('mNotes')?.value||'').trim() || null;
-  const hypoTreatment = ($('hypoTreatment')?.value||'').trim() || null;
+  // لو صف التصحيح ظاهر وAuto مطفي → استخدم إدخال المستخدم
+  if (corrRow && corrRow.style.display !== 'none' && useAutoCorr && !useAutoCorr.checked) {
+    const mv = Number(corrDoseInput.value);
+    if(Number.isFinite(mv)) correctionDose = mv;
+  }
+
+  // الحقول الاختيارية
+  const notes = (notesInput?.value || '').trim() || null;
+  const hypoTreatment = (hypoInput?.value || '').trim() || null;
 
   const payload = {
     value: v, unit,
