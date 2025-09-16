@@ -56,11 +56,36 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple
 .report-wrapper{padding:10px}
 .report-scroll{overflow:auto;border-radius:10px;border:1px solid #eef2f7}
 
-/* Report Table */
-.report-table{width:100%;border-collapse:collapse;table-layout:fixed}
-.report-table thead th{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:8px;z-index:2}
-.report-table th,.report-table td{padding:8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
-.report-table th:first-child,.report-table td:first-child{position:sticky;right:0;background:#fff;z-index:1;border-left:1px solid #eef2f7}
+/* ===== Report Table: شبكة + تلوين الخانات ===== */
+.report-table{
+  width:100%;
+  border-collapse:collapse;      /* شبكة كاملة */
+  table-layout:fixed;
+  background:#fff;
+}
+.report-table th,.report-table td{
+  padding:8px;
+  border:1px solid #e5e7eb;      /* تسطير كل الخلايا */
+  vertical-align:top;
+}
+.report-table thead th{
+  position:sticky; top:0; z-index:2;
+  background:#fff;
+}
+.report-table th:first-child,
+.report-table td:first-child{
+  position:sticky; right:0; z-index:1;
+  background:#fff;                /* يبقى عنوان التاريخ أبيض */
+  border-left:1px solid #e5e7eb;
+}
+
+/* لون الخانة حسب الحالة (خلفية ناعمة) */
+.report-table td.td-ok   { background:#dcfce7; } /* داخل النطاق = أخضر فاتح */
+.report-table td.td-low  { background:#e0f2fe; } /* هبوط = أزرق فاتح */
+.report-table td.td-high { background:#fee2e2; } /* ارتفاع = أحمر فاتح */
+.report-table td.td-sev  { background:#fde68a; } /* ارتفاع شديد = أصفر فاتح */
+.report-table td.td-crit { background:#ffe4e6; } /* حرج = وردي فاتح */
+
 .c-val{display:block;font-family:ui-monospace,Consolas,monospace}
 .c-note{display:block;color:#64748b;margin-top:4px;font-size:12px}
 .badge{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:999px;background:#eef2ff;font-size:12px;margin-inline-end:6px}
@@ -100,7 +125,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple
 @page { size: A4 landscape; margin: 8mm; }
 @media print{
   html,body{width:297mm;height:210mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .topbar,.toolbar,.actions,.zoom,.quick-range,.btn,#btnBack,#btnShow,#btnAnalytics,#btnPrintPage,#btnPrint,#btnBlankWeek,#btnExportPDF,#btnExportCSV,#btnExportXLSX{display:none!important}
+  .topbar,.toolbar,.actions,.zoom,.quick-range,.btn,
+  #btnBack,#btnShow,#btnAnalytics,#btnPrintPage,#btnPrint,#btnBlankWeek,#btnExportPDF,#btnExportCSV,#btnExportXLSX{display:none!important}
   body{zoom:var(--print-zoom)}
   .report-wrapper,.sheet{padding:0 6mm!important;box-shadow:none!important}
   thead{display:table-header-group}
