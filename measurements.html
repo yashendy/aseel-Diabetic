@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>القياسات</title>
-  <link rel="stylesheet" href="css/measurements.css" />
+  <link rel="stylesheet" href="measurements.css" />
 </head>
 <body>
   <div class="container">
@@ -18,9 +18,10 @@
       </div>
     </header>
 
+    <!-- CR / CF / Bolus -->
     <div id="therapyChips" class="chips"></div>
 
-    <!-- شريط الإدخال الرئيسي -->
+    <!-- شريط الإدخال -->
     <section class="toolbar">
       <label class="field">
         <span>التاريخ</span>
@@ -84,18 +85,15 @@
       <button id="saveBtn" class="btn">حفظ القياس</button>
     </section>
 
-    <!-- شيبس حدود النطاقات (يعرض mmol + mg) -->
+    <!-- حدود النطاقات -->
     <section class="chips" id="targetsChips"></section>
 
-    <!-- (يُحقن هنا تلقائيًا) فلاتر، بحث، إحصائيات، سباركل لاين، وصفوف الإجراءات -->
-    <!-- #filtersBar + #statsBar + #actionsPanel تُحقن بالـJS -->
+    <!-- (JS يحقن هنا: filtersBar + statsBar + actionsPanel) -->
 
     <!-- جدول اليوم -->
     <section class="table-wrap">
       <div class="table-head">
-        <div class="left">
-          <span class="muted">قياسات اليوم</span>
-        </div>
+        <div class="left"><span class="muted">قياسات اليوم</span></div>
         <div class="right">
           <select id="sortSel" class="sel">
             <option value="time-asc">ترتيب: حسب الوقت</option>
@@ -114,6 +112,6 @@
 
   <div id="toast" class="toast" style="display:none"></div>
 
-  <script type="module" src="js/measurements.js"></script>
+  <script type="module" src="measurements.js"></script>
 </body>
 </html>
