@@ -6,7 +6,7 @@
   <title>التحاليل</title>
   <link rel="stylesheet" href="./css/analytics.css" />
 
-  <!-- Chart.js + adapter للوقت -->
+  <!-- Chart.js + Adapter للوقت (الترتيب مهم) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
 </head>
@@ -81,8 +81,8 @@
           <div id="lineLegend" class="legend"></div>
         </div>
 
-        <div id="spinnerLine" class="spinner" hidden></div>
-        <div id="errLine" class="error" hidden></div>
+        <div id="spinnerLine" class="spinner"></div>
+        <div id="errLine" class="error" style="display:none"></div>
 
         <canvas id="dayChart" height="240" aria-label="الرسم الزمني"></canvas>
 
@@ -92,15 +92,15 @@
         </div>
       </section>
 
-      <!-- نسب الوقت داخل/خارج النطاق -->
+      <!-- نسب الوقت -->
       <section class="panel">
         <div class="panel-head">
           <h3>نِسَب الوقت داخل/خارج النطاق</h3>
           <div id="pieLegend" class="legend"></div>
         </div>
 
-        <div id="spinnerPie" class="spinner" hidden></div>
-        <div id="errPie" class="error" hidden></div>
+        <div id="spinnerPie" class="spinner"></div>
+        <div id="errPie" class="error" style="display:none"></div>
 
         <canvas id="rangePie" height="240" aria-label="نِسَب الوقت"></canvas>
       </section>
@@ -109,7 +109,7 @@
     <div id="toast" class="toast" style="display:none"></div>
   </div>
 
-  <!-- Firebase config (ESM يصدّر auth/db) -->
+  <!-- Firebase config (ESM) -->
   <script type="module" src="./js/analytics.js"></script>
 </body>
 </html>
