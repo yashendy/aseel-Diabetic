@@ -1,8 +1,6 @@
 :root{
   --bg:#f7f8fb; --card:#fff; --muted:#6b7280; --ink:#0f172a;
-  --brand:#4f46e5; --ok:#16a34a; --warn:#f59e0b; --danger:#ef4444;
-  --blue:#0ea5e9; --green:#22c55e; --red:#ef4444;
-  --shadow:0 6px 24px rgba(15,23,42,.06), 0 2px 8px rgba(15,23,42,.04);
+  --brand:#4f46e5; --shadow:0 6px 24px rgba(15,23,42,.06), 0 2px 8px rgba(15,23,42,.04);
   --radius:14px;
 }
 *{box-sizing:border-box}
