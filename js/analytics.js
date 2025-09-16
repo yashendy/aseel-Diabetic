@@ -1,4 +1,4 @@
-// analytics.js — التحليلات (وضع "متوسط الأيام" + إصلاحات الرسم/السبينر)
+// analytics.js — التحليلات (وضع "متوسط الأيام" + إصلاحات الرسم/السبينر + تكييف السلة/تنعيم)
 import { auth, db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy
@@ -179,9 +179,8 @@ function setStatsUI(stats){
   $('sevHighLbl').textContent = sevHighLbl;
 }
 
-/* ---------- Helpers: متوسط الأيام ---------- */
-function makeAvgDayData(list, unitOut, bucketMin=30){
-  // base = 1970-01-01؛ نستخدم time scale لعرض ساعات اليوم
+/* ---------- Helpers: متوسط الأيام (تكييف + تنعيم) ---------- */
+function makeAvgDayPts(list, unitOut, bucketMin){
   const base = new Date('1970-01-01T00:00:00');
   const bucketCount = Math.ceil(1440 / bucketMin);
   const buckets = Array.from({length: bucketCount}, ()=> []);
@@ -189,7 +188,7 @@ function makeAvgDayData(list, unitOut, bucketMin=30){
   for(const p of list){
     const d = p.when;
     if(!(d instanceof Date)) continue;
-    const mins = d.getHours()*60 + d.getMinutes();
+    const mins = d.getHours()*60 + d.getMinutes(); // وقت اليوم (محلي)
     const idx = Math.min(bucketCount-1, Math.floor(mins / bucketMin));
     const y = unitOut.includes('mg') ? Number(p.val_mgdl) : Number(p.val_mmol);
     if(Number.isFinite(y)) buckets[idx].push(y);
@@ -206,6 +205,32 @@ function makeAvgDayData(list, unitOut, bucketMin=30){
   return pts;
 }
 
+function autoAvgDayPts(list, unitOut){
+  // جرّب عدة أحجام سلات لحد ما نوصل ≥3 نقاط
+  const sizes = [30, 45, 60, 90, 120];
+  for(const s of sizes){
+    const pts = makeAvgDayPts(list, unitOut, s);
+    if(pts.length >= 3) return {pts, bucket:s};
+  }
+  // لو مفيش، خُد أكبر سلة (هيطلع نقطة/نقطتين على الأكثر)
+  const last = makeAvgDayPts(list, unitOut, sizes[sizes.length-1]);
+  return {pts:last, bucket:sizes[sizes.length-1]};
+}
+
+function smoothPts(pts, win=1){
+  if(pts.length < 3 || win<=0) return pts;
+  const out=[];
+  for(let i=0;i<pts.length;i++){
+    let sum=0, c=0;
+    for(let j=i-win;j<=i+win;j++){
+      if(j<0 || j>=pts.length) continue;
+      sum += pts[j].y; c++;
+    }
+    out.push({x: pts[i].x, y: round1(sum/c)});
+  }
+  return out;
+}
+
 /* ---------- Charts ---------- */
 function ensureChartsDestroyed(){
   try{ lineChart?.destroy(); }catch(e){}
@@ -220,10 +245,16 @@ function renderLineChart(list, unitOut, sevLow, sevHigh){
   let xScale;
 
   if(chartMode === 'avgday'){
-    // متوسط الأيام
-    data = makeAvgDayData(list, unitOut, 30);
+    // متوسط الأيام: تكييف السلة + تنعيم + تثبيت نطاق اليوم
+    const {pts, bucket} = autoAvgDayPts(list, unitOut);
+    const smoothed = smoothPts(pts, 1);
+    data = smoothed;
+
+    const dayStart = new Date('1970-01-01T00:00:00');
+    const dayEnd   = new Date('1970-01-01T23:59:59');
     xScale = {
       type:'time',
+      min: dayStart, max: dayEnd,
       time:{ unit:'hour', displayFormats:{hour:'h a'} },
       ticks:{ source:'auto' },
       grid:{ display:false }
@@ -237,6 +268,8 @@ function renderLineChart(list, unitOut, sevLow, sevHigh){
     xScale = { type:'time', grid:{ display:false } };
   }
 
+  const hasLine = data.length >= 2;
+
   lineChart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -245,11 +278,12 @@ function renderLineChart(list, unitOut, sevLow, sevHigh){
         data,
         borderColor: '#4f46e5',
         backgroundColor: 'rgba(79,70,229,.08)',
-        pointRadius: 2,
-        pointHoverRadius: 4,
-        tension: .25,
-        spanGaps: true,
-        parsing: false
+        pointRadius: chartMode==='avgday' ? 3 : 2,
+        pointHoverRadius: chartMode==='avgday' ? 5 : 4,
+        tension: chartMode==='avgday' ? .35 : .2,
+        spanGaps: false,
+        parsing: false,
+        showLine: hasLine
       }]
     },
     options: {
