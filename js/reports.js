@@ -1,3 +1,4 @@
+// reports.js — صفحة التقارير النهائية
 import { auth, db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy
@@ -19,11 +20,10 @@ const fromInp=$('fromDate'),toInp=$('toDate');
 const chkShowNotes=$('chkShowNotes');
 const reportTable=$('reportTable'),tblHead=$('tblHead'),tblBody=$('tblBody'),reportRoot=$('reportRoot');
 
-const childNameEl=$('childName'),childMetaEl=$('childMeta'),chipsBar=$('childChips');
-const periodFromEl=$('periodFrom'),periodToEl=$('periodTo');
-
+const childNameEl=$('childName'),childMetaEl=$('childMeta');
 const stTIR=$('stTIR'),stAvg=$('stAvg'),stSD=$('stSD'),stCV=$('stCV'),stLow=$('stLow'),stHigh=$('stHigh'),stCrit=$('stCrit'),spark=$('spark');
 
+/* Quick map */
 const SLOT_LABEL={ WAKE:'الاستيقاظ', FASTING:'صائم',
   PRE_BREAKFAST:'ق.الفطار', POST_BREAKFAST:'ب.الفطار',
   PRE_LUNCH:'ق.الغداء',     POST_LUNCH:'ب.الغداء',
@@ -57,26 +57,24 @@ const stateClass=st=>{
   if(st==='هبوط')return's-low'; return's-ok';
 };
 
-/* ===== خريطة الشدة + لون الخانة ===== */
+/* شدة الحالة لتلوين الخلية */
 const severityRank = (st)=>{
   st = normalizeState(st);
   switch(st){
     case 'داخل النطاق': return 0;
-    case 'هبوط':        return 2;   // هبوط
-    case 'ارتفاع':      return 2;   // ارتفاع
+    case 'هبوط': case 'ارتفاع': return 2;
     case 'ارتفاع شديد': return 3;
-    case 'هبوط حرج':
-    case 'ارتفاع حرج':  return 4;
-    default:            return 1;
+    case 'هبوط حرج': case 'ارتفاع حرج': return 4;
+    default: return 1;
   }
 };
 const cellBgClass = (st)=>{
   st = normalizeState(st);
-  if(st==='داخل النطاق') return 'td-ok';     // أخضر
-  if(st==='هبوط')        return 'td-low';    // أزرق
-  if(st==='ارتفاع')      return 'td-high';   // أحمر
-  if(st==='ارتفاع شديد') return 'td-sev';    // أصفر
-  if(st==='هبوط حرج'||st==='ارتفاع حرج') return 'td-crit'; // وردي
+  if(st==='داخل النطاق') return 'td-ok';
+  if(st==='هبوط')        return 'td-low';
+  if(st==='ارتفاع')      return 'td-high';
+  if(st==='ارتفاع شديد') return 'td-sev';
+  if(st==='هبوط حرج'||st==='ارتفاع حرج') return 'td-crit';
   return '';
 };
 
@@ -87,27 +85,32 @@ onAuthStateChanged(auth, async (user)=>{
 
   const p=new URLSearchParams(location.search);
   childId=(p.get('child')||'').trim();
+  if(!childId){ toast('لا يوجد child في الرابط'); return; }
 
-  await loadChild();
-  // فترة افتراضية: أسبوع
+  // فترة افتراضية أو من الرابط
+  const urlFrom=p.get('from'), urlTo=p.get('to');
   const to=todayISO(), from=addDays(to,-6);
-  fromInp.value=from; toInp.value=to;
+  fromInp.value = urlFrom || from;
+  toInp.value   = urlTo   || to;
+
   chkShowNotes.checked=showNotes = JSON.parse(localStorage.getItem('rep_showNotes')||'true');
 
+  await loadChild();
   wire();
   refresh();
 });
 
 async function loadChild(){
-  const childRef = doc(db,'parents',currentUser.uid,'children',childId);
+  childRef = doc(db,'parents',auth.currentUser.uid,'children',childId);
   const s = await getDoc(childRef);
-  if(!s.exists()) throw new Error('child-not-found');
+  if(!s.exists()){ toast('الطفل غير موجود'); return; }
   childDoc = s.data()||{};
   measCol  = collection(childRef,'measurements');
 
   const unit = childDoc.glucoseUnit || 'mg/dL';
   $('childName').textContent = childDoc.displayName||childDoc.name||'الطفل';
   $('childMeta').textContent  = `الوحدة: ${unit} • CR: ${childDoc.carbRatio??'—'} g/U • CF: ${childDoc.correctionFactor??'—'} ${unit}/U`;
+
   $('childChips').innerHTML = `
     <span class="chip">وحدة: ${unit}</span>
     <span class="chip">CR: ${childDoc.carbRatio??'—'} g/U</span>
@@ -117,7 +120,7 @@ async function loadChild(){
 
 /* ---------- Fetch (date + slotOrder) ---------- */
 async function fetchRange(fromISO,toISO){
-  // فهرس مركب: date asc, slotOrder asc
+  // فهرس مركّب: date asc, slotOrder asc
   const qy = query(measCol,
     where('date','>=',fromISO),
     where('date','<=',toISO),
@@ -163,7 +166,7 @@ function buildTable(list){
   Object.keys(byDate).sort().forEach(d=>{
     const tr=document.createElement('tr');
 
-    // عمود التاريخ (أبيض)
+    // عمود التاريخ
     let rowHtml = `<td class="mono">${fmtDate(d)}<div class="muted">${d}</div></td>`;
 
     // بقية الأعمدة
@@ -205,6 +208,9 @@ function computeStats(list){
   return {avg:mean,sd,cv,tir,low,high,crit};
 }
 function renderStats(list){
+  $('periodFrom').textContent=new Date(fromInp.value).toLocaleDateString('ar-EG');
+  $('periodTo').textContent  =new Date(toInp.value).toLocaleDateString('ar-EG');
+
   const u=childDoc.glucoseUnit||'mg/dL';
   const s=computeStats(list);
   $('stTIR').textContent = `${Math.round(s.tir)}%`;
@@ -225,25 +231,36 @@ function renderStats(list){
   }
 }
 
-/* ---------- Print helpers ---------- */
-function markEmptyColumns(forPrint){
-  const rows=reportTable.querySelectorAll('tr'); if(!rows.length) return;
-  const cols=rows[0].children.length;
-  for(let c=1;c<cols;c++){
-    let empty=true;
-    for(let r=1;r<rows.length;r++){
-      const el=r.children[c]; if(el && el.textContent.trim()!==''){ empty=false; break; }
+/* ---------- Print helpers (إصلاح قوي) ---------- */
+function markEmptyColumns(forPrint) {
+  const headRow = tblHead ? tblHead.querySelector('tr') : null;
+  const bodyRows = tblBody ? Array.from(tblBody.querySelectorAll('tr')) : [];
+  if (!headRow) return;
+
+  const cols = headRow.children.length;
+  const allRows = [headRow, ...bodyRows];
+
+  for (let c = 1; c < cols; c++) {
+    let empty = true;
+    for (let r = 1; r < allRows.length; r++) {
+      const row = allRows[r];
+      const el = row && row.children ? row.children[c] : null;
+      if (el && el.textContent && el.textContent.trim() !== '') {
+        empty = false; break;
+      }
     }
-    rows.forEach(r=>{
-      const el=r.children[c]; if(!el) return;
-      if(empty && forPrint) el.classList.add('col-empty'); else el.classList.remove('col-empty');
-    });
+    for (const row of allRows) {
+      const el = row && row.children ? row.children[c] : null;
+      if (!el) continue;
+      if (empty && forPrint) el.classList.add('col-empty');
+      else el.classList.remove('col-empty');
+    }
   }
 }
-window.addEventListener('beforeprint',()=>{ markEmptyColumns(true); document.documentElement.classList.add('printing'); });
-window.addEventListener('afterprint', ()=>{ document.querySelectorAll('.col-empty').forEach(e=>e.classList.remove('col-empty')); document.documentElement.classList.remove('printing'); });
+window.addEventListener('beforeprint',()=>{ markEmptyColumns(true); document.documentElement.style.setProperty('--print-zoom', String($('printZoom').value||1)); });
+window.addEventListener('afterprint', ()=>{ document.querySelectorAll('.col-empty').forEach(e=>e.classList.remove('col-empty')); });
 
-/* ---------- Export (HTML2PDF) ---------- */
+/* ---------- Export ---------- */
 $('btnExportPDF')?.addEventListener('click',()=>{
   const opt={
     margin:[10,10,10,10],
@@ -255,8 +272,6 @@ $('btnExportPDF')?.addEventListener('click',()=>{
   };
   html2pdf().set(opt).from(reportRoot).save();
 });
-
-/* ---------- CSV/Excel ---------- */
 function listForExport(list){
   const u=childDoc.glucoseUnit||'mg/dL';
   return list.map(x=>[x.date, (SLOT_LABEL[x.slot]||x.slot), `${round1(x.value)} ${u}`, normalizeState(x.state), x.corr||0, x.hypo||'', x.notes||'']);
@@ -279,9 +294,6 @@ $('btnExportXLSX')?.addEventListener('click',async ()=>{
 /* ---------- Refresh / Events ---------- */
 async function refresh(){
   const from=fromInp.value||todayISO(), to=toInp.value||todayISO();
-  $('periodFrom').textContent=new Date(from).toLocaleDateString('ar-EG');
-  $('periodTo').textContent  =new Date(to).toLocaleDateString('ar-EG');
-
   const list=await fetchRange(from,to);
   buildTable(list);
   renderStats(list);
@@ -292,10 +304,18 @@ function wire(){
   $('btnPrint')?.addEventListener('click',()=>window.print());
   $('btnPrintPage')?.addEventListener('click',()=>{ document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden')); $('view-report').classList.remove('hidden'); window.print(); });
 
-  $('btnAnalytics')?.addEventListener('click',()=>{ document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden')); $('view-analytics').classList.remove('hidden'); });
+  $('btnAnalytics')?.addEventListener('click',()=>{
+    const url = new URL(location.origin + location.pathname.replace('reports.html','analytics.html'));
+    url.searchParams.set('child', childId);
+    url.searchParams.set('from', fromInp.value);
+    url.searchParams.set('to', toInp.value);
+    location.href = url.toString();
+  });
+
   $('btnBlankWeek')?.addEventListener('click',()=>{ document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden')); $('view-blank-week').classList.remove('hidden'); buildBlankWeek(); });
 
   chkShowNotes?.addEventListener('change',()=>{ showNotes=chkShowNotes.checked; localStorage.setItem('rep_showNotes',JSON.stringify(showNotes)); refresh(); });
+  $('printZoom')?.addEventListener('input',(e)=>{ document.documentElement.style.setProperty('--print-zoom', String(e.target.value||1)); });
 
   [fromInp,toInp].forEach(i=>i?.addEventListener('change',refresh));
   document.querySelectorAll('.quick-range .chip').forEach(b=>b.addEventListener('click',()=>{
@@ -307,7 +327,6 @@ function wire(){
 /* ---------- Blank 7 days ---------- */
 const bkChildName=$('bkChildName'),bkUnit=$('bkUnit'),bkCR=$('bkCR'),bkCF=$('bkCF'),bkFrom=$('bkFrom'),bkTo=$('bkTo'),bkGrid=$('bkGrid'),bkNotesGrid=$('bkNotesGrid');
 function cell(cls,html){ const d=document.createElement('div'); if(cls)d.className=cls; d.innerHTML=html||''; return d; }
-
 function buildBlankWeek(){
   const from=fromInp.value, to=toInp.value;
   bkFrom.textContent=new Date(from).toLocaleDateString('ar-EG'); bkTo.textContent=new Date(to).toLocaleDateString('ar-EG');
