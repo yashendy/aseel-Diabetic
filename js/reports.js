@@ -1,4 +1,3 @@
-// reports.js — قراءة بالتاريخ + slotOrder + إصلاح when، مع التصدير والطباعة
 import { auth, db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy
@@ -58,6 +57,29 @@ const stateClass=st=>{
   if(st==='هبوط')return's-low'; return's-ok';
 };
 
+/* ===== خريطة الشدة + لون الخانة ===== */
+const severityRank = (st)=>{
+  st = normalizeState(st);
+  switch(st){
+    case 'داخل النطاق': return 0;
+    case 'هبوط':        return 2;   // هبوط
+    case 'ارتفاع':      return 2;   // ارتفاع
+    case 'ارتفاع شديد': return 3;
+    case 'هبوط حرج':
+    case 'ارتفاع حرج':  return 4;
+    default:            return 1;
+  }
+};
+const cellBgClass = (st)=>{
+  st = normalizeState(st);
+  if(st==='داخل النطاق') return 'td-ok';     // أخضر
+  if(st==='هبوط')        return 'td-low';    // أزرق
+  if(st==='ارتفاع')      return 'td-high';   // أحمر
+  if(st==='ارتفاع شديد') return 'td-sev';    // أصفر
+  if(st==='هبوط حرج'||st==='ارتفاع حرج') return 'td-crit'; // وردي
+  return '';
+};
+
 /* ---------- Boot ---------- */
 onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.replace('index.html'); return; }
@@ -77,7 +99,7 @@ onAuthStateChanged(auth, async (user)=>{
 });
 
 async function loadChild(){
-  childRef = doc(db,'parents',currentUser.uid,'children',childId);
+  const childRef = doc(db,'parents',currentUser.uid,'children',childId);
   const s = await getDoc(childRef);
   if(!s.exists()) throw new Error('child-not-found');
   childDoc = s.data()||{};
@@ -93,9 +115,9 @@ async function loadChild(){
     <span class="chip">Bolus: ${childDoc.bolusType||childDoc.bolus||'—'}</span>`;
 }
 
-/* ---------- Fetch ---------- */
+/* ---------- Fetch (date + slotOrder) ---------- */
 async function fetchRange(fromISO,toISO){
-  // مهم: فهرس مركب (date asc, slotOrder asc)
+  // فهرس مركب: date asc, slotOrder asc
   const qy = query(measCol,
     where('date','>=',fromISO),
     where('date','<=',toISO),
@@ -130,7 +152,7 @@ async function fetchRange(fromISO,toISO){
   return rows;
 }
 
-/* ---------- Table ---------- */
+/* ---------- Table (with colored cells) ---------- */
 function buildTable(list){
   tblHead.innerHTML=''; tblBody.innerHTML='';
   const trh=document.createElement('tr');
@@ -140,17 +162,30 @@ function buildTable(list){
   const byDate=list.reduce((m,x)=>((m[x.date]=m[x.date]||[]).push(x),m),{});
   Object.keys(byDate).sort().forEach(d=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td class="mono">${fmtDate(d)}<div class="muted">${d}</div></td>`+COLS.map(c=>{
+
+    // عمود التاريخ (أبيض)
+    let rowHtml = `<td class="mono">${fmtDate(d)}<div class="muted">${d}</div></td>`;
+
+    // بقية الأعمدة
+    for(const c of COLS){
       const arr=(byDate[d]||[]).filter(r=>r.slot===c);
-      if(!arr.length) return `<td data-col="${c}"></td>`;
+      if(!arr.length){ rowHtml += `<td data-col="${c}"></td>`; continue; }
+
+      // أسوأ حالة داخل الخلية لتحديد الخلفية
+      let worst = arr[0];
+      for(const r of arr){ if(severityRank(r.state) > severityRank(worst.state)) worst=r; }
+      const tdClass = cellBgClass(worst.state);
+
       const parts=arr.map(r=>{
-        const val=`<span class="c-val ${stateClass(r.state)}">${round1(r.value)}</span>`;
-        const corr=r.corr?`<span class="badge">U ${round1(r.corr)}</span>`:'';
-        const note=showNotes?`<span class="c-note">${(r.hypo?('رفع: '+r.hypo+' • '):'')+ (r.notes||'')}</span>`:'';
+        const val = `<span class="c-val ${stateClass(r.state)}">${round1(r.value)}</span>`;
+        const corr= r.corr? `<span class="badge">U ${round1(r.corr)}</span>`:'';
+        const note= showNotes? `<span class="c-note">${(r.hypo?('رفع: '+r.hypo+' • '):'') + (r.notes||'')}</span>`:'';
         return `${val}${corr}${note}`;
       }).join('<hr class="hr">');
-      return `<td data-col="${c}">${parts}</td>`;
-    }).join('');
+
+      rowHtml += `<td class="${tdClass}" data-col="${c}">${parts}</td>`;
+    }
+    tr.innerHTML=rowHtml;
     tblBody.appendChild(tr);
   });
 
@@ -158,15 +193,14 @@ function buildTable(list){
 }
 
 /* ---------- Stats / Spark ---------- */
-function normalizeState2(s){ return normalizeState(s); }
 function computeStats(list){
   if(!list.length) return {avg:0,sd:0,cv:0,tir:0,low:0,high:0,crit:0};
   const n=list.length, mean=list.reduce((a,r)=>a+r.value,0)/n;
   const sd=Math.sqrt(list.reduce((a,r)=>a+(r.value-mean)**2,0)/n);
-  const low = list.filter(r=>['هبوط'].includes(normalizeState2(r.state))).length;
-  const high= list.filter(r=>['ارتفاع','ارتفاع شديد'].includes(normalizeState2(r.state))).length;
-  const crit= list.filter(r=>['هبوط حرج','ارتفاع حرج'].includes(normalizeState2(r.state))).length;
-  const tir = list.filter(r=>normalizeState2(r.state)==='داخل النطاق').length/n*100;
+  const low = list.filter(r=>['هبوط'].includes(normalizeState(r.state))).length;
+  const high= list.filter(r=>['ارتفاع','ارتفاع شديد'].includes(normalizeState(r.state))).length;
+  const crit= list.filter(r=>['هبوط حرج','ارتفاع حرج'].includes(normalizeState(r.state))).length;
+  const tir = list.filter(r=>normalizeState(r.state)==='داخل النطاق').length/n*100;
   const cv  = mean>0 ? sd/mean*100 : 0;
   return {avg:mean,sd,cv,tir,low,high,crit};
 }
@@ -198,7 +232,7 @@ function markEmptyColumns(forPrint){
   for(let c=1;c<cols;c++){
     let empty=true;
     for(let r=1;r<rows.length;r++){
-      const el=rows[r].children[c]; if(el && el.textContent.trim()!==''){ empty=false; break; }
+      const el=r.children[c]; if(el && el.textContent.trim()!==''){ empty=false; break; }
     }
     rows.forEach(r=>{
       const el=r.children[c]; if(!el) return;
