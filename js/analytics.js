@@ -1,383 +1,341 @@
-// analytics.js  (ESM)
-import { auth } from "./js/firebase-config.js";
-
-// Firebase v10 modules from CDN (app is already initialized in firebase-config)
+// analytics.js — صفحة التحاليل
+import { auth, db } from './firebase-config.js';
 import {
-  getFirestore, doc, getDoc, collection, query, where, orderBy, getDocs, Timestamp
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  collection, doc, getDoc, getDocs, query, where, orderBy
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-const db = getFirestore();
+/* ---------- DOM & Helpers ---------- */
+const $ = (id)=>document.getElementById(id);
+const toast = (m)=>{ const t=$('toast'); t.textContent=m; t.style.display='block'; clearTimeout(t._t); t._t=setTimeout(()=>t.style.display='none',1800); };
 
-// ---------- DOM ----------
-const errBox = document.getElementById("errBox");
-const unitSelect = document.getElementById("unitSelect");
-const rangeSel   = document.getElementById("rangeSel");
-const customBox  = document.getElementById("customDates");
-const fromDate   = document.getElementById("fromDate");
-const toDate     = document.getElementById("toDate");
-const applyCustom= document.getElementById("applyCustom");
-const spinnerLine= document.getElementById("spinnerLine");
-const spinnerPie = document.getElementById("spinnerPie");
-const lineLegend = document.getElementById("lineLegend");
-const pieLegend  = document.getElementById("pieLegend");
+const todayISO = ()=> new Date().toISOString().slice(0,10);
+const addDays = (iso, d)=>{ const t=new Date(iso); t.setDate(t.getDate()+d); return t.toISOString().slice(0,10); };
+const toStart = (iso)=> new Date(`${iso}T00:00:00`);
+const toEnd   = (iso)=> new Date(`${iso}T23:59:59`);
 
-// ---------- Utils ----------
-const qs = new URLSearchParams(location.search);
-const childId = qs.get("child");
-if (!childId) showError("من فضلك افتح صفحة التحليلات من صفحة التقارير (لا يوجد childId في الرابط).");
+const round1 = (n)=> Math.round((Number(n)||0)*10)/10;
 
-function showError(msg) {
-  errBox.textContent = msg;
-  errBox.style.display = "block";
-}
-function hideError() {
-  errBox.style.display = "none";
-}
+/* تحويلات */
+const toMmol = (v, unit)=> String(unit).includes('mmol') ? Number(v) : Number(v)/18;
+const toMgdl = (v, unit)=> String(unit).includes('mg/dL') ? Number(v) : Number(v)*18;
 
-function beginSpin(el){ el.style.display = "inline-block"; }
-function endSpin(el){ el.style.display = "none"; }
-
-// Unit helpers
-function toMmol(value, unit) {
-  if (value == null || isNaN(value)) return null;
-  if (!unit || unit.toLowerCase() === "mmol") return +value;
-  // mg/dL -> mmol/L
-  return (+value) / 18;
-}
-function toMgdl(value, unit) {
-  if (value == null || isNaN(value)) return null;
-  if (!unit || unit.toLowerCase() === "mgdl") return +value;
-  // mmol/L -> mg/dL
-  return (+value) * 18;
-}
-function convertForDisplay(v, inUnit, wantUnit) {
-  return wantUnit === "mgdl" ? toMgdl(v, inUnit) : toMmol(v, inUnit);
-}
-function formatValue(v, unit) {
-  if (v == null) return "-";
-  return unit === "mgdl" ? Math.round(v) : (+v).toFixed(1);
+/* الحالة */
+function normalizeState(s){
+  if(!s) return s;
+  const t=String(s).trim().toLowerCase();
+  if(t==='normal'||s==='داخل النطاق'||s==='طبيعي') return 'داخل النطاق';
+  if(t==='low'||s==='هبوط') return 'هبوط';
+  if(t==='high'||s==='ارتفاع') return 'ارتفاع';
+  if(t==='severe high'||s==='ارتفاع شديد') return 'ارتفاع شديد';
+  if(t==='critical low'||s==='هبوط حرج') return 'هبوط حرج';
+  if(t==='critical high'||s==='ارتفاع حرج') return 'ارتفاع حرج';
+  return s;
 }
 
-function startOfDay(d){ const x = new Date(d); x.setHours(0,0,0,0); return x; }
-function endOfDay(d){ const x = new Date(d); x.setHours(23,59,59,999); return x; }
-function startOfWeek(d){
-  const x = new Date(d); const day = (x.getDay()+6)%7; // ISO week start Monday
-  x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x;
-}
-function endOfWeek(d){
-  const s = startOfWeek(d); const e = new Date(s); e.setDate(s.getDate()+6); e.setHours(23,59,59,999); return e;
-}
-function startOfMonth(d){ const x=new Date(d); x.setDate(1); x.setHours(0,0,0,0); return x; }
-function endOfMonth(d){ const x=new Date(d); x.setMonth(x.getMonth()+1,0); x.setHours(23,59,59,999); return x; }
-
-// Compute range from selector value
-function computeRange(sel, custom=null) {
-  const now = new Date();
-  let start, end = now;
-
-  const mapDays = (n)=> { const s=new Date(); s.setDate(s.getDate()-n+1); return {start:startOfDay(s), end:endOfDay(now)}; };
-
-  switch(sel){
-    case "7d":  return mapDays(7);
-    case "14d": return mapDays(14);
-    case "30d": return mapDays(30);
-    case "90d": return mapDays(90);
-    case "2w":  return mapDays(14);
-    case "2m":  { const s=new Date(); s.setMonth(s.getMonth()-2); return {start:startOfDay(s), end:endOfDay(now)}; }
-    case "this_w": return { start: startOfWeek(now), end: endOfWeek(now) };
-    case "prev_w": {
-      const s = startOfWeek(now); s.setDate(s.getDate()-7);
-      const e = new Date(s); e.setDate(s.getDate()+6); e.setHours(23,59,59,999);
-      return { start: s, end: e };
-    }
-    case "this_m": return { start: startOfMonth(now), end: endOfMonth(now) };
-    case "prev_m": {
-      const s = startOfMonth(now); s.setMonth(s.getMonth()-1);
-      const e = endOfMonth(s);
-      return { start: s, end: e };
-    }
-    case "custom": {
-      if (!custom || !custom.start || !custom.end) throw new Error("يرجى اختيار تاريخ البداية والنهاية.");
-      return { start: startOfDay(custom.start), end: endOfDay(custom.end) };
-    }
-    default: return mapDays(14);
-  }
-}
-
-// Chart instances
+/* ---------- State ---------- */
+let currentUser, childId, childRef, childDoc, measCol;
+let unitDisplay = 'mmol/L';
 let lineChart, pieChart;
 
-// Doughnut labels + center text plugin
-const DoughnutWritePlugin = {
-  id: "doughnutWrite",
-  afterDraw(chart, args, opts) {
-    const { ctx, chartArea: { width, height } } = chart;
-    const total = chart.data.datasets[0]?.data?.reduce((a,b)=>a+b,0) ?? 0;
-    if (!total) return;
+/* ---------- Boot ---------- */
+onAuthStateChanged(auth, async (user)=>{
+  if(!user){ location.replace('index.html'); return; }
+  currentUser=user;
 
-    // center text
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "#111";
-    ctx.font = "600 18px system-ui";
-    const tir = chart.data.datasets[0].data[1] || 0; // [TBR, TIR, TAR]
-    const perc = Math.round((tir/total)*100);
-    ctx.fillText(`${perc}% TIR`, chart.getDatasetMeta(0).data[0].x, chart.getDatasetMeta(0).data[0].y);
-    ctx.restore();
+  const p = new URLSearchParams(location.search);
+  childId = (p.get('child')||'').trim();
+  if(!childId){ toast('لا يوجد child في الرابط'); return; }
 
-    // slice labels
-    ctx.save();
-    ctx.font = "12px system-ui";
-    const meta = chart.getDatasetMeta(0);
-    const labels = chart.data.labels || [];
-    meta.data.forEach((el, i) => {
-      const val = chart.data.datasets[0].data[i];
-      if (!val) return;
-      const pct = Math.round((val/total)*100);
-      const { x, y } = el.tooltipPosition();
-      ctx.fillStyle = "#333";
-      ctx.textAlign = "center";
-      ctx.fillText(`${labels[i]}: ${pct}%`, x, y);
-    });
-    ctx.restore();
-  }
-};
+  const urlFrom=p.get('from'), urlTo=p.get('to');
+  const to = todayISO(), from = addDays(to,-13);
+  $('fromDate').value = urlFrom || from;
+  $('toDate').value   = urlTo   || to;
 
-// Fetch child info (unit + severe limits)
-async function getChildInfo(uid, childId) {
-  const ref = doc(db, "parents", uid, "children", childId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error("الطفل غير موجود أو ليس لديك صلاحية.");
-  const d = snap.data() || {};
+  await loadChild();
+  unitDisplay = childDoc.glucoseUnit || 'mg/dL';
+  $('unitSelect').value = unitDisplay;
 
-  // Default unit
-  let unit = (d.glucoseUnit || "mmol").toLowerCase();
-  if (!["mmol","mgdl"].includes(unit)) unit = "mmol";
+  wire();
+  await refresh();
+});
 
-  // Severe limits (required for lines)
-  const rng = d.normalRange || {};
-  let severeLow  = rng.severeLow;
-  let severeHigh = rng.severeHigh;
+/* ---------- Load child ---------- */
+async function loadChild(){
+  childRef = doc(db,'parents',auth.currentUser.uid,'children',childId);
+  const s = await getDoc(childRef);
+  if(!s.exists()) throw new Error('child-not-found');
+  childDoc = s.data()||{};
+  measCol  = collection(childRef,'measurements');
 
-  if (severeLow == null || severeHigh == null) {
-    console.warn("لا توجد severeLow/severeHigh في وثيقة الطفل؛ استخدم افتراضات 3.0 و 13.9 mmol/L.");
-    severeLow = 3.0; severeHigh = 13.9;
-  }
-  return { unit, severeLow, severeHigh };
+  const unit = childDoc.glucoseUnit || 'mg/dL';
+  $('childName').textContent = childDoc.displayName || childDoc.name || 'الطفل';
+  $('childMeta').textContent = `الوحدة الافتراضية: ${unit} • CR: ${childDoc.carbRatio??'—'} g/U • CF: ${childDoc.correctionFactor??'—'} ${unit}/U`;
+
+  $('childChips').innerHTML = `
+    <span class="chip">الوحدة: ${unit}</span>
+    <span class="chip">CR: ${childDoc.carbRatio??'—'} g/U</span>
+    <span class="chip">CF: ${childDoc.correctionFactor??'—'} ${unit}/U</span>`;
 }
 
-// Fetch measurements between dates
-async function getMeasurements(uid, childId, start, end) {
-  const coll = collection(db, "parents", uid, "children", childId, "measurements");
-  const q = query(
-    coll,
-    where("when", ">=", Timestamp.fromDate(start)),
-    where("when", "<=", Timestamp.fromDate(end)),
-    orderBy("when", "asc")
+/* ---------- Fetch measurements (by when) ---------- */
+async function fetchRange(fromISO, toISO){
+  const qy = query(
+    measCol,
+    where('when','>=', toStart(fromISO)),
+    where('when','<=', toEnd(toISO)),
+    orderBy('when','asc')
   );
-  const snap = await getDocs(q);
-  const items = [];
-  snap.forEach(docSnap => {
-    const m = docSnap.data();
-    const when = (m.when && m.when.toDate) ? m.when.toDate() :
-                 (m.when instanceof Date ? m.when : (m.date ? new Date(m.date) : null));
-    if (!when) return;
+  const snap = await getDocs(qy);
 
-    // value & unit detection
-    const unitIn = (m.unit || m.units || (m.mmol!=null?"mmol": (m.mgdl!=null?"mgdl": null)) || "mmol").toLowerCase();
-    let value = null;
-    if (m.mmol != null) value = +m.mmol;
-    else if (m.value != null) value = +m.value;
-    else if (m.glucose != null) value = +m.glucose;
-    else if (m.mgdl != null) value = +m.mgdl;
+  const rows=[];
+  snap.forEach(d=>{
+    const x=d.data();
+    // إصلاح when لو ناقص أو مش مطابق لـ date
+    let when = x.when?.toDate ? x.when.toDate() : (x.when ? new Date(x.when) : null);
+    const dateStr = x.date || (when ? when.toISOString().slice(0,10) : null);
+    if (!when && dateStr) when = new Date(`${dateStr}T12:00:00`);
 
-    // final push
-    if (value != null) items.push({ when, value, unit: unitIn });
+    const valMmol = Number.isFinite(x.value_mmol) ? Number(x.value_mmol)
+                  : (x.unit==='mg/dL' ? Number(x.value)/18 : Number(x.value));
+    const valMgdl = Number.isFinite(x.value_mgdl) ? Number(x.value_mgdl)
+                  : (x.unit==='mmol/L' ? Number(x.value)*18 : Number(x.value));
+
+    rows.push({
+      id:d.id, when, date: dateStr,
+      val_mmol: valMmol, val_mgdl: valMgdl,
+      state: normalizeState(x.state)
+    });
   });
-  return items;
+  return rows;
 }
 
-// Build datasets for line chart with 2 horizontal severe lines
-function buildLineDatasets(points, severeLow, severeHigh, displayUnit) {
-  const data = points.map(p => ({ x: p.when, y: convertForDisplay(p.value, p.unit, displayUnit) }));
-  // horizontal lines
-  const timeMin = points.length ? points[0].when : new Date();
-  const timeMax = points.length ? points[points.length-1].when : new Date();
+/* ---------- Stats ---------- */
+function computeStats(list, unitOut='mmol/L'){
+  if(!list.length) return {count:0, avg:0, sd:0, cv:0, tbr:0, tir:0, tar:0};
 
-  const sLow  = convertForDisplay(severeLow,  "mmol", displayUnit);
-  const sHigh = convertForDisplay(severeHigh, "mmol", displayUnit);
+  // حدود التحليل (نعتمد severe لو متاح، وإلا افتراضات آمنة)
+  const R = childDoc?.normalRange || {};
+  const sevLow  = Number.isFinite(R.severeLow)  ? R.severeLow  : (Number.isFinite(R.criticalLow) ? R.criticalLow : 3.0);
+  const sevHigh = Number.isFinite(R.severeHigh) ? R.severeHigh : (Number.isFinite(R.criticalHigh)? R.criticalHigh: 13.9);
 
-  return [
-    {
-      label: "Glucose",
-      data,
-      borderWidth: 2,
-      pointRadius: 0,
-      tension: .2
+  // حوِّل إلى mmol داخليًا للحساب
+  const valsMmol = list.map(p=>p.val_mmol);
+  const n = valsMmol.length;
+  const mean = valsMmol.reduce((a,x)=>a+x,0)/n;
+  const sd = Math.sqrt(valsMmol.reduce((a,x)=>a+(x-mean)**2,0)/n);
+  const cv = mean>0 ? sd/mean*100 : 0;
+
+  // TBR/TIR/TAR حسب severe
+  const tbr = valsMmol.filter(v=> v < sevLow ).length / n * 100;
+  const tar = valsMmol.filter(v=> v > sevHigh).length / n * 100;
+  const tir = 100 - tbr - tar;
+
+  // المتوسط بوحدة العرض
+  const avgOut = unitOut.includes('mg') ? round1(mean*18) : round1(mean);
+
+  return {count:n, avg:avgOut, sd:round1(sd), cv:Math.round(cv), tbr:Math.round(tbr), tir:Math.round(tir), tar:Math.round(tar), sevLow, sevHigh};
+}
+
+/* ---------- Charts ---------- */
+function ensureChartsDestroyed(){
+  try{ lineChart?.destroy(); }catch(e){}
+  try{ pieChart?.destroy(); }catch(e){}
+}
+
+function renderLineChart(list, unitOut, sevLow, sevHigh){
+  const ctx = $('dayChart').getContext('2d');
+
+  const data = list.map(p=>({
+    x: p.when,
+    y: unitOut.includes('mg') ? round1(p.val_mgdl) : round1(p.val_mmol)
+  }));
+
+  lineChart = new Chart(ctx,{
+    type:'line',
+    data:{
+      datasets:[{
+        label:'القياس',
+        data,
+        borderColor:'#4f46e5',
+        pointRadius:2, pointHoverRadius:4,
+        tension:.2
+      }]
     },
-    {
-      label: "Severe Low",
-      data: [
-        { x: timeMin, y: sLow },
-        { x: timeMax, y: sLow }
-      ],
-      borderDash: [6,6],
-      borderWidth: 1.5,
-      pointRadius: 0
-    },
-    {
-      label: "Severe High",
-      data: [
-        { x: timeMin, y: sHigh },
-        { x: timeMax, y: sHigh }
-      ],
-      borderDash: [6,6],
-      borderWidth: 1.5,
-      pointRadius: 0
-    }
-  ];
-}
-
-// Build data for pie (TBR/TIR/TAR) based on severeLow/high
-function buildPieData(points, severeLow, severeHigh, displayUnit) {
-  let tbr=0, tir=0, tar=0;
-  for (const p of points) {
-    const v = convertForDisplay(p.value, p.unit, "mmol"); // قارن دائمًا بالـ mmol داخليًا
-    if (v == null) continue;
-    if (v < severeLow) tbr++;
-    else if (v > severeHigh) tar++;
-    else tir++;
-  }
-  return {
-    labels: ["TBR", "TIR", "TAR"],
-    datasets: [{
-      data: [tbr, tir, tar]
-    }]
-  };
-}
-
-// Render legends
-function renderLegend(container, labels) {
-  container.innerHTML = "";
-  labels.forEach(text => {
-    const span = document.createElement("span");
-    span.className = "chip";
-    span.textContent = text;
-    container.appendChild(span);
-  });
-}
-
-// Main loader
-async function loadAll() {
-  hideError();
-  if (!auth.currentUser) {
-    showError("يجب تسجيل الدخول أولًا.");
-    return;
-  }
-  const uid = auth.currentUser.uid;
-
-  // Unit preference + severe limits
-  const child = await getChildInfo(uid, childId);
-  if (!unitSelect.dataset.userTouched) {
-    unitSelect.value = child.unit; // default from child
-  }
-
-  // Range
-  let range;
-  if (rangeSel.value === "custom") {
-    range = computeRange("custom", { start: fromDate.valueAsDate, end: toDate.valueAsDate });
-  } else {
-    range = computeRange(rangeSel.value);
-  }
-
-  // Fetch measurements
-  beginSpin(spinnerLine); beginSpin(spinnerPie);
-  const raw = await getMeasurements(uid, childId, range.start, range.end);
-  endSpin(spinnerLine); endSpin(spinnerPie);
-
-  // Sort to be safe
-  raw.sort((a,b)=>a.when-b.when);
-
-  // Prepare charts
-  const displayUnit = unitSelect.value;
-
-  // Line
-  const lineDataSets = buildLineDatasets(raw, child.severeLow, child.severeHigh, displayUnit);
-  const lineCfg = {
-    type: "line",
-    data: { datasets: lineDataSets },
-    options: {
-      maintainAspectRatio: false,
-      parsing: false,
-      scales: {
-        x: {
-          type: "time",
-          time: { unit: "day" },
-          ticks: { autoSkip: true, maxTicksLimit: 10 }
-        },
-        y: {
-          title: { display: true, text: displayUnit === "mgdl" ? "mg/dL" : "mmol/L" }
-        }
+    options:{
+      animation:false,
+      parsing:false,
+      normalized:true,
+      scales:{
+        x:{ type:'time', grid:{display:false} },
+        y:{ beginAtZero:false }
       },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label(ctx) {
-              const v = ctx.parsed.y;
-              return `${formatValue(v, displayUnit)} ${displayUnit === "mgdl" ? "mg/dL":"mmol/L"}`;
-            }
-          }
-        }
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{
+          label:(ctx)=>`${ctx.raw.y} ${unitOut}`
+        }},
+        annotation:{} // (يمكن إضافة plugin لاحقًا لخطوط annotation)
       }
     }
-  };
-
-  if (lineChart) { lineChart.destroy(); }
-  lineChart = new Chart(document.getElementById("dayChart"), lineCfg);
-
-  renderLegend(lineLegend, [
-    `Severe Low = ${formatValue(convertForDisplay(child.severeLow,"mmol",displayUnit), displayUnit)}`,
-    `Severe High = ${formatValue(convertForDisplay(child.severeHigh,"mmol",displayUnit), displayUnit)}`
-  ]);
-
-  // Pie
-  const pie = buildPieData(raw, child.severeLow, child.severeHigh, displayUnit);
-  if (pieChart) pieChart.destroy();
-  pieChart = new Chart(document.getElementById("rangePie"), {
-    type: "doughnut",
-    data: pie,
-    options: {
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } }
-    },
-    plugins: [DoughnutWritePlugin]
   });
 
-  renderLegend(pieLegend, ["TBR: دون Severe Low", "TIR: داخل النطاق", "TAR: فوق Severe High"]);
+  // نرسم خطّي الحدود يدويًا كـ overlay بسيط
+  drawSevereLines(ctx.canvas, lineChart, unitOut, sevLow, sevHigh);
 }
 
-// ---------- Events ----------
-rangeSel.addEventListener("change", () => {
-  customBox.style.display = rangeSel.value === "custom" ? "flex" : "none";
-  if (rangeSel.value !== "custom") loadAll();
-});
-applyCustom.addEventListener("click", () => loadAll());
+function drawSevereLines(canvas, chart, unitOut, sevLow, sevHigh){
+  const yScale = chart.scales.y;
+  const xArea  = chart.chartArea;
+  if(!yScale || !xArea) return;
 
-unitSelect.addEventListener("change", () => {
-  unitSelect.dataset.userTouched = "1";
-  loadAll();
-});
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.setLineDash([6,6]);
 
-// ---------- Startup ----------
-window.addEventListener("load", async () => {
-  // wait for auth state to be ready (firebase-config likely already sets onAuthStateChanged)
-  if (auth.currentUser) {
-    await loadAll();
-  } else {
-    const unsub = auth.onAuthStateChanged(async (u) => {
-      if (u) { await loadAll(); unsub(); }
-    });
+  // حوّل الحدود لوحدة العرض
+  const L = unitOut.includes('mg') ? sevLow*18 : sevLow;
+  const H = unitOut.includes('mg') ? sevHigh*18 : sevHigh;
+
+  // Y pixel
+  const yL = yScale.getPixelForValue(L);
+  const yH = yScale.getPixelForValue(H);
+
+  // low (أزرق)
+  ctx.strokeStyle = '#0ea5e9';
+  ctx.beginPath(); ctx.moveTo(xArea.left, yL); ctx.lineTo(xArea.right, yL); ctx.stroke();
+
+  // high (أحمر)
+  ctx.strokeStyle = '#ef4444';
+  ctx.beginPath(); ctx.moveTo(xArea.left, yH); ctx.lineTo(xArea.right, yH); ctx.stroke();
+
+  ctx.restore();
+}
+
+function renderPieChart(stats){
+  const ctx = $('rangePie').getContext('2d');
+  pieChart = new Chart(ctx,{
+    type:'doughnut',
+    data:{
+      labels:['TBR (تحت الحرج المنخفض)','TIR (داخل النطاق الحرج)','TAR (فوق الحرج المرتفع)'],
+      datasets:[{
+        data:[stats.tbr, stats.tir, stats.tar],
+        backgroundColor:['#e0f2fe','#dcfce7','#fee2e2'],
+        borderWidth:1,
+        borderColor:'#e5e7eb'
+      }]
+    },
+    options:{
+      plugins:{
+        legend:{position:'bottom'},
+        tooltip:{callbacks:{label:(ctx)=> `${ctx.label}: ${Math.round(ctx.parsed)}%`}}
+      },
+      cutout:'62%'
+    }
+  });
+}
+
+/* ---------- UI Binding ---------- */
+function setStatsUI(stats){
+  const u = $('unitSelect').value;
+  $('stCount').textContent = String(stats.count);
+  $('stAvg').textContent = `${stats.avg} ${u}`;
+  $('stSD').textContent  = String(stats.sd);
+  $('stCV').textContent  = `${stats.cv}%`;
+  $('stTIR').textContent = `${stats.tir}%`;
+  $('stTBR').textContent = `${stats.tbr}%`;
+  $('stTAR').textContent = `${stats.tar}%`;
+
+  // عناوين الحدود
+  const sevLowLbl  = u.includes('mg') ? `${round1(stats.sevLow*18)} mg/dL` : `${round1(stats.sevLow)} mmol/L`;
+  const sevHighLbl = u.includes('mg') ? `${round1(stats.sevHigh*18)} mg/dL` : `${round1(stats.sevHigh)} mmol/L`;
+  $('sevLowLbl').textContent  = sevLowLbl;
+  $('sevHighLbl').textContent = sevHighLbl;
+}
+
+function showSpinner(which, show){
+  $(which).hidden = !show;
+}
+function showError(which, msg){
+  const el=$(which); el.hidden=false; el.textContent = msg || 'تعذّر التحميل';
+}
+
+/* ---------- Refresh ---------- */
+async function refresh(){
+  const from = $('fromDate').value || todayISO();
+  const to   = $('toDate').value   || todayISO();
+  $('periodFrom').textContent = new Date(from).toLocaleDateString('ar-EG');
+  $('periodTo').textContent   = new Date(to).toLocaleDateString('ar-EG');
+
+  const unitOut = $('unitSelect').value;
+
+  ensureChartsDestroyed();
+  showSpinner('spinnerLine', true);
+  showSpinner('spinnerPie', true);
+  $('errLine').hidden = true;
+  $('errPie').hidden  = true;
+
+  try{
+    const list = await fetchRange(from,to);
+    if(!list.length){
+      showSpinner('spinnerLine', false);
+      showSpinner('spinnerPie', false);
+      showError('errLine','لا توجد قراءات في هذه الفترة');
+      showError('errPie','لا توجد قراءات في هذه الفترة');
+      setStatsUI({count:0,avg:0,sd:0,cv:0,tbr:0,tir:0,tar:0,sevLow:3.0,sevHigh:13.9});
+      return;
+    }
+
+    // حساب المؤشرات
+    const stats = computeStats(list, unitOut);
+    setStatsUI(stats);
+
+    // الرسوم
+    renderLineChart(list, unitOut, stats.sevLow, stats.sevHigh);
+    renderPieChart(stats);
+
+  }catch(e){
+    console.error(e);
+    showError('errLine','حدث خطأ أثناء تحميل البيانات');
+    showError('errPie','حدث خطأ أثناء تحميل البيانات');
+  }finally{
+    showSpinner('spinnerLine', false);
+    showSpinner('spinnerPie', false);
   }
-});
+}
+
+/* ---------- Events ---------- */
+function wire(){
+  // رجوع للتقرير بنفس المعلمات
+  $('btnBack').addEventListener('click', ()=>{
+    const url = new URL(location.origin + location.pathname.replace('analytics.html','reports.html'));
+    url.searchParams.set('child', childId);
+    url.searchParams.set('from', $('fromDate').value);
+    url.searchParams.set('to', $('toDate').value);
+    location.href = url.toString();
+  });
+
+  $('btnRefresh').addEventListener('click', refresh);
+  $('unitSelect').addEventListener('change', refresh);
+  $('fromDate').addEventListener('change', refresh);
+  $('toDate').addEventListener('change', refresh);
+
+  document.querySelectorAll('.quick-range .chip').forEach(b=>b.addEventListener('click',()=>{
+    const days=Number(b.dataset.days)||7;
+    const to=todayISO(), from=addDays(to, -(days-1));
+    $('fromDate').value=from; $('toDate').value=to; refresh();
+  }));
+
+  // حفظ الرسوم كصور PNG
+  $('btnSaveLine').addEventListener('click', ()=> saveCanvasAsPng('dayChart', `line-${$('fromDate').value}_to_${$('toDate').value}.png`));
+  $('btnSavePie').addEventListener('click',  ()=> saveCanvasAsPng('rangePie', `tir-pie-${$('fromDate').value}_to_${$('toDate').value}.png`));
+}
+
+function saveCanvasAsPng(canvasId, fileName){
+  const c = $(canvasId);
+  if(!c){ toast('لا يوجد رسم للحفظ'); return; }
+  const a=document.createElement('a');
+  a.href=c.toDataURL('image/png', 1.0);
+  a.download=fileName||'chart.png';
+  a.click();
+}
