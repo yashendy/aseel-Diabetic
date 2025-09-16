@@ -1,4 +1,4 @@
-// analytics.js — التحليلات (إصلاح الرسم الزمني + السبينر)
+// analytics.js — التحليلات (وضع "متوسط الأيام" + إصلاحات الرسم/السبينر)
 import { auth, db } from './firebase-config.js';
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy
@@ -15,10 +15,6 @@ const toStart = (iso)=> new Date(`${iso}T00:00:00`);
 const toEnd   = (iso)=> new Date(`${iso}T23:59:59`);
 const round1 = (n)=> Math.round((Number(n)||0)*10)/10;
 
-/* تحويل داخلي */
-const toMmol = (v, unit)=> String(unit).includes('mmol') ? Number(v) : Number(v)/18;
-const toMgdl = (v, unit)=> String(unit).includes('mg/dL') ? Number(v) : Number(v)*18;
-
 function normalizeState(s){
   if(!s) return s;
   const t=String(s).trim().toLowerCase();
@@ -34,6 +30,7 @@ function normalizeState(s){
 /* ---------- State ---------- */
 let currentUser, childId, childRef, childDoc, measCol;
 let lineChart, pieChart;
+let chartMode = 'series'; // 'series' | 'avgday'
 
 /* ---------- Severe lines plugin (آمن) ---------- */
 const severeLinesPlugin = {
@@ -182,17 +179,31 @@ function setStatsUI(stats){
   $('sevHighLbl').textContent = sevHighLbl;
 }
 
-/* Feedback helpers */
-function showSpinner(id, show){
-  const el = $(id);
-  if (!el) return;
-  el.style.display = show ? '' : 'none';
-}
-function showError(id, msg){
-  const el = $(id);
-  if (!el) return;
-  el.style.display = '';
-  el.textContent = msg || 'تعذّر التحميل';
+/* ---------- Helpers: متوسط الأيام ---------- */
+function makeAvgDayData(list, unitOut, bucketMin=30){
+  // base = 1970-01-01؛ نستخدم time scale لعرض ساعات اليوم
+  const base = new Date('1970-01-01T00:00:00');
+  const bucketCount = Math.ceil(1440 / bucketMin);
+  const buckets = Array.from({length: bucketCount}, ()=> []);
+
+  for(const p of list){
+    const d = p.when;
+    if(!(d instanceof Date)) continue;
+    const mins = d.getHours()*60 + d.getMinutes();
+    const idx = Math.min(bucketCount-1, Math.floor(mins / bucketMin));
+    const y = unitOut.includes('mg') ? Number(p.val_mgdl) : Number(p.val_mmol);
+    if(Number.isFinite(y)) buckets[idx].push(y);
+  }
+
+  const pts=[];
+  for(let i=0;i<bucketCount;i++){
+    const arr=buckets[i];
+    if(!arr.length) continue;
+    const avg = arr.reduce((a,b)=>a+b,0)/arr.length;
+    const x = new Date(base.getTime() + i*bucketMin*60000);
+    pts.push({x, y: round1(avg)});
+  }
+  return pts;
 }
 
 /* ---------- Charts ---------- */
@@ -205,22 +216,38 @@ function renderLineChart(list, unitOut, sevLow, sevHigh){
   const canvas = $('dayChart');
   const ctx = canvas.getContext('2d');
 
-  const data = list.map(p => ({
-    x: p.when,
-    y: unitOut.includes('mg') ? round1(p.val_mgdl) : round1(p.val_mmol)
-  }));
+  let data;
+  let xScale;
+
+  if(chartMode === 'avgday'){
+    // متوسط الأيام
+    data = makeAvgDayData(list, unitOut, 30);
+    xScale = {
+      type:'time',
+      time:{ unit:'hour', displayFormats:{hour:'h a'} },
+      ticks:{ source:'auto' },
+      grid:{ display:false }
+    };
+  }else{
+    // زمني عادي
+    data = list.map(p => ({
+      x: p.when,
+      y: unitOut.includes('mg') ? round1(p.val_mgdl) : round1(p.val_mmol)
+    }));
+    xScale = { type:'time', grid:{ display:false } };
+  }
 
   lineChart = new Chart(ctx, {
     type: 'line',
     data: {
       datasets: [{
-        label: 'القياس',
+        label: (chartMode==='avgday' ? 'متوسط الأيام' : 'القياس'),
         data,
         borderColor: '#4f46e5',
         backgroundColor: 'rgba(79,70,229,.08)',
         pointRadius: 2,
         pointHoverRadius: 4,
-        tension: .2,
+        tension: .25,
         spanGaps: true,
         parsing: false
       }]
@@ -229,7 +256,7 @@ function renderLineChart(list, unitOut, sevLow, sevHigh){
       animation: false,
       normalized: true,
       scales: {
-        x: { type: 'time', grid: { display: false } },
+        x: xScale,
         y: { beginAtZero: false }
       },
       plugins: {
@@ -269,6 +296,19 @@ function renderPieChart(stats){
   } finally {
     showSpinner('spinnerPie', false);
   }
+}
+
+/* Feedback helpers */
+function showSpinner(id, show){
+  const el = $(id);
+  if (!el) return;
+  el.style.display = show ? '' : 'none';
+}
+function showError(id, msg){
+  const el = $(id);
+  if (!el) return;
+  el.style.display = '';
+  el.textContent = msg || 'تعذّر التحميل';
 }
 
 /* ---------- Refresh ---------- */
@@ -329,7 +369,17 @@ function wire(){
     $('fromDate').value=from; $('toDate').value=to; refresh();
   }));
 
-  $('btnSaveLine').addEventListener('click', ()=> saveCanvasAsPng('dayChart', `line-${$('fromDate').value}_to_${$('toDate').value}.png`));
+  // سويتش وضع الرسم
+  document.querySelectorAll('#modeSeg .seg-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#modeSeg .seg-btn').forEach(x=>x.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      chartMode = btn.dataset.mode;  // 'series' | 'avgday'
+      refresh();
+    });
+  });
+
+  $('btnSaveLine').addEventListener('click', ()=> saveCanvasAsPng('dayChart', `line-${chartMode}-${$('fromDate').value}_to_${$('toDate').value}.png`));
   $('btnSavePie').addEventListener('click',  ()=> saveCanvasAsPng('rangePie', `tir-pie-${$('fromDate').value}_to_${$('toDate').value}.png`));
 }
 
