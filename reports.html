@@ -14,29 +14,13 @@
     <!-- شريط علوي -->
     <div class="topbar">
       <div class="chips" id="childChips"></div>
-      <div class="zoom">
-        <label for="printZoom">تكبير الطباعة</label>
-        <input id="printZoom" type="range" min="0.8" max="1.3" step="0.02" value="1" />
-      </div>
-    </div>
 
-    <!-- أدوات -->
-    <div class="toolbar sheet">
-      <div class="range">
-        <div class="field">
-          <span>من</span>
-          <input type="date" id="fromDate">
-        </div>
-        <div class="field">
-          <span>إلى</span>
-          <input type="date" id="toDate">
-        </div>
-        <div class="quick-range">
-          <button class="btn chip" data-days="7">7 أيام</button>
-          <button class="btn chip" data-days="14">14</button>
-          <button class="btn chip" data-days="30">30</button>
-          <button class="btn chip" data-days="90">90</button>
-        </div>
+      <div class="period">
+        <label>من</label><input type="date" id="fromDate">
+        <label>إلى</label><input type="date" id="toDate">
+        <button id="q7" class="chip">٧ أيام</button>
+        <button id="q14" class="chip">١٤ يوم</button>
+        <button id="q30" class="chip">٣٠ يوم</button>
       </div>
 
       <div class="chk">
@@ -68,25 +52,29 @@
       </div>
     </div>
 
-    <!-- إحصائيات -->
-    <div class="stats-bar">
-      <div class="cards">
-        <div class="card"><div class="k">TIR</div><div id="stTIR">0%</div></div>
-        <div class="card"><div class="k">Avg</div><div id="stAvg">0</div></div>
-        <div class="card"><div class="k">SD</div><div id="stSD">0</div></div>
-        <div class="card"><div class="k">CV%</div><div id="stCV">0%</div></div>
-        <div class="card low"><div class="k">Lows</div><div id="stLow">0</div></div>
-        <div class="card high"><div class="k">Highs</div><div id="stHigh">0</div></div>
-        <div class="card crit"><div class="k">Critical</div><div id="stCrit">0</div></div>
+    <!-- لوحة التحليلات الذكية -->
+    <div class="sheet">
+      <div id="aiPanel" class="panel">
+        <h3 class="section-title">تحليلات ذكية</h3>
+        <div class="kpis">
+          <div class="kpi"><div class="kpi-label">TIR</div><div class="kpi-val" id="stTIR">—</div></div>
+          <div class="kpi"><div class="kpi-label">المتوسط</div><div class="kpi-val"><span id="stAvg">—</span></div></div>
+          <div class="kpi"><div class="kpi-label">SD</div><div class="kpi-val" id="stSD">—</div></div>
+          <div class="kpi"><div class="kpi-label">CV</div><div class="kpi-val" id="stCV">—</div></div>
+          <div class="kpi"><div class="kpi-label">Lows</div><div class="kpi-val" id="stLow">—</div></div>
+          <div class="kpi"><div class="kpi-label">Highs</div><div class="kpi-val" id="stHigh">—</div></div>
+          <div class="kpi"><div class="kpi-label">حرجة</div><div class="kpi-val" id="stCrit">—</div></div>
+          <div class="kpi"><div class="kpi-label">Trend</div><div class="kpi-val"><span id="spark"></span></div></div>
+        </div>
+        <ul id="aiList" class="insights"></ul>
       </div>
-      <div class="spark" id="spark"></div>
     </div>
 
-    <!-- Views -->
-    <div class="view" id="view-report">
-      <div id="reportRoot" class="report-wrapper sheet">
-        <div class="report-scroll">
-          <table id="reportTable" class="report-table">
+    <!-- العرض الرئيسي -->
+    <div class="view" id="view-default">
+      <div class="sheet">
+        <div class="table-wrap" id="reportRoot">
+          <table class="table" id="reportTable">
             <thead id="tblHead"></thead>
             <tbody id="tblBody"></tbody>
           </table>
