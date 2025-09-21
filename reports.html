@@ -1,112 +1,107 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>تقرير قياسات الجلوكوز</title>
-  <link rel="stylesheet" href="./css/reports.css" />
-  <!-- PDF فقط للتصدير (خفيف) -->
-  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js" defer></script>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>التقرير</title>
+  <link rel="stylesheet" href="css/reports.css"/>
 </head>
 <body>
-  <div class="wrap">
-
-    <!-- شريط علوي -->
-    <div class="topbar">
-      <div class="chips" id="childChips"></div>
-
-      <div class="period">
-        <label>من</label><input type="date" id="fromDate">
-        <label>إلى</label><input type="date" id="toDate">
-        <button id="q7" class="chip">٧ أيام</button>
-        <button id="q14" class="chip">١٤ يوم</button>
-        <button id="q30" class="chip">٣٠ يوم</button>
+  <div class="container">
+    <header class="head">
+      <div class="left">
+        <a href="index.html" class="btn btn--ghost">🏠 الرئيسية</a>
+        <a id="openPrint" class="btn btn--ghost">🖨️ طباعة</a>
       </div>
-
-      <div class="chk">
-        <input type="checkbox" id="chkShowNotes" checked />
-        <label for="chkShowNotes">إظهار الملاحظات/الجرعات</label>
-      </div>
-
-      <div class="actions">
-        <button id="btnShow" class="btn">عرض</button>
-        <button id="btnBack" class="btn btn--ghost">رجوع</button>
-        <button id="btnBlankWeek" class="btn btn--danger">ورقة فارغة (7 أيام)</button>
-        <button id="btnPrintPage" class="btn btn--warn">صفحة طباعة التقرير</button>
-        <button id="btnAnalytics" class="btn btn--ok">التحاليل</button>
-        <button id="btnPrint" class="btn">طباعة</button>
-        <button id="btnExportPDF" class="btn">PDF ⬇</button>
-        <button id="btnExportCSV" class="btn">CSV ⬇</button>
-        <button id="btnExportXLSX" class="btn">Excel ⬇</button>
-      </div>
-    </div>
-
-    <!-- نظرة عامة -->
-    <div class="sheet">
-      <div class="line">
+      <div class="right">
         <strong id="childName">—</strong>
-        <span class="muted" id="childMeta"></span>
+        <span id="childMeta" class="muted"></span>
       </div>
-      <div class="line">
-        الفترة: <b id="periodFrom">—</b> إلى <b id="periodTo">—</b>
+    </header>
+
+    <!-- فلاتر الفترة -->
+    <section class="filters">
+      <div class="row">
+        <label class="field">
+          <span>من</span>
+          <input type="date" id="fromDate">
+        </label>
+        <label class="field">
+          <span>إلى</span>
+          <input type="date" id="toDate">
+        </label>
+        <label class="field">
+          <span>الوحدة</span>
+          <select id="unitSel">
+            <option value="mmol/L">mmol/L</option>
+            <option value="mg/dL">mg/dL</option>
+          </select>
+        </label>
+        <button id="applyBtn" class="btn">تطبيق</button>
+        <div class="grow"></div>
+        <button id="exportCsv" class="btn btn--ghost">⬇️ CSV</button>
+        <button id="exportXlsx" class="btn btn--ghost">⬇️ Excel</button>
+        <button id="exportPdf" class="btn btn--ghost">⬇️ PDF</button>
       </div>
-    </div>
+      <div class="chips" id="thresholdChips"></div>
+    </section>
 
-    <!-- لوحة التحليلات الذكية -->
-    <div class="sheet">
-      <div id="aiPanel" class="panel">
-        <h3 class="section-title">تحليلات ذكية</h3>
-        <div class="kpis">
-          <div class="kpi"><div class="kpi-label">TIR</div><div class="kpi-val" id="stTIR">—</div></div>
-          <div class="kpi"><div class="kpi-label">المتوسط</div><div class="kpi-val"><span id="stAvg">—</span></div></div>
-          <div class="kpi"><div class="kpi-label">SD</div><div class="kpi-val" id="stSD">—</div></div>
-          <div class="kpi"><div class="kpi-label">CV</div><div class="kpi-val" id="stCV">—</div></div>
-          <div class="kpi"><div class="kpi-label">Lows</div><div class="kpi-val" id="stLow">—</div></div>
-          <div class="kpi"><div class="kpi-label">Highs</div><div class="kpi-val" id="stHigh">—</div></div>
-          <div class="kpi"><div class="kpi-label">حرجة</div><div class="kpi-val" id="stCrit">—</div></div>
-          <div class="kpi"><div class="kpi-label">Trend</div><div class="kpi-val"><span id="spark"></span></div></div>
-        </div>
-        <ul id="aiList" class="insights"></ul>
+    <!-- ملخص سريع -->
+    <section class="summary">
+      <div class="cards">
+        <div class="card"><span class="k">داخل النطاق (TIR)</span><b id="statTIR">—</b></div>
+        <div class="card low"><span class="k">انخفاض (TBR)</span><b id="statLow">—</b></div>
+        <div class="card high"><span class="k">ارتفاع (TAR)</span><b id="statHigh">—</b></div>
+        <div class="card"><span class="k">المتوسط</span><b id="statAvg">—</b></div>
+        <div class="card"><span class="k">SD</span><b id="statSD">—</b></div>
+        <div class="card crit"><span class="k">حرِج</span><b id="statCrit">—</b></div>
       </div>
-    </div>
+      <canvas id="pieTIR" height="120"></canvas>
+    </section>
 
-    <!-- العرض الرئيسي -->
-    <div class="view" id="view-default">
-      <div class="sheet">
-        <div class="table-wrap" id="reportRoot">
-          <table class="table" id="reportTable">
-            <thead id="tblHead"></thead>
-            <tbody id="tblBody"></tbody>
-          </table>
-        </div>
+    <!-- الجدول الشبكي (يماثل شكلك الحالي: أعمدة فترات × صفوف أيام) -->
+    <section class="grid-wrap">
+      <div class="grid-head">
+        <div class="r">التاريخ</div>
+        <div>الاستيقاظ/صائم</div>
+        <div>ق.الفطار</div><div>ب.الفطار</div>
+        <div>ق.الغداء</div><div>ب.الغداء</div>
+        <div>ق.العشاء</div><div>ب.العشاء</div>
+        <div>سناك</div><div>قبل النوم</div><div>أثناء النوم</div>
       </div>
-    </div>
-
-    <!-- ورقة 7 أيام فارغة -->
-    <div class="view hidden" id="view-blank-week">
-      <div class="blank-sheet">
-        <h3 class="section-title">ورقة متابعة (٧ أيام)</h3>
-        <div class="chips" style="margin:6px 0">
-          <span class="chip">الطفل: <b id="bkChildName">—</b></span>
-          <span class="chip">الوحدة: <b id="bkUnit">—</b></span>
-          <span class="chip">CR: <b id="bkCR">—</b></span>
-          <span class="chip">CF: <b id="bkCF">—</b></span>
-          <span class="chip">من: <b id="bkFrom">—</b></span>
-          <span class="chip">إلى: <b id="bkTo">—</b></span>
-        </div>
-
-        <div class="section-title">شبكة القياسات</div>
-        <div id="bkGrid" class="blank-grid"></div>
-
-        <div class="section-title">ملاحظات / الوجبات / جرعات التصحيح</div>
-        <div id="bkNotesGrid" class="blank-notes-grid"></div>
+      <div id="reportGrid" class="grid-body"></div>
+      <div id="emptyGrid" class="empty hidden">
+        <!-- شبكة فارغة بنفس التصميم عند عدم توفر بيانات -->
       </div>
-    </div>
+    </section>
 
-    <div class="toast" id="toast" style="display:none"></div>
+    <!-- مقارنة فترتين -->
+    <section class="compare">
+      <h3>مقارنة فترة حالية مقابل سابقة</h3>
+      <div class="row">
+        <label class="field"><span>الفترة الحالية</span><input type="date" id="cmpAFrom"><input type="date" id="cmpATo"></label>
+        <label class="field"><span>الفترة السابقة</span><input type="date" id="cmpBFrom"><input type="date" id="cmpBTo"></label>
+        <button id="cmpRun" class="btn">تحديث المقارنة</button>
+      </div>
+      <div id="cmpTable" class="cmp-table">
+        <!-- يبنى أفقياً: المؤشر | الحالية | السابقة | الفرق -->
+      </div>
+    </section>
+
+    <!-- تحليلات ذكية (أفقي) -->
+    <section class="ai">
+      <h3>التحليلات الذكية</h3>
+      <div id="aiTable" class="ai-table">
+        <!-- صفوف: النمط | الوصف | التوصية | الثقة | إدراج -->
+      </div>
+    </section>
   </div>
 
-  <!-- Firebase config (ESM يصدر auth/db) -->
-  <script type="module" src="./js/reports.js"></script>
+  <div id="toast" class="toast" style="display:none"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+  <script type="module" src="js/reports.js"></script>
 </body>
 </html>
