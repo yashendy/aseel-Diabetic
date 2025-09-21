@@ -1,145 +1,43 @@
-<!-- reports-print.html -->
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تقرير قياسات — الطباعة</title>
-
-  <link rel="icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/reports-print.css?v=5" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>طباعة التقرير</title>
+  <link rel="stylesheet" href="css/reports-print.css"/>
 </head>
 <body>
-  <div class="container">
-    <header class="top card">
-      <div class="head-grid">
-        <div>
-          <h1>🧾 تقرير قياسات — <span id="childName">—</span></h1>
-          <div class="chips small">
-            <span class="chip">العمر: <b id="childAge">—</b></span>
-            <span class="chip">النطاق: <b id="childRange">—</b></span>
-            <span class="chip">CR: <b id="childCR">—</b></span>
-            <span class="chip">CF: <b id="childCF">—</b></span>
-          </div>
-        </div>
-        <div class="qr-wrap">
-          <canvas id="qr"></canvas>
-          <button id="backBtn" class="btn secondary">⟵ رجوع</button>
-        </div>
+  <div class="page">
+    <header class="print-head">
+      <div>
+        <h2>تقرير القياسات</h2>
+        <div class="muted" id="rangeTxt">—</div>
       </div>
-
-      <div class="filters">
-        <div class="row">
-          <div class="field">
-            <label>الوحدة</label>
-            <select id="unitSelect">
-              <option value="mmol">mmol/L</option>
-              <option value="mgdl">mg/dL</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>من</label>
-            <input id="fromDate" type="date" />
-          </div>
-          <div class="field">
-            <label>إلى</label>
-            <input id="toDate" type="date" />
-          </div>
-
-          <div class="field grow">
-            <label>ملاحظات</label>
-            <input id="notes" type="text" placeholder="ملاحظات تظهر أعلى التقرير" />
-          </div>
-
-          <div class="actions">
-            <button id="applyBtn" class="btn">تطبيق</button>
-            <button id="blankBtn" class="btn outline" title="تفعيل النموذج الفارغ بسرعة">نموذج فارغ الآن</button>
-            <button id="printBtn" class="btn secondary">🖨️ PDF / طباعة</button>
-          </div>
-        </div>
-
-        <div class="row wrap gap8">
-          <label class="switch">
-            <input id="maskTreat" type="checkbox" />
-            <span></span> إخفاء الملاحظات في الطباعة
-          </label>
-
-          <label class="switch">
-            <input id="colorize" type="checkbox" checked />
-            <span></span> تلوين (هبوط/طبيعي/ارتفاع)
-          </label>
-
-          <label class="switch">
-            <input id="weeklyMode" type="checkbox" />
-            <span></span> تقرير خاص (أسبوعي)
-          </label>
-
-          <label class="switch">
-            <input id="manualMode" type="checkbox" />
-            <span></span> وضع يدوي (نموذج فارغ قابل للتحرير)
-          </label>
-        </div>
+      <div class="meta">
+        <div><b id="childName">—</b></div>
+        <div class="muted" id="childMeta">—</div>
       </div>
     </header>
 
-    <!-- يظهر أعلى الجدول إذا خانة الملاحظات ليست فارغة -->
-    <section id="notesBar" class="card notes-bar hidden">
-      <strong>ملاحظات:</strong>
-      <span id="notesText">—</span>
+    <!-- شبكة بنفس شكل الجدول المرئي -->
+    <section class="grid-wrap">
+      <div class="grid-head">
+        <div class="r">التاريخ</div>
+        <div>الاستيقاظ/صائم</div>
+        <div>ق.الفطار</div><div>ب.الفطار</div>
+        <div>ق.الغداء</div><div>ب.الغداء</div>
+        <div>ق.العشاء</div><div>ب.العشاء</div>
+        <div>سناك</div><div>قبل النوم</div><div>أثناء النوم</div>
+      </div>
+      <div id="grid" class="grid-body"></div>
     </section>
 
-    <section class="card">
-      <div class="table-head">
-        <div class="legend">
-          <span class="badge danger">هبوط</span>
-          <span class="badge ok">طبيعي</span>
-          <span class="badge warn">ارتفاع</span>
-        </div>
-        <div class="period small">
-          <span>من: <b id="periodFrom">—</b></span>
-          <span>إلى: <b id="periodTo">—</b></span>
-          <span>الوحدة: <b id="periodUnit">mmol/L</b></span>
-        </div>
-      </div>
+    <!-- في حال عدم وجود بيانات: شبكة فارغة -->
+    <section id="empty" class="muted" style="display:none; padding:8px 0">لا توجد قياسات في الفترة المحددة.</section>
 
-      <div class="table-wrap">
-        <table id="reportTable" class="table">
-          <thead>
-            <tr>
-              <th>التاريخ</th>
-              <th>الاستيقاظ</th>
-              <th>ق.الفطار</th>
-              <th>ب.الفطار</th>
-              <th>ق.الغدا</th>
-              <th>ب.الغدا</th>
-              <th>ق.العشا</th>
-              <th>ب.العشا</th>
-              <th>سناك</th>
-              <th>أثناء النوم</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
-      <div id="empty" class="empty hidden">لا توجد قياسات في هذه الفترة.</div>
-    </section>
-
-    <footer class="muted tiny">
-      ملاحظة: خيار “إخفاء الملاحظات في الطباعة” يؤثر فقط على الملاحظات داخل خلايا الجدول؛
-      أما الملاحظات أعلى التقرير فتظهر دائمًا إن وُجدت.
-    </footer>
+    <footer class="print-foot muted">تم الإنشاء آليًا — التاريخ: <span id="now"></span></footer>
   </div>
 
-  <!-- Firebase -->
-  <script type="module" src="js/firebase-config.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-
-  <!-- كود الصفحة -->
-  <script type="module" src="js/reports-print.js?v=5"></script>
- 
-</body>
-</html>
-
+  <script type="module" src="js/reports-print.js"></script>
 </body>
 </html>
