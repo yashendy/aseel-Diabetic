@@ -1,414 +1,291 @@
-// reports.js — صفحة التقارير النهائية (محدَّث)
-// - جلب مزدوج when+date + دمج النتائج لمنع التكرار
-// - لوحة تحليلات ذكية أعلى الجدول
-
 import { auth, db } from './firebase-config.js';
 import {
-  collection, doc, getDoc, getDocs, query, where, orderBy
+  collection, doc, getDoc, getDocs, onSnapshot, query, where, orderBy
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-/* ---------- DOM & Helpers ---------- */
+/* ---------- helpers ---------- */
 const $=id=>document.getElementById(id);
-const round1=n=>Math.round((Number(n)||0)*10)/10;
-const fmtDate=d=>new Date(d).toLocaleDateString('ar-EG',{weekday:'short',day:'2-digit',month:'2-digit'});
-const todayISO=()=>new Date().toISOString().slice(0,10);
-const addDays=(iso,d)=>{const t=new Date(iso);t.setDate(t.getDate()+d);return t.toISOString().slice(0,10);};
-const toast=m=>{const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',1600);};
-
-let childId,currentUser,childDoc,childRef,measCol;
-let showNotes=true;
-
-const fromInp=$('fromDate'),toInp=$('toDate');
-const chkShowNotes=$('chkShowNotes');
-const reportTable=$('reportTable'),tblHead=$('tblHead'),tblBody=$('tblBody'),reportRoot=$('reportRoot');
-
-const childNameEl=$('childName'),childMetaEl=$('childMeta');
-const stTIR=$('stTIR'),stAvg=$('stAvg'),stSD=$('stSD'),stCV=$('stCV'),stLow=$('stLow'),stHigh=$('stHigh'),stCrit=$('stCrit'),spark=$('spark');
-
-/* AI panel */
-const aiPanel=$('aiPanel'), aiList=$('aiList');
-
-/* Quick map */
-const SLOT_LABEL={ WAKE:'الاستيقاظ', FASTING:'صائم',
-  PRE_BREAKFAST:'ق.الفطار', POST_BREAKFAST:'ب.الفطار',
-  PRE_LUNCH:'ق.الغداء',     POST_LUNCH:'ب.الغداء',
-  PRE_DINNER:'ق.العشاء',    POST_DINNER:'ب.العشاء',
-  SNACK:'سناك', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم', EXERCISE:'رياضة', OTHER:'أخرى' };
-const SLOT_ALIAS={
-  WAKE:['WAKE','UPON_WAKE','UPONWAKE'],
-  FASTING:['FASTING'],
-  PRE_BREAKFAST:['PRE_BREAKFAST'], POST_BREAKFAST:['POST_BREAKFAST'],
-  PRE_LUNCH:['PRE_LUNCH'], POST_LUNCH:['POST_LUNCH'],
-  PRE_DINNER:['PRE_DINNER'], POST_DINNER:['POST_DINNER'],
-  SNACK:['SNACK'], BEDTIME:['BEDTIME','PRE_SLEEP','BEFORE_SLEEP','BEFORESLEEP','PRE-SLEEP'],
-  DURING_SLEEP:['DURING_SLEEP','NIGHT'], EXERCISE:['EXERCISE'], OTHER:['OTHER']
+const round1=n=>Math.round((+n||0)*10)/10;
+const mgdl2mmol=v=>v/18, mmol2mgdl=v=>v*18;
+const FIXED_MMOL = Object.freeze({ low:3.9, upper:7.1, severe:10.9, critHigh:14.1 });
+const SLOT_ORDER = ["WAKE","FASTING","PRE_BREAKFAST","POST_BREAKFAST","PRE_LUNCH","POST_LUNCH","PRE_DINNER","POST_DINNER","SNACK","BEDTIME","DURING_SLEEP"];
+const SLOT_LABEL = {
+  FASTING:'صائم/استيقاظ', PRE_BREAKFAST:'ق.الفطار', POST_BREAKFAST:'ب.الفطار',
+  PRE_LUNCH:'ق.الغداء', POST_LUNCH:'ب.الغداء',
+  PRE_DINNER:'ق.العشاء', POST_DINNER:'ب.العشاء',
+  SNACK:'سناك', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم', WAKE:'الاستيقاظ'
 };
-const COLS=['WAKE','FASTING','PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK','BEDTIME','DURING_SLEEP'];
+function formatDate(d){return d.toLocaleDateString('ar-EG',{weekday:'long', day:'2-digit', month:'numeric'})}
+function toast(m){const t=$('toast'); t.textContent=m; t.style.display='block'; clearTimeout(t._t); t._t=setTimeout(()=>t.style.display='none',2200);}
 
-function normalizeSlot(k){
-  if(!k) return 'OTHER';
-  const t=String(k).trim().toUpperCase();
-  for(const key of Object.keys(SLOT_ALIAS)){
-    if(SLOT_ALIAS[key].includes(t)) return key;
-  }
-  return t in SLOT_LABEL ? t : 'OTHER';
-}
-function normalizeState(s){
-  if(!s) return s; const t=String(s).trim().toLowerCase();
-  if(t==='normal'||s==='داخل النطاق'||s==='طبيعي') return 'داخل النطاق';
-  if(t==='low'||s==='هبوط') return 'هبوط';
-  if(t==='high'||s==='ارتفاع') return 'ارتفاع';
-  if(t==='severe high'||s==='ارتفاع شديد') return 'ارتفاع شديد';
-  if(t==='critical low'||s==='هبوط حرج') return 'هبوط حرج';
-  if(t==='critical high'||s==='ارتفاع حرج') return 'ارتفاع حرج';
-  return s;
-}
-const severityRank = st => ({'داخل النطاق':0,'هبوط':1,'ارتفاع':1,'ارتفاع شديد':2,'هبوط حرج':3,'ارتفاع حرج':3}[normalizeState(st)]??0);
-const stateClass = st => ({'داخل النطاق':'ok','هبوط':'low','ارتفاع':'high','ارتفاع شديد':'sev','هبوط حرج':'crit','ارتفاع حرج':'crit'}[normalizeState(st)]||'');
-const cellBgClass = st => {
-  const n=normalizeState(st);
-  if(n==='داخل النطاق') return '';
-  if(n==='هبوط')        return 'td-low';
-  if(n==='ارتفاع')      return 'td-high';
-  if(n==='ارتفاع شديد') return 'td-sev';
-  if(n==='هبوط حرج'||n==='ارتفاع حرج') return 'td-crit';
-  return '';
-};
+/* ---------- globals ---------- */
+let currentUser, childId=new URLSearchParams(location.search).get('child')||'', childRef, child;
+let unitSel, fromDate, toDate, reportGrid, emptyGrid, pie, cmpElems, aiTable;
 
-/* ---------- Boot ---------- */
-onAuthStateChanged(auth, async (user)=>{
-  if(!user){ location.replace('index.html'); return; }
-  currentUser=user;
+/* ---------- boot ---------- */
+onAuthStateChanged(auth, async (u)=>{
+  if(!u){ location.href='index.html'; return; }
+  currentUser=u;
 
-  const p=new URLSearchParams(location.search);
-  childId=(p.get('child')||'').trim();
-  if(!childId){ toast('لا يوجد child في الرابط'); return; }
-
-  // فترة افتراضية أو من الرابط
-  const urlFrom=p.get('from'), urlTo=p.get('to');
-  const to=todayISO(), from=addDays(to,-6);
-  fromInp.value = urlFrom || from;
-  toInp.value   = urlTo   || to;
-
-  chkShowNotes.checked=showNotes = JSON.parse(localStorage.getItem('rep_showNotes')||'true');
-
-  await loadChild();
-  wire();
-  refresh();
+  wire(); await loadChild(u.uid);
+  unitSel.value = child?.glucoseUnit || 'mg/dL';
+  fillThresholdChips();
+  initDefaultRange();
+  await renderReport();
+  wireEvents();
 });
 
-async function loadChild(){
-  childRef = doc(db,'parents',auth.currentUser.uid,'children',childId);
-  const s = await getDoc(childRef);
-  if(!s.exists()){ toast('الطفل غير موجود'); return; }
-  childDoc = s.data()||{};
-  measCol  = collection(childRef,'measurements');
-
-  const unit = childDoc.glucoseUnit || 'mg/dL';
-  $('childName').textContent = childDoc.displayName||childDoc.name||'الطفل';
-  $('childMeta').textContent  = `الوحدة: ${unit} • CR: ${childDoc.carbRatio??'—'} g/U • CF: ${childDoc.correctionFactor??'—'} ${unit}/U`;
-
-  $('childChips').innerHTML = `
-    <span class="chip">وحدة: ${unit}</span>
-    <span class="chip">CR: ${childDoc.carbRatio??'—'} g/U</span>
-    <span class="chip">CF: ${childDoc.correctionFactor??'—'} ${unit}/U</span>
-    <span class="chip">Bolus: ${childDoc.bolusType||childDoc.bolus||'—'}</span>`;
-}
-
-/* ---------- Fetch (when + date) ---------- */
-function toStart(fromISO){ return new Date(fromISO+'T00:00:00'); }
-function toEnd(toISO){   return new Date(toISO+'T23:59:59'); }
-
-async function fetchRange(fromISO,toISO){
-  const unit = childDoc.glucoseUnit||'mg/dL';
-  const seen = new Set();
-  const rows = [];
-
-  // 1) by when (Timestamp)
-  try{
-    const qWhen = query(
-      measCol,
-      where('when','>=',toStart(fromISO)),
-      where('when','<=',toEnd(toISO)),
-      orderBy('when','asc')
-    );
-    const sWhen = await getDocs(qWhen);
-    sWhen.forEach(d=>{
-      if(seen.has(d.id)) return; seen.add(d.id);
-      const x=d.data();
-      const dateStr = x.date || (x.when?.toDate? x.when.toDate().toISOString().slice(0,10) : null);
-      let when = x.when?.toDate ? x.when.toDate() : (x.when ? new Date(x.when) : null);
-      if (!when && dateStr) when = new Date(`${dateStr}T12:00:00`);
-      const slot = normalizeSlot(x.slotKey);
-      const state= normalizeState(x.state);
-      const val = unit.includes('mmol')
-        ? (Number(x.value_mmol) ?? (x.unit==='mg/dL'? Number(x.value)/18 : Number(x.value)))
-        : (Number(x.value_mgdl) ?? (x.unit==='mmol/L'? Number(x.value)*18 : Number(x.value)));
-      rows.push({ id:d.id, date:dateStr, when, slotOrder: x.slotOrder ?? 99, slot, state, value: Number(val)||0,
-                  corr: Number(x.correctionDose)||0, notes: x.notes||'', hypo: x.hypoTreatment||'' });
-    });
-  }catch(e){ /* قد يحتاج لفهرس مركب — نتجاوز ونكمل */ }
-
-  // 2) by date (String)
-  try{
-    const qDate = query(
-      measCol,
-      where('date','>=',fromISO),
-      where('date','<=',toISO),
-      orderBy('date','asc'),
-      orderBy('slotOrder','asc')
-    );
-    const sDate = await getDocs(qDate);
-    sDate.forEach(d=>{
-      if(seen.has(d.id)) return; seen.add(d.id);
-      const x=d.data();
-      const dateStr = x.date || (x.when?.toDate? x.when.toDate().toISOString().slice(0,10) : null);
-      let when = x.when?.toDate ? x.when.toDate() : (x.when ? new Date(x.when) : null);
-      if (!when && dateStr) when = new Date(`${dateStr}T12:00:00`);
-      const slot = normalizeSlot(x.slotKey);
-      const state= normalizeState(x.state);
-      const val = unit.includes('mmol')
-        ? (Number(x.value_mmol) ?? (x.unit==='mg/dL'? Number(x.value)/18 : Number(x.value)))
-        : (Number(x.value_mgdl) ?? (x.unit==='mmol/L'? Number(x.value)*18 : Number(x.value)));
-      rows.push({ id:d.id, date:dateStr, when, slotOrder: x.slotOrder ?? 99, slot, state, value: Number(val)||0,
-                  corr: Number(x.correctionDose)||0, notes: x.notes||'', hypo: x.hypoTreatment||'' });
-    });
-  }catch(e){ /* قد يحتاج لفهرس مركب — نتجاوز ونكمل */ }
-
-  // sort stable by date asc, then slotOrder asc
-  rows.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (a.slotOrder - b.slotOrder));
-  return rows;
-}
-
-/* ---------- Build table ---------- */
-function groupByDate(list){
-  const map=new Map();
-  for(const r of list){
-    const k=r.date || (r.when? r.when.toISOString().slice(0,10):'');
-    if(!map.has(k)) map.set(k,[]);
-    map.get(k).push(r);
-  }
-  return map;
-}
-function markEmptyColumns(show=true){
-  const ths=[...tblHead.querySelectorAll('th[data-col]')];
-  const tds=[...tblBody.querySelectorAll('td[data-col]')];
-  const colHas = Object.fromEntries(COLS.map(c=>[c,false]));
-  tds.forEach(td=>{ if(td.textContent.trim()) colHas[td.dataset.col]=true; });
-  ths.forEach(th=> th.classList.toggle('muted', !colHas[th.dataset.col]));
-}
-function buildTable(list){
-  // head
-  tblHead.innerHTML='<tr><th>التاريخ</th>'+COLS.map(c=>`<th data-col="${c}">${SLOT_LABEL[c]}</th>`).join('')+'</tr>';
-  tblBody.innerHTML='';
-
-  const byDate=groupByDate(list);
-  [...byDate.keys()].sort().forEach(dkey=>{
-    const day=byDate.get(dkey)||[];
-    const tr=document.createElement('tr');
-    let rowHtml=`<td class="date">${fmtDate(dkey)}</td>`;
-
-    for(const c of COLS){
-      const arr = day.filter(r=>r.slot===c);
-      if(!arr.length){ rowHtml += `<td data-col="${c}"></td>`; continue; }
-
-      // أسوأ حالة داخل الخلية لتحديد الخلفية
-      let worst = arr[0];
-      for(const r of arr){ if(severityRank(r.state) > severityRank(worst.state)) worst=r; }
-      const tdClass = cellBgClass(worst.state);
-
-      const parts=arr.map(r=>{
-        const val = `<span class="c-val ${stateClass(r.state)}">${round1(r.value)}</span>`;
-        const corr= r.corr? `<span class="badge">U ${round1(r.corr)}</span>`:'';
-        const note= showNotes? `<span class="c-note">${(r.hypo?('رفع: '+r.hypo+' • '):'') + (r.notes||'')}</span>`:'';
-        return `${val}${corr}${note}`;
-      }).join('<hr class="hr">');
-
-      rowHtml += `<td class="${tdClass}" data-col="${c}">${parts}</td>`;
-    }
-    tr.innerHTML=rowHtml;
-    tblBody.appendChild(tr);
-  });
-
-  markEmptyColumns(false);
-}
-
-/* ---------- Stats / Spark ---------- */
-function computeStats(list){
-  if(!list.length) return {avg:0,sd:0,cv:0,tir:0,low:0,high:0,crit:0};
-  const n=list.length, mean=list.reduce((a,r)=>a+r.value,0)/n;
-  const sd=Math.sqrt(list.reduce((a,r)=>a+(r.value-mean)**2,0)/n);
-  const low = list.filter(r=>['هبوط'].includes(normalizeState(r.state))).length;
-  const high= list.filter(r=>['ارتفاع','ارتفاع شديد'].includes(normalizeState(r.state))).length;
-  const crit= list.filter(r=>['هبوط حرج','ارتفاع حرج'].includes(normalizeState(r.state))).length;
-  const inRange = list.filter(r=>normalizeState(r.state)==='داخل النطاق').length;
-  const tir = n? Math.round((inRange/n)*100):0;
-  return {avg:mean,sd,cv:(mean? sd/mean : 0),tir,low,high,crit};
-}
-function renderSpark(list){
-  spark.innerHTML='';
-  if(list.length<2) return;
-  const w=260,h=40,p=4;
-  const xs=list.map((_,i)=>p+i*(w-2*p)/(list.length-1));
-  const vals=list.map(r=>r.value);
-  const min=Math.min(...vals), max=Math.max(...vals);
-  const ys=vals.map(v=>h-p-((v-min)/(max-min||1))*(h-2*p));
-  let d=`M ${xs[0]} ${ys[0]}`; for(let i=1;i<xs.length;i++) d+=` L ${xs[i]} ${ys[i]}`;
-  spark.innerHTML=`<svg width="${w}" height="${h}"><path d="${d}" fill="none" stroke="#2563eb" stroke-width="2"/></svg>`;
-}
-
-/* ---------- AI Insights ---------- */
-function bucket(slot){
-  if(['WAKE','FASTING','PRE_BREAKFAST','POST_BREAKFAST'].includes(slot)) return 'صباح';
-  if(['PRE_LUNCH','POST_LUNCH','SNACK'].includes(slot)) return 'ظهر/عصر';
-  if(['PRE_DINNER','POST_DINNER','BEDTIME'].includes(slot)) return 'مساء';
-  if(['DURING_SLEEP'].includes(slot)) return 'ليل';
-  return 'عام';
-}
-function buildInsights(list){
-  const tips=[];
-  if(!list.length) return tips;
-
-  // TIR عام وبحسب الفترات
-  const byBkt={}; for(const r of list){ const b=bucket(r.slot); (byBkt[b]??=([])).push(r); }
-  const statAll = computeStats(list);
-  tips.push(`زمن داخل النطاق (TIR) العام: ${statAll.tir}% — متوسط ${round1(statAll.avg)} (${childDoc.glucoseUnit||'mg/dL'})، SD ${round1(statAll.sd)}.`);
-
-  for(const [b,arr] of Object.entries(byBkt)){
-    const st=computeStats(arr);
-    tips.push(`TIR ${b}: ${st.tir}% • منخفضات: ${st.low} • ارتفاعات: ${st.high} • حرجة: ${st.crit}.`);
-  }
-
-  // ارتفاعات بعد الوجبات
-  const postMeals = list.filter(r=>['POST_BREAKFAST','POST_LUNCH','POST_DINNER'].includes(r.slot));
-  if(postMeals.length){
-    const highPosts = postMeals.filter(r=>['ارتفاع','ارتفاع شديد','ارتفاع حرج'].includes(normalizeState(r.state)));
-    if(highPosts.length){
-      const rate = Math.round(highPosts.length*100/postMeals.length);
-      tips.push(`رُصدت ارتفاعات بعد الوجبات في ~${rate}% من قراءات ما بعد الوجبة. راجع نسبة الكربوهيدرات/التصحيح حول الوجبات.`);
-    }
-  }
-
-  // هبوط ليلي
-  const night = list.filter(r=>r.slot==='DURING_SLEEP');
-  const nightLows = night.filter(r=>['هبوط','هبوط حرج'].includes(normalizeState(r.state))).length;
-  if(night.length && nightLows>0) tips.push(`ملاحظات ليلية: ${nightLows} هبوط أثناء النوم — يُفضّل مراجعة الوجبة المسائية/الجرعات القاعدية.`);
-
-  // تذبذب (CV)
-  if(statAll.cv>0.36) tips.push(`التذبذب مرتفع (CV ${(statAll.cv*100|0)}%). تحسين توزيع الوجبات/الجرعات قد يقلل التغيّر.`);
-
-  return tips;
-}
-function renderInsights(list){
-  if(!aiPanel || !aiList) return;
-  const tips = buildInsights(list);
-  aiList.innerHTML = tips.length ? tips.map(t=>`<li>${t}</li>`).join('') : `<li class="muted">لا توجد ملاحظات كافية للفترة المختارة.</li>`;
-}
-
-/* ---------- Export ---------- */
-function listForExport(list){
-  const u=childDoc.glucoseUnit||'mg/dL';
-  return list.map(x=>[x.date, (SLOT_LABEL[x.slot]||x.slot), `${round1(x.value)} ${u}`, normalizeState(x.state), x.corr||0, x.hypo||'', x.notes||'']);
-}
-
-/* ---------- Events / Wire ---------- */
 function wire(){
-  $('periodFrom').textContent=new Date(fromInp.value).toLocaleDateString('ar-EG');
-  $('periodTo').textContent  =new Date(toInp.value).toLocaleDateString('ar-EG');
-
-  $('btnShow')?.addEventListener('click',refresh);
-  $('btnBack')?.addEventListener('click',()=> history.back());
-  $('btnPrint')?.addEventListener('click',()=> window.print());
-  $('btnPrintPage')?.addEventListener('click',()=>{
-    const url=new URL('reports-print.html', location.href);
-    url.searchParams.set('child', childId);
-    url.searchParams.set('from', fromInp.value);
-    url.searchParams.set('to',   toInp.value);
-    location.href=url.toString();
-  });
-  $('btnAnalytics')?.addEventListener('click',()=> toast('أنت في صفحة التحليلات بالفعل'));
-  chkShowNotes?.addEventListener('change',()=>{ showNotes=chkShowNotes.checked; localStorage.setItem('rep_showNotes', JSON.stringify(showNotes)); refresh(); });
-
-  $('btnBlankWeek')?.addEventListener('click',()=>{ document.getElementById('view-default').classList.add('hidden'); document.getElementById('view-blank-week').classList.remove('hidden'); buildBlankWeek(); });
-  $('btnBackToReport')?.addEventListener('click',()=>{ document.getElementById('view-blank-week').classList.add('hidden'); document.getElementById('view-default').classList.remove('hidden'); });
-  $('btnExportPDF')?.addEventListener('click',async ()=>{
-    const opt={
-      margin:[10,10,10,10],
-      filename:`report-${(childDoc.displayName||childDoc.name||'child')}-${fromInp.value}_to_${toInp.value}.pdf`,
-      image:{type:'jpeg',quality:0.98},
-      html2canvas:{scale:2,useCORS:true},
-      jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},
-      pagebreak:{mode:['css','legacy']}
-    };
-    html2pdf().set(opt).from(reportRoot).save();
-  });
-  $('btnExportCSV')?.addEventListener('click',async ()=>{
-    const L=await fetchRange(fromInp.value,toInp.value);
-    const rows=[['التاريخ','النوع','القيمة','الحالة','جرعة التصحيح (U)','رفع الهبوط','ملاحظات'],...listForExport(L)];
-    const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download=`measurements-${fromInp.value}_to_${toInp.value}.csv`; a.click(); URL.revokeObjectURL(a.href);
-  });
-  $('btnExportXLSX')?.addEventListener('click',async ()=>{
-    const L=await fetchRange(fromInp.value,toInp.value);
-    const rows=[['التاريخ','النوع','القيمة','الحالة','جرعة التصحيح (U)','رفع الهبوط','ملاحظات'],...listForExport(L)];
-    if(!window.XLSX){ await new Promise((res,rej)=>{const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; s.onload=res; s.onerror=rej; document.head.appendChild(s);}); }
-    const ws = window.XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:14},{wch:16},{wch:16},{wch:12},{wch:16},{wch:20},{wch:40}];
-    const wb = window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb,ws,'Report');
-    window.XLSX.writeFile(wb,`report-${fromInp.value}_to_${toInp.value}.xlsx`);
-  });
-
-  // فترة سريعة
-  $('q7')?.addEventListener('click',()=>{ const to=todayISO(); const from=addDays(to,-6); fromInp.value=from; toInp.value=to; refresh(); });
-  $('q14')?.addEventListener('click',()=>{ const to=todayISO(); const from=addDays(to,-13); fromInp.value=from; toInp.value=to; refresh(); });
-  $('q30')?.addEventListener('click',()=>{ const to=todayISO(); const from=addDays(to,-29); fromInp.value=from; toInp.value=to; refresh(); });
+  unitSel=$('unitSel'); fromDate=$('fromDate'); toDate=$('toDate');
+  reportGrid=$('reportGrid'); emptyGrid=$('emptyGrid'); aiTable=$('aiTable');
+  cmpElems={AFrom:$('cmpAFrom'), ATo:$('cmpATo'), BFrom:$('cmpBFrom'), BTo:$('cmpBTo')};
+  $('openPrint').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&from=${fromDate.value}&to=${toDate.value}`,'_blank');
+  $('exportPdf').onclick=exportPdf; $('exportCsv').onclick=exportCSV; $('exportXlsx').onclick=exportXLSX;
+}
+async function loadChild(uid){
+  childRef=doc(db,'parents',uid,'children',childId);
+  const snap=await getDoc(childRef);
+  if(!snap.exists()) { toast('لا يوجد طفل'); throw new Error('child-not-found'); }
+  child=snap.data();
+  $('childName').textContent=child.displayName||child.name||'الطفل';
+  $('childMeta').textContent=`وحدة: ${child.glucoseUnit||'mg/dL'} • CF: ${child.correctionFactor||'—'} • CR: ${child.carbRatio||'—'}`;
+}
+function limitsInUnit(unit){
+  if((unit||'').includes('mmol')) return {...FIXED_MMOL};
+  return {
+    low: round1(mmol2mgdl(FIXED_MMOL.low)),
+    upper: round1(mmol2mgdl(FIXED_MMOL.upper)),
+    severe: round1(mmol2mgdl(FIXED_MMOL.severe)),
+    critHigh: round1(mmol2mgdl(FIXED_MMOL.critHigh))
+  };
+}
+function fillThresholdChips(){
+  const u = unitSel.value;
+  const L = limitsInUnit(u);
+  $('thresholdChips').innerHTML = `
+    <span class="chip">هبوط: <b>${L.low} ${u}</b></span>
+    <span class="chip">ارتفاع: <b>${L.upper} ${u}</b></span>
+    <span class="chip">ارتفاع شديد: <b>${L.severe} ${u}</b></span>
+    <span class="chip">ارتفاع حرج: <b>${L.critHigh} ${u}</b></span>
+  `;
+}
+function initDefaultRange(){
+  const now=new Date();
+  const to=now.toISOString().slice(0,10);
+  const from=new Date(now); from.setDate(from.getDate()-6);
+  fromDate.value=from.toISOString().slice(0,10); toDate.value=to;
+  cmpElems.AFrom.value=fromDate.value; cmpElems.ATo.value=toDate.value;
+  const prevFrom=new Date(from); prevFrom.setDate(prevFrom.getDate()-7);
+  const prevTo=new Date(from); prevTo.setDate(prevTo.getDate()-1);
+  cmpElems.BFrom.value=prevFrom.toISOString().slice(0,10);
+  cmpElems.BTo.value=prevTo.toISOString().slice(0,10);
 }
 
-/* ---------- Refresh ---------- */
-async function refresh(){
-  $('periodFrom').textContent=new Date(fromInp.value).toLocaleDateString('ar-EG');
-  $('periodTo').textContent  =new Date(toInp.value).toLocaleDateString('ar-EG');
-
-  const list=await fetchRange(fromInp.value,toInp.value);
-  buildTable(list);
-
-  const stats=computeStats(list);
-  stTIR.textContent=stats.tir+'%';
-  stAvg.textContent=round1(stats.avg);
-  stSD.textContent=round1(stats.sd);
-  stCV.textContent=(stats.cv*100|0)+'%';
-  stLow.textContent=String(stats.low);
-  stHigh.textContent=String(stats.high);
-  stCrit.textContent=String(stats.crit);
-  renderSpark(list);
-
-  // AI panel
-  renderInsights(list);
-
-  // blank 7 days UI refresh
-  $('bkChildName')&&(bkChildName.textContent=childDoc.displayName||childDoc.name||'الطفل');
-  $('bkUnit')&&(bkUnit.textContent=childDoc.glucoseUnit||'mg/dL');
-  $('bkCR')&&(bkCR.textContent=(childDoc.carbRatio!=null)?`${childDoc.carbRatio} g/U`:'—');
-  $('bkCF')&&(bkCF.textContent=(childDoc.correctionFactor!=null)?`${childDoc.correctionFactor} ${(childDoc.glucoseUnit||'mg/dL')}/U`:'—');
+function classFor(val,u){
+  const L=limitsInUnit(u);
+  if(val>L.critHigh) return 'crit';
+  if(val>L.severe)   return 'sev';
+  if(val>L.upper)    return 'mild';
+  if(val<L.low)      return 'sev';
+  return 'ok';
 }
 
-/* ---------- Quick blank 7 days ---------- */
-const bkChildName=$('bkChildName'),bkUnit=$('bkUnit'),bkCR=$('bkCR'),bkCF=$('bkCF'),bkFrom=$('bkFrom'),bkTo=$('bkTo'),bkGrid=$('bkGrid'),bkNotesGrid=$('bkNotesGrid');
-function cell(cls,html){ const d=document.createElement('div'); if(cls)d.className=cls; d.innerHTML=html||''; return d; }
-function buildBlankWeek(){
-  const from=fromInp.value, to=toInp.value;
-  bkFrom.textContent=new Date(from).toLocaleDateString('ar-EG'); bkTo.textContent=new Date(to).toLocaleDateString('ar-EG');
-  const unit=childDoc.glucoseUnit||'mg/dL';
-  bkChildName.textContent=childDoc.displayName||childDoc.name||'الطفل';
-  bkUnit.textContent=unit; bkCR.textContent=(childDoc.carbRatio!=null)?`${childDoc.carbRatio} g/U`:'—'; bkCF.textContent=(childDoc.correctionFactor!=null)?`${childDoc.correctionFactor} ${unit}/U`:'—';
+/* ---------- fetch & render ---------- */
+async function fetchRange(fromISO,toISO){
+  const col=collection(childRef,'measurements');
+  const qy=query(col, where('when','>=',new Date(fromISO+'T00:00:00')), where('when','<=',new Date(toISO+'T23:59:59')), orderBy('when','asc'));
+  const snap=await getDocs(qy);
+  const unit=unitSel.value;
+  const arr=[];
+  snap.forEach(s=>{
+    const x=s.data();
+    let v = unit.includes('mmol') ? (x.value_mmol ?? (x.unit==='mg/dL'? mgdl2mmol(x.value): x.value))
+                                  : (x.value_mgdl ?? (x.unit==='mmol/L'? mmol2mgdl(x.value): x.value));
+    if(!Number.isFinite(+v)) return;
+    arr.push({when:x.when.toDate(), slot:x.slotKey||'OTHER', val:round1(+v), notes:x.notes||'', corr:+(x.correctionDose||0)});
+  });
+  return arr;
+}
+function groupByDaySlot(list){
+  const days={};
+  for(const r of list){
+    const key=r.when.toISOString().slice(0,10);
+    days[key] = days[key] || {date:new Date(key), slots:{}};
+    days[key].slots[r.slot]=days[key].slots[r.slot]||[];
+    days[key].slots[r.slot].push(r);
+  }
+  return Object.values(days).sort((a,b)=>a.date-b.date);
+}
+function cellHTML(vals,u){
+  if(!vals || !vals.length) return '';
+  // نعرض آخر قيمة في الخلية (+ جرعة التصحيح كبادج صغيرة)
+  const v=vals[vals.length-1];
+  const cls=classFor(v.val,u);
+  return `<span class="v ${cls}">${v.val}</span> ${v.corr? `<span class="u">U ${round1(v.corr)}</span>`:''}`;
+}
+async function renderReport(){
+  fillThresholdChips();
+  const unit=unitSel.value, from=fromDate.value, to=toDate.value;
+  const data=await fetchRange(from,to);
+  const days=groupByDaySlot(data);
 
-  const d0=new Date(from), days=[]; for(let i=0;i<7;i++){ const d=new Date(d0); d.setDate(d0.getDate()+i); days.push(d); }
-  const rows=['الاستيقاظ','ق.الفطار','ب.الفطار','ق.الغداء','ب.الغداء','ق.العشاء','ب.العشاء','سناك','قبل النوم','أثناء النوم'];
+  const body= $('reportGrid'); body.innerHTML='';
+  if(!days.length){
+    $('emptyGrid').classList.remove('hidden');
+    // شبكة فارغة بنفس التصميم (7 صفوف)
+    for(let i=0;i<7;i++){
+      const row=document.createElement('div'); row.className='grid-row';
+      row.innerHTML= `<div class="grid-cell">${formatDate(new Date(from))}</div>` + 
+        new Array(10).fill(0).map(()=>`<div class="grid-cell">&nbsp;</div>`).join('');
+      body.appendChild(row);
+    }
+    updateStats([]); drawPie({TIR:0,TBR:0,TAR:0}); buildAI([],unit); return;
+  }
+  $('emptyGrid').classList.add('hidden');
 
-  bkGrid.innerHTML=''; bkGrid.appendChild(cell('head row-label','الوقت \\ اليوم')); days.forEach(d=>bkGrid.appendChild(cell('head',fmtDate(d))));
-  rows.forEach(r=>{ bkGrid.appendChild(cell('row-label',r)); days.forEach(()=>bkGrid.appendChild(cell('', ''))); });
+  for(const d of days){
+    const row=document.createElement('div'); row.className='grid-row';
+    row.innerHTML = `<div class="grid-cell">${formatDate(d.date)}</div>` +
+      [
+        'FASTING','PRE_BREAKFAST','POST_BREAKFAST',
+        'PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER',
+        'SNACK','BEDTIME','DURING_SLEEP'
+      ].map(k=>`<div class="grid-cell">${cellHTML(d.slots[k],unit)}</div>`).join('');
+    body.appendChild(row);
+  }
 
-  bkNotesGrid.innerHTML=''; bkNotesGrid.appendChild(cell('row-label','ملاحظات')); days.forEach(d=>bkNotesGrid.appendChild(cell('head',fmtDate(d))));
-  for(let i=0;i<2;i++){ bkNotesGrid.appendChild(cell('row-label', i===0?'الوجبات/الكارب':'الملاحظات/الجرعات')); days.forEach(()=>bkNotesGrid.appendChild(cell('', ''))); }
+  updateStats(data);
+  const parts=calcParts(data,unit); drawPie(parts);
+  buildAI(data,unit);
+}
+
+/* ---------- stats / pie ---------- */
+function updateStats(list){
+  const unit=unitSel.value, L=limitsInUnit(unit);
+  if(!list.length){ $('statTIR').textContent='0%'; $('statLow').textContent='0%'; $('statHigh').textContent='0%'; $('statAvg').textContent='—'; $('statSD').textContent='—'; $('statCrit').textContent='0'; return; }
+  const n=list.length;
+  const lows=list.filter(x=>x.val<L.low).length;
+  const highs=list.filter(x=>x.val>L.upper).length;
+  const crit=list.filter(x=>x.val>L.critHigh).length;
+  const TIR = list.filter(x=>x.val>=L.low && x.val<=L.severe).length; // 3.9–10.9
+  const mean=list.reduce((a,x)=>a+x.val,0)/n;
+  const sd=Math.sqrt(list.reduce((a,x)=>a+Math.pow(x.val-mean,2),0)/n);
+  $('statTIR').textContent=`${Math.round(TIR/n*100)}%`;
+  $('statLow').textContent=`${Math.round(lows/n*100)}%`;
+  $('statHigh').textContent=`${Math.round(highs/n*100)}%`;
+  $('statCrit').textContent=String(crit);
+  $('statAvg').textContent=`${round1(mean)} ${unit}`;
+  $('statSD').textContent=round1(sd);
+}
+function calcParts(list,unit){
+  const L=limitsInUnit(unit), n=list.length||1;
+  const tbr=list.filter(x=>x.val<L.low).length/n*100;
+  const tir=list.filter(x=>x.val>=L.low && x.val<=L.severe).length/n*100;
+  const tar=100 - tir - tbr;
+  return {TIR:Math.round(tir), TBR:Math.round(tbr), TAR:Math.round(tar)};
+}
+function drawPie({TIR,TBR,TAR}){
+  const ctx=$('pieTIR').getContext('2d');
+  if(pie) pie.destroy();
+  pie=new Chart(ctx,{type:'doughnut',
+    data:{labels:['داخل النطاق','انخفاض','ارتفاع'], datasets:[{data:[TIR,TBR,TAR]}]},
+    options:{plugins:{legend:{position:'bottom'}}, cutout:'70%'}
+  });
+}
+
+/* ---------- compare two ranges ---------- */
+function rowCmp(label,a,b,fmt='%'){
+  const diff = (a-b);
+  const cls = diff>=0 ? 'diff-up' : 'diff-down';
+  return `<div>${label}</div><div>${fmtVal(a,fmt)}</div><div>${fmtVal(b,fmt)}</div><div class="${cls}">${fmtVal(diff,fmt,true)}</div>`;
+}
+function fmtVal(v,fmt,isDiff=false){
+  if(fmt==='%') return `${Math.round(v)}%`;
+  return isDiff? (v>0?`+${round1(v)}`:round1(v)) : round1(v);
+}
+async function runCompare(){
+  const unit=unitSel.value;
+  const A=await fetchRange(cmpElems.AFrom.value, cmpElems.ATo.value);
+  const B=await fetchRange(cmpElems.BFrom.value, cmpElems.BTo.value);
+  const pa=calcParts(A,unit), pb=calcParts(B,unit);
+  const nA=A.length||1, nB=B.length||1;
+  const meanA=A.reduce((a,x)=>a+x.val,0)/nA, meanB=B.reduce((a,x)=>a+x.val,0)/nB;
+  const sdA=Math.sqrt(A.reduce((a,x)=>a+Math.pow(x.val-meanA,2),0)/nA);
+  const sdB=Math.sqrt(B.reduce((a,x)=>a+Math.pow(x.val-meanB,2),0)/nB);
+
+  $('cmpTable').innerHTML = `
+    <div>المؤشر</div><div>الحالية</div><div>السابقة</div><div>الفرق</div>
+    ${rowCmp('TIR',pa.TIR,pb.TIR,'%')}
+    ${rowCmp('TBR',pa.TBR,pb.TBR,'%')}
+    ${rowCmp('TAR',pa.TAR,pb.TAR,'%')}
+    ${rowCmp('المتوسط',meanA,meanB,'num')}
+    ${rowCmp('SD',sdA,sdB,'num')}
+    ${rowCmp('عدد القياسات',nA,nB,'num')}
+  `;
+}
+
+/* ---------- AI (horizontal table) ---------- */
+function buildAI(list,unit){
+  const L=limitsInUnit(unit);
+  // قواعد بسيطة: نمط ارتفاع بعد الفطار/العشاء، هبوط قبل النوم...
+  const bySlot = s => list.filter(x=>x.slot===s).map(x=>x.val);
+  const mean = arr => arr.length? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+  const patt=[];
+  const pb = bySlot('POST_BREAKFAST'), pd=bySlot('POST_DINNER'), bed=bySlot('BEDTIME');
+  if(pb.length && pb.filter(v=>v>L.upper).length>=3) patt.push({
+    name:'ارتفاع متكرر بعد الفطار', desc:`عدد ${pb.filter(v=>v>L.upper).length} من ${pb.length} قراءات فوق ${L.upper} ${unit}`,
+    rec:'راجع CR للفطار أو أضف تصحيحًا صغيرًا', conf:'متوسط'
+  });
+  if(pd.length && pd.filter(v=>v>L.severe).length>=3) patt.push({
+    name:'ارتفاع شديد بعد العشاء', desc:`${pd.filter(v=>v>L.severe).length} قراءة > ${L.severe} ${unit}`,
+    rec:'تصحيح بعد العشاء ومراجعة توقيت الجرعة', conf:'عالٍ'
+  });
+  if(bed.length && bed.filter(v=>v<L.low).length>=2) patt.push({
+    name:'هبوط قبل النوم', desc:`${bed.filter(v=>v<L.low).length} قراءتين دون ${L.low} ${unit}`,
+    rec:'وجبة خفيفة أو تقليل تصحيح المساء', conf:'عالٍ'
+  });
+  if(!patt.length) patt.push({name:'لا توجد أنماط لافتة', desc:'البيانات ضمن الحدود غالبًا', rec:'—', conf:'—'});
+
+  aiTable.innerHTML = ['<div>النمط</div><div>الوصف</div><div>التوصية</div><div>الثقة</div><div>إدراج</div>'].join('')
+   + patt.map(p=>`<div>${p.name}</div><div>${p.desc}</div><div>${p.rec}</div><div>${p.conf}</div><div><button class="btn btn--ghost btn-mini">إدراج</button></div>`).join('');
+}
+
+/* ---------- export ---------- */
+async function exportCSV(){
+  const unit=unitSel.value; const rows=[['التاريخ','النوع','القيمة','U']];
+  const list=await fetchRange(fromDate.value,toDate.value);
+  groupByDaySlot(list).forEach(d=>{
+    Object.keys(d.slots).forEach(k=>{
+      const v=d.slots[k][d.slots[k].length-1];
+      rows.push([formatDate(d.date), SLOT_LABEL[k]||k, `${v.val} ${unit}`, v.corr||0]);
+    });
+  });
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`report-${fromDate.value}_${toDate.value}.csv`; a.click();
+}
+async function exportXLSX(){
+  const XLSX=window.XLSX; const unit=unitSel.value;
+  const rows=[['التاريخ','النوع','القيمة','U']];
+  const list=await fetchRange(fromDate.value,toDate.value);
+  groupByDaySlot(list).forEach(d=>{
+    Object.keys(d.slots).forEach(k=>{
+      const v=d.slots[k][d.slots[k].length-1];
+      rows.push([formatDate(d.date), SLOT_LABEL[k]||k, `${v.val} ${unit}`, v.corr||0]);
+    });
+  });
+  const ws=XLSX.utils.aoa_to_sheet(rows); const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Report'); XLSX.writeFile(wb,`report-${fromDate.value}_${toDate.value}.xlsx`);
+}
+function exportPdf(){
+  const node=document.querySelector('.container'); const opt={filename:`report-${fromDate.value}_${toDate.value}.pdf`, html2canvas:{scale:2}, jsPDF:{orientation:'landscape'}};
+  window.html2pdf().from(node).set(opt).save();
+}
+
+/* ---------- events ---------- */
+function wireEvents(){
+  $('applyBtn').onclick=renderReport;
+  $('cmpRun').onclick=runCompare;
+  unitSel.onchange=()=>{ fillThresholdChips(); renderReport(); };
 }
