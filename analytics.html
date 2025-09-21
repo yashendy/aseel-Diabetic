@@ -1,133 +1,72 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>التحاليل</title>
-  <link rel="stylesheet" href="./css/analytics.css" />
-
-  <!-- Chart.js + Adapter للوقت (الترتيب مهم) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>التحليلات</title>
+  <link rel="stylesheet" href="css/analytics.css"/>
 </head>
 <body>
-  <div class="wrap">
-    <!-- شريط علوي -->
-    <header class="topbar">
-      <div class="left chips" id="childChips"></div>
-
-      <div class="right controls">
-        <div class="range">
-          <label class="field">
-            <span>من</span>
-            <input type="date" id="fromDate">
-          </label>
-          <label class="field">
-            <span>إلى</span>
-            <input type="date" id="toDate">
-          </label>
-
-          <div class="quick-range">
-            <button class="chip" data-days="7">7 أيام</button>
-            <button class="chip" data-days="14">14</button>
-            <button class="chip" data-days="30">30</button>
-            <button class="chip" data-days="90">90</button>
-          </div>
-        </div>
-
-        <label class="field">
-          <span>وحدة العرض</span>
-          <select id="unitSelect">
-            <option value="mmol/L">mmol/L</option>
-            <option value="mg/dL">mg/dL</option>
-          </select>
-        </label>
-
-        <label class="field chk">
-          <input type="checkbox" id="compareToggle">
-          <span>تفعيل المقارنة (الفترة السابقة)</span>
-        </label>
-
-        <div class="actions">
-          <button id="btnBack" class="btn btn--ghost">رجوع للتقرير</button>
-          <button id="btnRefresh" class="btn">تحديث</button>
-          <button id="btnSaveLine" class="btn">حفظ الرسم الزمني</button>
-        </div>
+  <div class="container">
+    <header class="head">
+      <div class="left">
+        <a href="index.html" class="btn btn--ghost">🏠 الرئيسية</a>
+        <a id="toReport" class="btn btn--ghost">📄 التقرير</a>
+      </div>
+      <div class="right">
+        <strong id="childName">—</strong>
+        <span id="childMeta" class="muted"></span>
       </div>
     </header>
 
-    <!-- ملخص -->
-    <section class="sheet meta">
-      <div class="line">
-        <strong id="childName">—</strong>
-        <span class="muted" id="childMeta">—</span>
+    <section class="filters">
+      <div class="row">
+        <label class="field"><span>من</span><input type="date" id="fromDate"></label>
+        <label class="field"><span>إلى</span><input type="date" id="toDate"></label>
+        <label class="field"><span>الوحدة</span>
+          <select id="unitSel"><option value="mmol/L">mmol/L</option><option value="mg/dL">mg/dL</option></select>
+        </label>
+        <button id="applyBtn" class="btn">تطبيق</button>
+        <div class="grow"></div>
+        <button id="exportCsv" class="btn btn--ghost">⬇️ CSV</button>
+        <button id="exportPdf" class="btn btn--ghost">⬇️ PDF</button>
       </div>
-      <div class="line">
-        الفترة: <b id="periodFrom">—</b> إلى <b id="periodTo">—</b>
-      </div>
-      <div class="cards">
-        <div class="card"><span class="k">عدد القراءات</span><b id="stCount">—</b></div>
-        <div class="card"><span class="k">المتوسط</span><b id="stAvg">—</b></div>
-        <div class="card"><span class="k">الانحراف (SD)</span><b id="stSD">—</b></div>
-        <div class="card"><span class="k">CV%</span><b id="stCV">—</b></div>
-        <div class="card b-ok"><span class="k">TIR</span><b id="stTIR">—</b></div>
-        <div class="card b-low"><span class="k">TBR</span><b id="stTBR">—</b></div>
-        <div class="card b-high"><span class="k">TAR</span><b id="stTAR">—</b></div>
-      </div>
+      <div id="thresholdChips" class="chips"></div>
     </section>
 
-    <!-- الرسوم -->
-    <main class="grid-2">
-      <!-- الرسم الزمني -->
-      <section class="panel">
-        <div class="panel-head">
-          <h3>الرسم الزمني للقراءات</h3>
-          <!-- وضع الرسم -->
-          <div class="seg" id="modeSeg">
-            <button class="seg-btn" data-mode="series">زمني</button>
-            <button class="seg-btn is-active" data-mode="avgbyday">متوسط كل يوم</button>
-          </div>
-        </div>
+    <!-- منحنى (كما هو) -->
+    <section class="chart-card">
+      <canvas id="lineChart" height="220"></canvas>
+    </section>
 
-        <div id="spinnerLine" class="spinner"></div>
-        <div id="errLine" class="error" style="display:none"></div>
+    <!-- رسم دائري -->
+    <section class="chart-card">
+      <h3>توزيع الوقت داخل/خارج النطاق</h3>
+      <canvas id="pieChart" height="140"></canvas>
+    </section>
 
-        <canvas id="dayChart" height="260" aria-label="الرسم الزمني"></canvas>
+    <!-- مقارنة فترتين -->
+    <section class="compare-card">
+      <h3>مقارنة فترة حالية مقابل سابقة</h3>
+      <div class="row">
+        <label class="field"><span>الحالية</span><input type="date" id="cmpAFrom"><input type="date" id="cmpATo"></label>
+        <label class="field"><span>السابقة</span><input type="date" id="cmpBFrom"><input type="date" id="cmpBTo"></label>
+        <button id="cmpRun" class="btn">تحديث</button>
+      </div>
+      <div id="cmpTable" class="cmp-table"></div>
+    </section>
 
-        <div class="limits">
-          <span class="chip chip-dot dot-low">الحد الحرج المنخفض (Severe Low): <b id="sevLowLbl">—</b></span>
-          <span class="chip chip-dot dot-high">الحد الحرج المرتفع (Severe High): <b id="sevHighLbl">—</b></span>
-        </div>
-      </section>
-
-      <!-- نسب الوقت -->
-      <section class="panel">
-        <div class="panel-head">
-          <h3>نِسَب الوقت داخل/خارج النطاق</h3>
-        </div>
-
-        <div class="pies">
-          <div class="pieBox">
-            <div class="pieTitle">الفترة الحالية</div>
-            <div id="spinnerPieNow" class="spinner"></div>
-            <div id="errPieNow" class="error" style="display:none"></div>
-            <canvas id="rangePieNow" width="180" height="180"></canvas>
-          </div>
-
-          <div class="pieBox compareOnly">
-            <div class="pieTitle">الفترة السابقة</div>
-            <div id="spinnerPiePrev" class="spinner"></div>
-            <div id="errPiePrev" class="error" style="display:none"></div>
-            <canvas id="rangePiePrev" width="180" height="180"></canvas>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <div id="toast" class="toast" style="display:none"></div>
+    <!-- تحليلات ذكية أفقية -->
+    <section class="ai-card">
+      <h3>تحليلات ذكية</h3>
+      <div id="aiTable" class="ai-table"></div>
+    </section>
   </div>
 
-  <!-- Firebase config (ESM) -->
-  <script type="module" src="./js/analytics.js"></script>
+  <div id="toast" class="toast" style="display:none"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+  <script type="module" src="js/analytics.js"></script>
 </body>
 </html>
