@@ -3,6 +3,13 @@
   --primary:#2563eb; --ghost:#eef2ff; --success:#16a34a; --warn:#ea580c; --danger:#ef4444;
   --shadow:0 6px 24px rgba(15,23,42,.06), 0 2px 8px rgba(15,23,42,.04);
   --radius:14px;
+
+  /* ألوان باهتة للحالات */
+  --green-soft:#dcfce7;
+  --green-ghost:#f0fdf4;
+  --orange-soft:#ffedd5;
+  --red-soft:#fee2e2;
+  --red-strong:#fecaca;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -35,7 +42,11 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Ara
 .btn:active{transform:translateY(1px)}
 .btn--ghost{background:#fff;color:#1f2937;border:1px solid #e5e7eb}
 .btn--ghost:hover{background:#f8fafc}
-.btn--link{background:transparent;color:var(--primary);border:none;box-shadow:none;padding:0;height:auto}
+.btn--link{background:transparent;color:#2563eb;border:none;box-shadow:none;padding:0;height:auto}
+
+/* أيقونة صغيرة */
+.btn-icon{width:32px;height:32px;border-radius:8px;border:1px solid #e5e7eb;background:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.btn-icon:hover{background:#fff1f2;border-color:#fecaca}
 
 .badge{display:inline-flex;align-items:center;height:28px;min-width:28px;padding:0 10px;border-radius:999px;background:#eef2ff;font-size:12.5px}
 .badge.info{background:#e0f2fe}
@@ -46,17 +57,19 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Ara
 
 .table-wrap{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow)}
 .table-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #eef2f7}
-.table{display:grid;grid-template-columns:130px 170px 110px 110px 1fr;gap:6px;padding:12px}
+/* + عمود أكشن */
+.table{display:grid;grid-template-columns:130px 170px 110px 140px 1fr 40px;gap:6px;padding:12px}
 .row{display:contents}
 .cell{background:#fff;border:1px solid #eef2f7;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px}
 .cell .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,"Liberation Mono","Courier New",monospace}
 .cell .state-dot{width:8px;height:8px;border-radius:999px}
-.state-low{background:var(--danger)}
+.state-low{background:#ef4444}
 .state-high{background:#f59e0b}
-.state-norm{background:var(--success)}
+.state-norm{background:#16a34a}
 .state-vhigh{background:#f59e0b}
 .state-critlow{background:#ef4444}
 .state-crithigh{background:#ef4444}
+.cell.action{justify-content:center}
 
 .empty{padding:16px;color:var(--muted);text-align:center}
 .hidden{display:none !important}
@@ -77,7 +90,7 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Ara
 .stats .card.low{background:#fef2f2}
 .stats .card.high{background:#fff7ed}
 .stats .card.crit{background:#ffe7e7}
-.sparkline{height:48px;display:flex;align-items:center;justify-content:flex-end}
+.sparkline{height:56px;display:flex;align-items:center;justify-content:flex-end}
 
 /* صفوف الإجراءات + التنبيه */
 #actionsPanel{
@@ -97,3 +110,13 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Ara
 
 /* تلميح تكرار الـ Slot */
 .slot-hint{font-size:12.5px;color:#b45309;background:#fff7ed;border:1px solid #fde68a;padding:6px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:6px}
+
+/* تلوين القيمة في الجدول */
+.val--normal{background:var(--green-ghost);border-color:#bbf7d0}
+.val--mild{background:var(--green-ghost);border-color:#fed7aa;box-shadow:inset 0 0 0 2px var(--orange-soft)}
+.val--sev{background:var(--red-soft);border-color:#fecaca}
+.val--crit{background:#ffe4e6;border-color:#fb7185}
+
+/* فاليوديشن */
+.is-invalid{border-color:#fda4af !important; box-shadow:0 0 0 2px rgba(244,63,94,.15)}
+.help-err{font-size:12px;color:#b91c1c;margin-top:-4px}
