@@ -1,12 +1,5 @@
-// measurements.js — نسخة نهائية مُراجَعة وفق المطلوب
-// (فلترة/بحث/إحصائيات/Sparkline/Undo-Redo/Export + Panels ديناميكية + توحيد الحالة للعربية)
-// تحديثات هذه النسخة:
-// - منع قراءة = 0
-// - خانة "رفعنا بإيه؟" للهبوط
-// - خانة "جرعة التصحيح" تُملأ تلقائياً عند الارتفاع + قابلة للتعديل فوراً
-// - منع تكرار Slots يوميًّا باستثناء: OTHER (أخرى) و EXERCISE (رياضة)
-// - تنبيه واضح عند محاولة إدخال Slot مكرر
-// - الحفاظ على ثيم فاتح وألوان غير داكنة
+// measurements.js — نسخة متكاملة بعد المراجعة
+// تلوين/تصحيح/منع تكرار/حذف/فاليوديشن + إصلاح statePill + Sparkline Band
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -52,7 +45,6 @@ const SLOT_LABEL = {
   SNACK:'سناك', EXERCISE:'رياضة', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم', OTHER:'أخرى'
 };
 const slotOrder = key => SLOT_ORDER[key] ?? 200;
-
 /* Slots المسموح تكرارها في نفس اليوم */
 const DUP_ALLOWED = new Set(['EXERCISE','OTHER']);
 
@@ -64,7 +56,7 @@ let dayPicker, slotSel, readingInp, unitSel, convertedBox, stateBadge, corrDoseV
 let childNameEl, childMetaEl, chipsBar, targetsChips, backToChildBtn;
 let gridEl, emptyEl, sortSel, liveToggle, toMealsBtn, saveBtn, exportCsvBtn, exportXlsxBtn;
 let filtersBar, searchBox, statsBar, sparklineBox, undoBtn, redoBtn, autoSlotToggle;
-let actionsPanel, alertBarEl, corrRow, corrDoseInput, hypoRow, hypoInput, notesRow, notesInput;
+let actionsPanel, alertBarEl, corrRow, corrDoseInput, hypoRow, hypoInput, notesRow, notesInput, slotDupHint;
 let lastComputedCorr = 0;
 let corrDirty = false; // المستخدم عدّل الجرعة يدويًا؟
 
@@ -172,7 +164,7 @@ function ensureActionPanel(){
   `;
   toolbar.after(actionsPanel);
 
-  alertBarEl=$('alertBar'); corrRow=$('corrRow'); corrDoseInput=$('corrDoseInput');
+  alertBarEl=$('alertBar'); corrRow=$('corrRow'); corrDoseInput=$('corrDoseInput'); slotDupHint=$('slotDupHint');
   hypoRow=$('hypoRow'); hypoInput=$('hypoTreatment'); notesRow=$('notesRow'); notesInput=$('mNotes');
 
   actionsPanel.querySelectorAll('.chip-suggest').forEach(btn=>btn.addEventListener('click',()=>{ hypoInput.value=btn.dataset.val; }));
@@ -233,7 +225,9 @@ function dualUnit(val, unit){
 /* ---------- Derived + Slot duplicate hint ---------- */
 function updateDerived(){
   const unit=unitSel.value; const v=Number(readingInp.value);
+
   // منع صفر أو قيم غير صالحة
+  clearFieldError();
   if(!Number.isFinite(v) || v<=0){
     convertedBox.textContent='—'; stateBadge.textContent='—'; stateBadge.className='badge';
     corrDoseView.textContent='0'; lastComputedCorr=0;
@@ -246,18 +240,29 @@ function updateDerived(){
   convertedBox.textContent = unit.includes('mmol') ? `${round1(mmol2mgdl(v))} mg/dL` : `${round1(mgdl2mmol(v))} mmol/L`;
 
   const min=getTargetLower(), upper=getTargetUpper(), severe=getSevereUpper(), critL=getCriticalLow(), critH=getCriticalHigh();
-  let st='داخل النطاق', css='ok';
-  if(Number.isFinite(critL) && valueInChildUnit<=critL){ st='هبوط حرج'; css='err'; }
-  else if(Number.isFinite(critH) && valueInChildUnit>=critH){ st='ارتفاع حرج'; css='danger'; }
-  else if(Number.isFinite(severe) && valueInChildUnit>severe){ st='ارتفاع شديد'; css='warn'; }
-  else if(Number.isFinite(upper) && valueInChildUnit>upper){ st='ارتفاع'; css='warn'; }
-  else if(Number.isFinite(min) && valueInChildUnit<min){ st='هبوط'; css='err'; }
 
-  stateBadge.textContent=st; stateBadge.className=`badge ${css}`;
+  // تحديد الحالة حسب القاعدة الجديدة
+  let st='داخل النطاق', css='ok', classVal='val--normal', arrow='';
+  if(Number.isFinite(critL) && valueInChildUnit<=critL){ st='هبوط حرج'; css='err'; classVal='val--crit'; }
+  else if(Number.isFinite(min) && valueInChildUnit<min){ st='هبوط'; css='err'; classVal='val--sev'; }
+  else if(Number.isFinite(critH) && valueInChildUnit>critH){ st='ارتفاع حرج'; css='danger'; classVal='val--crit'; arrow=' ↑'; }
+  else if(Number.isFinite(severe) && valueInChildUnit>severe){ st='ارتفاع شديد'; css='warn'; classVal='val--sev'; }
+  else if(Number.isFinite(upper) && valueInChildUnit>upper){ st='ارتفاع'; css='warn'; classVal='val--mild'; }
+  else if(valueInChildUnit>=3.9 && valueInChildUnit<=10.9 && childUnit.includes('mmol')){ st='داخل النطاق'; css='ok'; classVal='val--normal'; }
+  else if(!childUnit.includes('mmol')){ // mg/dL: نحسب المكافئ 3.9–10.9
+    const low=mmol2mgdl(3.9), high=mmol2mgdl(10.9);
+    if(valueInChildUnit>=low && valueInChildUnit<=high){ st='داخل النطاق'; css='ok'; classVal='val--normal'; }
+  }
 
-  // حساب جرعة التصحيح الحسابية
+  stateBadge.textContent=st+arrow; stateBadge.className=`badge ${css}`;
+
+  // التصحيح يبدأ من "ارتفاع شديد" فأعلى فقط
   const cf=Number(childData?.correctionFactor)||0;
-  let corr=0; if(cf>0 && Number.isFinite(upper) && valueInChildUnit>upper) corr=(valueInChildUnit-upper)/cf;
+  let corr=0;
+  if(cf>0 && Number.isFinite(severe) && valueInChildUnit>severe){
+    const target = severe; // نقطة البدء
+    corr=(valueInChildUnit-target)/cf;
+  }
   lastComputedCorr=corr; corrDoseView.textContent=String(round1(Math.max(0,corr)));
 
   // عرض الصف المناسب
@@ -265,11 +270,10 @@ function updateDerived(){
   if(st==='هبوط' || st==='هبوط حرج'){
     show(hypoRow); hide(corrRow);
     setAlert(st==='هبوط حرج'?'danger':'warn', st==='هبوط حرج'?'يجب التدخل السريع لمعالجة الهبوط':'فضلاً قم بمعالجة الهبوط ثم دوّن ما استُخدم للرفع.');
-  }else if(st==='ارتفاع' || st==='ارتفاع شديد' || st==='ارتفاع حرج'){
+  }else if(st==='ارتفاع شديد' || st==='ارتفاع حرج'){
     hide(hypoRow); show(corrRow);
-    // تعبئة تلقائية دون فرض readOnly — مع احترام التعديل اليدوي
     if(!corrDirty){ corrDoseInput.value=String(round1(Math.max(0,corr))); }
-    setAlert(st==='ارتفاع حرج'?'danger':(st==='ارتفاع شديد'?'warn':null), st==='ارتفاع حرج'?'يجب معالجة الارتفاع بسرعة':(st==='ارتفاع شديد'?'القراءة أعلى من حد الارتفاع الشديد.':null));
+    if(st==='ارتفاع حرج') setAlert('danger','القراءة حرجة — يُنصح بالتصحيح الآن.');
   }else{
     hide(hypoRow); hide(corrRow);
   }
@@ -280,11 +284,11 @@ function updateDerived(){
 
 /* إظهار/إخفاء تلميح منع التكرار للـ Slot الحالي */
 function updateSlotDuplicateHint(){
-  const hint = $('slotDupHint'); if(!hint) return;
+  if(!slotDupHint) return;
   if (isSlotTakenToday(slotSel.value) && !DUP_ALLOWED.has(slotSel.value)){
-    hint.style.display='inline-flex';
+    slotDupHint.style.display='inline-flex';
   }else{
-    hint.style.display='none';
+    slotDupHint.style.display='none';
   }
 }
 
@@ -349,38 +353,79 @@ function applyFilters(arr){
   else out.sort((a,b)=>(a.slotOrder-b.slotOrder)||(a.when-b.when));
   return out;
 }
+
+/* رسم صفوف الجدول + عمود الحذف */
 function renderList(){
   const unit=childData?.glucoseUnit||'mg/dL';
   const all=buildDayArray(); const arr=applyFilters(all);
   renderStats(arr,unit); renderSparkline(arr);
   gridEl.innerHTML=''; if(!arr.length){ emptyEl.classList.remove('hidden'); return; } emptyEl.classList.add('hidden');
+
   for(const r of arr){
+    const mood = classForValue(r.val, unit); // لتلوين الخلية
     const row=document.createElement('div'); row.className='row';
     row.innerHTML=`
       <div class="cell"><span class="mono">${r.when.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</span></div>
       <div class="cell">${SLOT_LABEL[r.key]||r.key}<span class="muted tiny" style="margin-inline-start:6px">#${r.slotOrder}</span></div>
-      <div class="cell"><span class="mono">${round1(r.val)} ${unit}</span></div>
+      <div class="cell ${mood}"><span class="mono">${round1(r.val)} ${unit}</span></div>
       <div class="cell">${statePill(r.state)}</div>
       <div class="cell">
-        ${r.corr? `<span class="badge info">U ${round1(r.corr)}</span>`:''}
+        ${r.corr? `<span class="badge warn">U ${round1(r.corr)}</span>`:''}
         ${r.hypo? `<span class="chip">رفع: ${esc(r.hypo)}</span>`:''}
         ${r.notes? `<span class="muted" style="margin-inline-start:6px">${esc(r.notes)}</span>`:''}
+      </div>
+      <div class="cell action">
+        <button class="btn-icon" title="حذف" data-del="${r.id}">🗑️</button>
       </div>`;
     gridEl.appendChild(row);
   }
+  gridEl.querySelectorAll('[data-del]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id=btn.getAttribute('data-del');
+      if(!confirm('هل تريد حذف هذا القياس؟')) return;
+      const row=arr.find(x=>x.id===id);
+      await deleteDoc(doc(measCol,id));
+      lastOps.push({id, data:{
+        value:row.val, unit:row.unit, when:row.when, slotKey:row.key, slotOrder:row.slotOrder,
+        state:row.state, correctionDose:row.corr, hypoTreatment:row.hypo, notes:row.notes, createdAt:serverTimestamp()
+      }});
+      toast('تم حذف القياس'); refreshList();
+    });
+  });
 }
 
-/* ---------- Slots uniqueness helpers ---------- */
-function isSlotTakenToday(slotKey){
-  const arr=buildDayArray();
-  return arr.some(r=>r.key===slotKey);
+/* ---------- لون الخلية حسب القيمة في وحدة الطفل ---------- */
+function classForValue(val, unit){
+  const min=getTargetLower(), upper=getTargetUpper(), severe=getSevereUpper(), critL=getCriticalLow(), critH=getCriticalHigh();
+  // val هنا بالفعل بوحدة الطفل
+  if(Number.isFinite(critL) && val<=critL) return 'val--crit';
+  if(Number.isFinite(min) && val<min) return 'val--sev';
+  if(Number.isFinite(critH) && val>critH) return 'val--crit';
+  if(Number.isFinite(severe) && val>severe) return 'val--sev';
+  if(Number.isFinite(upper) && val>upper) return 'val--mild';
+  // نطاق طبيعي 3.9–10.9 mmol/L
+  if(unit.includes('mmol')) return (val>=3.9 && val<=10.9) ? 'val--normal' : '';
+  const low=mmol2mgdl(3.9), high=mmol2mgdl(10.9);
+  return (val>=low && val<=high) ? 'val--normal' : '';
+}
+
+/* ---------- شارة الحالة (مُعاد تعريفها) ---------- */
+function statePill(st){
+  st=normalizeState(st);
+  let badge='ok',dot='state-norm', txt=st;
+  if(st==='هبوط'){ badge='err'; dot='state-low'; }
+  else if(st==='ارتفاع'){ badge='warn'; dot='state-high'; txt='ارتفاع (↗︎)'; }
+  else if(st==='ارتفاع شديد'){ badge='warn'; dot='state-vhigh'; txt='ارتفاع شديد (↑)'; }
+  else if(st==='هبوط حرج'){ badge='err'; dot='state-critlow'; txt='هبوط حرج (↓)'; }
+  else if(st==='ارتفاع حرج'){ badge='danger'; dot='state-crithigh'; txt='ارتفاع حرج (↑↑)'; }
+  return `<span class="state-dot ${dot}"></span><span class="badge ${badge}" style="margin-inline-start:6px">${txt}</span>`;
 }
 
 /* ---------- Stats & Sparkline ---------- */
 function renderStats(arr, unit){
   const TIR=$('statTIR'), AVG=$('statAvg'), SD=$('statSD'), LOW=$('statLow'), HIGH=$('statHigh'), CRIT=$('statCrit');
   if(!arr.length){ TIR.textContent=AVG.textContent=SD.textContent=LOW.textContent=HIGH.textContent=CRIT.textContent='—'; return; }
-  const n=arr.length, inRange=arr.filter(r=>r.state==='داخل النطاق').length;
+  const n=arr.length, inRange=arr.filter(r=>classForValue(r.val,unit)==='val--normal').length;
   const lows=arr.filter(r=>r.state==='هبوط').length;
   const highs=arr.filter(r=>r.state==='ارتفاع'||r.state==='ارتفاع شديد').length;
   const critical=arr.filter(r=>r.state==='هبوط حرج'||r.state==='ارتفاع حرج').length;
@@ -392,22 +437,49 @@ function renderStats(arr, unit){
 }
 function renderSparkline(arr){
   if(!sparklineBox) return; sparklineBox.innerHTML=''; if(arr.length<2) return;
-  const w=260,h=48,p=4,minV=Math.min(...arr.map(r=>r.val)),maxV=Math.max(...arr.map(r=>r.val));
+  const w=320,h=56,p=6;
+
+  const minV=Math.min(...arr.map(r=>r.val)),maxV=Math.max(...arr.map(r=>r.val));
   const xs=arr.map((_,i)=>p+i*(w-2*p)/(arr.length-1)), ys=arr.map(r=>h-p-((r.val-minV)/(maxV-minV||1))*(h-2*p));
+
+  // Band أخضر 3.9–10.9 mmol/L مكافئ وحدة الطفل
+  const unit=childData?.glucoseUnit||'mg/dL';
+  const bandLow = unit.includes('mmol') ? 3.9 : mmol2mgdl(3.9);
+  const bandHigh = unit.includes('mmol') ? 10.9 : mmol2mgdl(10.9);
+  const yLow = h-p-((bandLow-minV)/(maxV-minV||1))*(h-2*p);
+  const yHigh = h-p-((bandHigh-minV)/(maxV-minV||1))*(h-2*p);
+  const bandTop = Math.min(yLow,yHigh), bandHeight = Math.abs(yHigh-yLow)||2;
+
   let d=`M ${xs[0]} ${ys[0]}`; for(let i=1;i<xs.length;i++) d+=` L ${xs[i]} ${ys[i]}`;
-  sparklineBox.innerHTML=`<svg width="${w}" height="${h}"><path d="${d}" fill="none" stroke="#2563eb" stroke-width="2"/></svg>`;
+  const circles = arr.map((r,i)=>{
+    const cls = classForValue(r.val,unit);
+    const color = cls==='val--normal' ? '#16a34a' : (cls==='val--mild' ? '#ea580c' : (cls==='val--sev' ? '#ef4444' : '#b91c1c'));
+    return `<circle cx="${xs[i]}" cy="${ys[i]}" r="3" fill="${color}" />`;
+  }).join('');
+
+  sparklineBox.innerHTML=`
+    <svg width="${w}" height="${h}">
+      <rect x="${p}" y="${bandTop}" width="${w-2*p}" height="${bandHeight}" fill="#dcfce7" opacity="0.5"></rect>
+      <path d="${d}" fill="none" stroke="#2563eb" stroke-width="1.8"/>
+      ${circles}
+    </svg>`;
 }
 
 /* ---------- Save + Undo/Redo ---------- */
 async function saveMeasurement(){
   const unit=unitSel.value; const v=Number(readingInp.value);
+
   // منع قراءة 0 أو أقل
-  if(!Number.isFinite(v) || v<=0){ toast('أدخل قراءة صحيحة (> 0)'); return; }
+  if(!Number.isFinite(v) || v<=0){
+    setFieldError('reading','أدخل قراءة صحيحة (> 0)');
+    toast('أدخل قراءة صحيحة (> 0)');
+    return;
+  }
 
   // منع تكرار Slot يوميًا إلا للأنواع المسموح بها
   const slot = slotSel.value;
   if(!DUP_ALLOWED.has(slot) && isSlotTakenToday(slot)){
-    toast(`لا يمكن تسجيل قياس آخر لنوع "${SLOT_LABEL[slot]||slot}" اليوم. استخدم "أخرى" أو "رياضة" لو قياس إضافي.`); 
+    toast(`لا يمكن تسجيل قياس آخر لنوع "${SLOT_LABEL[slot]||slot}" اليوم. استخدم "أخرى" أو "رياضة" للقياس الإضافي.`); 
     setAlert('warn','هذا النوع مُسجّل اليوم بالفعل — التكرار غير مسموح.');
     return;
   }
@@ -420,16 +492,16 @@ async function saveMeasurement(){
 
   const childUnit=childData?.glucoseUnit||'mg/dL';
   const valInChild = childUnit===unit ? v : (childUnit.includes('mmol') ? mgdl2mmol(v) : mmol2mgdl(v));
-  const upper=getTargetUpper(); const cf=Number(childData?.correctionFactor)||0;
+  const severe=getSevereUpper(); const cf=Number(childData?.correctionFactor)||0;
 
-  // جرعة التصحيح: لو الصف ظاهر نأخذ قيمة الحقل (مع الافتراضي التلقائي)، وإلا نحسب
+  // جرعة التصحيح: تبدأ من ارتفاع شديد فقط
   let correctionDose = 0;
   if(corrRow && corrRow.style.display!=='none'){
     const manual=Number(corrDoseInput.value);
     if(Number.isFinite(manual) && manual>=0){ correctionDose = manual; }
-    else if(cf>0 && Number.isFinite(upper) && valInChild>upper){ correctionDose=(valInChild-upper)/cf; }
+    else if(cf>0 && Number.isFinite(severe) && valInChild>severe){ correctionDose=(valInChild-severe)/cf; }
   }else{
-    if(cf>0 && Number.isFinite(upper) && valInChild>upper) correctionDose=(valInChild-upper)/cf;
+    if(cf>0 && Number.isFinite(severe) && valInChild>severe) correctionDose=(valInChild-severe)/cf;
   }
 
   const notes=(notesInput?.value||'').trim()||null;
@@ -531,11 +603,34 @@ function slotToMealType(slot){
   if(/^SNACK$/.test(slot)) return 'سناك';
   return '';
 }
-function inferState(v){ const min=getTargetLower(),upper=getTargetUpper(),severe=getSevereUpper(),cl=getCriticalLow(),ch=getCriticalHigh();
+function inferState(v){ 
+  const min=getTargetLower(),upper=getTargetUpper(),severe=getSevereUpper(),cl=getCriticalLow(),ch=getCriticalHigh();
   if(Number.isFinite(cl) && v<=cl) return 'هبوط حرج';
-  if(Number.isFinite(ch) && v>=ch) return 'ارتفاع حرج';
+  if(Number.isFinite(ch) && v>ch) return 'ارتفاع حرج';
   if(Number.isFinite(severe) && v>severe) return 'ارتفاع شديد';
   if(Number.isFinite(upper) && v>upper) return 'ارتفاع';
   if(Number.isFinite(min) && v<min) return 'هبوط';
   return 'داخل النطاق';
+}
+
+/* ---------- Field validation helpers ---------- */
+function setFieldError(fieldId, msg){
+  const el=$(fieldId); if(!el) return;
+  el.classList.add('is-invalid');
+  let help=el.nextElementSibling;
+  if(!help || !help.classList.contains('help-err')){
+    help=document.createElement('div'); help.className='help-err'; el.after(help);
+  }
+  help.textContent=msg||'قيمة غير صالحة';
+}
+function clearFieldError(){
+  readingInp.classList.remove('is-invalid');
+  const help=readingInp.nextElementSibling;
+  if(help && help.classList.contains('help-err')) help.remove();
+}
+
+/* ---------- Slots uniqueness helpers ---------- */
+function isSlotTakenToday(slotKey){
+  const arr=buildDayArray();
+  return arr.some(r=>r.key===slotKey);
 }
