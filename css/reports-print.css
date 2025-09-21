@@ -1,29 +1,120 @@
 :root{
-  --grid-border:#d1d5db; --alt:#f9fafb;
-  --band:#dcfce7; --mild:#fff7ed; --sev:#fee2e2; --crit:#ffe4e6;
-  --ink:#0f172a; --muted:#6b7280;
+  --grid-border:#d1d5db; 
+  --alt:#f9fafb;
+  --band:#dcfce7; 
+  --mild:#fff7ed; 
+  --sev:#fee2e2; 
+  --crit:#ffe4e6;
+  --ink:#0f172a; 
+  --muted:#6b7280;
 }
+
+/* حجم الصفحة والطباعة */
+@page{
+  size: A4 portrait;           /* لو عايزها بالعرض: A4 landscape */
+  margin: 12mm;
+}
+
 *{box-sizing:border-box}
-@page{size:A4 landscape;margin:12mm}
-body{margin:0;color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Arabic",Tahoma,Arial}
+body{
+  margin:0;
+  color:var(--ink);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Arabic",Tahoma,Arial
+}
 .page{padding:10px}
-.print-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--grid-border);padding-bottom:6px;margin-bottom:8px}
+
+/* رأس وتذييل */
+.print-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  border-bottom:1px solid var(--grid-border);
+  padding-bottom:6px;
+  margin-bottom:8px
+}
 .print-head h2{margin:0}
 .meta{text-align:left}
 .muted{color:var(--muted)}
+.print-foot{
+  margin-top:6px;
+  text-align:center;
+  border-top:1px dashed var(--grid-border);
+  padding-top:4px
+}
 
-.grid-wrap{border:1px solid var(--grid-border);border-radius:10px;overflow:hidden}
-.grid-head,.grid-row{display:grid;grid-template-columns:160px repeat(10,1fr)}
-.grid-head{background:#f3f4f6;border-bottom:1px solid var(--grid-border);font-weight:600}
-.grid-head>div,.cell{padding:8px;border-inline-start:1px solid var(--grid-border)}
+/* شبكة الجدول (نفس شكل الصفحة المرئية) */
+.grid-wrap{
+  border:1px solid var(--grid-border);
+  border-radius:10px;
+  overflow:hidden
+}
+.grid-head,.grid-row{
+  display:grid;
+  grid-template-columns:160px repeat(10,1fr)
+}
+.grid-head{
+  background:#f3f4f6;
+  border-bottom:1px solid var(--grid-border);
+  font-weight:600
+}
+.grid-head>div,.cell{
+  padding:8px;
+  border-inline-start:1px solid var(--grid-border)
+}
 .grid-head>div:first-child,.cell:first-child{border-inline-start:none}
 .grid-row{border-bottom:1px solid var(--grid-border)}
 .grid-row:nth-child(odd) .cell{background:var(--alt)}
-.v{padding:2px 6px;border-radius:6px;border:1px solid #e5e7eb;background:#fff}
+
+/* وسوم القيم داخل الخلايا */
+.v{
+  padding:2px 6px;
+  border-radius:6px;
+  border:1px solid #e5e7eb;
+  background:#fff
+}
 .v.ok{background:var(--band)}
 .v.mild{background:var(--mild)}
 .v.sev{background:var(--sev)}
 .v.crit{background:var(--crit)}
-.u{font-size:10px;color:#334155;background:#e2e8f0;border-radius:999px;padding:2px 6px;margin-inline-start:4px}
+.u{
+  font-size:10px;
+  color:#334155;
+  background:#e2e8f0;
+  border-radius:999px;
+  padding:2px 6px;
+  margin-inline-start:4px
+}
 
-.print-foot{margin-top:6px;text-align:center;border-top:1px dashed var(--grid-border);padding-top:4px}
+/* -------------------------------
+   مركز الدائرة في صفحة الطباعة
+   -------------------------------- */
+
+/* حاوية مركزية تملأ المساحة المتاحة وتوسّط ما بداخلها */
+.print-center{
+  width:100%;
+  min-height:120mm;                 /* ارتفاع مناسب بعد الهيدر، عدّله حسب حاجتك */
+  display:flex;
+  align-items:center;               /* عموديًا في المنتصف */
+  justify-content:center;           /* أفقيًا في المنتصف */
+  margin:8mm 0;
+}
+
+/* حجم الدائرة بالضبط: 5 سم = 50 ملم */
+.pie-mm{
+  width:50mm;
+  height:50mm;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* تأكيد أن الـ canvas يملأ الحاوية الصغيرة */
+.pie-mm canvas{
+  width:100% !important;
+  height:100% !important;
+}
+
+/* طباعة أنظف للألوان والخلفيات */
+@media print{
+  .v,.u{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
