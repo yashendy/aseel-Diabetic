@@ -1,5 +1,8 @@
-// measurements.js — نسخة متكاملة بعد المراجعة
-// تلوين/تصحيح/منع تكرار/حذف/فاليوديشن + إصلاح statePill + Sparkline Band
+// measurements.js — نسخة نهائية بثوابت الحدود + معادلة التصحيح من حد الارتفاع (7.1)
+// ملاحظات سريعة:
+// - كل الحدود ثابتة بالـ mmol/L ثم نُحوّل تلقائياً لوحدة الطفل للحساب والعرض.
+// - التصحيح = max(0, (val - upper) / CF) يبدأ من أول ارتفاع.
+// - كل ما عدا ذلك كما هو: حذف صف، Undo/Redo، منع التكرار، فاليوديشن، تلوين، Sparkline.
 
 import { auth, db } from './firebase-config.js';
 import {
@@ -17,6 +20,25 @@ const sameDay = (a,b) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.g
 const mgdl2mmol = mg => mg/18;
 const mmol2mgdl = mmol => mmol*18;
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.display='block'; clearTimeout(t._t); t._t=setTimeout(()=>t.style.display='none',2200); }
+
+/* ---------- حدود ثابتة (mmol/L) ---------- */
+const FIXED_MMOL = Object.freeze({
+  low: 3.9,        // هبوط
+  upper: 7.1,      // بداية ارتفاع عادي
+  severe: 10.9,    // ارتفاع شديد
+  critHigh: 14.1   // ارتفاع حرج
+});
+// تحويل الحدود لوحدة الطفل
+function limitsInChildUnit(unit){
+  if((unit||'').includes('mmol')) return {...FIXED_MMOL};
+  // mg/dL
+  return {
+    low: round1(mmol2mgdl(FIXED_MMOL.low)),
+    upper: round1(mmol2mgdl(FIXED_MMOL.upper)),
+    severe: round1(mmol2mgdl(FIXED_MMOL.severe)),
+    critHigh: round1(mmol2mgdl(FIXED_MMOL.critHigh)),
+  };
+}
 
 /* ---------- Normalize state to Arabic ---------- */
 function normalizeState(s){
@@ -138,7 +160,7 @@ function injectUI(){
   }else{ undoBtn=$('undoBtn'); redoBtn=$('redoBtn'); }
 }
 
-/* ---------- Panels: alert + correction + hypo + notes ---------- */
+/* ---------- Panels ---------- */
 function ensureActionPanel(){
   if(actionsPanel) return;
   const toolbar=document.querySelector('.toolbar');
@@ -195,38 +217,27 @@ function applyChildUI(){
   const bolus = childData?.bolusType || childData?.bolus || '—';
   chipsBar.innerHTML=`<span class="chip">CR: ${esc(cr)}</span><span class="chip">CF: ${esc(cf)}</span><span class="chip">Bolus: ${esc(bolus)}</span>`;
 
-  const u=(childData?.glucoseUnit||'mg/dL'); const max=getTargetUpper(); const min=getTargetLower();
-  const sev=getSevereUpper(); const cl=getCriticalLow(); const ch=getCriticalHigh();
+  // عرض الحدود الثابتة مزدوجة الوحدة
+  const mmol = FIXED_MMOL;
+  const mgdl = {
+    low: round1(mmol2mgdl(mmol.low)),
+    upper: round1(mmol2mgdl(mmol.upper)),
+    severe: round1(mmol2mgdl(mmol.severe)),
+    critHigh: round1(mmol2mgdl(mmol.critHigh))
+  };
   targetsChips.innerHTML = `
-    ${Number.isFinite(min)? `<span class="chip">هبوط: <b class="tiny">${dualUnit(min,u)}</b></span>` : ''}
-    <span class="chip">ارتفاع: <b class="tiny">${dualUnit(max,u)}</b></span>
-    <span class="chip">ارتفاع شديد: <b class="tiny">${dualUnit(sev,u)}</b></span>
-    ${Number.isFinite(cl)? `<span class="chip err">هبوط حرج: <b class="tiny">${dualUnit(cl,u)}</b></span>` : ''}
-    ${Number.isFinite(ch)? `<span class="chip danger">ارتفاع حرج: <b class="tiny">${dualUnit(ch,u)}</b></span>` : ''}
+    <span class="chip">هبوط: <b class="tiny">${mmol.low} mmol/L (${mgdl.low} mg/dL)</b></span>
+    <span class="chip">ارتفاع: <b class="tiny">${mmol.upper} mmol/L (${mgdl.upper} mg/dL)</b></span>
+    <span class="chip">ارتفاع شديد: <b class="tiny">${mmol.severe} mmol/L (${mgdl.severe} mg/dL)</b></span>
+    <span class="chip danger">ارتفاع حرج: <b class="tiny">${mmol.critHigh} mmol/L (${mgdl.critHigh} mg/dL)</b></span>
   `;
   backToChildBtn.addEventListener('click',()=>location.href=`child.html?child=${encodeURIComponent(childId)}`);
 }
 
-/* ---------- Ranges / Units ---------- */
-function getTargetUpper(){ const u=(childData?.glucoseUnit||'mg/dL').toLowerCase();
-  let t=(childData?.normalRange?.max??childData?.hyperLevel); t=Number(t);
-  if(!Number.isFinite(t)) t=u.includes('mmol')?7:130; return t; }
-function getTargetLower(){ let t=(childData?.normalRange?.min??childData?.hypoLevel); t=Number(t); return Number.isFinite(t)?t:NaN; }
-function getSevereUpper(){ const u=(childData?.glucoseUnit||'mg/dL').toLowerCase();
-  let t=(childData?.normalRange?.severeHigh??childData?.severeHighLevel??childData?.veryHighLevel); t=Number(t);
-  if(!Number.isFinite(t)){ const upper=getTargetUpper(); t=u.includes('mmol')?(upper+3):(upper+54); } return t; }
-function getCriticalLow(){ let t=(childData?.normalRange?.criticalLow??childData?.criticalLowLevel); t=Number(t); return Number.isFinite(t)?t:NaN; }
-function getCriticalHigh(){ let t=(childData?.normalRange?.criticalHigh??childData?.criticalHighLevel); t=Number(t); return Number.isFinite(t)?t:NaN; }
-function dualUnit(val, unit){
-  if(!Number.isFinite(val)) return '—';
-  return unit.includes('mmol') ? `${round1(val)} mmol/L (${round1(mmol2mgdl(val))} mg/dL)` : `${round1(val)} mg/dL (${round1(mgdl2mmol(val))} mmol/L)`;
-}
-
-/* ---------- Derived + Slot duplicate hint ---------- */
+/* ---------- Derived ---------- */
 function updateDerived(){
   const unit=unitSel.value; const v=Number(readingInp.value);
 
-  // منع صفر أو قيم غير صالحة
   clearFieldError();
   if(!Number.isFinite(v) || v<=0){
     convertedBox.textContent='—'; stateBadge.textContent='—'; stateBadge.className='badge';
@@ -239,38 +250,34 @@ function updateDerived(){
   const valueInChildUnit = childUnit===unit ? v : (childUnit.includes('mmol') ? mgdl2mmol(v) : mmol2mgdl(v));
   convertedBox.textContent = unit.includes('mmol') ? `${round1(mmol2mgdl(v))} mg/dL` : `${round1(mgdl2mmol(v))} mmol/L`;
 
-  const min=getTargetLower(), upper=getTargetUpper(), severe=getSevereUpper(), critL=getCriticalLow(), critH=getCriticalHigh();
-
-  // تحديد الحالة حسب القاعدة الجديدة
-  let st='داخل النطاق', css='ok', classVal='val--normal', arrow='';
-  if(Number.isFinite(critL) && valueInChildUnit<=critL){ st='هبوط حرج'; css='err'; classVal='val--crit'; }
-  else if(Number.isFinite(min) && valueInChildUnit<min){ st='هبوط'; css='err'; classVal='val--sev'; }
-  else if(Number.isFinite(critH) && valueInChildUnit>critH){ st='ارتفاع حرج'; css='danger'; classVal='val--crit'; arrow=' ↑'; }
-  else if(Number.isFinite(severe) && valueInChildUnit>severe){ st='ارتفاع شديد'; css='warn'; classVal='val--sev'; }
-  else if(Number.isFinite(upper) && valueInChildUnit>upper){ st='ارتفاع'; css='warn'; classVal='val--mild'; }
-  else if(valueInChildUnit>=3.9 && valueInChildUnit<=10.9 && childUnit.includes('mmol')){ st='داخل النطاق'; css='ok'; classVal='val--normal'; }
-  else if(!childUnit.includes('mmol')){ // mg/dL: نحسب المكافئ 3.9–10.9
-    const low=mmol2mgdl(3.9), high=mmol2mgdl(10.9);
-    if(valueInChildUnit>=low && valueInChildUnit<=high){ st='داخل النطاق'; css='ok'; classVal='val--normal'; }
-  }
+  const L = limitsInChildUnit(childUnit);
+  // تحديد الحالة (لا يوجد "هبوط حرج" ثابت؛ نستخدم هبوط فقط تحت 3.9)
+  let st='داخل النطاق', css='ok', arrow='';
+  // طبيعي 3.9-10.9 mmol/L (مكافئ في وحدة الطفل)
+  const natLow = limitsInChildUnit(childUnit).low;            // 3.9 converted
+  const natHigh = limitsInChildUnit(childUnit).severe;        // 10.9 converted
+  if(valueInChildUnit < L.low){ st='هبوط'; css='err'; }
+  else if(valueInChildUnit > L.critHigh){ st='ارتفاع حرج'; css='danger'; arrow=' ↑'; }
+  else if(valueInChildUnit > L.severe){ st='ارتفاع شديد'; css='warn'; }
+  else if(valueInChildUnit > L.upper){ st='ارتفاع'; css='warn'; }
+  else if(valueInChildUnit>=natLow && valueInChildUnit<=natHigh){ st='داخل النطاق'; css='ok'; }
 
   stateBadge.textContent=st+arrow; stateBadge.className=`badge ${css}`;
 
-  // التصحيح يبدأ من "ارتفاع شديد" فأعلى فقط
+  // التصحيح يبدأ من "ارتفاع" (upper)
   const cf=Number(childData?.correctionFactor)||0;
   let corr=0;
-  if(cf>0 && Number.isFinite(severe) && valueInChildUnit>severe){
-    const target = severe; // نقطة البدء
-    corr=(valueInChildUnit-target)/cf;
+  if(cf>0 && valueInChildUnit>L.upper){
+    corr=(valueInChildUnit - L.upper)/cf;
   }
   lastComputedCorr=corr; corrDoseView.textContent=String(round1(Math.max(0,corr)));
 
   // عرض الصف المناسب
   ensureActionPanel(); setAlert(null,null);
-  if(st==='هبوط' || st==='هبوط حرج'){
+  if(st==='هبوط'){
     show(hypoRow); hide(corrRow);
-    setAlert(st==='هبوط حرج'?'danger':'warn', st==='هبوط حرج'?'يجب التدخل السريع لمعالجة الهبوط':'فضلاً قم بمعالجة الهبوط ثم دوّن ما استُخدم للرفع.');
-  }else if(st==='ارتفاع شديد' || st==='ارتفاع حرج'){
+    setAlert('warn','فضلاً قم بمعالجة الهبوط ثم دوّن ما استُخدم للرفع.');
+  }else if(st==='ارتفاع' || st==='ارتفاع شديد' || st==='ارتفاع حرج'){
     hide(hypoRow); show(corrRow);
     if(!corrDirty){ corrDoseInput.value=String(round1(Math.max(0,corr))); }
     if(st==='ارتفاع حرج') setAlert('danger','القراءة حرجة — يُنصح بالتصحيح الآن.');
@@ -282,7 +289,7 @@ function updateDerived(){
   updateSlotDuplicateHint();
 }
 
-/* إظهار/إخفاء تلميح منع التكرار للـ Slot الحالي */
+/* ---------- Slot duplicate hint ---------- */
 function updateSlotDuplicateHint(){
   if(!slotDupHint) return;
   if (isSlotTakenToday(slotSel.value) && !DUP_ALLOWED.has(slotSel.value)){
@@ -334,7 +341,7 @@ function applyFilters(arr){
   if(filterState.state!=='ALL'){
     out=out.filter(r=>{
       if(filterState.state==='NORMAL') return r.state==='داخل النطاق';
-      if(filterState.state==='LOW') return r.state==='هبوط' || r.state==='هبوط حرج';
+      if(filterState.state==='LOW') return r.state==='هبوط';
       if(filterState.state==='HIGH') return r.state==='ارتفاع' || r.state==='ارتفاع شديد' || r.state==='ارتفاع حرج';
       return true;
     });
@@ -362,7 +369,7 @@ function renderList(){
   gridEl.innerHTML=''; if(!arr.length){ emptyEl.classList.remove('hidden'); return; } emptyEl.classList.add('hidden');
 
   for(const r of arr){
-    const mood = classForValue(r.val, unit); // لتلوين الخلية
+    const mood = classForValue(r.val, unit);
     const row=document.createElement('div'); row.className='row';
     row.innerHTML=`
       <div class="cell"><span class="mono">${r.when.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</span></div>
@@ -394,29 +401,23 @@ function renderList(){
   });
 }
 
-/* ---------- لون الخلية حسب القيمة في وحدة الطفل ---------- */
+/* لون الخلية حسب القيمة */
 function classForValue(val, unit){
-  const min=getTargetLower(), upper=getTargetUpper(), severe=getSevereUpper(), critL=getCriticalLow(), critH=getCriticalHigh();
-  // val هنا بالفعل بوحدة الطفل
-  if(Number.isFinite(critL) && val<=critL) return 'val--crit';
-  if(Number.isFinite(min) && val<min) return 'val--sev';
-  if(Number.isFinite(critH) && val>critH) return 'val--crit';
-  if(Number.isFinite(severe) && val>severe) return 'val--sev';
-  if(Number.isFinite(upper) && val>upper) return 'val--mild';
-  // نطاق طبيعي 3.9–10.9 mmol/L
-  if(unit.includes('mmol')) return (val>=3.9 && val<=10.9) ? 'val--normal' : '';
-  const low=mmol2mgdl(3.9), high=mmol2mgdl(10.9);
-  return (val>=low && val<=high) ? 'val--normal' : '';
+  const L = limitsInChildUnit(unit);
+  if(val > L.critHigh) return 'val--crit';
+  if(val > L.severe) return 'val--sev';
+  if(val > L.upper) return 'val--mild';
+  if(val < L.low) return 'val--sev';
+  return 'val--normal';
 }
 
-/* ---------- شارة الحالة (مُعاد تعريفها) ---------- */
+/* شارة الحالة */
 function statePill(st){
   st=normalizeState(st);
   let badge='ok',dot='state-norm', txt=st;
   if(st==='هبوط'){ badge='err'; dot='state-low'; }
   else if(st==='ارتفاع'){ badge='warn'; dot='state-high'; txt='ارتفاع (↗︎)'; }
   else if(st==='ارتفاع شديد'){ badge='warn'; dot='state-vhigh'; txt='ارتفاع شديد (↑)'; }
-  else if(st==='هبوط حرج'){ badge='err'; dot='state-critlow'; txt='هبوط حرج (↓)'; }
   else if(st==='ارتفاع حرج'){ badge='danger'; dot='state-crithigh'; txt='ارتفاع حرج (↑↑)'; }
   return `<span class="state-dot ${dot}"></span><span class="badge ${badge}" style="margin-inline-start:6px">${txt}</span>`;
 }
@@ -428,7 +429,7 @@ function renderStats(arr, unit){
   const n=arr.length, inRange=arr.filter(r=>classForValue(r.val,unit)==='val--normal').length;
   const lows=arr.filter(r=>r.state==='هبوط').length;
   const highs=arr.filter(r=>r.state==='ارتفاع'||r.state==='ارتفاع شديد').length;
-  const critical=arr.filter(r=>r.state==='هبوط حرج'||r.state==='ارتفاع حرج').length;
+  const critical=arr.filter(r=>r.state==='ارتفاع حرج').length;
   const mean=arr.reduce((a,r)=>a+r.val,0)/n;
   const sd=Math.sqrt(arr.reduce((a,r)=>a+Math.pow(r.val-mean,2),0)/n);
   TIR.textContent=`${Math.round((inRange/n)*100)}%`;
@@ -442,10 +443,9 @@ function renderSparkline(arr){
   const minV=Math.min(...arr.map(r=>r.val)),maxV=Math.max(...arr.map(r=>r.val));
   const xs=arr.map((_,i)=>p+i*(w-2*p)/(arr.length-1)), ys=arr.map(r=>h-p-((r.val-minV)/(maxV-minV||1))*(h-2*p));
 
-  // Band أخضر 3.9–10.9 mmol/L مكافئ وحدة الطفل
   const unit=childData?.glucoseUnit||'mg/dL';
-  const bandLow = unit.includes('mmol') ? 3.9 : mmol2mgdl(3.9);
-  const bandHigh = unit.includes('mmol') ? 10.9 : mmol2mgdl(10.9);
+  const bandLow = limitsInChildUnit(unit).low;        // 3.9 conv
+  const bandHigh = limitsInChildUnit(unit).severe;    // 10.9 conv
   const yLow = h-p-((bandLow-minV)/(maxV-minV||1))*(h-2*p);
   const yHigh = h-p-((bandHigh-minV)/(maxV-minV||1))*(h-2*p);
   const bandTop = Math.min(yLow,yHigh), bandHeight = Math.abs(yHigh-yLow)||2;
@@ -469,7 +469,6 @@ function renderSparkline(arr){
 async function saveMeasurement(){
   const unit=unitSel.value; const v=Number(readingInp.value);
 
-  // منع قراءة 0 أو أقل
   if(!Number.isFinite(v) || v<=0){
     setFieldError('reading','أدخل قراءة صحيحة (> 0)');
     toast('أدخل قراءة صحيحة (> 0)');
@@ -492,16 +491,17 @@ async function saveMeasurement(){
 
   const childUnit=childData?.glucoseUnit||'mg/dL';
   const valInChild = childUnit===unit ? v : (childUnit.includes('mmol') ? mgdl2mmol(v) : mmol2mgdl(v));
-  const severe=getSevereUpper(); const cf=Number(childData?.correctionFactor)||0;
+  const L = limitsInChildUnit(childUnit);
+  const cf=Number(childData?.correctionFactor)||0;
 
-  // جرعة التصحيح: تبدأ من ارتفاع شديد فقط
+  // جرعة التصحيح: تبدأ من حد الارتفاع العادي
   let correctionDose = 0;
   if(corrRow && corrRow.style.display!=='none'){
     const manual=Number(corrDoseInput.value);
     if(Number.isFinite(manual) && manual>=0){ correctionDose = manual; }
-    else if(cf>0 && Number.isFinite(severe) && valInChild>severe){ correctionDose=(valInChild-severe)/cf; }
+    else if(cf>0 && valInChild>L.upper){ correctionDose=(valInChild-L.upper)/cf; }
   }else{
-    if(cf>0 && Number.isFinite(severe) && valInChild>severe) correctionDose=(valInChild-severe)/cf;
+    if(cf>0 && valInChild>L.upper) correctionDose=(valInChild-L.upper)/cf;
   }
 
   const notes=(notesInput?.value||'').trim()||null;
@@ -554,9 +554,14 @@ async function exportXLSX(){
     SLOT_LABEL[r.key]||r.key, `${round1(r.val)} ${unit}`, r.state, r.corr||0, r.hypo, r.notes
   ]);
   const ws=XLSX.utils.aoa_to_sheet([header,...rows]); ws['!cols']=[{wch:12},{wch:18},{wch:18},{wch:14},{wch:18},{wch:20},{wch:40}];
-  const max=getTargetUpper(),min=getTargetLower(),sev=getSevereUpper(),cl=getCriticalLow(),ch=getCriticalHigh();
+
+  const mmol = FIXED_MMOL;
+  const mgdl = {low:round1(mmol2mgdl(mmol.low)),upper:round1(mmol2mgdl(mmol.upper)),severe:round1(mmol2mgdl(mmol.severe)),critHigh:round1(mmol2mgdl(mmol.critHigh))};
   const meta=[['الطفل',childData?.displayName||childData?.name||'—'],['التاريخ',dayPicker.value||todayISO()],['الوحدة',unit],
-    ['هبوط',dualUnit(min,unit)],['ارتفاع',dualUnit(max,unit)],['ارتفاع شديد',dualUnit(sev,unit)],['هبوط حرج',dualUnit(cl,unit)],['ارتفاع حرج',dualUnit(ch,unit)],
+    ['هبوط',`${mmol.low} mmol/L (${mgdl.low} mg/dL)`],
+    ['ارتفاع',`${mmol.upper} mmol/L (${mgdl.upper} mg/dL)`],
+    ['ارتفاع شديد',`${mmol.severe} mmol/L (${mgdl.severe} mg/dL)`],
+    ['ارتفاع حرج',`${mmol.critHigh} mmol/L (${mgdl.critHigh} mg/dL)`],
     ['CR (g/U)',Number(childData?.carbRatio)||'—'],[`CF (${unit}/U)`,Number(childData?.correctionFactor)||'—']];
   const ws2=XLSX.utils.aoa_to_sheet(meta); ws2['!cols']=[{wch:26},{wch:40}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'القياسات (مُفلترة)'); XLSX.utils.book_append_sheet(wb,ws2,'ملخّص');
@@ -583,7 +588,8 @@ function wireEvents(){
   $('clearFilters').addEventListener('click',()=>{ filterState={...filterState,group:'ALL',state:'ALL',search:''}; searchBox.value=''; renderList(); });
   autoSlotToggle.addEventListener('change',()=>{ filterState.auto=!!autoSlotToggle.checked; renderList(); });
 
-  $('undoBtn').addEventListener('click',undoLast); $('redoBtn').addEventListener('click',redoLast);
+  if($('undoBtn')) $('undoBtn').addEventListener('click',undoLast);
+  if($('redoBtn')) $('redoBtn').addEventListener('click',redoLast);
 
   window.addEventListener('keydown',(e)=>{
     const k=e.key.toLowerCase();
@@ -603,17 +609,16 @@ function slotToMealType(slot){
   if(/^SNACK$/.test(slot)) return 'سناك';
   return '';
 }
-function inferState(v){ 
-  const min=getTargetLower(),upper=getTargetUpper(),severe=getSevereUpper(),cl=getCriticalLow(),ch=getCriticalHigh();
-  if(Number.isFinite(cl) && v<=cl) return 'هبوط حرج';
-  if(Number.isFinite(ch) && v>ch) return 'ارتفاع حرج';
-  if(Number.isFinite(severe) && v>severe) return 'ارتفاع شديد';
-  if(Number.isFinite(upper) && v>upper) return 'ارتفاع';
-  if(Number.isFinite(min) && v<min) return 'هبوط';
+function inferState(v, unit){ 
+  const L = limitsInChildUnit(unit);
+  if(v > L.critHigh) return 'ارتفاع حرج';
+  if(v > L.severe) return 'ارتفاع شديد';
+  if(v > L.upper) return 'ارتفاع';
+  if(v < L.low) return 'هبوط';
   return 'داخل النطاق';
 }
 
-/* ---------- Field validation helpers ---------- */
+/* ---------- Field validation ---------- */
 function setFieldError(fieldId, msg){
   const el=$(fieldId); if(!el) return;
   el.classList.add('is-invalid');
@@ -629,7 +634,7 @@ function clearFieldError(){
   if(help && help.classList.contains('help-err')) help.remove();
 }
 
-/* ---------- Slots uniqueness helpers ---------- */
+/* ---------- Slots uniqueness ---------- */
 function isSlotTakenToday(slotKey){
   const arr=buildDayArray();
   return arr.some(r=>r.key===slotKey);
