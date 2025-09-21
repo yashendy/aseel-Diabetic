@@ -1,43 +1,29 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>طباعة التقرير</title>
-  <link rel="stylesheet" href="css/reports-print.css"/>
-</head>
-<body>
-  <div class="page">
-    <header class="print-head">
-      <div>
-        <h2>تقرير القياسات</h2>
-        <div class="muted" id="rangeTxt">—</div>
-      </div>
-      <div class="meta">
-        <div><b id="childName">—</b></div>
-        <div class="muted" id="childMeta">—</div>
-      </div>
-    </header>
+:root{
+  --grid-border:#d1d5db; --alt:#f9fafb;
+  --band:#dcfce7; --mild:#fff7ed; --sev:#fee2e2; --crit:#ffe4e6;
+  --ink:#0f172a; --muted:#6b7280;
+}
+*{box-sizing:border-box}
+@page{size:A4 landscape;margin:12mm}
+body{margin:0;color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Arabic",Tahoma,Arial}
+.page{padding:10px}
+.print-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--grid-border);padding-bottom:6px;margin-bottom:8px}
+.print-head h2{margin:0}
+.meta{text-align:left}
+.muted{color:var(--muted)}
 
-    <!-- شبكة بنفس شكل الجدول المرئي -->
-    <section class="grid-wrap">
-      <div class="grid-head">
-        <div class="r">التاريخ</div>
-        <div>الاستيقاظ/صائم</div>
-        <div>ق.الفطار</div><div>ب.الفطار</div>
-        <div>ق.الغداء</div><div>ب.الغداء</div>
-        <div>ق.العشاء</div><div>ب.العشاء</div>
-        <div>سناك</div><div>قبل النوم</div><div>أثناء النوم</div>
-      </div>
-      <div id="grid" class="grid-body"></div>
-    </section>
+.grid-wrap{border:1px solid var(--grid-border);border-radius:10px;overflow:hidden}
+.grid-head,.grid-row{display:grid;grid-template-columns:160px repeat(10,1fr)}
+.grid-head{background:#f3f4f6;border-bottom:1px solid var(--grid-border);font-weight:600}
+.grid-head>div,.cell{padding:8px;border-inline-start:1px solid var(--grid-border)}
+.grid-head>div:first-child,.cell:first-child{border-inline-start:none}
+.grid-row{border-bottom:1px solid var(--grid-border)}
+.grid-row:nth-child(odd) .cell{background:var(--alt)}
+.v{padding:2px 6px;border-radius:6px;border:1px solid #e5e7eb;background:#fff}
+.v.ok{background:var(--band)}
+.v.mild{background:var(--mild)}
+.v.sev{background:var(--sev)}
+.v.crit{background:var(--crit)}
+.u{font-size:10px;color:#334155;background:#e2e8f0;border-radius:999px;padding:2px 6px;margin-inline-start:4px}
 
-    <!-- في حال عدم وجود بيانات: شبكة فارغة -->
-    <section id="empty" class="muted" style="display:none; padding:8px 0">لا توجد قياسات في الفترة المحددة.</section>
-
-    <footer class="print-foot muted">تم الإنشاء آليًا — التاريخ: <span id="now"></span></footer>
-  </div>
-
-  <script type="module" src="js/reports-print.js"></script>
-</body>
-</html>
+.print-foot{margin-top:6px;text-align:center;border-top:1px dashed var(--grid-border);padding-top:4px}
