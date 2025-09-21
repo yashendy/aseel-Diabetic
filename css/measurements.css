@@ -94,3 +94,6 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Ara
 .alert.warn{background:#fff7ed;border-color:#fed7aa}
 .alert.danger{background:#fee2e2;border-color:#fecaca}
 .field.check{flex-direction:row;align-items:center;gap:8px}
+
+/* تلميح تكرار الـ Slot */
+.slot-hint{font-size:12.5px;color:#b45309;background:#fff7ed;border:1px solid #fde68a;padding:6px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:6px}
