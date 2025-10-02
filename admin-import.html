@@ -1,103 +1,183 @@
-<!DOCTYPE html><meta charset="utf-8">
-<title>USDA Import (Admin)</title>
-<input id="file" type="file" accept=".csv,.json">
-<button id="run">رفع وتحديث</button>
-<pre id="log"></pre>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>استيراد بيانات USDA للأصناف (أدمن)</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:#0b1220; color:#eef3ff; margin:0; padding:24px}
+    h1{font-size:20px; margin:0 0 12px}
+    .card{background:#0f172a; border:1px solid #1e293b; border-radius:14px; padding:16px; margin-bottom:16px}
+    .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+    label{font-size:14px; color:#cbd5e1}
+    input[type="file"]{padding:8px; background:#0b1220; color:#e2e8f0; border:1px dashed #334155; border-radius:10px}
+    button{background:#22c55e; color:#06220f; border:0; padding:10px 16px; border-radius:10px; cursor:pointer; font-weight:600}
+    button.ghost{background:#0b1220; color:#93c5fd; border:1px solid #334155}
+    .muted{color:#94a3b8; font-size:12px}
+    .progress{height:8px; background:#0b1220; border:1px solid #334155; border-radius:9999px; overflow:hidden}
+    .bar{height:100%; width:0%; background:#22c55e; transition:width .2s}
+    pre{max-height:280px; overflow:auto; background:#020617; border:1px solid #1e293b; padding:12px; border-radius:10px}
+    .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+    .tag{display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border:1px solid #334155; border-radius:9999px; font-size:12px; color:#cbd5e1}
+  </style>
+</head>
+<body>
+  <h1>🗂️ استيراد بيانات USDA للأصناف (أدمن)</h1>
 
-<script type="module">
-import { db } from "./js/firebase-config.js";
-import { collection, query, where, getDocs, doc, updateDoc } 
-  from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+  <div class="card">
+    <div class="row">
+      <input id="file" type="file" accept=".csv,.json" />
+      <button id="run">رفع وتحديث</button>
+      <!-- لو عندك الملفات على السيرفر بدّلي الروابط -->
+      <a class="tag" href="usda-import-sample.csv" download>قالب CSV جاهز</a>
+      <a class="tag" href="diet-templates-samples.json" download>نماذج قوالب أنظمة (JSON)</a>
+    </div>
+    <p class="muted">
+      القيم يُفضّل تكون <b>لكل 100 جم</b>. أعمدة شائعة: 203 (Protein)، 204 (Fat)، 205 (Carbs)، 269 (Sugars)،
+      291 (Fiber)، 307 (Sodium)، 601 (Cholesterol)، 606 (Sat. Fat) … إلخ.
+    </p>
+    <div class="grid">
+      <label><input type="radio" name="lookup" value="name" checked> المطابقة بالاسم (AR/EN)</label>
+      <label><input type="radio" name="lookup" value="id"> المطابقة بمعرّف خارجي (external_id/fdc_id)</label>
+    </div>
+  </div>
 
-/* CSV parser بسيط */
-function parseCSV(text){
-  const [headerLine, ...lines] = text.split(/\r?\n/).filter(Boolean);
-  const headers = headerLine.split(",").map(h=>h.trim());
-  return lines.map(line=>{
-    const cells = line.split(",").map(c=>c.trim());
-    const row = {};
-    headers.forEach((h,i)=> row[h]=cells[i] ?? "");
-    return row;
-  });
-}
+  <div class="card">
+    <div class="row"><div class="progress" style="flex:1"><div id="bar" class="bar"></div></div><span id="pct" class="muted">0%</span></div>
+    <pre id="log">… في انتظار اختيار ملف</pre>
+  </div>
 
-/* حوّل صف USDA -> nutrMapUSDA */
-function toNutrMapUSDA(row){
-  // توقعات أعمدة شائعة: FDC_ID, name_ar, name_en, 203,204,205,269,291,307,601,606,301,303,306,320,401,328,323
-  const map = {};
-  const add=(id,label,unit,val)=> {
-    const v = Number(val); if(!Number.isFinite(v)) return;
-    map[id] = { label_ar:label, unit, per100: v };
-  };
-  add("203","بروتين","g", row["203"]);
-  add("204","دهون","g", row["204"]);
-  add("205","كربوهيدرات","g", row["205"]);
-  add("269","سكر","g", row["269"]);
-  add("291","ألياف","g", row["291"]);
-  add("307","صوديوم","mg",row["307"]);
-  add("601","كوليسترول","mg",row["601"]);
-  add("606","دهون مشبعة","g",row["606"]);
-  add("301","كالسيوم","mg",row["301"]);
-  add("303","حديد","mg",row["303"]);
-  add("306","بوتاسيوم","mg",row["306"]);
-  add("320","Vit A","µg",row["320"]);
-  add("401","Vit C","mg",row["401"]);
-  add("328","Vit D","µg",row["328"]);
-  add("323","Vit E","mg",row["323"]);
-  // أضِيفي أي IDs زيادة حسب ملف USDA عندك
-  return map;
-}
+  <div class="card">
+    <div class="row">
+      <button id="dry">تشغيل وضع تجريبي (Dry Run)</button>
+      <button id="save" class="ghost">حفظ الأعلام فقط (dietFlags)</button>
+    </div>
+    <p class="muted">الوضع التجريبي يعرض ما سيتم حفظه بدون كتابة في قاعدة البيانات.</p>
+  </div>
 
-function computeDietFlagsFromUSDA(n){
-  const get=(id,d=0)=> Number(n?.[id]?.per100 ?? d);
-  const sugar=get("269"), carbs=get("205"), fat=get("204"), sat=get("606"),
-        na=get("307"),  chol=get("601");
-  return {
-    low_sugar:  sugar <= 5,
-    low_carb:   carbs <= 10,
-    low_fat:    fat   <= 3,
-    low_satfat: sat   <= 1.5,
-    low_sodium: na    <= 120,
-    low_chol:   chol  <= 20
-    // نباتي/نباتي صارم/خالٍ من الجلوتين: يدوياً أو من فئة/مكونات
-  };
-}
+  <!-- Firebase Firestore (يستخدم نفس firebase-config.js بتاعك) -->
+  <script type="module">
+    import { db } from "./js/firebase-config.js";
+    import { collection, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-async function findFoodDocByName(ar, en){
-  // لو عندك مفتاح خارجي أفضل (external_id أو fdc_id) استخدميه بدل الاسم
-  const col = collection(db, "admin/global/foodItems");
-  const name = (ar || en || "").trim();
-  if(!name) return null;
-  const qs = await getDocs(query(col, where("name","==", name)));
-  return qs.docs[0] ?? null;
-}
+    const $file = document.getElementById('file');
+    const $run  = document.getElementById('run');
+    const $log  = document.getElementById('log');
+    const $bar  = document.getElementById('bar');
+    const $pct  = document.getElementById('pct');
+    const $dry  = document.getElementById('dry');
+    const $saveFlags = document.getElementById('save');
 
-const $file = document.getElementById("file");
-const $log  = document.getElementById("log");
-document.getElementById("run").onclick = async ()=>{
-  const f = $file.files?.[0]; if(!f){ alert("اختاري ملف"); return; }
-  const text = await f.text();
-  const rows = f.name.endsWith(".json") ? JSON.parse(text) : parseCSV(text);
-  let ok=0, fail=0;
-
-  for(const r of rows){
-    try{
-      const usda = toNutrMapUSDA(r);
-      const flags = computeDietFlagsFromUSDA(usda);
-      const ref = await findFoodDocByName(r.name_ar, r.name_en); // غيّري lookup حسب حالتك
-      if(!ref){ fail++; $log.textContent += `NG: مش لاقي ${r.name_ar||r.name_en}\n`; continue; }
-      await updateDoc(doc(db,"admin/global/foodItems", ref.id), {
-        nutrMapUSDA: usda,
-        dietFlags: flags,
-        // ممكن كمان: allergens, tags لو عندك أعمدة ليهم
-        updatedAt: new Date().toISOString()
-      });
-      ok++;
-      $log.textContent += `OK: ${r.name_ar||r.name_en}\n`;
-    }catch(e){
-      fail++; $log.textContent += `ERR: ${(r.name_ar||r.name_en)} – ${e}\n`;
+    function log(line){ $log.textContent += "\\n" + line; $log.scrollTop = $log.scrollHeight; }
+    function setProgress(i, n){
+      const p = n ? Math.round((i/n)*100) : 0;
+      $bar.style.width = p + '%'; $pct.textContent = p + '%';
     }
-  }
-  alert(`تم: ${ok} نجاح / ${fail} فشل`);
-};
-</script>
+
+    function parseCSV(text){
+      const rows = [];
+      const lines = text.split(/\\r?\\n/);
+      const head = lines.shift();
+      if(!head){ return rows; }
+      const headers = head.split(',').map(h=>h.trim());
+      for(const line of lines){
+        if(!line.trim()) continue;
+        const cells = line.split(',').map(c=>c.trim());
+        const o = {};
+        headers.forEach((h,i)=> o[h] = cells[i] ?? '');
+        rows.push(o);
+      }
+      return rows;
+    }
+
+    function toNutrMapUSDA(row){
+      const ids = ["203","204","205","269","291","307","601","606","301","303","306","320","401","328","323"];
+      const labels = {
+        "203":"بروتين","204":"دهون","205":"كربوهيدرات","269":"سكر","291":"ألياف",
+        "307":"صوديوم","601":"كوليسترول","606":"دهون مشبعة","301":"كالسيوم",
+        "303":"حديد","306":"بوتاسيوم","320":"Vit A","401":"Vit C","328":"Vit D","323":"Vit E"
+      };
+      const units = { "203":"g","204":"g","205":"g","269":"g","291":"g","307":"mg","601":"mg","606":"g","301":"mg","303":"mg","306":"mg","320":"µg","401":"mg","328":"µg","323":"mg" };
+      const map = {};
+      for(const id of ids){
+        const val = Number(row[id] ?? '');
+        if(Number.isFinite(val)){
+          map[id] = { label_ar: labels[id] || id, unit: units[id] || '', per100: val };
+        }
+      }
+      return map;
+    }
+
+    function computeDietFlagsFromUSDA(n){
+      const get=(id,d=0)=> Number(n?.[id]?.per100 ?? d);
+      const sugar=get("269"), carbs=get("205"), fat=get("204"), sat=get("606"), na=get("307"), chol=get("601");
+      return {
+        low_sugar:  sugar <= 5,
+        low_carb:   carbs <= 10,
+        low_fat:    fat   <= 3,
+        low_satfat: sat   <= 1.5,
+        low_sodium: na    <= 120,
+        low_chol:   chol  <= 20
+        // نباتي/نباتي صارم/خالٍ من الجلوتين: يدويًا أو من فئة/مكونات المنتج
+      };
+    }
+
+    async function findByName(name_ar, name_en){
+      const name = (name_ar || name_en || '').trim();
+      if(!name) return null;
+      const col = collection(db, "admin/global/foodItems");
+      const qs = await getDocs(query(col, where("name","==", name)));
+      return qs.docs[0] ?? null;
+    }
+
+    async function findByExternalId(extId){
+      const col = collection(db, "admin/global/foodItems");
+      const qs = await getDocs(query(col, where("external_id","==", String(extId))));
+      return qs.docs[0] ?? null;
+    }
+
+    async function runImport({dryRun=false, flagsOnly=false}){
+      const f = $file.files?.[0];
+      if(!f){ alert("اختاري ملف أولاً"); return; }
+      const text = await f.text();
+      const rows = f.name.endsWith('.json') ? JSON.parse(text) : parseCSV(text);
+      $log.textContent = 'بدء المعالجة…'; setProgress(0, rows.length);
+
+      let ok=0, fail=0, i=0;
+      const byId = document.querySelector('input[name="lookup"]:checked').value === 'id';
+
+      for(const r of rows){
+        i++; setProgress(i, rows.length);
+
+        try{
+          const nutrMapUSDA = toNutrMapUSDA(r);
+          const dietFlags = computeDietFlagsFromUSDA(nutrMapUSDA);
+
+          const refDoc = byId ? await findByExternalId(r.external_id || r.fdc_id || r.id)
+                              : await findByName(r.name_ar, r.name_en);
+          if(!refDoc){ fail++; log(`❌ غير موجود: ${r.name_ar||r.name_en||r.external_id||'??'}`); continue; }
+
+          if(dryRun){
+            log(`🛈 فحص: ${refDoc.id} — سيتم حفظ nutrMapUSDA + dietFlags`);
+            continue;
+          }
+
+          const payload = flagsOnly ? { dietFlags, updatedAt: new Date().toISOString() }
+                                    : { nutrMapUSDA, dietFlags, updatedAt: new Date().toISOString() };
+
+          await updateDoc(doc(db, "admin/global/foodItems", refDoc.id), payload);
+          ok++; log(`✅ تم: ${r.name_ar||r.name_en||refDoc.id}`);
+        }catch(e){
+          fail++; log(`⚠️ خطأ: ${(r.name_ar||r.name_en)||'??'} — ${e}`);
+        }
+      }
+      log('\\n— اكتمل —');
+      log(`✔️ نجاح: ${ok} — ❌ فشل: ${fail}`);
+    }
+
+    document.getElementById('run').addEventListener('click', ()=> runImport({dryRun:false, flagsOnly:false}));
+    document.getElementById('dry').addEventListener('click', ()=> runImport({dryRun:true, flagsOnly:false}));
+    document.getElementById('save').addEventListener('click', ()=> runImport({dryRun:false, flagsOnly:true}));
+  </script>
+</body>
+</html>
