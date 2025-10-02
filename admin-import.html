@@ -1,0 +1,103 @@
+<!DOCTYPE html><meta charset="utf-8">
+<title>USDA Import (Admin)</title>
+<input id="file" type="file" accept=".csv,.json">
+<button id="run">رفع وتحديث</button>
+<pre id="log"></pre>
+
+<script type="module">
+import { db } from "./js/firebase-config.js";
+import { collection, query, where, getDocs, doc, updateDoc } 
+  from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+/* CSV parser بسيط */
+function parseCSV(text){
+  const [headerLine, ...lines] = text.split(/\r?\n/).filter(Boolean);
+  const headers = headerLine.split(",").map(h=>h.trim());
+  return lines.map(line=>{
+    const cells = line.split(",").map(c=>c.trim());
+    const row = {};
+    headers.forEach((h,i)=> row[h]=cells[i] ?? "");
+    return row;
+  });
+}
+
+/* حوّل صف USDA -> nutrMapUSDA */
+function toNutrMapUSDA(row){
+  // توقعات أعمدة شائعة: FDC_ID, name_ar, name_en, 203,204,205,269,291,307,601,606,301,303,306,320,401,328,323
+  const map = {};
+  const add=(id,label,unit,val)=> {
+    const v = Number(val); if(!Number.isFinite(v)) return;
+    map[id] = { label_ar:label, unit, per100: v };
+  };
+  add("203","بروتين","g", row["203"]);
+  add("204","دهون","g", row["204"]);
+  add("205","كربوهيدرات","g", row["205"]);
+  add("269","سكر","g", row["269"]);
+  add("291","ألياف","g", row["291"]);
+  add("307","صوديوم","mg",row["307"]);
+  add("601","كوليسترول","mg",row["601"]);
+  add("606","دهون مشبعة","g",row["606"]);
+  add("301","كالسيوم","mg",row["301"]);
+  add("303","حديد","mg",row["303"]);
+  add("306","بوتاسيوم","mg",row["306"]);
+  add("320","Vit A","µg",row["320"]);
+  add("401","Vit C","mg",row["401"]);
+  add("328","Vit D","µg",row["328"]);
+  add("323","Vit E","mg",row["323"]);
+  // أضِيفي أي IDs زيادة حسب ملف USDA عندك
+  return map;
+}
+
+function computeDietFlagsFromUSDA(n){
+  const get=(id,d=0)=> Number(n?.[id]?.per100 ?? d);
+  const sugar=get("269"), carbs=get("205"), fat=get("204"), sat=get("606"),
+        na=get("307"),  chol=get("601");
+  return {
+    low_sugar:  sugar <= 5,
+    low_carb:   carbs <= 10,
+    low_fat:    fat   <= 3,
+    low_satfat: sat   <= 1.5,
+    low_sodium: na    <= 120,
+    low_chol:   chol  <= 20
+    // نباتي/نباتي صارم/خالٍ من الجلوتين: يدوياً أو من فئة/مكونات
+  };
+}
+
+async function findFoodDocByName(ar, en){
+  // لو عندك مفتاح خارجي أفضل (external_id أو fdc_id) استخدميه بدل الاسم
+  const col = collection(db, "admin/global/foodItems");
+  const name = (ar || en || "").trim();
+  if(!name) return null;
+  const qs = await getDocs(query(col, where("name","==", name)));
+  return qs.docs[0] ?? null;
+}
+
+const $file = document.getElementById("file");
+const $log  = document.getElementById("log");
+document.getElementById("run").onclick = async ()=>{
+  const f = $file.files?.[0]; if(!f){ alert("اختاري ملف"); return; }
+  const text = await f.text();
+  const rows = f.name.endsWith(".json") ? JSON.parse(text) : parseCSV(text);
+  let ok=0, fail=0;
+
+  for(const r of rows){
+    try{
+      const usda = toNutrMapUSDA(r);
+      const flags = computeDietFlagsFromUSDA(usda);
+      const ref = await findFoodDocByName(r.name_ar, r.name_en); // غيّري lookup حسب حالتك
+      if(!ref){ fail++; $log.textContent += `NG: مش لاقي ${r.name_ar||r.name_en}\n`; continue; }
+      await updateDoc(doc(db,"admin/global/foodItems", ref.id), {
+        nutrMapUSDA: usda,
+        dietFlags: flags,
+        // ممكن كمان: allergens, tags لو عندك أعمدة ليهم
+        updatedAt: new Date().toISOString()
+      });
+      ok++;
+      $log.textContent += `OK: ${r.name_ar||r.name_en}\n`;
+    }catch(e){
+      fail++; $log.textContent += `ERR: ${(r.name_ar||r.name_en)} – ${e}\n`;
+    }
+  }
+  alert(`تم: ${ok} نجاح / ${fail} فشل`);
+};
+</script>
