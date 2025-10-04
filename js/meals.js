@@ -19,25 +19,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-
-// ===== [DIET FILTER HELPERS - START] =====
-function getChildDietFlagsSafe() {
-  const f = window.childData || {};
-  if (Array.isArray(f.dietaryFlags)) return f.dietaryFlags;
-  if (Array.isArray(f.specialDiet))  return f.specialDiet;
-  return [];
-}
-function isCompliantDiet(itemTags, flags){
-  if(!flags.length) return true;
-  const set = new Set(Array.isArray(itemTags) ? itemTags : []);
-  return flags.every(f => set.has(f));
-}
-function dietScore(item, flags){
-  return isCompliantDiet(item?.dietTags, flags) ? 1 : 0;
-}
-// ===== [DIET FILTER HELPERS - END] =====
-
-
 /* ============ Tiny utils ============ */
 const $ = id => document.getElementById(id);
 const q = (sel, root=document) => root.querySelector(sel);
@@ -421,14 +402,12 @@ function childHasAllergy(f){
   const ca=Array.isArray(childData?.allergies)?childData.allergies:[];
   return (Array.isArray(f.allergens)?f.allergens:[]).some(a=>ca.includes(a));
 }
-
 function violatesDiet(f){
-  const rules = getChildDietFlagsSafe();
+  const rules=Array.isArray(childData?.specialDiet)?childData.specialDiet:[];
   if(!rules.length) return false;
-  const tags = Array.isArray(f?.dietTags) ? f.dietTags : [];
-  return rules.some(r => !tags.includes(r));
+  const tags=Array.isArray(f.dietTags)?f.dietTags:[];
+  return rules.some(r=>!tags.includes(r)); // strict
 }
-
 function getPref(itemId){ return (childData?.preferences||{})[itemId]; }
 
 function renderPicker(){
