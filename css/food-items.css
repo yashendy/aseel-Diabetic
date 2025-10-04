@@ -3,10 +3,10 @@
   --panel: #ffffff;
   --text: #1a2540;
   --muted: #6d7890;
-  --primary: #6b9cff;   /* أزرق سماوي مبهج */
+  --primary: #6b9cff;
   --primary-2:#4b8bff;
-  --accent: #ff80b5;    /* وردي طفولي */
-  --mint: #5ee3b1;      /* نعناعي */
+  --accent: #ff80b5;
+  --mint: #5ee3b1;
   --warning:#ffb454;
   --danger: #ff5f6d;
   --border:#e4e9f5;
@@ -74,6 +74,11 @@ tbody tr:hover{background:#fbfdff}
   display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;
   font-size:12px;background:#eaf7ff;border:1px solid #cfe6ff;color:#204c88
 }
+.tags{
+  display:flex;flex-wrap:wrap;gap:6px
+}
+.tags .chip{background:#fff;border:1px dashed #cfe6ff}
+
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .empty{text-align:center;padding:36px 14px;color:#8aa0c5}
 
@@ -108,6 +113,8 @@ dialog::backdrop{background:rgba(48,60,110,.35)}
   background:#fbfcff;border:1px dashed #dfe7ff;border-radius:12px;padding:8px
 }
 
-/* إخفاء عمود الإجراءات لغير الأدمن */
+/* إخفاء أعمدة للأدوار */
 .no-admin .col-actions,
 .no-admin td.actions-cell {display:none}
+.no-admin .col-hashtags,
+.no-admin td.hashtags-cell {display:none}
