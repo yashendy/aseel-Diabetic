@@ -391,6 +391,23 @@ function initFoodItemsPage() {
 
       updatedAt: nowISO()
     };
+  // ===== [DIET TAGS SAVE - START] =====
+  (function(){
+    try{
+      const tagInput = document.getElementById('dietTagsInput');
+      let newTags = null;
+      if(tagInput && tagInput.value){
+        newTags = tagInput.value.split(/[;,\s]+/).map(s=>s.trim()).filter(Boolean);
+      }
+      if(Array.isArray(existing?.dietTags) && (!newTags || !newTags.length)){
+        payload.dietTags = existing.dietTags; // keep previous if not edited
+      }else if(newTags){
+        payload.dietTags = newTags;
+      }
+    }catch(e){ console.warn('[food-items] dietTags save warn', e); }
+  })();
+  // ===== [DIET TAGS SAVE - END] =====
+
 
     // تنظيف: nulls في المقادير
     payload.measures = payload.measures.map(m=>{
@@ -497,3 +514,17 @@ function initFoodItemsPage() {
   // انطلاق
   boot();
 }
+
+
+  // ===== [DIET TAGS LOAD - START] =====
+  (function(){
+    try{
+      const tagInput = document.getElementById('dietTagsInput');
+      if(tagInput){
+        const arr = Array.isArray(existing?.dietTags) ? existing.dietTags : [];
+        tagInput.value = arr.join(' ');
+      }
+    }catch(e){ console.warn('[food-items] dietTags load warn', e); }
+  })();
+  // ===== [DIET TAGS LOAD - END] =====
+
