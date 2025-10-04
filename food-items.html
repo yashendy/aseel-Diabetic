@@ -32,6 +32,16 @@
         </div>
       </div>
 
+      <!-- فلتر الهاشتاج الجديد -->
+      <div class="filters" style="grid-template-columns:1fr 1fr;">
+        <div class="field">
+          <input id="hashtagFilter" type="search" placeholder="فلترة بالهاشتاج: مثال #halal #vegan (أو اكتب بكل بساطة halal vegan)" />
+        </div>
+        <div class="field">
+          <input id="brandFilter" type="search" placeholder="فلترة إضافية بالبراند (اختياري)…" />
+        </div>
+      </div>
+
       <div class="table-wrap">
         <table>
           <thead>
@@ -41,17 +51,103 @@
             <th>البراند</th>
             <th>الفئة</th>
             <th>مقدار (معاينة)</th>
+            <th class="col-hashtags">الهاشتاجات</th>
             <th>معرّف</th>
             <th class="col-actions" style="width:160px">إجراءات</th>
           </tr>
           </thead>
           <tbody id="itemsTbody">
-            <tr><td colspan="7" class="empty">جارِ التحميل…</td></tr>
+            <tr><td colspan="8" class="empty">جارِ التحميل…</td></tr>
           </tbody>
         </table>
       </div>
     </section>
   </div>
+
+  <!-- Dialog (للأدمن فقط) -->
+  <dialog id="itemDialog">
+    <div class="modal-head">
+      <strong>تحرير صنف</strong>
+      <button class="btn small ghost" id="btnCloseDialog" type="button">إغلاق</button>
+    </div>
+    <div class="modal-body">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-pane="tab-basic" role="tab">الأساسي</button>
+        <button class="tab" data-pane="tab-nutr" role="tab">التغذية (لكل 100جم)</button>
+        <button class="tab" data-pane="tab-measures" role="tab">المقادير البيتية</button>
+        <button class="tab" data-pane="tab-diet" role="tab">الهاشتاجات (dietTags)</button>
+      </div>
+
+      <div class="pane active" id="tab-basic">
+        <div class="grid-2">
+          <div class="field"><label>الاسم (AR)</label><input id="name_ar" /></div>
+          <div class="field"><label>الاسم (EN)</label><input id="name_en" /></div>
+          <div class="field"><label>البراند (AR)</label><input id="brand_ar" /></div>
+          <div class="field"><label>البراند (EN)</label><input id="brand_en" /></div>
+          <div class="field"><label>الفئة (AR)</label><input id="cat_ar" /></div>
+          <div class="field"><label>الفئة (EN)</label><input id="cat_en" /></div>
+          <div class="field"><label>وصف (AR)</label><input id="desc_ar" /></div>
+          <div class="field"><label>وصف (EN)</label><input id="desc_en" /></div>
+          <div class="field"><label>رابط صورة</label><input id="image_url" /></div>
+          <div class="field small"><label>GI</label><input id="gi" type="number" min="0" max="100" /></div>
+          <div class="field"><label>مفعل؟</label><input id="isActive" type="checkbox" /></div>
+        </div>
+      </div>
+
+      <div class="pane" id="tab-nutr">
+        <div class="grid-4">
+          <div class="field small"><label>سعرات (kcal)</label><input id="cal_kcal" type="number"/></div>
+          <div class="field small"><label>كارب (g)</label><input id="carbs_g" type="number"/></div>
+          <div class="field small"><label>ألياف (g)</label><input id="fiber_g" type="number"/></div>
+          <div class="field small"><label>بروتين (g)</label><input id="protein_g" type="number"/></div>
+          <div class="field small"><label>دهون (g)</label><input id="fat_g" type="number"/></div>
+          <div class="field small"><label>سكر (g)</label><input id="sugar_g" type="number"/></div>
+          <div class="field small"><label>دهون مشبعة (g)</label><input id="satFat_g" type="number"/></div>
+          <div class="field small"><label>صوديوم (mg)</label><input id="sodium_mg" type="number"/></div>
+        </div>
+      </div>
+
+      <div class="pane" id="tab-measures">
+        <div class="measures-head"><div>المقادير البيتية (حتى ٤)</div></div>
+        <div class="measure-list">
+          <div class="measure-row">
+            <input id="m1_name" placeholder="الاسم (AR) - كوب/طبق/ملعقة/وحدة…" />
+            <input id="m1_name_en" placeholder="EN" />
+            <input id="m1_grams" type="number" placeholder="جرام" />
+          </div>
+          <div class="measure-row">
+            <input id="m2_name" placeholder="…" />
+            <input id="m2_name_en" placeholder="…" />
+            <input id="m2_grams" type="number" placeholder="جرام" />
+          </div>
+          <div class="measure-row">
+            <input id="m3_name" placeholder="…" />
+            <input id="m3_name_en" placeholder="…" />
+            <input id="m3_grams" type="number" placeholder="جرام" />
+          </div>
+          <div class="measure-row">
+            <input id="m4_name" placeholder="…" />
+            <input id="m4_name_en" placeholder="…" />
+            <input id="m4_grams" type="number" placeholder="جرام" />
+          </div>
+        </div>
+      </div>
+
+      <div class="pane" id="tab-diet">
+        <div class="field">
+          <label>ادخل الهاشتاجات (dietTags) مفصولة بمسافة / فاصلة / سيمي-كولون</label>
+          <input id="dietTagsInput" placeholder="مثال: halal vegetarian vegan gluten_free" />
+          <div class="note">لن تظهر للمستخدم النهائي — للاستعمال الداخلي في الفلترة/الأولوية فقط.</div>
+        </div>
+        <div class="divider"></div>
+        <div class="note">وسوم مقترحة: halal, vegetarian, vegan, gluten_free, lactose_free, low_carb, low_fat, low_sugar</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="btnSaveItem" type="button">حفظ</button>
+      <button class="btn ghost" id="btnCancelItem" type="button">إلغاء</button>
+    </div>
+  </dialog>
 
   <!-- سكربت الصفحة -->
   <script type="module" src="./js/food-items.js"></script>
