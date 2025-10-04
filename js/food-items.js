@@ -1,88 +1,90 @@
-/* ============================ food-items.js (FULL) ============================
-   - Fetch list from admin/global/foodItems
+/* ============================ js/food-items.js (FULL, v12) ============================
+   - Uses firebase-config.js (v12) for initialized db
+   - Fetches admin/global/foodItems
    - Filters: text, category, hashtag(s), brand
-   - Admin dialog: edit & save dietTags, nutrPer100g, measures, etc.
-============================================================================= */
+   - Admin dialog for editing item incl. dietTags
+====================================================================================== */
 
+import { db } from './firebase-config.js';
 import {
-  getFirestore, collection, getDocs, doc, setDoc, updateDoc
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+  collection, getDocs, doc, updateDoc, setDoc
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-const db = getFirestore();
+/* ---------- Helpers ---------- */
+const $ = (id) => document.getElementById(id);
+const escapeHtml = (s) => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const safeArr = (a) => Array.isArray(a) ? a : [];
 
+function val(el){ return (el?.value ?? '').toString().trim(); }
+function numVal(el){ const v = val(el); if(v==='') return null; const n=Number(v); return Number.isFinite(n)?n:null; }
+function setVal(el,v){ if(el) el.value = (v ?? ''); }
+
+/* ---------- Elements ---------- */
 const els = {
-  tbody: document.getElementById('itemsTbody'),
-  search: document.getElementById('searchInput'),
-  hashtag: document.getElementById('hashtagFilter'),
-  brand: document.getElementById('brandFilter'),
-  category: document.getElementById('categoryFilter'),
-  refresh: document.getElementById('btnRefresh'),
-  addBtn: document.getElementById('btnAdd'),
+  tbody: $('itemsTbody'),
+  search: $('searchInput'),
+  hashtag: $('hashtagFilter'),
+  brand: $('brandFilter'),
+  category: $('categoryFilter'),
+  refresh: $('btnRefresh'),
+  addBtn: $('btnAdd'),
 
-  dialog: document.getElementById('itemDialog'),
-  closeDialog: document.getElementById('btnCloseDialog'),
-  cancelDialog: document.getElementById('btnCancelItem'),
-  saveItem: document.getElementById('btnSaveItem'),
+  dialog: $('itemDialog'),
+  closeDialog: $('btnCloseDialog'),
+  cancelDialog: $('btnCancelItem'),
+  saveItem: $('btnSaveItem'),
 
   tabs: document.querySelectorAll('.tab'),
   panes: document.querySelectorAll('.pane'),
 
   // basic
-  name_ar:  document.getElementById('name_ar'),
-  name_en:  document.getElementById('name_en'),
-  brand_ar: document.getElementById('brand_ar'),
-  brand_en: document.getElementById('brand_en'),
-  cat_ar:   document.getElementById('cat_ar'),
-  cat_en:   document.getElementById('cat_en'),
-  desc_ar:  document.getElementById('desc_ar'),
-  desc_en:  document.getElementById('desc_en'),
-  image:    document.getElementById('image_url'),
-  gi:       document.getElementById('gi'),
-  isActive: document.getElementById('isActive'),
+  name_ar:  $('name_ar'),
+  name_en:  $('name_en'),
+  brand_ar: $('brand_ar'),
+  brand_en: $('brand_en'),
+  cat_ar:   $('cat_ar'),
+  cat_en:   $('cat_en'),
+  desc_ar:  $('desc_ar'),
+  desc_en:  $('desc_en'),
+  image:    $('image_url'),
+  gi:       $('gi'),
+  isActive: $('isActive'),
 
   // nutr
-  cal_kcal:  document.getElementById('cal_kcal'),
-  carbs_g:   document.getElementById('carbs_g'),
-  fiber_g:   document.getElementById('fiber_g'),
-  protein_g: document.getElementById('protein_g'),
-  fat_g:     document.getElementById('fat_g'),
-  sugar_g:   document.getElementById('sugar_g'),
-  satFat_g:  document.getElementById('satFat_g'),
-  sodium_mg: document.getElementById('sodium_mg'),
+  cal_kcal:  $('cal_kcal'),
+  carbs_g:   $('carbs_g'),
+  fiber_g:   $('fiber_g'),
+  protein_g: $('protein_g'),
+  fat_g:     $('fat_g'),
+  sugar_g:   $('sugar_g'),
+  satFat_g:  $('satFat_g'),
+  sodium_mg: $('sodium_mg'),
 
   // measures
-  m1_name: document.getElementById('m1_name'),
-  m1_name_en: document.getElementById('m1_name_en'),
-  m1_grams: document.getElementById('m1_grams'),
-  m2_name: document.getElementById('m2_name'),
-  m2_name_en: document.getElementById('m2_name_en'),
-  m2_grams: document.getElementById('m2_grams'),
-  m3_name: document.getElementById('m3_name'),
-  m3_name_en: document.getElementById('m3_name_en'),
-  m3_grams: document.getElementById('m3_grams'),
-  m4_name: document.getElementById('m4_name'),
-  m4_name_en: document.getElementById('m4_name_en'),
-  m4_grams: document.getElementById('m4_grams'),
+  m1_name: $('m1_name'), m1_name_en: $('m1_name_en'), m1_grams: $('m1_grams'),
+  m2_name: $('m2_name'), m2_name_en: $('m2_name_en'), m2_grams: $('m2_grams'),
+  m3_name: $('m3_name'), m3_name_en: $('m3_name_en'), m3_grams: $('m3_grams'),
+  m4_name: $('m4_name'), m4_name_en: $('m4_name_en'), m4_grams: $('m4_grams'),
 
   // diet
-  dietTagsInput: document.getElementById('dietTagsInput')
+  dietTagsInput: $('dietTagsInput')
 };
 
 const state = {
   items: [],
   filtered: [],
-  selected: null, // doc snapshot data + id
+  selected: null, // {id, ...data}
   isAdmin: !document.body.classList.contains('no-admin')
 };
 
-/* ===================== Fetch & Render ===================== */
+/* ===================== Fetch ===================== */
 async function fetchItems(){
   els.tbody.innerHTML = `<tr><td colspan="8" class="empty">جارِ التحميل…</td></tr>`;
   const snap = await getDocs(collection(db, 'admin/global/foodItems'));
   const rows = [];
   snap.forEach(d => {
-    const data = d.data() || {};
-    rows.push(Object.assign({ id: d.id }, normalizeItem(data)));
+    const data = normalizeItem(d.data() || {});
+    rows.push({ id: d.id, ...data });
   });
   state.items = rows;
   fillCategories(rows);
@@ -90,11 +92,22 @@ async function fetchItems(){
 }
 
 function normalizeItem(d){
-  // ensure props exist
-  d.nutrPer100g = d.nutrPer100g || {};
-  d.measures = Array.isArray(d.measures) ? d.measures : [];
-  d.dietTags = Array.isArray(d.dietTags) ? d.dietTags : [];
-  return d;
+  return {
+    name: d.name || d.name_ar || '',
+    name_en: d.name_en || '',
+    brand: d.brand || d.brand_ar || '',
+    brand_en: d.brand_en || '',
+    category: d.category || d.category_ar || '',
+    category_en: d.category_en || '',
+    description: d.description || d.description_ar || '',
+    description_en: d.description_en || '',
+    imageUrl: d.imageUrl || '',
+    gi: (d.gi ?? null),
+    isActive: !!d.isActive,
+    nutrPer100g: d.nutrPer100g || {},
+    measures: safeArr(d.measures),
+    dietTags: safeArr(d.dietTags)
+  };
 }
 
 function fillCategories(rows){
@@ -110,13 +123,12 @@ function fillCategories(rows){
   els.category.value = '__ALL__';
 }
 
+/* ===================== Filters ===================== */
 function applyFilters(){
-  const q = (els.search.value||'').trim().toLowerCase();
-  const c = els.category.value || '__ALL__';
-  const brandQ = (els.brand.value||'').trim().toLowerCase();
-
-  // hashtags: parse tokens, remove '#'
-  const tags = (els.hashtag.value || '')
+  const q = val(els.search).toLowerCase();
+  const brandQ = val(els.brand).toLowerCase();
+  const cat = els.category.value || '__ALL__';
+  const tags = val(els.hashtag)
     .split(/[\s,;]+/)
     .map(s => s.replace(/^#/, '').trim().toLowerCase())
     .filter(Boolean);
@@ -125,29 +137,23 @@ function applyFilters(){
 
   if (q){
     list = list.filter(r => {
-      const ar = (r.name || r.name_ar || '').toLowerCase();
+      const ar = (r.name || '').toLowerCase();
       const en = (r.name_en || '').toLowerCase();
-      const br = (r.brand || r.brand_ar || '').toLowerCase();
+      const br = (r.brand || '').toLowerCase();
       const brEn = (r.brand_en || '').toLowerCase();
       return ar.includes(q) || en.includes(q) || br.includes(q) || brEn.includes(q);
     });
   }
-
   if (brandQ){
-    list = list.filter(r => {
-      const br = (r.brand || r.brand_ar || '').toLowerCase();
-      const brEn = (r.brand_en || '').toLowerCase();
-      return br.includes(brandQ) || brEn.includes(brandQ);
-    });
+    list = list.filter(r => (r.brand || '').toLowerCase().includes(brandQ) ||
+                            (r.brand_en || '').toLowerCase().includes(brandQ));
   }
-
-  if (c && c !== '__ALL__'){
-    list = list.filter(r => r.category === c);
+  if (cat !== '__ALL__'){
+    list = list.filter(r => r.category === cat);
   }
-
   if (tags.length){
     list = list.filter(r => {
-      const itemTags = (r.dietTags || []).map(x => String(x).toLowerCase());
+      const itemTags = safeArr(r.dietTags).map(x => String(x).toLowerCase());
       return tags.every(t => itemTags.includes(t));
     });
   }
@@ -156,9 +162,10 @@ function applyFilters(){
   renderTable(list);
 }
 
+/* ===================== Render ===================== */
 function renderTable(list){
   if (!list.length){
-    els.tbody.innerHTML = `<tr><td colspan="8" class="empty">لا توجد نتائج مطابقة</td></tr>`;
+    els.tbody.innerHTML = `<tr><td colspan="8" class="empty">لا توجد نتائج مطابقة…</td></tr>`;
     return;
   }
   els.tbody.innerHTML = '';
@@ -174,18 +181,19 @@ function renderTable(list){
     const tdName = document.createElement('td');
     tdName.innerHTML = `
       <div class="meta">
-        <strong>${escapeHtml(it.name || it.name_ar || 'بدون اسم')}</strong>
+        <strong>${escapeHtml(it.name || 'بدون اسم')}</strong>
         <span class="muted">${escapeHtml(it.name_en || '')}</span>
       </div>`;
 
     const tdBrand = document.createElement('td');
-    tdBrand.innerHTML = `<div class="meta">
-        <span>${escapeHtml(it.brand || it.brand_ar || '-')}</span>
+    tdBrand.innerHTML = `
+      <div class="meta">
+        <span>${escapeHtml(it.brand || '-')}</span>
         <span class="muted">${escapeHtml(it.brand_en || '')}</span>
       </div>`;
 
     const tdCat = document.createElement('td');
-    tdCat.textContent = it.category || it.category_ar || '-';
+    tdCat.textContent = it.category || '-';
 
     const tdMeasure = document.createElement('td');
     tdMeasure.textContent = previewMeasure(it.measures);
@@ -210,15 +218,7 @@ function renderTable(list){
       tdActions.textContent = '—';
     }
 
-    tr.appendChild(tdImg);
-    tr.appendChild(tdName);
-    tr.appendChild(tdBrand);
-    tr.appendChild(tdCat);
-    tr.appendChild(tdMeasure);
-    tr.appendChild(tdTags);
-    tr.appendChild(tdId);
-    tr.appendChild(tdActions);
-
+    tr.append(tdImg, tdName, tdBrand, tdCat, tdMeasure, tdTags, tdId, tdActions);
     els.tbody.appendChild(tr);
   }
 }
@@ -232,13 +232,9 @@ function previewMeasure(measures){
 }
 
 function renderTags(tags){
-  const arr = Array.isArray(tags) ? tags : [];
+  const arr = safeArr(tags);
   if (!arr.length) return '<span class="muted">—</span>';
   return `<div class="tags">` + arr.map(t => `<span class="chip">#${escapeHtml(t)}</span>`).join('') + `</div>`;
-}
-
-function escapeHtml(s){
-  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
 
 /* ===================== Dialog (Admin) ===================== */
@@ -247,13 +243,8 @@ function openDialog(item){
   fillItemDialog(item);
   els.dialog?.showModal();
 }
+function closeDialog(){ state.selected = null; els.dialog?.close(); }
 
-function closeDialog(){
-  state.selected = null;
-  els.dialog?.close();
-}
-
-// تبويب بسيط
 els.tabs.forEach(tab=>{
   tab.addEventListener('click', ()=>{
     els.tabs.forEach(t=>t.classList.remove('active'));
@@ -263,19 +254,18 @@ els.tabs.forEach(tab=>{
   });
 });
 
-function fillItemDialog(existing){
-  const d = existing || {};
-  setVal(els.name_ar, d.name || d.name_ar || '');
-  setVal(els.name_en, d.name_en || '');
-  setVal(els.brand_ar, d.brand || d.brand_ar || '');
+function fillItemDialog(d){
+  d = d || {};
+  setVal(els.name_ar,  d.name || '');
+  setVal(els.name_en,  d.name_en || '');
+  setVal(els.brand_ar, d.brand || '');
   setVal(els.brand_en, d.brand_en || '');
-  setVal(els.cat_ar, d.category || d.category_ar || '');
-  setVal(els.cat_en, d.category_en || '');
-  setVal(els.desc_ar, d.description || d.description_ar || '');
-  setVal(els.desc_en, d.description_en || '');
-  setVal(els.image, d.imageUrl || '');
-  setVal(els.gi, d.gi ?? '');
-
+  setVal(els.cat_ar,   d.category || '');
+  setVal(els.cat_en,   d.category_en || '');
+  setVal(els.desc_ar,  d.description || '');
+  setVal(els.desc_en,  d.description_en || '');
+  setVal(els.image,    d.imageUrl || '');
+  setVal(els.gi,       d.gi ?? '');
   if (els.isActive) els.isActive.checked = !!d.isActive;
 
   const n = d.nutrPer100g || {};
@@ -288,33 +278,49 @@ function fillItemDialog(existing){
   setVal(els.satFat_g,  n.satFat_g ?? '');
   setVal(els.sodium_mg, n.sodium_mg ?? '');
 
-  // measures
-  const m = Array.isArray(d.measures) ? d.measures : [];
-  fillMeasureRow(els.m1_name, els.m1_name_en, els.m1_grams, m[0]);
-  fillMeasureRow(els.m2_name, els.m2_name_en, els.m2_grams, m[1]);
-  fillMeasureRow(els.m3_name, els.m3_name_en, els.m3_grams, m[2]);
-  fillMeasureRow(els.m4_name, els.m4_name_en, els.m4_grams, m[3]);
+  // measures (4 rows)
+  fillMeasureRow(els.m1_name, els.m1_name_en, els.m1_grams, d.measures?.[0]);
+  fillMeasureRow(els.m2_name, els.m2_name_en, els.m2_grams, d.measures?.[1]);
+  fillMeasureRow(els.m3_name, els.m3_name_en, els.m3_grams, d.measures?.[2]);
+  fillMeasureRow(els.m4_name, els.m4_name_en, els.m4_grams, d.measures?.[3]);
 
-  // dietTags
-  if (els.dietTagsInput){
-    els.dietTagsInput.value = (d.dietTags || []).join(' ');
-  }
+  if (els.dietTagsInput) els.dietTagsInput.value = safeArr(d.dietTags).join(' ');
 }
-
 function fillMeasureRow(n, ne, g, row){
-  if (!n || !ne || !g) return;
-  n.value  = row?.name ?? '';
-  ne.value = row?.name_en ?? '';
-  g.value  = row?.grams ?? '';
+  setVal(n,  row?.name ?? '');
+  setVal(ne, row?.name_en ?? '');
+  setVal(g,  row?.grams ?? '');
 }
 
-function setVal(el, v){ if (el) el.value = v; }
-function numVal(el){ const v=el?.value?.toString().trim(); if(!v) return null; const n=Number(v); return Number.isFinite(n)?n:null; }
+function collectMeasuresFromForm(){
+  const out = [];
+  pushMeasure(out, els.m1_name, els.m1_name_en, els.m1_grams);
+  pushMeasure(out, els.m2_name, els.m2_name_en, els.m2_grams);
+  pushMeasure(out, els.m3_name, els.m3_name_en, els.m3_grams);
+  pushMeasure(out, els.m4_name, els.m4_name_en, els.m4_grams);
+  return out;
+}
+function pushMeasure(out, n, ne, g){
+  const name = val(n), name_en = val(ne);
+  const grams = numVal(g);
+  if (name || name_en || grams!=null) out.push({ name, name_en, grams });
+}
+
+function readDietTagsFromUI(){
+  const tags = new Set();
+  const input = els.dietTagsInput;
+  if (input && input.value){
+    input.value.split(/[;,\s]+/).forEach(t => {
+      t = t.replace(/^#/, '').trim();
+      if (t) tags.add(t);
+    });
+  }
+  return Array.from(tags);
+}
 
 async function saveItem(){
-  if (!state.isAdmin) return;
-  const ex = state.selected || {};
-  const id = ex.id; // تحرير فقط في هذا المثال
+  if (!state.isAdmin || !state.selected) return;
+  const id = state.selected.id;
 
   const payload = {
     name: val(els.name_ar),
@@ -328,7 +334,6 @@ async function saveItem(){
     imageUrl: val(els.image),
     gi: numVal(els.gi),
     isActive: !!els.isActive?.checked,
-
     nutrPer100g: {
       cal_kcal:  numVal(els.cal_kcal),
       carbs_g:   numVal(els.carbs_g),
@@ -339,22 +344,9 @@ async function saveItem(){
       satFat_g:  numVal(els.satFat_g),
       sodium_mg: numVal(els.sodium_mg)
     },
-
     measures: collectMeasuresFromForm(),
-
-    // dietTags
-    dietTags: readDietTagsFromUI(els.dietTagsInput)
+    dietTags: readDietTagsFromUI()
   };
-
-  // نظّف nulls الفارغة داخل nutr/measures
-  if (!payload.nutrPer100g.cal_kcal)  delete payload.nutrPer100g.cal_kcal;
-  if (!payload.nutrPer100g.carbs_g)   delete payload.nutrPer100g.carbs_g;
-  if (!payload.nutrPer100g.fiber_g)   delete payload.nutrPer100g.fiber_g;
-  if (!payload.nutrPer100g.protein_g) delete payload.nutrPer100g.protein_g;
-  if (!payload.nutrPer100g.fat_g)     delete payload.nutrPer100g.fat_g;
-  if (!payload.nutrPer100g.sugar_g)   delete payload.nutrPer100g.sugar_g;
-  if (!payload.nutrPer100g.satFat_g)  delete payload.nutrPer100g.satFat_g;
-  if (!payload.nutrPer100g.sodium_mg) delete payload.nutrPer100g.sodium_mg;
 
   try{
     await updateDoc(doc(db, 'admin/global/foodItems', id), payload);
@@ -366,31 +358,7 @@ async function saveItem(){
   }
 }
 
-function val(el){ return (el?.value ?? '').toString().trim(); }
-
-function collectMeasuresFromForm(){
-  const rows = [];
-  pushMeasure(rows, els.m1_name, els.m1_name_en, els.m1_grams);
-  pushMeasure(rows, els.m2_name, els.m2_name_en, els.m2_grams);
-  pushMeasure(rows, els.m3_name, els.m3_name_en, els.m3_grams);
-  pushMeasure(rows, els.m4_name, els.m4_name_en, els.m4_grams);
-  return rows;
-}
-function pushMeasure(out, n, ne, g){
-  const name = val(n), name_en = val(ne);
-  const grams = numVal(g);
-  if (name || name_en || grams!=null) out.push({ name, name_en, grams });
-}
-
-function readDietTagsFromUI(inputEl){
-  const tags = new Set();
-  if (inputEl && inputEl.value){
-    inputEl.value.split(/[;,\s]+/).forEach(t => { t=t.trim(); if(t) tags.add(t.replace(/^#/, '')); });
-  }
-  return Array.from(tags);
-}
-
-/* ===================== Events ===================== */
+/* ---------- Events ---------- */
 ['input','change'].forEach(ev=>{
   els.search?.addEventListener(ev, applyFilters);
   els.hashtag?.addEventListener(ev, applyFilters);
@@ -402,7 +370,7 @@ els.closeDialog?.addEventListener('click', closeDialog);
 els.cancelDialog?.addEventListener('click', closeDialog);
 els.saveItem?.addEventListener('click', saveItem);
 
-// تفعيل/تعطيل زر إضافة صنف (لو عندك إضافة جديدة)
+// إظهار أدوات الأدمن
 if (state.isAdmin){
   document.body.classList.remove('no-admin');
   if (els.addBtn) els.addBtn.style.display = 'inline-flex';
@@ -410,8 +378,8 @@ if (state.isAdmin){
   if (els.addBtn) els.addBtn.style.display = 'none';
 }
 
-/* ===================== Boot ===================== */
+/* ---------- Boot ---------- */
 fetchItems().catch(err=>{
   console.error('fetchItems error', err);
-  els.tbody.innerHTML = `<tr><td colspan="8" class="empty">تعذر التحميل</td></tr>`;
+  if (els.tbody) els.tbody.innerHTML = `<tr><td colspan="8" class="empty">تعذر التحميل</td></tr>`;
 });
