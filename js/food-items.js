@@ -1,530 +1,417 @@
-// js/food-items.js
-import { db, auth } from "./firebase-config.js";
-import {
-  collection, getDocs, addDoc, updateDoc, deleteDoc,
-  doc, getDoc
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+/* ============================ food-items.js (FULL) ============================
+   - Fetch list from admin/global/foodItems
+   - Filters: text, category, hashtag(s), brand
+   - Admin dialog: edit & save dietTags, nutrPer100g, measures, etc.
+============================================================================= */
 
-/* ======== حراسة: لا يعمل إلا على صفحة الأصناف ======== */
-const root = document.getElementById("foodItemsPage");
-if (!root) {
-  console.warn("[food-items] skipped: not on food items page.");
-} else {
-  initFoodItemsPage();
+import {
+  getFirestore, collection, getDocs, doc, setDoc, updateDoc
+} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+
+const db = getFirestore();
+
+const els = {
+  tbody: document.getElementById('itemsTbody'),
+  search: document.getElementById('searchInput'),
+  hashtag: document.getElementById('hashtagFilter'),
+  brand: document.getElementById('brandFilter'),
+  category: document.getElementById('categoryFilter'),
+  refresh: document.getElementById('btnRefresh'),
+  addBtn: document.getElementById('btnAdd'),
+
+  dialog: document.getElementById('itemDialog'),
+  closeDialog: document.getElementById('btnCloseDialog'),
+  cancelDialog: document.getElementById('btnCancelItem'),
+  saveItem: document.getElementById('btnSaveItem'),
+
+  tabs: document.querySelectorAll('.tab'),
+  panes: document.querySelectorAll('.pane'),
+
+  // basic
+  name_ar:  document.getElementById('name_ar'),
+  name_en:  document.getElementById('name_en'),
+  brand_ar: document.getElementById('brand_ar'),
+  brand_en: document.getElementById('brand_en'),
+  cat_ar:   document.getElementById('cat_ar'),
+  cat_en:   document.getElementById('cat_en'),
+  desc_ar:  document.getElementById('desc_ar'),
+  desc_en:  document.getElementById('desc_en'),
+  image:    document.getElementById('image_url'),
+  gi:       document.getElementById('gi'),
+  isActive: document.getElementById('isActive'),
+
+  // nutr
+  cal_kcal:  document.getElementById('cal_kcal'),
+  carbs_g:   document.getElementById('carbs_g'),
+  fiber_g:   document.getElementById('fiber_g'),
+  protein_g: document.getElementById('protein_g'),
+  fat_g:     document.getElementById('fat_g'),
+  sugar_g:   document.getElementById('sugar_g'),
+  satFat_g:  document.getElementById('satFat_g'),
+  sodium_mg: document.getElementById('sodium_mg'),
+
+  // measures
+  m1_name: document.getElementById('m1_name'),
+  m1_name_en: document.getElementById('m1_name_en'),
+  m1_grams: document.getElementById('m1_grams'),
+  m2_name: document.getElementById('m2_name'),
+  m2_name_en: document.getElementById('m2_name_en'),
+  m2_grams: document.getElementById('m2_grams'),
+  m3_name: document.getElementById('m3_name'),
+  m3_name_en: document.getElementById('m3_name_en'),
+  m3_grams: document.getElementById('m3_grams'),
+  m4_name: document.getElementById('m4_name'),
+  m4_name_en: document.getElementById('m4_name_en'),
+  m4_grams: document.getElementById('m4_grams'),
+
+  // diet
+  dietTagsInput: document.getElementById('dietTagsInput')
+};
+
+const state = {
+  items: [],
+  filtered: [],
+  selected: null, // doc snapshot data + id
+  isAdmin: !document.body.classList.contains('no-admin')
+};
+
+/* ===================== Fetch & Render ===================== */
+async function fetchItems(){
+  els.tbody.innerHTML = `<tr><td colspan="8" class="empty">جارِ التحميل…</td></tr>`;
+  const snap = await getDocs(collection(db, 'admin/global/foodItems'));
+  const rows = [];
+  snap.forEach(d => {
+    const data = d.data() || {};
+    rows.push(Object.assign({ id: d.id }, normalizeItem(data)));
+  });
+  state.items = rows;
+  fillCategories(rows);
+  applyFilters();
 }
 
-function initFoodItemsPage() {
-  /* === عناصر الواجهة === */
-  const searchInput   = document.getElementById("searchInput");
-  const categorySel   = document.getElementById("categoryFilter");
-  const tbody         = document.getElementById("itemsTbody");
-  const btnRefresh    = document.getElementById("btnRefresh");
-  const btnAdd        = document.getElementById("btnAdd");
-  const btnLangAr     = document.getElementById("btnLangAr");
-  const btnLangEn     = document.getElementById("btnLangEn");
+function normalizeItem(d){
+  // ensure props exist
+  d.nutrPer100g = d.nutrPer100g || {};
+  d.measures = Array.isArray(d.measures) ? d.measures : [];
+  d.dietTags = Array.isArray(d.dietTags) ? d.dietTags : [];
+  return d;
+}
 
-  if (!searchInput || !categorySel || !tbody || !btnRefresh || !btnLangAr || !btnLangEn) {
-    console.warn("[food-items] missing DOM nodes.");
+function fillCategories(rows){
+  const set = new Set(['__ALL__']);
+  rows.forEach(r => { if (r.category) set.add(r.category); });
+  els.category.innerHTML = '';
+  for (const val of set){
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = (val === '__ALL__') ? 'كل الفئات' : val;
+    els.category.appendChild(opt);
+  }
+  els.category.value = '__ALL__';
+}
+
+function applyFilters(){
+  const q = (els.search.value||'').trim().toLowerCase();
+  const c = els.category.value || '__ALL__';
+  const brandQ = (els.brand.value||'').trim().toLowerCase();
+
+  // hashtags: parse tokens, remove '#'
+  const tags = (els.hashtag.value || '')
+    .split(/[\s,;]+/)
+    .map(s => s.replace(/^#/, '').trim().toLowerCase())
+    .filter(Boolean);
+
+  let list = state.items.slice();
+
+  if (q){
+    list = list.filter(r => {
+      const ar = (r.name || r.name_ar || '').toLowerCase();
+      const en = (r.name_en || '').toLowerCase();
+      const br = (r.brand || r.brand_ar || '').toLowerCase();
+      const brEn = (r.brand_en || '').toLowerCase();
+      return ar.includes(q) || en.includes(q) || br.includes(q) || brEn.includes(q);
+    });
+  }
+
+  if (brandQ){
+    list = list.filter(r => {
+      const br = (r.brand || r.brand_ar || '').toLowerCase();
+      const brEn = (r.brand_en || '').toLowerCase();
+      return br.includes(brandQ) || brEn.includes(brandQ);
+    });
+  }
+
+  if (c && c !== '__ALL__'){
+    list = list.filter(r => r.category === c);
+  }
+
+  if (tags.length){
+    list = list.filter(r => {
+      const itemTags = (r.dietTags || []).map(x => String(x).toLowerCase());
+      return tags.every(t => itemTags.includes(t));
+    });
+  }
+
+  state.filtered = list;
+  renderTable(list);
+}
+
+function renderTable(list){
+  if (!list.length){
+    els.tbody.innerHTML = `<tr><td colspan="8" class="empty">لا توجد نتائج مطابقة</td></tr>`;
     return;
   }
+  els.tbody.innerHTML = '';
+  for (const it of list){
+    const tr = document.createElement('tr');
 
-  /* === حالة الصفحة === */
-  const FOOD_PATH = "admin/global/foodItems";
-  let allItems = [];
-  let ui = {
-    lang: "ar",                 // "ar" | "en"
-    filterText: "",
-    filterCat: "__ALL__",
-    isAdmin: false,
-  };
+    const tdImg = document.createElement('td');
+    const img = document.createElement('img');
+    img.className = 'thumb';
+    img.src = it.imageUrl || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2244%22 height=%2244%22></svg>';
+    tdImg.appendChild(img);
 
-  /* === إنشاء نافذة الإضافة/التعديل === */
-  const dialog = document.createElement("dialog");
-  dialog.id = "itemDialog";
-  dialog.innerHTML = `
-    <div class="modal-head">
-      <strong id="dlgTitle">إضافة صنف</strong>
-      <button id="btnCloseDlg" class="btn ghost" type="button" aria-label="إغلاق">إغلاق</button>
-    </div>
+    const tdName = document.createElement('td');
+    tdName.innerHTML = `
+      <div class="meta">
+        <strong>${escapeHtml(it.name || it.name_ar || 'بدون اسم')}</strong>
+        <span class="muted">${escapeHtml(it.name_en || '')}</span>
+      </div>`;
 
-    <form id="itemForm" class="modal-body">
-      <input type="hidden" id="docId" />
+    const tdBrand = document.createElement('td');
+    tdBrand.innerHTML = `<div class="meta">
+        <span>${escapeHtml(it.brand || it.brand_ar || '-')}</span>
+        <span class="muted">${escapeHtml(it.brand_en || '')}</span>
+      </div>`;
 
-      <div class="tabs">
-        <button type="button" class="tab active" data-pane="pane-ar">العربية</button>
-        <button type="button" class="tab" data-pane="pane-en">English</button>
-      </div>
+    const tdCat = document.createElement('td');
+    tdCat.textContent = it.category || it.category_ar || '-';
 
-      <!-- Arabic pane -->
-      <div id="pane-ar" class="pane active">
-        <div class="grid-2">
-          <div class="field"><label>الاسم (AR)</label><input id="name_ar" placeholder="مثال: رز مسلوق" /></div>
-          <div class="field"><label>البراند (AR)</label><input id="brand_ar" placeholder="مثال: —" /></div>
-        </div>
-        <div class="grid-2">
-          <div class="field"><label>الفئة (AR)</label><input id="category_ar" placeholder="مثال: نشويات" /></div>
-          <div class="field"><label>وصف (AR)</label><input id="desc_ar" placeholder="اختياري" /></div>
-        </div>
-      </div>
+    const tdMeasure = document.createElement('td');
+    tdMeasure.textContent = previewMeasure(it.measures);
 
-      <!-- English pane -->
-      <div id="pane-en" class="pane">
-        <div class="grid-2">
-          <div class="field"><label>Name (EN)</label><input id="name_en" placeholder="e.g., Boiled Rice" /></div>
-          <div class="field"><label>Brand (EN)</label><input id="brand_en" placeholder="Optional" /></div>
-        </div>
-        <div class="grid-2">
-          <div class="field"><label>Category (EN)</label><input id="category_en" placeholder="e.g., Carbs" /></div>
-          <div class="field"><label>Description (EN)</label><input id="desc_en" placeholder="Optional" /></div>
-        </div>
-      </div>
+    const tdTags = document.createElement('td');
+    tdTags.className = 'hashtags-cell';
+    tdTags.innerHTML = renderTags(it.dietTags);
 
-      <div class="divider"></div>
+    const tdId = document.createElement('td');
+    tdId.className = 'mono';
+    tdId.textContent = it.id;
 
-      <div class="grid-2">
-        <div class="field"><label>رابط صورة</label><input id="imageUrl" placeholder="https://..." /></div>
-        <div class="field"><label>مؤشر الجلايسيميك GI</label><input id="gi" type="number" step="any" placeholder="مثال: 73" /></div>
-      </div>
-
-      <fieldset class="nutr">
-        <legend>القيم الغذائية لكل 100g (بدون تغيير أسماء المفاتيح)</legend>
-        <div class="grid-4">
-          <div class="field small"><label>السعرات الحرارية (kcal)</label><input id="n_cal" type="number" step="any" /></div>
-          <div class="field small"><label>الكارب (g)</label><input id="n_carbs" type="number" step="any" /></div>
-          <div class="field small"><label>الألياف (g)</label><input id="n_fiber" type="number" step="any" /></div>
-          <div class="field small"><label>البروتين (g)</label><input id="n_protein" type="number" step="any" /></div>
-          <div class="field small"><label>الدهون (g)</label><input id="n_fat" type="number" step="any" /></div>
-          <div class="field small"><label>السكر (g)</label><input id="n_sugar" type="number" step="any" /></div>
-          <div class="field small"><label>الدهون المشبعة (g)</label><input id="n_satFat" type="number" step="any" /></div>
-          <div class="field small"><label>الصوديوم (mg)</label><input id="n_sodium" type="number" step="any" /></div>
-        </div>
-      </fieldset>
-
-      <div class="divider"></div>
-
-      <div class="measures">
-        <div class="measures-head">
-          <strong>المقادير البيتية</strong>
-          <button id="btnAddMeasure" class="btn small" type="button">+ إضافة مقدار</button>
-        </div>
-        <div id="measuresWrap" class="measure-list">
-          <!-- صفوف المقادير -->
-        </div>
-        <p class="note">كل صف: اسم AR (إلزامي)، اسم EN (اختياري)، والوزن بالجرام.</p>
-      </div>
-
-      <div class="divider"></div>
-
-      <label class="switch">
-        <input id="isActive" type="checkbox" checked />
-        <span>نشط (يظهر في البحث والقائمة)</span>
-      </label>
-
-      <div class="modal-actions">
-        <button class="btn" type="submit">حفظ</button>
-        <button class="btn ghost" type="button" id="btnCancel">إلغاء</button>
-      </div>
-    </form>
-  `;
-  document.body.appendChild(dialog);
-
-  /* نقاط إلى عناصر داخل الـ dialog */
-  const dlgTitle      = dialog.querySelector("#dlgTitle");
-  const btnCloseDlg   = dialog.querySelector("#btnCloseDlg");
-  const itemForm      = dialog.querySelector("#itemForm");
-  const btnCancel     = dialog.querySelector("#btnCancel");
-  const docIdEl       = dialog.querySelector("#docId");
-  const name_ar       = dialog.querySelector("#name_ar");
-  const brand_ar      = dialog.querySelector("#brand_ar");
-  const category_ar   = dialog.querySelector("#category_ar");
-  const desc_ar       = dialog.querySelector("#desc_ar");
-  const name_en       = dialog.querySelector("#name_en");
-  const brand_en      = dialog.querySelector("#brand_en");
-  const category_en   = dialog.querySelector("#category_en");
-  const desc_en       = dialog.querySelector("#desc_en");
-  const imageUrlEl    = dialog.querySelector("#imageUrl");
-  const giEl          = dialog.querySelector("#gi");
-  const n_cal         = dialog.querySelector("#n_cal");
-  const n_carbs       = dialog.querySelector("#n_carbs");
-  const n_fiber       = dialog.querySelector("#n_fiber");
-  const n_protein     = dialog.querySelector("#n_protein");
-  const n_fat         = dialog.querySelector("#n_fat");
-  const n_sugar       = dialog.querySelector("#n_sugar");
-  const n_satFat      = dialog.querySelector("#n_satFat");
-  const n_sodium      = dialog.querySelector("#n_sodium");
-  const isActiveEl    = dialog.querySelector("#isActive");
-  const measuresWrap  = dialog.querySelector("#measuresWrap");
-  const btnAddMeasure = dialog.querySelector("#btnAddMeasure");
-
-  /* === أدوات === */
-  const escapeHtml = (s)=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
-  const displayText = (ar,en)=> ui.lang==="en" ? (en||ar||"") : (ar||en||"");
-  const num = (v)=> { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-  const nowISO = ()=> new Date().toISOString();
-
-  /* === قراءة البيانات === */
-  async function fetchAllFood() {
-    const snap = await getDocs(collection(db, FOOD_PATH));
-    return snap.docs.map(s => ({ id: s.id, ...s.data() }));
-  }
-
-  /* === رسم الجدول === */
-  function previewMeasure(it){
-    if (Array.isArray(it.measures) && it.measures.length) {
-      const m0 = it.measures[0];
-      const n  = displayText(m0?.name, m0?.name_en);
-      const g  = m0?.grams;
-      return [n, (g!=null? `${g}g` : "")].filter(Boolean).join(" / ");
-    }
-    return "—";
-  }
-
-  function render() {
-    const q  = (ui.filterText||"").trim().toLowerCase();
-    const cat= ui.filterCat;
-
-    const list = allItems.filter(it=>{
-      // الفئة مع الترجمة
-      const catAr = (it.category||"");
-      const catEn = (it.category_en||"");
-      const inCat = cat==="__ALL__" || cat===catAr || cat===catEn;
-
-      // البحث AR/EN
-      const txt = [
-        it.name, it.name_en,
-        it.brand, it.brand_en,
-        it.category, it.category_en
-      ].filter(Boolean).join(" ").toLowerCase();
-
-      const inTxt = !q || txt.includes(q);
-      // إخفاء غير النشطين من العرض الأساسي (لكن ما يمنع قراءتهم)
-      const visible = it.isActive !== false;
-
-      return inCat && inTxt && visible;
-    });
-
-    if (list.length === 0) {
-      tbody.innerHTML = `<tr><td class="empty" colspan="7">لا توجد أصناف مطابقة.</td></tr>`;
-      return;
+    const tdActions = document.createElement('td');
+    tdActions.className = 'actions-cell';
+    if (state.isAdmin){
+      const btn = document.createElement('button');
+      btn.className = 'btn small secondary';
+      btn.textContent = 'تحرير';
+      btn.addEventListener('click', ()=> openDialog(it));
+      tdActions.appendChild(btn);
+    } else {
+      tdActions.textContent = '—';
     }
 
-    tbody.innerHTML = list.map(it=>{
-      const img = it.imageUrl || "";
-      const nm  = displayText(it.name, it.name_en) || "بدون اسم";
-      const br  = displayText(it.brand, it.brand_en) || "—";
-      const ct  = displayText(it.category, it.category_en) || "—";
-      const meas = previewMeasure(it);
-      const actions = ui.isAdmin
-        ? `<td class="actions-cell">
-             <button class="btn small secondary act-edit" data-id="${it.id}">تعديل</button>
-             <button class="btn small danger act-del" data-id="${it.id}">حذف</button>
-           </td>`
-        : `<td class="actions-cell"></td>`;
+    tr.appendChild(tdImg);
+    tr.appendChild(tdName);
+    tr.appendChild(tdBrand);
+    tr.appendChild(tdCat);
+    tr.appendChild(tdMeasure);
+    tr.appendChild(tdTags);
+    tr.appendChild(tdId);
+    tr.appendChild(tdActions);
 
-      return `
-        <tr data-id="${it.id}">
-          <td><img class="thumb" src="${img}" alt="" loading="lazy"/></td>
-          <td><div class="meta"><strong>${escapeHtml(nm)}</strong></div></td>
-          <td class="muted">${escapeHtml(br)}</td>
-          <td><span class="chip">${escapeHtml(ct)}</span></td>
-          <td class="muted">${escapeHtml(meas)}</td>
-          <td class="muted mono">${it.id}</td>
-          ${actions}
-        </tr>
-      `;
-    }).join("");
+    els.tbody.appendChild(tr);
   }
-
-  function populateCategories(){
-    const set = new Set();
-    allItems.forEach(it=>{
-      if (ui.lang==="en") { if (it.category_en) set.add(it.category_en); else if (it.category) set.add(it.category); }
-      else { if (it.category) set.add(it.category); else if (it.category_en) set.add(it.category_en); }
-    });
-
-    const prev = categorySel.value || "__ALL__";
-    categorySel.innerHTML = `<option value="__ALL__">كل الفئات</option>` +
-      Array.from(set).sort((a,b)=>a.localeCompare(b,"ar")).map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
-    categorySel.value = set.has(prev) ? prev : "__ALL__";
-  }
-
-  /* === قياس (Repeater) === */
-  function measureRowTemplate(m={name:"", name_en:"", grams:""}) {
-    const id = Math.random().toString(36).slice(2,9);
-    return `
-      <div class="measure-row" data-k="${id}">
-        <input class="m-name"    placeholder="اسم AR (مثال: كوب)" value="${escapeHtml(m.name||"")}"/>
-        <input class="m-name-en" placeholder="Name EN (optional)" value="${escapeHtml(m.name_en||"")}"/>
-        <input class="m-grams"   type="number" step="any" placeholder="جرام" value="${m.grams ?? ""}"/>
-        <button type="button" class="btn small danger m-del" title="حذف">🗑</button>
-      </div>
-    `;
-  }
-  function setMeasuresRows(measures=[]) {
-    measuresWrap.innerHTML = measures.map(measureRowTemplate).join("") || measureRowTemplate();
-  }
-  function readMeasures(){
-    const rows = [...measuresWrap.querySelectorAll(".measure-row")];
-    return rows.map(r=>{
-      const n  = r.querySelector(".m-name")?.value?.trim();
-      const ne = r.querySelector(".m-name-en")?.value?.trim();
-      const g  = r.querySelector(".m-grams")?.value?.trim();
-      const obj = {};
-      if (n) obj.name = n;
-      if (ne) obj.name_en = ne;
-      if (g!=="") obj.grams = Number(g);
-      return obj;
-    }).filter(o=>o.name || o.name_en || o.grams!=null);
-  }
-
-  /* === تشغيل أولي === */
-  async function boot(){
-    tbody.innerHTML = `<tr><td class="empty" colspan="7">جارِ التحميل…</td></tr>`;
-    allItems = await fetchAllFood();
-    populateCategories();
-    render();
-  }
-
-  /* === أحداث === */
-  btnLangAr.addEventListener("click", ()=>{
-    ui.lang="ar";
-    btnLangAr.classList.add("active");
-    btnLangEn.classList.remove("active");
-    populateCategories(); render();
-  });
-  btnLangEn.addEventListener("click", ()=>{
-    ui.lang="en";
-    btnLangEn.classList.add("active");
-    btnLangAr.classList.remove("active");
-    populateCategories(); render();
-  });
-
-  searchInput.addEventListener("input", e => {
-    ui.filterText = e.currentTarget.value || "";
-    render();
-  });
-  categorySel.addEventListener("change", e => {
-    ui.filterCat = e.currentTarget.value || "__ALL__";
-    render();
-  });
-  btnRefresh.addEventListener("click", async ()=>{
-    tbody.innerHTML = `<tr><td class="empty" colspan="7">جارِ التحديث…</td></tr>`;
-    allItems = await fetchAllFood();
-    populateCategories();
-    render();
-  });
-
-  btnAdd.addEventListener("click", ()=>{
-    dlgTitle.textContent = "إضافة صنف";
-    docIdEl.value = "";
-    // تفريغ
-    name_ar.value = brand_ar.value = category_ar.value = desc_ar.value = "";
-    name_en.value = brand_en.value = category_en.value = desc_en.value = "";
-    imageUrlEl.value = giEl.value = "";
-    n_cal.value = n_carbs.value = n_fiber.value = n_protein.value = n_fat.value = n_sugar.value = n_satFat.value = n_sodium.value = "";
-    isActiveEl.checked = true;
-    setMeasuresRows([]);
-    dialog.showModal();
-  });
-
-  btnCloseDlg.addEventListener("click", ()=> dialog.close());
-  btnCancel.addEventListener("click", ()=> dialog.close());
-
-  btnAddMeasure.addEventListener("click", ()=>{
-    measuresWrap.insertAdjacentHTML("beforeend", measureRowTemplate());
-  });
-  measuresWrap.addEventListener("click", (e)=>{
-    const t = e.target;
-    if (t.classList.contains("m-del")) {
-      const row = t.closest(".measure-row");
-      row?.remove();
-      if (!measuresWrap.querySelector(".measure-row")) {
-        setMeasuresRows([]);
-      }
-    }
-  });
-
-  // حفظ (إضافة/تعديل)
-  itemForm.addEventListener("submit", async (ev)=>{
-    ev.preventDefault();
-    const id = (docIdEl.value||"").trim();
-
-    // الاسم: لازم واحد على الأقل
-    if (!name_ar.value.trim() && !name_en.value.trim()) {
-      alert("الاسم مطلوب (AR أو EN)."); return;
-    }
-
-    const nutr = {
-      cal_kcal:  num(n_cal.value),
-      carbs_g:   num(n_carbs.value),
-      fiber_g:   num(n_fiber.value),
-      protein_g: num(n_protein.value),
-      fat_g:     num(n_fat.value),
-    };
-    // إضافي (اختياري)
-    if (n_sugar.value !== "")  nutr.sugar_g   = num(n_sugar.value);
-    if (n_satFat.value !== "") nutr.satFat_g  = num(n_satFat.value);
-    if (n_sodium.value !== "") nutr.sodium_mg = num(n_sodium.value);
-
-    const payload = {
-      // لا نغيّر مفاتيح التغذية المستخدمة في صفحة الوجبات
-      nutrPer100g: nutr,
-
-      // نُبقي الحقول القديمة كما هي لعدم كسر أي صفحات
-      name:      name_ar.value.trim() || (name_en.value.trim() || null),
-      brand:     brand_ar.value.trim() || null,
-      category:  category_ar.value.trim() || null,
-
-      // ترجمة إضافية (اختيارية)
-      name_en:     name_en.value.trim()     || null,
-      brand_en:    brand_en.value.trim()    || null,
-      category_en: category_en.value.trim() || null,
-      description: desc_ar.value.trim()     || null,
-      description_en: desc_en.value.trim()  || null,
-
-      imageUrl: (imageUrlEl.value||"").trim() || null,
-      gi: giEl.value==="" ? null : num(giEl.value),
-
-      isActive: !!isActiveEl.checked,
-      measures: readMeasures(),
-
-      updatedAt: nowISO()
-    };
-  // ===== [DIET TAGS SAVE - START] =====
-  (function(){
-    try{
-      const tagInput = document.getElementById('dietTagsInput');
-      let newTags = null;
-      if(tagInput && tagInput.value){
-        newTags = tagInput.value.split(/[;,\s]+/).map(s=>s.trim()).filter(Boolean);
-      }
-      if(Array.isArray(existing?.dietTags) && (!newTags || !newTags.length)){
-        payload.dietTags = existing.dietTags; // keep previous if not edited
-      }else if(newTags){
-        payload.dietTags = newTags;
-      }
-    }catch(e){ console.warn('[food-items] dietTags save warn', e); }
-  })();
-  // ===== [DIET TAGS SAVE - END] =====
-
-
-    // تنظيف: nulls في المقادير
-    payload.measures = payload.measures.map(m=>{
-      const r = {};
-      if (m.name) r.name = m.name;
-      if (m.name_en) r.name_en = m.name_en;
-      if (m.grams != null && Number.isFinite(m.grams)) r.grams = m.grams;
-      return r;
-    });
-
-    try {
-      if (id) {
-        await updateDoc(doc(db, FOOD_PATH, id), payload);
-      } else {
-        payload.createdAt = payload.updatedAt;
-        await addDoc(collection(db, FOOD_PATH), payload);
-      }
-      dialog.close();
-      allItems = await fetchAllFood();
-      populateCategories(); render();
-      alert("تم الحفظ بنجاح ✅");
-    } catch (err) {
-      console.error(err);
-      alert("تعذّر الحفظ. تأكدي من صلاحيات الأدمن.");
-    }
-  });
-
-  // تعديل/حذف من الجدول
-  tbody.addEventListener("click", async (e)=>{
-    const t = e.target;
-    if (!(t instanceof HTMLElement)) return;
-
-    // تعديل
-    if (t.classList.contains("act-edit")) {
-      const id = t.dataset.id;
-      const it = allItems.find(x=>x.id===id);
-      if (!it) return;
-
-      dlgTitle.textContent = "تعديل صنف";
-      docIdEl.value = id;
-
-      name_ar.value = it.name || "";
-      brand_ar.value = it.brand || "";
-      category_ar.value = it.category || "";
-      desc_ar.value = it.description || "";
-
-      name_en.value = it.name_en || "";
-      brand_en.value = it.brand_en || "";
-      category_en.value = it.category_en || "";
-      desc_en.value = it.description_en || "";
-
-      imageUrlEl.value = it.imageUrl || "";
-      giEl.value = it.gi ?? "";
-
-      const n = it.nutrPer100g || {};
-      n_cal.value    = n.cal_kcal ?? "";
-      n_carbs.value  = n.carbs_g ?? "";
-      n_fiber.value  = n.fiber_g ?? "";
-      n_protein.value= n.protein_g ?? "";
-      n_fat.value    = n.fat_g ?? "";
-      n_sugar.value  = n.sugar_g ?? "";
-      n_satFat.value = n.satFat_g ?? "";
-      n_sodium.value = n.sodium_mg ?? "";
-
-      isActiveEl.checked = it.isActive !== false;
-
-      setMeasuresRows(Array.isArray(it.measures) ? it.measures : []);
-      dialog.showModal();
-    }
-
-    // حذف
-    if (t.classList.contains("act-del")) {
-      const id = t.dataset.id;
-      const it = allItems.find(x=>x.id===id);
-      if (!it) return;
-      if (!confirm(`حذف الصنف: ${displayText(it.name, it.name_en) || id} ؟`)) return;
-      try {
-        await deleteDoc(doc(db, FOOD_PATH, id));
-        allItems = await fetchAllFood();
-        populateCategories(); render();
-        alert("تم الحذف 🗑️");
-      } catch (err) {
-        console.error(err);
-        alert("تعذّر الحذف. تأكدي من صلاحيات الأدمن.");
-      }
-    }
-  });
-
-  // صلاحيات الأدمن
-  onAuthStateChanged(auth, async (user)=>{
-    let admin = false;
-    if (user) {
-      try {
-        const us = await getDoc(doc(db,"users",user.uid));
-        admin = us.exists() && us.data()?.role === "admin";
-      } catch {}
-    }
-    ui.isAdmin = admin;
-    btnAdd.style.display = admin ? "inline-flex":"none";
-    document.body.classList.toggle("no-admin", !admin);
-    render();
-  });
-
-  // انطلاق
-  boot();
 }
 
+function previewMeasure(measures){
+  const m = Array.isArray(measures) ? measures[0] : null;
+  if (!m) return '—';
+  const n = [m.name, m.name_en].filter(Boolean).join(' / ');
+  const g = (m.grams!=null && m.grams!=='') ? `${m.grams} g` : '';
+  return `${n} ${g}`.trim();
+}
 
-  // ===== [DIET TAGS LOAD - START] =====
-  (function(){
-    try{
-      const tagInput = document.getElementById('dietTagsInput');
-      if(tagInput){
-        const arr = Array.isArray(existing?.dietTags) ? existing.dietTags : [];
-        tagInput.value = arr.join(' ');
-      }
-    }catch(e){ console.warn('[food-items] dietTags load warn', e); }
-  })();
-  // ===== [DIET TAGS LOAD - END] =====
+function renderTags(tags){
+  const arr = Array.isArray(tags) ? tags : [];
+  if (!arr.length) return '<span class="muted">—</span>';
+  return `<div class="tags">` + arr.map(t => `<span class="chip">#${escapeHtml(t)}</span>`).join('') + `</div>`;
+}
 
+function escapeHtml(s){
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+
+/* ===================== Dialog (Admin) ===================== */
+function openDialog(item){
+  state.selected = item || null;
+  fillItemDialog(item);
+  els.dialog?.showModal();
+}
+
+function closeDialog(){
+  state.selected = null;
+  els.dialog?.close();
+}
+
+// تبويب بسيط
+els.tabs.forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    els.tabs.forEach(t=>t.classList.remove('active'));
+    els.panes.forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.pane)?.classList.add('active');
+  });
+});
+
+function fillItemDialog(existing){
+  const d = existing || {};
+  setVal(els.name_ar, d.name || d.name_ar || '');
+  setVal(els.name_en, d.name_en || '');
+  setVal(els.brand_ar, d.brand || d.brand_ar || '');
+  setVal(els.brand_en, d.brand_en || '');
+  setVal(els.cat_ar, d.category || d.category_ar || '');
+  setVal(els.cat_en, d.category_en || '');
+  setVal(els.desc_ar, d.description || d.description_ar || '');
+  setVal(els.desc_en, d.description_en || '');
+  setVal(els.image, d.imageUrl || '');
+  setVal(els.gi, d.gi ?? '');
+
+  if (els.isActive) els.isActive.checked = !!d.isActive;
+
+  const n = d.nutrPer100g || {};
+  setVal(els.cal_kcal,  n.cal_kcal ?? '');
+  setVal(els.carbs_g,   n.carbs_g ?? '');
+  setVal(els.fiber_g,   n.fiber_g ?? '');
+  setVal(els.protein_g, n.protein_g ?? '');
+  setVal(els.fat_g,     n.fat_g ?? '');
+  setVal(els.sugar_g,   n.sugar_g ?? '');
+  setVal(els.satFat_g,  n.satFat_g ?? '');
+  setVal(els.sodium_mg, n.sodium_mg ?? '');
+
+  // measures
+  const m = Array.isArray(d.measures) ? d.measures : [];
+  fillMeasureRow(els.m1_name, els.m1_name_en, els.m1_grams, m[0]);
+  fillMeasureRow(els.m2_name, els.m2_name_en, els.m2_grams, m[1]);
+  fillMeasureRow(els.m3_name, els.m3_name_en, els.m3_grams, m[2]);
+  fillMeasureRow(els.m4_name, els.m4_name_en, els.m4_grams, m[3]);
+
+  // dietTags
+  if (els.dietTagsInput){
+    els.dietTagsInput.value = (d.dietTags || []).join(' ');
+  }
+}
+
+function fillMeasureRow(n, ne, g, row){
+  if (!n || !ne || !g) return;
+  n.value  = row?.name ?? '';
+  ne.value = row?.name_en ?? '';
+  g.value  = row?.grams ?? '';
+}
+
+function setVal(el, v){ if (el) el.value = v; }
+function numVal(el){ const v=el?.value?.toString().trim(); if(!v) return null; const n=Number(v); return Number.isFinite(n)?n:null; }
+
+async function saveItem(){
+  if (!state.isAdmin) return;
+  const ex = state.selected || {};
+  const id = ex.id; // تحرير فقط في هذا المثال
+
+  const payload = {
+    name: val(els.name_ar),
+    name_en: val(els.name_en),
+    brand: val(els.brand_ar),
+    brand_en: val(els.brand_en),
+    category: val(els.cat_ar),
+    category_en: val(els.cat_en),
+    description: val(els.desc_ar),
+    description_en: val(els.desc_en),
+    imageUrl: val(els.image),
+    gi: numVal(els.gi),
+    isActive: !!els.isActive?.checked,
+
+    nutrPer100g: {
+      cal_kcal:  numVal(els.cal_kcal),
+      carbs_g:   numVal(els.carbs_g),
+      fiber_g:   numVal(els.fiber_g),
+      protein_g: numVal(els.protein_g),
+      fat_g:     numVal(els.fat_g),
+      sugar_g:   numVal(els.sugar_g),
+      satFat_g:  numVal(els.satFat_g),
+      sodium_mg: numVal(els.sodium_mg)
+    },
+
+    measures: collectMeasuresFromForm(),
+
+    // dietTags
+    dietTags: readDietTagsFromUI(els.dietTagsInput)
+  };
+
+  // نظّف nulls الفارغة داخل nutr/measures
+  if (!payload.nutrPer100g.cal_kcal)  delete payload.nutrPer100g.cal_kcal;
+  if (!payload.nutrPer100g.carbs_g)   delete payload.nutrPer100g.carbs_g;
+  if (!payload.nutrPer100g.fiber_g)   delete payload.nutrPer100g.fiber_g;
+  if (!payload.nutrPer100g.protein_g) delete payload.nutrPer100g.protein_g;
+  if (!payload.nutrPer100g.fat_g)     delete payload.nutrPer100g.fat_g;
+  if (!payload.nutrPer100g.sugar_g)   delete payload.nutrPer100g.sugar_g;
+  if (!payload.nutrPer100g.satFat_g)  delete payload.nutrPer100g.satFat_g;
+  if (!payload.nutrPer100g.sodium_mg) delete payload.nutrPer100g.sodium_mg;
+
+  try{
+    await updateDoc(doc(db, 'admin/global/foodItems', id), payload);
+    closeDialog();
+    await fetchItems();
+  }catch(e){
+    console.error('saveItem error', e);
+    alert('حدث خطأ أثناء الحفظ');
+  }
+}
+
+function val(el){ return (el?.value ?? '').toString().trim(); }
+
+function collectMeasuresFromForm(){
+  const rows = [];
+  pushMeasure(rows, els.m1_name, els.m1_name_en, els.m1_grams);
+  pushMeasure(rows, els.m2_name, els.m2_name_en, els.m2_grams);
+  pushMeasure(rows, els.m3_name, els.m3_name_en, els.m3_grams);
+  pushMeasure(rows, els.m4_name, els.m4_name_en, els.m4_grams);
+  return rows;
+}
+function pushMeasure(out, n, ne, g){
+  const name = val(n), name_en = val(ne);
+  const grams = numVal(g);
+  if (name || name_en || grams!=null) out.push({ name, name_en, grams });
+}
+
+function readDietTagsFromUI(inputEl){
+  const tags = new Set();
+  if (inputEl && inputEl.value){
+    inputEl.value.split(/[;,\s]+/).forEach(t => { t=t.trim(); if(t) tags.add(t.replace(/^#/, '')); });
+  }
+  return Array.from(tags);
+}
+
+/* ===================== Events ===================== */
+['input','change'].forEach(ev=>{
+  els.search?.addEventListener(ev, applyFilters);
+  els.hashtag?.addEventListener(ev, applyFilters);
+  els.brand?.addEventListener(ev, applyFilters);
+  els.category?.addEventListener(ev, applyFilters);
+});
+els.refresh?.addEventListener('click', fetchItems);
+els.closeDialog?.addEventListener('click', closeDialog);
+els.cancelDialog?.addEventListener('click', closeDialog);
+els.saveItem?.addEventListener('click', saveItem);
+
+// تفعيل/تعطيل زر إضافة صنف (لو عندك إضافة جديدة)
+if (state.isAdmin){
+  document.body.classList.remove('no-admin');
+  if (els.addBtn) els.addBtn.style.display = 'inline-flex';
+} else {
+  if (els.addBtn) els.addBtn.style.display = 'none';
+}
+
+/* ===================== Boot ===================== */
+fetchItems().catch(err=>{
+  console.error('fetchItems error', err);
+  els.tbody.innerHTML = `<tr><td colspan="8" class="empty">تعذر التحميل</td></tr>`;
+});
