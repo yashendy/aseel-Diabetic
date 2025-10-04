@@ -196,7 +196,8 @@ function fullPayloadCommon(){
     basalType:(basalEl.value||"").trim()||null, bolusType:(bolusEl.value||"").trim()||null, deviceType:devTypeEl.value||null, deviceModel:(devModelEl.value||"").trim()||null,
     injectionSites:injSites.get(), insulinNotes:(insulinNotesEl.value||"").trim()||null,
 
-    dietaryFlags:collectDietFlags(), allergies:allergies.get(), preferred:preferred.get(), disliked:disliked.get(),
+    \1
+  specialDiet: collectDietFlags(), // mirror for compatibility allergies:allergies.get(), preferred:preferred.get(), disliked:disliked.get(),
 
     parentId, updated:now, updatedAt:now
   };
