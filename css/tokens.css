@@ -1,0 +1,9 @@
+:root{
+  --brand:#111;
+  --ghost:#eef2ff;
+  --surface:#fff;
+  --muted:#6b7280;
+}
+*{box-sizing:border-box}
+.btn{transition:transform .05s ease}
+.btn:active{transform:scale(.98)}
