@@ -4,8 +4,39 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>مكتبة الأصناف — أدمن</title>
-  <link rel="stylesheet" href="../css/tokens.css">
-  <link rel="stylesheet" href="./css/food-items.css">
+
+  <!-- منع 404 للفاف آيكون على GitHub Pages -->
+  <link rel="icon" href="data:,">
+
+  <!-- CSS (جذر/ css / ...) -->
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/food-items.css">
+
+  <!-- Firebase init: استبدلي المفاتيح بمفاتيح مشروعك، وابقِ هذا قبل سكربت الصفحة -->
+  <script type="module">
+    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+    import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+
+    // ▼▼▼ ضعي مفاتيح Firebase الخاصة بمشروعك هنا ▼▼▼
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+    // ▲▲▲ ضعي مفاتيح Firebase الخاصة بمشروعك هنا ▲▲▲
+
+    const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    // نتيح الـ db كـ global للسكريبت التالي
+    window.db = getFirestore(app);
+  </script>
+
+  <!-- Scripts -->
+  <script src="js/dictionaries.js"></script>
+  <script src="js/import-excel.js"></script>
+  <script src="js/food-items.js" defer></script>
 </head>
 <body>
   <header class="app-header">
@@ -107,9 +138,9 @@
     </dialog>
   </main>
 
-  <!-- Firebase config assumed globally or via modules -->
-  <script src="../js/dictionaries.js"></script>
-  <script src="./js/import-excel.js"></script>
-  <script src="./js/food-items.js"></script>
+  <!-- Scripts في أسفل الجسم لضمان التحميل -->
+  <script src="js/dictionaries.js"></script>
+  <script src="js/import-excel.js"></script>
+  <script src="js/food-items.js"></script>
 </body>
 </html>
