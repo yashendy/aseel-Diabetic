@@ -11,9 +11,23 @@
   <link rel="stylesheet" href="css/food-items.css">
 
   <!-- Firebase init (استبدلي القيم من Firebase Console > Project settings > Web app) -->
-  <script type="module">
-    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
-    import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+ <script type="module">
+  import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+  import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
+    authDomain: "sugar-kids-tracker.firebaseapp.com",
+    projectId: "sugar-kids-tracker",
+    storageBucket: "sugar-kids-tracker.appspot.com",   // ✅ التصحيح هنا
+    messagingSenderId: "251830888114",
+    appId: "1:251830888114:web:a20716d3d4ad86a6724bab",
+    measurementId: "G-L7YGX3PHLB"
+  };
+
+  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+  window.db = getFirestore(app);
+</script>
 
     const firebaseConfig = {
       apiKey: "YOUR_API_KEY",
