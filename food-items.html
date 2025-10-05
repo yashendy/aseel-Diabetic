@@ -4,69 +4,78 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>مكتبة الأصناف — أدمن</title>
-
   <link rel="icon" href="data:,">
-
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/food-items.css">
-
-  <!-- Firebase init (استبدلي القيم من Firebase Console > Project settings > Web app) -->
- <script type="module">
-  import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
-  import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
-    authDomain: "sugar-kids-tracker.firebaseapp.com",
-    projectId: "sugar-kids-tracker",
-    storageBucket: "sugar-kids-tracker.appspot.com",   // ✅ التصحيح هنا
-    messagingSenderId: "251830888114",
-    appId: "1:251830888114:web:a20716d3d4ad86a6724bab",
-    measurementId: "G-L7YGX3PHLB"
-  };
-
-  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-  window.db = getFirestore(app);
-</script>
-
+  <script type="module">
+    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+    import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
+      authDomain: "sugar-kids-tracker.firebaseapp.com",
+      projectId: "sugar-kids-tracker",
+      storageBucket: "sugar-kids-tracker.appspot.com",
+      messagingSenderId: "251830888114",
+      appId: "1:251830888114:web:a20716d3d4ad86a6724bab",
+      measurementId: "G-L7YGX3PHLB"
     };
-
     const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
     window.db = getFirestore(app);
   </script>
-
-  <!-- Dictionaries (موجود داخل js/) -->
   <script src="js/dictionaries.js"></script>
-
-  <!-- Optional loader for import-excel.js: لا يوقف الصفحة لو الملف مش مرفوع -->
   <script>
     (function(){
       var s = document.createElement('script');
       s.src = 'js/import-excel.js';
       s.onload = function(){ console.log('import-excel.js loaded'); };
       s.onerror = function(){
-        window.runExcelImporter = function(){ alert('ميزة الاستيراد غير متاحة حاليًا — ارفعي js/import-excel.js'); };
+        window.runExcelImporter = function(){ alert('ميزة الاستيراد غير متاحة الآن — ارفعي js/import-excel.js'); };
         console.warn('import-excel.js غير موجود — تم تفعيل بديل آمن.');
       };
       document.head.appendChild(s);
     })();
   </script>
-
-  <!-- سكريبت الصفحة -->
   <script src="js/food-items.js" defer></script>
+  <style>
+    :root{--bg:#fff;--text:#111;--muted:#6b7280;}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,ui-sans-serif; margin:0}
+    .app-header{display:flex;align-items:center;gap:8px;padding:18px 22px;border-bottom:1px solid #eee}
+    .app-header h1{margin:0;font-size:22px}
+    .btn{background:#111;color:#fff;border:0;border-radius:10px;padding:10px 14px;cursor:pointer}
+    .btn--ghost{background:#eef2ff;color:#111}
+    .container{padding:20px}
+    .filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+    .input{padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;min-width:200px}
+    .switch{display:flex;align-items:center;gap:6px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+    .card{background:#fff;border:1px solid #eee;border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:14px}
+    .item{display:flex;gap:12px;align-items:flex-start}
+    .item img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid #eee;background:#fafafa}
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#f3f4f6;font-size:12px}
+    .badge.warn{background:#fff7ed;color:#b45309}
+    .badge.danger{background:#fee2e2;color:#991b1b}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px dashed #e5e7eb;font-size:12px}
+    .modal{border:0;border-radius:16px;max-width:980px;width:96%}
+    .modal .card{padding:0}
+    .modal__header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #eee}
+    .tabs{display:flex;gap:6px;padding:10px 14px}
+    .tab{border:1px solid #e5e7eb;background:#fff;border-radius:999px;padding:8px 14px;cursor:pointer}
+    .tab.active{background:#111;color:#fff;border-color:#111}
+    .form{padding:14px;display:flex;flex-direction:column;gap:12px}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1}
+    .field.full{min-width:100%}
+    .field input, .field select{padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px}
+    .box{border:1px dashed #e5e7eb;border-radius:12px;padding:12px}
+    .measures{display:flex;gap:8px;flex-wrap:wrap}
+    .close{border:0;background:transparent;font-size:18px;cursor:pointer}
+  </style>
 </head>
 <body>
   <header class="app-header">
     <h1>مكتبة الأصناف</h1>
     <div class="spacer"></div>
-    <button id="btnImport" class="btn btn--ghost">استيراد من Excel</button>
+    <button id="btnImport" class="btn btn--ghost" onclick="window.runExcelImporter?.(window.addOrUpdate)">استيراد من Excel</button>
     <button id="btnNew" class="btn">إضافة صنف</button>
   </header>
 
@@ -84,12 +93,11 @@
 
     <section id="grid" class="grid"></section>
 
-    <!-- Modal -->
     <dialog id="editor" class="modal">
       <form method="dialog" class="card">
         <header class="modal__header">
           <h3 id="formTitle">إضافة صنف</h3>
-          <button id="closeModal" class="close">✕</button>
+          <button id="closeModal" class="close" type="button">✕</button>
         </header>
 
         <div class="tabs">
@@ -114,7 +122,7 @@
           </div>
 
           <fieldset class="box">
-            <legend>القيم الغذائية لكل 100g (بدون تغيير أسماء المفاتيح)</legend>
+            <legend>القيم الغذائية لكل 100g</legend>
             <div class="row">
               <label class="field"><span>السعرات الحرارية (kcal)</span><input id="cal_kcal" type="number" step="any"/></label>
               <label class="field"><span>الكارب (g)</span><input id="carbs_g" type="number" step="any"/></label>
