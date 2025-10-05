@@ -5,19 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>مكتبة الأصناف — أدمن</title>
 
-  <!-- منع 404 للفاف آيكون على GitHub Pages -->
   <link rel="icon" href="data:,">
 
-  <!-- CSS (جذر/ css / ...) -->
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/food-items.css">
 
-  <!-- Firebase init: استبدلي المفاتيح بمفاتيح مشروعك، وابقِ هذا قبل سكربت الصفحة -->
+  <!-- Firebase init (استبدلي القيم من Firebase Console > Project settings > Web app) -->
   <script type="module">
     import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
     import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 
-    // ▼▼▼ ضعي مفاتيح Firebase الخاصة بمشروعك هنا ▼▼▼
     const firebaseConfig = {
       apiKey: "YOUR_API_KEY",
       authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -26,16 +23,29 @@
       messagingSenderId: "YOUR_SENDER_ID",
       appId: "YOUR_APP_ID"
     };
-    // ▲▲▲ ضعي مفاتيح Firebase الخاصة بمشروعك هنا ▲▲▲
 
     const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-    // نتيح الـ db كـ global للسكريبت التالي
     window.db = getFirestore(app);
   </script>
 
-  <!-- Scripts -->
+  <!-- Dictionaries (موجود داخل js/) -->
   <script src="js/dictionaries.js"></script>
-  <script src="js/import-excel.js"></script>
+
+  <!-- Optional loader for import-excel.js: لا يوقف الصفحة لو الملف مش مرفوع -->
+  <script>
+    (function(){
+      var s = document.createElement('script');
+      s.src = 'js/import-excel.js';
+      s.onload = function(){ console.log('import-excel.js loaded'); };
+      s.onerror = function(){
+        window.runExcelImporter = function(){ alert('ميزة الاستيراد غير متاحة حاليًا — ارفعي js/import-excel.js'); };
+        console.warn('import-excel.js غير موجود — تم تفعيل بديل آمن.');
+      };
+      document.head.appendChild(s);
+    })();
+  </script>
+
+  <!-- سكريبت الصفحة -->
   <script src="js/food-items.js" defer></script>
 </head>
 <body>
@@ -138,9 +148,6 @@
     </dialog>
   </main>
 
-  <!-- Scripts في أسفل الجسم لضمان التحميل -->
-  <script src="js/dictionaries.js"></script>
-  <script src="js/import-excel.js"></script>
   <script src="js/food-items.js"></script>
 </body>
 </html>
