@@ -1,10 +1,38 @@
-// dictionaries.js — القواميس الموحّدة للمنصة
+// ======= Dictionaries (canonical lists) =======
+
+// ✅ الفئات الأساسية (اللي بتظهر في الصفحة)
+window.CATEGORIES = [
+  'النشويات',
+  'منتجات الحليب',
+  'الفاكهة',
+  'الخضروات',
+  'منتجات اللحوم',
+  'الدهون',
+  'الحلويات',
+  'اخرى'
+];
+
+// ✅ وسوم الأنظمة الصحية (اختيارية)
 window.DIET_TAGS = [
-  'halal','vegetarian','vegan','gluten-free','lactose-free',
-  'low-carb','low-fat','low-gi','no-added-sugar','nut-free',
-  'egg-free','soy-free','keto','whole-grain'
+  'low-gi',
+  'low-carb',
+  'high-protein',
+  'gluten-free',
+  'lactose-free',
+  'vegetarian',
+  'vegan',
+  'keto',
+  'diabetic-friendly',
+  'halal'
 ];
+
+// ✅ قائمة الحساسية (اختيارية)
 window.ALLERGENS = [
-  'gluten','peanut','tree-nut','egg','milk','soy','fish','shellfish','sesame'
+  'gluten',
+  'peanut',
+  'lactose',
+  'soy',
+  'egg',
+  'sesame',
+  'fish'
 ];
-window.CATEGORIES = ['حبوب','فاكهة','خضار','ألبان','مسليات','مشروبات','أخرى'];
