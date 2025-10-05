@@ -1,59 +1,115 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>مكتبة الأصناف العامة</title>
-  <link rel="stylesheet" href="./css/food-items.css" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>مكتبة الأصناف — أدمن</title>
+  <link rel="stylesheet" href="../styles/tokens.css">
+  <link rel="stylesheet" href="./food-items.css">
 </head>
-<body class="no-admin">
-  <div class="container" id="foodItemsPage">
-    <header class="header">
-      <div class="title">مكتبة الأصناف العامة</div>
-      <div class="actions">
-        <div class="lang-switch" role="tablist">
-          <button id="btnLangAr" class="chip active" data-lang="ar" role="tab" aria-selected="true">العربية</button>
-          <button id="btnLangEn" class="chip" data-lang="en" role="tab" aria-selected="false">English</button>
-        </div>
-        <button id="btnRefresh" class="btn secondary" type="button">تحديث</button>
-        <button id="btnAdd" class="btn" type="button" style="display:none">إضافة صنف</button>
-      </div>
-    </header>
+<body>
+  <header class="app-header">
+    <h1>مكتبة الأصناف</h1>
+    <div class="spacer"></div>
+    <button id="btnImport" class="btn btn--ghost">استيراد من Excel</button>
+    <button id="btnNew" class="btn">إضافة صنف</button>
+  </header>
 
-    <section class="panel">
-      <div class="filters">
-        <div class="field">
-          <input id="searchInput" type="search" placeholder="ابحث بالاسم أو البراند (AR/EN)…" />
-        </div>
-        <div class="field">
-          <select id="categoryFilter">
-            <option value="__ALL__">كل الفئات</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-          <tr>
-            <th style="width:72px">الصورة</th>
-            <th>الاسم</th>
-            <th>البراند</th>
-            <th>الفئة</th>
-            <th>مقدار (معاينة)</th>
-            <th>معرّف</th>
-            <th class="col-actions" style="width:160px">إجراءات</th>
-          </tr>
-          </thead>
-          <tbody id="itemsTbody">
-            <tr><td colspan="7" class="empty">جارِ التحميل…</td></tr>
-          </tbody>
-        </table>
-      </div>
+  <main class="container">
+    <section class="filters">
+      <input id="q" class="input" placeholder="بحث بالاسم/البراند/الفئة أو #وسم"/>
+      <select id="category" class="input">
+        <option value="">الفئة (الكل)</option>
+      </select>
+      <label class="switch">
+        <input type="checkbox" id="onlyActive" checked>
+        <span>نشط فقط</span>
+      </label>
     </section>
-  </div>
 
-  <!-- سكربت الصفحة -->
-  <script type="module" src="./js/food-items.js"></script>
+    <section id="grid" class="grid"></section>
+
+    <!-- Modal -->
+    <dialog id="editor" class="modal">
+      <form method="dialog" class="card">
+        <header class="modal__header">
+          <h3 id="formTitle">إضافة صنف</h3>
+          <button id="closeModal" class="close">✕</button>
+        </header>
+
+        <div class="tabs">
+          <button type="button" class="tab active" data-tab="ar">العربية</button>
+          <button type="button" class="tab" data-tab="en">English</button>
+        </div>
+
+        <div class="form">
+          <div class="row">
+            <label class="field"><span>الاسم (AR)</span><input id="name_ar" /></label>
+            <label class="field"><span>البراند (AR)</span><input id="brand_ar" /></label>
+          </div>
+          <div class="row">
+            <label class="field full"><span>وصف (AR)</span><input id="desc_ar" /></label>
+          </div>
+          <div class="row">
+            <label class="field"><span>الفئة</span>
+              <select id="category_in"></select>
+            </label>
+            <label class="field"><span>رابط صورة</span><input id="imageUrl" placeholder="https://"/></label>
+            <label class="field"><span>GI</span><input id="gi" type="number" step="any" placeholder="مثال: 73"/></label>
+          </div>
+
+          <fieldset class="box">
+            <legend>القيم الغذائية لكل 100g (بدون تغيير أسماء المفاتيح)</legend>
+            <div class="row">
+              <label class="field"><span>السعرات الحرارية (kcal)</span><input id="cal_kcal" type="number" step="any"/></label>
+              <label class="field"><span>الكارب (g)</span><input id="carbs_g" type="number" step="any"/></label>
+              <label class="field"><span>الألياف (g)</span><input id="fiber_g" type="number" step="any"/></label>
+            </div>
+            <div class="row">
+              <label class="field"><span>البروتين (g)</span><input id="protein_g" type="number" step="any"/></label>
+              <label class="field"><span>الدهون (g)</span><input id="fat_g" type="number" step="any"/></label>
+              <label class="field"><span>الصوديوم (mg) (اختياري)</span><input id="sodium_mg" type="number" step="any"/></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="box">
+            <legend>المقادير البيتية</legend>
+            <div id="measuresList" class="measures"></div>
+            <div class="row">
+              <input id="m_name_ar" class="input" placeholder="اسم AR (مثال: نصف كوب)"/>
+              <input id="m_name_en" class="input" placeholder="Name EN (اختياري)"/>
+              <input id="m_grams" class="input" type="number" step="any" placeholder="جرام"/>
+              <button id="addMeasure" type="button" class="btn btn--ghost">➕ إضافة مقدار</button>
+            </div>
+          </fieldset>
+
+          <div class="row">
+            <label class="field full"><span>#Tags (مفصولة بفواصل، بدون #)</span><input id="tags" placeholder="رز, حبوب, مسلوق"/></label>
+          </div>
+
+          <div class="row">
+            <label class="field full"><span>dietTags (من القاموس المعتمد، مفصولة بفواصل)</span><input id="dietTags" placeholder="halal, gluten-free, low-gi"/></label>
+          </div>
+
+          <div class="row">
+            <label class="field full"><span>allergens (حساسية، مفصولة بفواصل)</span><input id="allergens" placeholder="gluten, peanut"/></label>
+          </div>
+
+          <div class="row">
+            <label class="switch"><input type="checkbox" id="isActive" checked/> <span>نشط (يظهر في البحث والقائمة)</span></label>
+            <div class="spacer"></div>
+            <button id="save" type="button" class="btn">حفظ</button>
+          </div>
+        </div>
+
+        <input type="hidden" id="docId"/>
+      </form>
+    </dialog>
+  </main>
+
+  <!-- Firebase config assumed globally or via modules -->
+  <script src="../shared/dictionaries.js"></script>
+  <script src="./import-excel.js"></script>
+  <script src="./food-items.js"></script>
 </body>
 </html>
