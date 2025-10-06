@@ -2,40 +2,34 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>مكتبة الأصناف</title>
-  <link rel="stylesheet" href="css/food-items.css?v=3" />
-
-  <!-- SheetJS (لازم قبل ملف الموديول) -->
-  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-  <!-- ملف الجافاسكربت (موديول) -->
-  <script type="module" src="js/food-items.js?v=3"></script>
+  <link rel="stylesheet" href="food-items.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="left">
-      <button id="btnLogout" class="btn ghost">خروج</button>
-      <span class="pill user" id="adminName">—</span>
+      <button id="btnLogout" class="btn sm danger">خروج</button>
+      <span class="admin" id="adminName">—</span>
     </div>
 
-    <h1 class="title">مكتبة الأصناف</h1>
-
-    <div class="right row gap-6">
+    <div class="right gap-8">
       <button id="btnAdd" class="btn primary">إضافة صنف</button>
       <button id="btnRefresh" class="btn">تحديث</button>
+      <button id="btnExport" class="btn">تصدير إلى Excel</button>
 
-      <input id="excelImportInput" type="file" accept=".xlsx,.xls" hidden />
-      <button id="btnImportExcel" class="btn">استيراد من Excel</button>
-      <button id="btnExportExcel" class="btn">تصدير إلى Excel</button>
+      <label class="file-btn">
+        <input type="file" id="fileExcel" accept=".xlsx,.xls" hidden />
+        <span class="btn">استيراد من Excel</span>
+      </label>
     </div>
   </header>
 
   <section class="filters row gap-8">
     <input id="txtSearch" class="input grow" placeholder="بحث بالاسم/الوصف/الوسم" />
-    <select id="selCategory" class="input">
+    <select id="ddlCategory" class="input w160">
       <option value="">(الكل)</option>
-      <option>النشويات</option>
+      <option>نشويات</option>
       <option>منتجات الحليب</option>
       <option>الفاكهة</option>
       <option>الخضروات</option>
@@ -44,27 +38,35 @@
       <option>الحلويات</option>
       <option>أخرى</option>
     </select>
-    <label class="row gap-3">
-      <input id="chkActiveOnly" type="checkbox" checked />
+
+    <label class="chk">
+      <input type="checkbox" id="chkActive" checked />
       <span>نشط فقط</span>
     </label>
   </section>
 
-  <main id="itemsGrid" class="grid"></main>
+  <main>
+    <div id="cards" class="cards"></div>
+  </main>
 
-  <!-- نافذة نموذج الإضافة/التعديل -->
-  <div id="formModal" class="modal hidden">
-    <div class="modal-card">
-      <h3 id="formTitle">إضافة صنف</h3>
+  <!-- Modal -->
+  <dialog id="dlg" class="modal">
+    <form method="dialog" class="panel">
+      <div class="modal-head">
+        <h3 id="dlgTitle">إضافة صنف</h3>
+        <button id="dlgClose" class="icon">×</button>
+      </div>
 
-      <div class="form grid-2 gap-10">
-        <div class="col">
+      <div class="grid-3 gap-12">
+        <!-- عمود 1 -->
+        <div>
           <label>الاسم (AR)</label>
-          <input id="f_nameAR" class="input" placeholder="مثال: أرز مسلوق" />
+          <input id="f_nameAR" class="input" placeholder="مثال: خبز مصري" />
 
-          <label>الفئة</label>
-          <select id="f_category" class="input">
-            <option>النشويات</option>
+          <label class="mt-8">الفئة</label>
+          <input id="f_category" class="input" list="catList" placeholder="اختر/اكتب الفئة" />
+          <datalist id="catList">
+            <option>نشويات</option>
             <option>منتجات الحليب</option>
             <option>الفاكهة</option>
             <option>الخضروات</option>
@@ -72,69 +74,75 @@
             <option>الدهون</option>
             <option>الحلويات</option>
             <option>أخرى</option>
-          </select>
+          </datalist>
 
-          <label>رابط صورة</label>
+          <label class="mt-8">رابط صورة</label>
           <input id="f_imageUrl" class="input" placeholder="https://..." />
 
-          <label>GI</label>
-          <input id="f_gi" class="input" placeholder="مثال: 73" />
+          <label class="mt-8">GI</label>
+          <input id="f_gi" class="input" type="number" step="1" />
         </div>
 
-        <div class="col">
-          <p class="muted">القيم الغذائية لكل 100g</p>
+        <!-- عمود 2 القيم الغذائية لكل 100g -->
+        <div>
+          <div class="group-title">القيم الغذائية لكل 100g</div>
+          <div class="grid-2 gap-8">
+            <div>
+              <label>السعرات (kcal)</label>
+              <input id="n_cal" class="input" type="number" step="1" />
+            </div>
+            <div>
+              <label>الكارب (g)</label>
+              <input id="n_carb" class="input" type="number" step="0.1" />
+            </div>
+            <div>
+              <label>الدهون (g)</label>
+              <input id="n_fat" class="input" type="number" step="0.1" />
+            </div>
+            <div>
+              <label>البروتين (g)</label>
+              <input id="n_protein" class="input" type="number" step="0.1" />
+            </div>
+            <div>
+              <label>الصوديوم (mg)</label>
+              <input id="n_sodium" class="input" type="number" step="1" />
+            </div>
+            <div>
+              <label>الألياف (g)</label>
+              <input id="n_fiber" class="input" type="number" step="0.1" />
+            </div>
+          </div>
 
-          <label>السعرات (kcal)</label>
-          <input id="n_cal" class="input" placeholder="0" />
+          <label class="mt-8 chk">
+            <input type="checkbox" id="f_active" checked />
+            <span>نشط</span>
+          </label>
+        </div>
 
-          <label>الكارب (g)</label>
-          <input id="n_carb" class="input" placeholder="0" />
+        <!-- عمود 3 الذكاء والوسوم -->
+        <div>
+          <label>وسوم (Tags)</label>
+          <div id="chipsTags" class="chips"></div>
+          <div class="muted mt-4">اقتراحات الوسوم</div>
+          <div id="chipsTagsSug" class="chips sug"></div>
 
-          <label>الدهون (g)</label>
-          <input id="n_fat" class="input" placeholder="0" />
+          <label class="mt-12">الأنظمة الصحية (Diets)</label>
+          <div id="chipsDiets" class="chips"></div>
 
-          <label>البروتين (g)</label>
-          <input id="n_protein" class="input" placeholder="0" />
+          <button type="button" id="btnAutoSuggest" class="btn mt-8">توليد تلقائي</button>
 
-          <label>الصوديوم (mg)</label>
-          <input id="n_sodium" class="input" placeholder="0" />
-
-          <label>الألياف (g)</label>
-          <input id="n_fiber" class="input" placeholder="0" />
+          <div class="muted mt-4">اقتراحات الأنظمة</div>
+          <div id="chipsDietsSug" class="chips sug"></div>
         </div>
       </div>
 
-      <div class="row gap-6 mt-8">
-        <label class="row gap-3"><input id="f_active" type="checkbox" checked /><span>نشط</span></label>
-        <div class="grow"></div>
-        <button id="btnPreview" class="btn primary">معاينة</button>
-        <button id="btnCancelForm" class="btn">إلغاء</button>
+      <div class="footer">
+        <button id="btnSave" type="button" class="btn primary">حفظ</button>
+        <button id="btnCancel" class="btn">إلغاء</button>
       </div>
-    </div>
-  </div>
+    </form>
+  </dialog>
 
-  <!-- نافذة المعاينة -->
-  <div id="previewModal" class="modal hidden">
-    <div class="modal-card">
-      <h3>معاينة الصنف</h3>
-      <div id="previewBody" class="space-y"></div>
-      <div class="row gap-6 mt-8">
-        <button id="btnConfirmSave" class="btn primary">تأكيد الحفظ</button>
-        <button id="btnCancelPreview" class="btn">إلغاء</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- نافذة تأكيد الحذف -->
-  <div id="confirmModal" class="modal hidden">
-    <div class="modal-card">
-      <h3>تأكيد الحذف</h3>
-      <p>هل أنت متأكد من حذف هذا الصنف؟ لا يمكن التراجع.</p>
-      <div class="row gap-6 mt-8">
-        <button id="btnDoDelete" class="btn danger">حذف</button>
-        <button id="btnCancelDelete" class="btn">إلغاء</button>
-      </div>
-    </div>
-  </div>
+  <script type="module" src="food-items.js"></script>
 </body>
 </html>
