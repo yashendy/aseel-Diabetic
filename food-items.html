@@ -1,192 +1,140 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>مكتبة الأصناف — أدمن</title>
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="css/food-items.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>مكتبة الأصناف</title>
+  <link rel="stylesheet" href="css/food-items.css?v=3" />
+
+  <!-- SheetJS (لازم قبل ملف الموديول) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- ملف الجافاسكربت (موديول) -->
+  <script type="module" src="js/food-items.js?v=3"></script>
 </head>
 <body>
-  <header class="app-header">
-    <h1>مكتبة الأصناف</h1>
-
-    <div class="actions">
-      <button id="btnPreviewImport" class="btn btn--ghost">استيراد من Excel</button>
-      <input id="excelFile" type="file" accept=".xlsx,.xls" style="display:none"/>
-      <button id="btnExport" class="btn btn--ghost">تصدير إلى Excel</button>
-      <button id="btnRefresh" class="btn btn--ghost">تحديث</button>
-      <button id="btnNew" class="btn">إضافة صنف</button>
+  <header class="topbar">
+    <div class="left">
+      <button id="btnLogout" class="btn ghost">خروج</button>
+      <span class="pill user" id="adminName">—</span>
     </div>
 
-    <div id="authBox" class="auth-box">
-      <span id="whoAmI" class="muted">غير مسجّل</span>
-      <button id="loginGoogle" class="btn btn--ghost">دخول Google</button>
-      <button id="loginGitHub" class="btn btn--ghost">دخول GitHub</button>
-      <button id="logout" class="btn" style="display:none">خروج</button>
+    <h1 class="title">مكتبة الأصناف</h1>
+
+    <div class="right row gap-6">
+      <button id="btnAdd" class="btn primary">إضافة صنف</button>
+      <button id="btnRefresh" class="btn">تحديث</button>
+
+      <input id="excelImportInput" type="file" accept=".xlsx,.xls" hidden />
+      <button id="btnImportExcel" class="btn">استيراد من Excel</button>
+      <button id="btnExportExcel" class="btn">تصدير إلى Excel</button>
     </div>
   </header>
 
-  <main class="container">
-    <section class="filters">
-      <input id="q" class="input" placeholder="بحث بالاسم/البراند/الفئة أو #وسم"/>
-      <select id="category" class="input"><option value="">الفئة (الكل)</option></select>
-      <label class="switch"><input type="checkbox" id="onlyActive" checked><span>نشط فقط</span></label>
-    </section>
+  <section class="filters row gap-8">
+    <input id="txtSearch" class="input grow" placeholder="بحث بالاسم/الوصف/الوسم" />
+    <select id="selCategory" class="input">
+      <option value="">(الكل)</option>
+      <option>النشويات</option>
+      <option>منتجات الحليب</option>
+      <option>الفاكهة</option>
+      <option>الخضروات</option>
+      <option>منتجات اللحوم</option>
+      <option>الدهون</option>
+      <option>الحلويات</option>
+      <option>أخرى</option>
+    </select>
+    <label class="row gap-3">
+      <input id="chkActiveOnly" type="checkbox" checked />
+      <span>نشط فقط</span>
+    </label>
+  </section>
 
-    <section id="grid" class="grid"></section>
+  <main id="itemsGrid" class="grid"></main>
 
-    <section id="importPreview" class="card" style="display:none">
-      <div class="import-header">
-        <h3>معاينة الاستيراد من Excel</h3>
-        <div class="muted">راجعي الأعمدة (الاسم، الفئة، القيم…)</div>
-      </div>
-      <div class="table-wrap">
-        <table class="tbl" id="previewTable">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="row">
-        <label class="switch"><input type="checkbox" id="selectAllRows" checked> <span>تحديد الكل</span></label>
-        <div class="spacer"></div>
-        <button id="confirmImport" class="btn">حفظ المحدد</button>
-        <button id="cancelImport" class="btn btn--ghost">إلغاء</button>
-      </div>
-    </section>
+  <!-- نافذة نموذج الإضافة/التعديل -->
+  <div id="formModal" class="modal hidden">
+    <div class="modal-card">
+      <h3 id="formTitle">إضافة صنف</h3>
 
-    <dialog id="editor" class="modal">
-      <form method="dialog" class="card">
-        <header class="modal__header">
-          <h3 id="formTitle">إضافة صنف</h3>
-          <button id="closeModal" class="close" type="button" title="إغلاق">✕</button>
-        </header>
+      <div class="form grid-2 gap-10">
+        <div class="col">
+          <label>الاسم (AR)</label>
+          <input id="f_nameAR" class="input" placeholder="مثال: أرز مسلوق" />
 
-        <div class="form">
-          <div class="row">
-            <label class="field"><span>الاسم (AR)</span><input id="name_ar"/></label>
-            <label class="field"><span>البراند (AR)</span><input id="brand_ar"/></label>
-          </div>
+          <label>الفئة</label>
+          <select id="f_category" class="input">
+            <option>النشويات</option>
+            <option>منتجات الحليب</option>
+            <option>الفاكهة</option>
+            <option>الخضروات</option>
+            <option>منتجات اللحوم</option>
+            <option>الدهون</option>
+            <option>الحلويات</option>
+            <option>أخرى</option>
+          </select>
 
-          <div class="row">
-            <label class="field full"><span>وصف (AR)</span><input id="desc_ar"/></label>
-          </div>
+          <label>رابط صورة</label>
+          <input id="f_imageUrl" class="input" placeholder="https://..." />
 
-          <div class="row">
-            <label class="field">
-              <span>الفئة</span>
-              <input id="category_in" list="cats" placeholder="اختر/اكتب الفئة"/>
-              <datalist id="cats"></datalist>
-            </label>
-            <label class="field"><span>رابط صورة</span><input id="imageUrl" placeholder="https://"/></label>
-            <label class="field"><span>GI</span><input id="gi" type="number" step="any" placeholder="مثال: 73"/></label>
-          </div>
-
-          <fieldset class="box"><legend>القيم الغذائية لكل 100g</legend>
-            <div class="row">
-              <label class="field"><span>السعرات (kcal)</span><input id="cal_kcal" type="number" step="any"/></label>
-              <label class="field"><span>الكارب (g)</span><input id="carbs_g" type="number" step="any"/></label>
-              <label class="field"><span>الألياف (g)</span><input id="fiber_g" type="number" step="any"/></label>
-            </div>
-            <div class="row">
-              <label class="field"><span>البروتين (g)</span><input id="protein_g" type="number" step="any"/></label>
-              <label class="field"><span>الدهون (g)</span><input id="fat_g" type="number" step="any"/></label>
-              <label class="field"><span>الصوديوم (mg)</span><input id="sodium_mg" type="number" step="any"/></label>
-            </div>
-          </fieldset>
-
-          <fieldset class="box">
-            <legend>المقادير البيتية</legend>
-            <div id="measuresList" class="measures"></div>
-            <div class="row">
-              <input id="m_name_ar" class="input" placeholder="اسم AR"/>
-              <input id="m_name_en" class="input" placeholder="Name EN (اختياري)"/>
-              <input id="m_grams" class="input" type="number" step="any" placeholder="جرام"/>
-              <button id="addMeasure" type="button" class="btn btn--ghost">➕ إضافة مقدار</button>
-            </div>
-          </fieldset>
-
-          <div class="row">
-            <label class="field full"><span>#Tags</span><input id="tags" placeholder="فطور, كارب, بروتين"/></label>
-          </div>
-          <div class="row">
-            <label class="field full"><span>dietTags</span><input id="dietTags" placeholder="low-gi, halal"/></label>
-          </div>
-          <div class="row">
-            <label class="field full"><span>allergens</span><input id="allergens" placeholder="gluten, peanut"/></label>
-          </div>
-
-          <div class="row">
-            <label class="switch"><input type="checkbox" id="isActive" checked/> <span>نشط</span></label>
-            <div class="spacer"></div>
-            <button id="save" type="button" class="btn">حفظ</button>
-          </div>
-
-          <input type="hidden" id="docId"/>
+          <label>GI</label>
+          <input id="f_gi" class="input" placeholder="مثال: 73" />
         </div>
-      </form>
-    </dialog>
-  </main>
 
-  <!-- Firebase + Auth -->
-  <script type="module">
-    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-    import { getFirestore } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-    import {
-      getAuth, onAuthStateChanged, GoogleAuthProvider, GithubAuthProvider,
-      signInWithPopup, signOut
-    } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+        <div class="col">
+          <p class="muted">القيم الغذائية لكل 100g</p>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
-      authDomain: "sugar-kids-tracker.firebaseapp.com",
-      projectId: "sugar-kids-tracker",
-      storageBucket: "sugar-kids-tracker.firebasestorage.app",
-      messagingSenderId: "251830888114",
-      appId: "1:251830888114:web:a20716d3d4ad86a6724bab",
-      measurementId: "G-L7YGX3PHLB"
-    };
+          <label>السعرات (kcal)</label>
+          <input id="n_cal" class="input" placeholder="0" />
 
-    const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-    window.db = getFirestore(app);
-    window.auth = getAuth(app);
+          <label>الكارب (g)</label>
+          <input id="n_carb" class="input" placeholder="0" />
 
-    // UI auth wiring
-    const who = document.getElementById('whoAmI');
-    const gbtn = document.getElementById('loginGoogle');
-    const ghbtn= document.getElementById('loginGitHub');
-    const lo   = document.getElementById('logout');
+          <label>الدهون (g)</label>
+          <input id="n_fat" class="input" placeholder="0" />
 
-    gbtn.onclick = ()=> signInWithPopup(auth, new GoogleAuthProvider());
-    ghbtn.onclick= ()=> signInWithPopup(auth, new GithubAuthProvider());
-    lo.onclick   = ()=> signOut(auth);
+          <label>البروتين (g)</label>
+          <input id="n_protein" class="input" placeholder="0" />
 
-    onAuthStateChanged(auth, async (u)=>{
-      if (u) {
-        // جِب اسم الأدمن من users/{uid}
-        try {
-          const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js");
-          const snap = await getDoc(doc(db,'users',u.uid));
-          const name = snap.exists() ? (snap.data().name || snap.data().displayName) : null;
-          who.textContent = name || u.displayName || u.email || u.uid;
-        } catch { who.textContent = u.displayName || u.email || u.uid; }
+          <label>الصوديوم (mg)</label>
+          <input id="n_sodium" class="input" placeholder="0" />
 
-        gbtn.style.display = ghbtn.style.display = 'none';
-        lo.style.display = '';
-        window.__uid = u.uid;
-      } else {
-        who.textContent = 'غير مسجّل';
-        gbtn.style.display = ghbtn.style.display = '';
-        lo.style.display   = 'none';
-        window.__uid = null;
-      }
-    });
-  </script>
+          <label>الألياف (g)</label>
+          <input id="n_fiber" class="input" placeholder="0" />
+        </div>
+      </div>
 
-  <!-- SheetJS (Global) -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+      <div class="row gap-6 mt-8">
+        <label class="row gap-3"><input id="f_active" type="checkbox" checked /><span>نشط</span></label>
+        <div class="grow"></div>
+        <button id="btnPreview" class="btn primary">معاينة</button>
+        <button id="btnCancelForm" class="btn">إلغاء</button>
+      </div>
+    </div>
+  </div>
 
-  <!-- Logic -->
-  <script type="module" src="js/food-items.js"></script>
+  <!-- نافذة المعاينة -->
+  <div id="previewModal" class="modal hidden">
+    <div class="modal-card">
+      <h3>معاينة الصنف</h3>
+      <div id="previewBody" class="space-y"></div>
+      <div class="row gap-6 mt-8">
+        <button id="btnConfirmSave" class="btn primary">تأكيد الحفظ</button>
+        <button id="btnCancelPreview" class="btn">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة تأكيد الحذف -->
+  <div id="confirmModal" class="modal hidden">
+    <div class="modal-card">
+      <h3>تأكيد الحذف</h3>
+      <p>هل أنت متأكد من حذف هذا الصنف؟ لا يمكن التراجع.</p>
+      <div class="row gap-6 mt-8">
+        <button id="btnDoDelete" class="btn danger">حذف</button>
+        <button id="btnCancelDelete" class="btn">إلغاء</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
