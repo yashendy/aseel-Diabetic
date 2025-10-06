@@ -10,24 +10,58 @@
 <body>
   <header class="app-header">
     <h1>مكتبة الأصناف</h1>
-    <div class="spacer"></div>
 
-    <!-- زر الاستيراد من اكسل -->
-    <button id="btnImport" class="btn btn--ghost">استيراد من Excel</button>
-    <input id="excelFile" type="file" accept=".xlsx,.xls" style="display:none"/>
+    <div class="actions">
+      <!-- استيراد/تصدير -->
+      <button id="btnPreviewImport" class="btn btn--ghost">استيراد من Excel</button>
+      <input id="excelFile" type="file" accept=".xlsx,.xls" style="display:none"/>
+      <button id="btnExport" class="btn btn--ghost">تصدير إلى Excel</button>
 
-    <!-- زر إضافة صنف -->
-    <button id="btnNew" class="btn">إضافة صنف</button>
+      <!-- إضافة صنف -->
+      <button id="btnNew" class="btn">إضافة صنف</button>
+    </div>
+
+    <!-- Auth box -->
+    <div id="authBox" class="auth-box">
+      <span id="whoAmI" class="muted">غير مسجّل</span>
+      <button id="loginGoogle" class="btn btn--ghost">دخول Google</button>
+      <button id="loginGitHub" class="btn btn--ghost">دخول GitHub</button>
+      <button id="logout" class="btn" style="display:none">خروج</button>
+    </div>
   </header>
 
   <main class="container">
+    <!-- فلاتر -->
     <section class="filters">
       <input id="q" class="input" placeholder="بحث بالاسم/البراند/الفئة أو #وسم"/>
       <select id="category" class="input"><option value="">الفئة (الكل)</option></select>
       <label class="switch"><input type="checkbox" id="onlyActive" checked><span>نشط فقط</span></label>
     </section>
 
+    <!-- الشبكة -->
     <section id="grid" class="grid"></section>
+
+    <!-- معاينة الاستيراد -->
+    <section id="importPreview" class="card" style="display:none">
+      <div class="import-header">
+        <h3>معاينة الاستيراد من Excel</h3>
+        <div class="muted">راجعي الأعمدة (الاسم، الفئة، القيم…)</div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="tbl" id="previewTable">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="row">
+        <label class="switch"><input type="checkbox" id="selectAllRows" checked> <span>تحديد الكل</span></label>
+        <div class="spacer"></div>
+        <button id="confirmImport" class="btn">حفظ المحدد</button>
+        <button id="cancelImport" class="btn btn--ghost">إلغاء</button>
+      </div>
+    </section>
 
     <!-- محرر الصنف -->
     <dialog id="editor" class="modal">
@@ -48,7 +82,7 @@
           </div>
 
           <div class="row">
-            <!-- الفئة: input + datalist -->
+            <!-- الفئة: input + datalist (حر + اقتراحات) -->
             <label class="field">
               <span>الفئة</span>
               <input id="category_in" list="cats" placeholder="اختر/اكتب الفئة"/>
@@ -84,7 +118,7 @@
           </fieldset>
 
           <div class="row">
-            <label class="field full"><span>#Tags</span><input id="tags" placeholder="سندوتش, فطار, مشبع"/></label>
+            <label class="field full"><span>#Tags</span><input id="tags" placeholder="فطور, كارب, بروتين"/></label>
           </div>
           <div class="row">
             <label class="field full"><span>dietTags</span><input id="dietTags" placeholder="low-gi, halal"/></label>
@@ -105,10 +139,14 @@
     </dialog>
   </main>
 
-  <!-- تهيئة Firebase (ضروري قبل JS الخاص بالصفحة) -->
+  <!-- Firebase + Auth -->
   <script type="module">
     import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
     import { getFirestore } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+    import {
+      getAuth, onAuthStateChanged, GoogleAuthProvider, GithubAuthProvider,
+      signInWithPopup, signOut
+    } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
@@ -122,9 +160,34 @@
 
     const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
     window.db = getFirestore(app);
+    window.auth = getAuth(app);
+
+    // UI auth wiring
+    const who = document.getElementById('whoAmI');
+    const gbtn = document.getElementById('loginGoogle');
+    const ghbtn= document.getElementById('loginGitHub');
+    const lo   = document.getElementById('logout');
+
+    gbtn.onclick = ()=> signInWithPopup(auth, new GoogleAuthProvider());
+    ghbtn.onclick= ()=> signInWithPopup(auth, new GithubAuthProvider());
+    lo.onclick   = ()=> signOut(auth);
+
+    onAuthStateChanged(auth, (u)=>{
+      if (u) {
+        who.textContent = u.displayName || u.email || u.uid;
+        gbtn.style.display = ghbtn.style.display = 'none';
+        lo.style.display = '';
+        window.__uid = u.uid;
+      } else {
+        who.textContent = 'غير مسجّل';
+        gbtn.style.display = ghbtn.style.display = '';
+        lo.style.display   = 'none';
+        window.__uid = null;
+      }
+    });
   </script>
 
-  <!-- SheetJS لقراءة ملفات Excel -->
+  <!-- SheetJS -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
 
   <!-- منطق الصفحة -->
