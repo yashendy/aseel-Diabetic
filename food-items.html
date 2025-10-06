@@ -11,6 +11,12 @@
   <header class="app-header">
     <h1>مكتبة الأصناف</h1>
     <div class="spacer"></div>
+
+    <!-- زر الاستيراد من اكسل -->
+    <button id="btnImport" class="btn btn--ghost">استيراد من Excel</button>
+    <input id="excelFile" type="file" accept=".xlsx,.xls" style="display:none"/>
+
+    <!-- زر إضافة صنف -->
     <button id="btnNew" class="btn">إضافة صنف</button>
   </header>
 
@@ -42,7 +48,13 @@
           </div>
 
           <div class="row">
-            <label class="field"><span>الفئة</span><select id="category_in"></select></label>
+            <!-- الفئة: input + datalist -->
+            <label class="field">
+              <span>الفئة</span>
+              <input id="category_in" list="cats" placeholder="اختر/اكتب الفئة"/>
+              <datalist id="cats"></datalist>
+            </label>
+
             <label class="field"><span>رابط صورة</span><input id="imageUrl" placeholder="https://"/></label>
             <label class="field"><span>GI</span><input id="gi" type="number" step="any" placeholder="مثال: 73"/></label>
           </div>
@@ -93,7 +105,7 @@
     </dialog>
   </main>
 
-  <!-- Firebase boot (قبل سكريبت الصفحة) -->
+  <!-- تهيئة Firebase (ضروري قبل JS الخاص بالصفحة) -->
   <script type="module">
     import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
     import { getFirestore } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
@@ -111,6 +123,9 @@
     const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
     window.db = getFirestore(app);
   </script>
+
+  <!-- SheetJS لقراءة ملفات Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
 
   <!-- منطق الصفحة -->
   <script type="module" src="js/food-items.js"></script>
