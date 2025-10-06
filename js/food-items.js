@@ -1,382 +1,380 @@
+/* ====================== Firebase Bootstrap (safe) ====================== */
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import {
-  collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp
+  getFirestore, collection, getDocs, doc, setDoc, deleteDoc,
+  writeBatch, serverTimestamp, getDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import {
+  getAuth, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-const db = window.db;
-
-/* عناصر الواجهة */
-const grid = document.getElementById('grid');
-const q = document.getElementById('q');
-const categorySel = document.getElementById('category');
-const onlyActive = document.getElementById('onlyActive');
-const btnNew = document.getElementById('btnNew');
-const btnRefresh = document.getElementById('btnRefresh');
-
-const dlg = document.getElementById('editor');
-const formTitle = document.getElementById('formTitle');
-const closeModal = document.getElementById('closeModal');
-const saveBtn = document.getElementById('save');
-const docId = document.getElementById('docId');
-const catsDL = document.getElementById('cats');
-
-const fields = {
-  name_ar: document.getElementById('name_ar'),
-  brand_ar: document.getElementById('brand_ar'),
-  desc_ar: document.getElementById('desc_ar'),
-  category_in: document.getElementById('category_in'),
-  imageUrl: document.getElementById('imageUrl'),
-  gi: document.getElementById('gi'),
-  cal_kcal: document.getElementById('cal_kcal'),
-  carbs_g: document.getElementById('carbs_g'),
-  fiber_g: document.getElementById('fiber_g'),
-  protein_g: document.getElementById('protein_g'),
-  fat_g: document.getElementById('fat_g'),
-  sodium_mg: document.getElementById('sodium_mg'),
-  tags: document.getElementById('tags'),
-  dietTags: document.getElementById('dietTags'),
-  allergens: document.getElementById('allergens'),
-  isActive: document.getElementById('isActive'),
-  measuresList: document.getElementById('measuresList'),
-  m_name_ar: document.getElementById('m_name_ar'),
-  m_name_en: document.getElementById('m_name_en'),
-  m_grams: document.getElementById('m_grams'),
-  addMeasure: document.getElementById('addMeasure'),
+const firebaseConfig = {
+  apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
+  authDomain: "sugar-kids-tracker.firebaseapp.com",
+  projectId: "sugar-kids-tracker",
+  storageBucket: "sugar-kids-tracker.firebasestorage.app",
+  messagingSenderId: "251830888114",
+  appId: "1:251830888114:web:a20716d3d4ad86a6724bab",
+  measurementId: "G-L7YGX3PHLB"
 };
 
-const importBtn = document.getElementById('btnPreviewImport');
-const exportBtn = document.getElementById('btnExport');
-const excelFile = document.getElementById('excelFile');
-const importCard = document.getElementById('importPreview');
-const previewTable = document.getElementById('previewTable');
-const confirmImport = document.getElementById('confirmImport');
-const cancelImport = document.getElementById('cancelImport');
-const selectAllRows = document.getElementById('selectAllRows');
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+const auth = getAuth(app);
 
-let ITEMS = [];
-let CATEGORIES = [];
+// ثابت المجموعة
+const FOOD_COL = collection(db, 'admin', 'global', 'foodItems');
 
-/* ---------------- Helpers ---------------- */
-function toArray(v){
-  if (!v) return [];
-  if (Array.isArray(v)) return v;
-  return String(v).split(',').map(s=>s.trim()).filter(Boolean);
-}
-function el(tag, attrs={}, children=[]){
-  const e = document.createElement(tag);
-  Object.entries(attrs).forEach(([k,v])=>{
-    if (k==='class') e.className=v;
-    else if (k==='text') e.textContent=v;
-    else e.setAttribute(k,v);
+// التصنيفات
+const CATEGORIES = ['النشويات','منتجات الحليب','الفاكهة','الخضروات','منتجات اللحوم','الدهون','الحلويات','أخرى'];
+
+// Placeholder محلي (Data URI) — لا يحتاج إنترنت
+const PLACEHOLDER = "data:image/svg+xml;base64," +
+  btoa(`<svg xmlns='http://www.w3.org/2000/svg' width='320' height='240'>
+    <rect width='100%' height='100%' fill='#181f2a'/>
+    <text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle'
+      font-family='Segoe UI,Roboto' font-size='16' fill='#8590a3'>لا توجد صورة</text>
+  </svg>`);
+
+/* ========================== State & Elements ========================== */
+const els = {
+  adminName: document.getElementById('adminName'),
+  btnLogout: document.getElementById('btnLogout'),
+  btnAdd: document.getElementById('btnAdd'),
+  btnRefresh: document.getElementById('btnRefresh'),
+  btnImportExcel: document.getElementById('btnImportExcel'),
+  excelInput: document.getElementById('excelImportInput'),
+  btnExportExcel: document.getElementById('btnExportExcel'),
+  itemsGrid: document.getElementById('itemsGrid'),
+  txtSearch: document.getElementById('txtSearch'),
+  selCategory: document.getElementById('selCategory'),
+  chkActiveOnly: document.getElementById('chkActiveOnly'),
+
+  // form modal
+  formModal: document.getElementById('formModal'),
+  formTitle: document.getElementById('formTitle'),
+  f_nameAR: document.getElementById('f_nameAR'),
+  f_category: document.getElementById('f_category'),
+  f_imageUrl: document.getElementById('f_imageUrl'),
+  f_gi: document.getElementById('f_gi'),
+  n_cal: document.getElementById('n_cal'),
+  n_carb: document.getElementById('n_carb'),
+  n_fat: document.getElementById('n_fat'),
+  n_protein: document.getElementById('n_protein'),
+  n_sodium: document.getElementById('n_sodium'),
+  n_fiber: document.getElementById('n_fiber'),
+  f_active: document.getElementById('f_active'),
+  btnPreview: document.getElementById('btnPreview'),
+  btnCancelForm: document.getElementById('btnCancelForm'),
+
+  // preview modal
+  previewModal: document.getElementById('previewModal'),
+  previewBody: document.getElementById('previewBody'),
+  btnConfirmSave: document.getElementById('btnConfirmSave'),
+  btnCancelPreview: document.getElementById('btnCancelPreview'),
+
+  // confirm delete
+  confirmModal: document.getElementById('confirmModal'),
+  btnDoDelete: document.getElementById('btnDoDelete'),
+  btnCancelDelete: document.getElementById('btnCancelDelete'),
+};
+
+let ALL_ITEMS = [];
+let editingId = null;
+let pendingDeleteId = null;
+
+/* ============================== Helpers ============================== */
+function num(v){ const n = Number(String(v).trim()); return isFinite(n) ? n : 0; }
+function openModal(m){ m.classList.remove('hidden'); }
+function closeModal(m){ m.classList.add('hidden'); }
+
+function makeCard(item, id){
+  const div = document.createElement('div');
+  div.className = 'card';
+
+  const img = document.createElement('img');
+  img.src = item.imageUrl || PLACEHOLDER;
+  img.onerror = () => { img.src = PLACEHOLDER; };
+  div.appendChild(img);
+
+  const head = document.createElement('div');
+  head.className = 'row-between';
+  head.innerHTML = `<strong>${item.nameAR || '-'}</strong>
+                    <span class="badge">${item.category || '-'}</span>`;
+  div.appendChild(head);
+
+  const tgs = document.createElement('div');
+  tgs.className = 'tags';
+  (item.tags || []).forEach(t=>{
+    const s = document.createElement('span');
+    s.className = 'tag'; s.textContent = '#'+t;
+    tgs.appendChild(s);
   });
-  (Array.isArray(children)?children:[children]).forEach(c=>{
-    if (c==null) return;
-    e.appendChild(typeof c==='string'?document.createTextNode(c):c);
-  });
-  return e;
-}
-function computeAutoTags(obj){
-  const tags = new Set(toArray(obj.tags).map(t=>t.replace(/^#*/,'#')));
-  const diet = new Set(toArray(obj.dietTags));
+  div.appendChild(tgs);
 
-  const carbs = +obj.carbs_g || 0;
-  const sodium = +obj.sodium_mg || 0;
+  const row = document.createElement('div');
+  row.className = 'row gap-6';
+  const btnEdit = document.createElement('button');
+  btnEdit.className = 'btn';
+  btnEdit.textContent = 'تعديل';
+  btnEdit.onclick = ()=> openEdit(id, item);
 
-  // أمثلة قواعد بسيطة:
-  if (carbs <= 5){ tags.add('#كيتو'); tags.add('#لو_كارب'); diet.add('keto'); }
-  else if (carbs <= 20){ tags.add('#لو_كارب'); }
+  const btnDel = document.createElement('button');
+  btnDel.className = 'btn danger';
+  btnDel.textContent = 'حذف';
+  btnDel.onclick = ()=> { pendingDeleteId = id; openModal(els.confirmModal); };
 
-  if ((+obj.gi || 0) <= 55){ diet.add('low-gi'); tags.add('#لو_GI'); }
-  if (sodium <= 120){ tags.add('#قليل_الملح'); diet.add('low-sodium'); }
+  row.appendChild(btnEdit); row.appendChild(btnDel);
+  div.appendChild(row);
 
-  // فئات مساعدة
-  const cat = (obj.category||'').trim();
-  if (cat === 'النشويات') tags.add('#كارب');
-  if (cat === 'منتجات اللحوم') tags.add('#بروتين');
-
-  return { tags: Array.from(tags), dietTags: Array.from(diet) };
-}
-function measuresUI(list, measures){
-  list.innerHTML='';
-  (measures||[]).forEach((m,i)=>{
-    const pill = el('span',{class:'pill'},[
-      el('span',{text:`${m.name || '—'} · ${m.grams||0}g`}),
-      el('button',{type:'button',class:'btn btn--ghost',style:'padding:2px 8px',text:'×'})
-    ]);
-    pill.lastChild.onclick = ()=>{ measures.splice(i,1); measuresUI(list, measures); };
-    list.appendChild(pill);
-  });
+  return div;
 }
 
-/* -------------- Rendering -------------- */
-async function fetchItems(){
-  ITEMS = [];
-  const snap = await getDocs(collection(db,'admin','global','foodItems'));
-  snap.forEach(d=>{
-    const x = d.data(); x.id=d.id; ITEMS.push(x);
-    if (x.category && !CATEGORIES.includes(x.category)) CATEGORIES.push(x.category);
-  });
-  CATEGORIES.sort();
-  renderCategorySelect();
-  renderGrid();
-}
-function renderCategorySelect(){
-  categorySel.innerHTML = '<option value="">الفئة (الكل)</option>' +
-    CATEGORIES.map(c=>`<option>${c}</option>`).join('');
-  catsDL.innerHTML = CATEGORIES.map(c=>`<option value="${c}">`).join('');
-}
-function passFilters(x){
-  if (onlyActive.checked && x.isActive===false) return false;
-  const cq = q.value.trim().toLowerCase();
-  if (categorySel.value && x.category!==categorySel.value) return false;
-  if (cq){
-    const hay = [
-      x.name_ar, x.brand_ar, x.desc_ar, x.category,
-      ...(x.tags||[]), ...(x.dietTags||[])
-    ].join(' ').toLowerCase();
-    if (!hay.includes(cq.replace(/^#*/,'#')) && !hay.includes(cq)) return false;
-  }
-  return true;
-}
-function renderGrid(){
-  grid.innerHTML='';
-  ITEMS.filter(passFilters).forEach(x=>{
-    const card = el('div',{class:'card'});
-    const header = el('div',{class:'item'},[
-      el('img',{src:x.imageUrl||'https://via.placeholder.com/72?text=%20', alt:''}),
-      el('div',{},[
-        el('div',{style:'font-weight:600',text:x.name_ar||'—'}),
-        el('div',{class:'muted',text:x.category||'—'}),
-        el('div',{}, (x.tags||[]).map(t=>el('span',{class:'badge',text:t})))
-      ])
-    ]);
-    const actions = el('div',{style:'display:flex;gap:8px;margin-top:10px'},[
-      el('button',{class:'btn btn--ghost',text:'تعديل'}),
-      el('button',{class:'btn',text:'حذف'})
-    ]);
-    actions.children[0].onclick = ()=> openEditor(x);
-    actions.children[1].onclick = ()=> removeItem(x.id);
+function filterAndRender(){
+  const q = els.txtSearch.value.trim();
+  const cat = els.selCategory.value.trim();
+  const activeOnly = els.chkActiveOnly.checked;
 
-    card.append(header, actions);
-    grid.appendChild(card);
-  });
-}
+  let list = [...ALL_ITEMS];
 
-/* -------------- Editor -------------- */
-function openEditor(x={}){
-  formTitle.textContent = x.id ? 'تعديل صنف' : 'إضافة صنف';
-  docId.value = x.id || '';
-  fields.name_ar.value = x.name_ar || '';
-  fields.brand_ar.value = x.brand_ar || '';
-  fields.desc_ar.value = x.desc_ar || '';
-  fields.category_in.value = x.category || '';
-  fields.imageUrl.value = x.imageUrl || '';
-  fields.gi.value = x.gi ?? '';
-  fields.cal_kcal.value = x.nutrPer100g?.cal_kcal ?? '';
-  fields.carbs_g.value = x.nutrPer100g?.carbs_g ?? '';
-  fields.fiber_g.value = x.nutrPer100g?.fiber_g ?? '';
-  fields.protein_g.value = x.nutrPer100g?.protein_g ?? '';
-  fields.fat_g.value = x.nutrPer100g?.fat_g ?? '';
-  fields.sodium_mg.value = x.nutrPer100g?.sodium_mg ?? '';
-  fields.tags.value = (x.tags||[]).join(', ');
-  fields.dietTags.value = (x.dietTags||[]).join(', ');
-  fields.allergens.value = (x.allergens||[]).join(', ');
-  fields.isActive.checked = x.isActive!==false;
+  if (activeOnly) list = list.filter(x => x.data.isActive !== false);
+  if (cat) list = list.filter(x => x.data.category === cat);
 
-  const measures = JSON.parse(JSON.stringify(x.measures||[]));
-  fields.addMeasure.onclick = ()=>{
-    const name = fields.m_name_ar.value.trim();
-    const nameEn = fields.m_name_en.value.trim();
-    const grams = parseFloat(fields.m_grams.value);
-    if (!name || !grams) return;
-    measures.push({name, name_en:nameEn || null, grams});
-    fields.m_name_ar.value = fields.m_name_en.value = fields.m_grams.value = '';
-    measuresUI(fields.measuresList, measures);
-  };
-  measuresUI(fields.measuresList, measures);
-
-  saveBtn.onclick = async ()=>{
-    const obj = {
-      name_ar: fields.name_ar.value.trim(),
-      brand_ar: fields.brand_ar.value.trim()||null,
-      desc_ar: fields.desc_ar.value.trim()||null,
-      category: fields.category_in.value.trim()||null,
-      imageUrl: fields.imageUrl.value.trim()||null,
-      gi: fields.gi.value? Number(fields.gi.value): null,
-      nutrPer100g: {
-        cal_kcal: fields.cal_kcal.value? Number(fields.cal_kcal.value): null,
-        carbs_g: fields.carbs_g.value? Number(fields.carbs_g.value): null,
-        fiber_g: fields.fiber_g.value? Number(fields.fiber_g.value): null,
-        protein_g: fields.protein_g.value? Number(fields.protein_g.value): null,
-        fat_g: fields.fat_g.value? Number(fields.fat_g.value): null,
-        sodium_mg: fields.sodium_mg.value? Number(fields.sodium_mg.value): null,
-      },
-      tags: toArray(fields.tags.value),
-      dietTags: toArray(fields.dietTags.value),
-      allergens: toArray(fields.allergens.value),
-      isActive: !!fields.isActive.checked,
-      measures,
-      updatedAt: serverTimestamp(),
-      createdAt: x.createdAt || serverTimestamp(),
-    };
-    // أوسمة وأنظمة تلقائية
-    const auto = computeAutoTags({
-      category: obj.category,
-      gi: obj.gi,
-      carbs_g: obj.nutrPer100g.carbs_g,
-      sodium_mg: obj.nutrPer100g.sodium_mg,
-      tags: obj.tags,
-      dietTags: obj.dietTags
+  if (q){
+    const qq = q.toLowerCase();
+    list = list.filter(x => {
+      const d = x.data;
+      const pool = [
+        d.nameAR||'', d.descAR||'',
+        ...(d.tags||[]), ...(d.dietTags||[])
+      ].join(' ').toLowerCase();
+      return pool.includes(qq);
     });
-    obj.tags = Array.from(new Set([...obj.tags, ...auto.tags]));
-    obj.dietTags = Array.from(new Set([...obj.dietTags, ...auto.dietTags]));
+  }
 
-    const id = docId.value || crypto.randomUUID();
-    await setDoc(doc(db,'admin','global','foodItems', id), obj, {merge:true});
-    dlg.close(); await fetchItems();
+  els.itemsGrid.innerHTML = '';
+  list.forEach(x=>{
+    els.itemsGrid.appendChild(makeCard(x.data, x.id));
+  });
+}
+
+function autoSuggest(payload){
+  const nutr = payload.nutrPer100g || {};
+  const tags = new Set(payload.tags || []);
+  const diets = new Set(payload.dietTags || []);
+
+  if (num(nutr.carbs_g) <= 5){ diets.add('كيتو'); diets.add('لو-كارب'); tags.add('كارب-منخفض'); }
+  if (num(nutr.fat_g) >= 15){ tags.add('دهون-مرتفعة'); }
+  if (num(nutr.protein_g) >= 15){ diets.add('هاي-بروتين'); tags.add('بروتين'); }
+  if (num(nutr.sodium_mg) <= 120){ diets.add('قليل-الملح'); tags.add('قليل-الصوديوم'); }
+
+  payload.tags = Array.from(tags);
+  payload.dietTags = Array.from(diets);
+  return payload;
+}
+
+/* ============================== Data IO ============================== */
+async function loadItems(){
+  const snap = await getDocs(FOOD_COL);
+  ALL_ITEMS = snap.docs.map(d=>({ id:d.id, data:d.data() }));
+  filterAndRender();
+}
+
+function collectPayloadFromForm(){
+  const p = {
+    nameAR: els.f_nameAR.value.trim(),
+    category: els.f_category.value.trim(),
+    imageUrl: els.f_imageUrl.value.trim(),
+    gi: num(els.f_gi.value),
+    isActive: !!els.f_active.checked,
+    nutrPer100g:{
+      cal_kcal: num(els.n_cal.value),
+      carbs_g:  num(els.n_carb.value),
+      fat_g:    num(els.n_fat.value),
+      protein_g:num(els.n_protein.value),
+      sodium_mg:num(els.n_sodium.value),
+      fiber_g:  num(els.n_fiber.value),
+    },
+    updatedAt: serverTimestamp(),
   };
-
-  dlg.showModal();
-}
-async function removeItem(id){
-  if (!confirm('حذف هذا الصنف؟')) return;
-  await deleteDoc(doc(db,'admin','global','foodItems', id));
-  await fetchItems();
+  return autoSuggest(p);
 }
 
-closeModal.onclick = ()=> dlg.close();
-btnNew.onclick = ()=> openEditor({});
-btnRefresh.onclick = ()=> fetchItems();
-[q,categorySel,onlyActive].forEach(c=> c.addEventListener('input',renderGrid));
+function fillForm(item){
+  els.f_nameAR.value = item?.nameAR || '';
+  els.f_category.value = item?.category || CATEGORIES[0];
+  els.f_imageUrl.value = item?.imageUrl || '';
+  els.f_gi.value = item?.gi ?? '';
+  els.f_active.checked = item?.isActive !== false;
 
-/* -------------- Import / Export -------------- */
-importBtn.onclick = ()=> excelFile.click();
-excelFile.onchange = async ()=>{
-  if (!excelFile.files?.length) return;
-  const file = excelFile.files[0];
+  const n = item?.nutrPer100g || {};
+  els.n_cal.value    = n.cal_kcal ?? '';
+  els.n_carb.value   = n.carbs_g ?? '';
+  els.n_fat.value    = n.fat_g ?? '';
+  els.n_protein.value= n.protein_g ?? '';
+  els.n_sodium.value = n.sodium_mg ?? '';
+  els.n_fiber.value  = n.fiber_g ?? '';
+}
+
+function openAdd(){
+  editingId = null;
+  els.formTitle.textContent = 'إضافة صنف';
+  fillForm(null);
+  openModal(els.formModal);
+}
+
+function openEdit(id, data){
+  editingId = id;
+  els.formTitle.textContent = 'تعديل صنف';
+  fillForm(data);
+  openModal(els.formModal);
+}
+
+function showPreview(payload){
+  const b = els.previewBody;
+  b.innerHTML = `
+    <div><b>الاسم:</b> ${payload.nameAR||'-'}</div>
+    <div><b>الفئة:</b> ${payload.category||'-'}</div>
+    <div><b>GI:</b> ${payload.gi||'-'}</div>
+    <div><b>نشط:</b> ${payload.isActive?'نعم':'لا'}</div>
+    <div><b>سعرات/100g:</b> ${payload.nutrPer100g.cal_kcal}</div>
+    <div><b>كارب/100g:</b> ${payload.nutrPer100g.carbs_g}</div>
+    <div><b>دهون/100g:</b> ${payload.nutrPer100g.fat_g}</div>
+    <div><b>بروتين/100g:</b> ${payload.nutrPer100g.protein_g}</div>
+    <div><b>صوديوم(mg):</b> ${payload.nutrPer100g.sodium_mg}</div>
+    <div><b>ألياف(g):</b> ${payload.nutrPer100g.fiber_g}</div>
+    <div><b>وسوم:</b> ${(payload.tags||[]).map(t=>'#'+t).join(' ')||'-'}</div>
+    <div><b>أنظمة:</b> ${(payload.dietTags||[]).join(', ')||'-'}</div>
+  `;
+  openModal(els.previewModal);
+}
+
+async function confirmSave(payload){
+  const ref = editingId ? doc(FOOD_COL, editingId) : doc(FOOD_COL);
+  await setDoc(ref, { ...payload, createdAt: editingId?undefined:serverTimestamp() }, { merge: true });
+  closeModal(els.previewModal);
+  closeModal(els.formModal);
+  await loadItems();
+}
+
+async function doDelete(){
+  if (!pendingDeleteId) return;
+  await deleteDoc(doc(FOOD_COL, pendingDeleteId));
+  pendingDeleteId = null;
+  closeModal(els.confirmModal);
+  await loadItems();
+}
+
+/* ============================= Excel IO ============================== */
+async function importFromExcel(file){
   const data = await file.arrayBuffer();
-  const wb = window.XLSX.read(data, {type:'array'});
+  const wb = XLSX.read(data, { type: 'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = window.XLSX.utils.sheet_to_json(ws, {defval:''});
-
-  // معاينة
-  buildPreview(rows);
-};
-cancelImport.onclick = ()=>{ importCard.style.display='none'; };
-selectAllRows.onchange = ()=>{
-  previewTable.querySelectorAll('tbody input[type=checkbox]').forEach(cb=> cb.checked = selectAllRows.checked);
-};
-confirmImport.onclick = async ()=>{
-  const checks = [...previewTable.querySelectorAll('tbody input[type=checkbox]')];
-  const chosen = checks.filter(c=>c.checked).map(c=> JSON.parse(c.dataset.row));
-  if (!chosen.length) return alert('اختاري صفوف للحفظ');
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
   const batch = writeBatch(db);
-  chosen.forEach(r=>{
-    const id = r.id || crypto.randomUUID();
-    const nutr = {
-      cal_kcal: +r.cal_kcal || null,
-      carbs_g: +r.carbs_g || null,
-      fiber_g: +r.fiber_g || null,
-      protein_g: +r.protein_g || null,
-      fat_g: +r.fat_g || null,
-      sodium_mg: +r.sodium_mg || null,
-    };
-    const obj = {
-      name_ar: r.name_ar || r.name || '',
-      brand_ar: r.brand_ar || null,
-      desc_ar: r.desc_ar || null,
-      category: r.category || null,
-      imageUrl: r.imageUrl || null,
-      gi: r.gi? +r.gi : null,
-      nutrPer100g: nutr,
-      tags: toArray(r.tags),
-      dietTags: toArray(r.dietTags),
-      allergens: toArray(r.allergens),
-      isActive: r.isActive!=='' ? !!r.isActive : true,
-      measures: [],
+  rows.forEach(r=>{
+    const p = autoSuggest({
+      nameAR:   r['الاسم']||r['nameAR']||'',
+      category: r['الفئة']||r['category']||CATEGORIES[0],
+      imageUrl: r['صورة']||r['imageUrl']||'',
+      gi:       num(r['GI']),
+      isActive: String(r['نشط']||'1')==='1',
+      nutrPer100g:{
+        cal_kcal:num(r['السعرات']||r['cal_kcal']),
+        carbs_g: num(r['الكارب(g)']||r['carbs_g']),
+        fat_g:   num(r['الدهون(g)']||r['fat_g']),
+        protein_g:num(r['البروتين(g)']||r['protein_g']),
+        sodium_mg:num(r['الصوديوم(mg)']||r['sodium_mg']),
+        fiber_g: num(r['الألياف(g)']||r['fiber_g']),
+      },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    };
-    const auto = computeAutoTags({
-      category: obj.category,
-      gi: obj.gi,
-      carbs_g: nutr.carbs_g,
-      sodium_mg: nutr.sodium_mg,
-      tags: obj.tags,
-      dietTags: obj.dietTags
     });
-    obj.tags = Array.from(new Set([...obj.tags, ...auto.tags]));
-    obj.dietTags = Array.from(new Set([...obj.dietTags, ...auto.dietTags]));
-    batch.set(doc(db,'admin','global','foodItems', id), obj, {merge:true});
+    const ref = doc(FOOD_COL);
+    batch.set(ref, p);
   });
 
   await batch.commit();
-  importCard.style.display='none';
-  await fetchItems();
-};
-
-function buildPreview(rows){
-  importCard.style.display='';
-  const headers = [
-    'id','name_ar','brand_ar','desc_ar','category','imageUrl','gi',
-    'cal_kcal','carbs_g','fiber_g','protein_g','fat_g','sodium_mg',
-    'tags','dietTags','allergens','isActive'
-  ];
-  previewTable.tHead.innerHTML = '<tr><th></th>' + headers.map(h=>`<th>${h}</th>`).join('') + '</tr>';
-  const tb = previewTable.tBodies[0] || previewTable.createTBody();
-  tb.innerHTML='';
-  rows.forEach(r=>{
-    const nutr = {
-      cal_kcal: +r.cal_kcal || null, carbs_g:+r.carbs_g||null, fiber_g:+r.fiber_g||null,
-      protein_g:+r.protein_g||null, fat_g:+r.fat_g||null, sodium_mg:+r.sodium_mg||null
-    };
-    const obj = {
-      id: r.id || '',
-      name_ar:r.name_ar||r.name||'',
-      brand_ar:r.brand_ar||'',
-      desc_ar:r.desc_ar||'',
-      category:r.category||'',
-      imageUrl:r.imageUrl||'',
-      gi:r.gi||'',
-      ...nutr,
-      tags:r.tags||'',
-      dietTags:r.dietTags||'',
-      allergens:r.allergens||'',
-      isActive:r.isActive===''?'':!!r.isActive
-    };
-    const tr = el('tr');
-    const cb = el('input',{type:'checkbox'}); cb.checked = true; cb.dataset.row = JSON.stringify(obj);
-    tr.appendChild(el('td',{},cb));
-    headers.forEach(h=> tr.appendChild(el('td',{text: obj[h]===''?'':String(obj[h])})));
-    tb.appendChild(tr);
-  });
+  await loadItems();
 }
 
-exportBtn.onclick = ()=>{
-  const rows = ITEMS.map(x=>({
-    id:x.id,
-    name_ar:x.name_ar||'',
-    brand_ar:x.brand_ar||'',
-    desc_ar:x.desc_ar||'',
-    category:x.category||'',
-    imageUrl:x.imageUrl||'',
-    gi:x.gi??'',
-    cal_kcal:x.nutrPer100g?.cal_kcal??'',
-    carbs_g:x.nutrPer100g?.carbs_g??'',
-    fiber_g:x.nutrPer100g?.fiber_g??'',
-    protein_g:x.nutrPer100g?.protein_g??'',
-    fat_g:x.nutrPer100g?.fat_g??'',
-    sodium_mg:x.nutrPer100g?.sodium_mg??'',
-    tags:(x.tags||[]).join(', '),
-    dietTags:(x.dietTags||[]).join(', '),
-    allergens:(x.allergens||[]).join(', '),
-    isActive:x.isActive!==false
-  }));
-  const ws = window.XLSX.utils.json_to_sheet(rows);
-  const wb = window.XLSX.utils.book_new();
-  window.XLSX.utils.book_append_sheet(wb, ws, 'foodItems');
-  window.XLSX.writeFile(wb, 'foodItems.xlsx');
-};
+async function exportToExcel(){
+  const snap = await getDocs(FOOD_COL);
+  const rows = [];
+  snap.forEach(d=>{
+    const x = d.data();
+    rows.push({
+      'الاسم': x.nameAR||'',
+      'الفئة': x.category||'',
+      'GI': x.gi||0,
+      'السعرات': x.nutrPer100g?.cal_kcal || 0,
+      'الكارب(g)': x.nutrPer100g?.carbs_g || 0,
+      'الدهون(g)': x.nutrPer100g?.fat_g || 0,
+      'البروتين(g)': x.nutrPer100g?.protein_g || 0,
+      'الصوديوم(mg)': x.nutrPer100g?.sodium_mg || 0,
+      'الألياف(g)': x.nutrPer100g?.fiber_g || 0,
+      'نشط': x.isActive ? 1 : 0,
+    });
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'foodItems');
+  XLSX.writeFile(wb, 'foodItems.xlsx');
+}
 
-/* init */
-fetchItems();
+/* ============================ Admin header =========================== */
+function initAdminHeader(){
+  onAuthStateChanged(auth, async (user)=>{
+    if (!user){ els.adminName.textContent = 'غير مسجّل'; return; }
+    try{
+      const s = await getDoc(doc(db, 'users', user.uid));
+      els.adminName.textContent = s.exists() && (s.data().displayName || s.data().name)
+        ? (s.data().displayName || s.data().name)
+        : (user.email || 'مستخدم');
+    }catch{
+      els.adminName.textContent = user.email || 'مستخدم';
+    }
+  });
+
+  els.btnLogout.onclick = ()=> signOut(auth).catch(()=>{});
+}
+
+/* ============================== Wiring UI ============================ */
+function wire(){
+  // Filters
+  els.txtSearch.addEventListener('input', filterAndRender);
+  els.selCategory.addEventListener('change', filterAndRender);
+  els.chkActiveOnly.addEventListener('change', filterAndRender);
+
+  // CRUD
+  els.btnAdd.onclick = openAdd;
+  els.btnRefresh.onclick = loadItems;
+
+  els.btnPreview.onclick = ()=>{
+    const p = collectPayloadFromForm();
+    showPreview(p);
+    els.btnConfirmSave.onclick = ()=> confirmSave(p);
+  };
+  els.btnCancelForm.onclick = ()=> closeModal(els.formModal);
+  els.btnCancelPreview.onclick = ()=> closeModal(els.previewModal);
+
+  // Delete
+  els.btnDoDelete.onclick = doDelete;
+  els.btnCancelDelete.onclick = ()=> closeModal(els.confirmModal);
+
+  // Excel
+  els.btnImportExcel.onclick = ()=> els.excelInput.click();
+  els.excelInput.onchange = (e)=>{
+    const f = e.target.files?.[0]; if (f) importFromExcel(f);
+    e.target.value = '';
+  };
+  els.btnExportExcel.onclick = exportToExcel;
+}
+
+/* ================================ Start ============================== */
+initAdminHeader();
+wire();
+loadItems().catch(err=>{
+  console.error('Load error', err);
+});
