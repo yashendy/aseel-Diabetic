@@ -1,10 +1,10 @@
-// ====== Admin Food Items page (النسخة الجديدة) ======
+// ====== Admin Food Items page (نسخة كاملة مع استيراد Excel) ======
 import {
   collection, doc, addDoc, updateDoc, onSnapshot, getDocs,
-  query, orderBy, serverTimestamp
+  query, orderBy, serverTimestamp, writeBatch
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 
-if (!window.db) throw new Error('Firestore not initialized (db)!');
+if (!window.db) throw new Error('Firestore not initialized (window.db)!');
 
 const collPath = ['admin','global','foodItems'];
 const el = (id)=>document.getElementById(id);
@@ -26,16 +26,16 @@ const placeholderImg = 'https://via.placeholder.com/72';
 const setText = (id,v)=>{ const n=el(id); if(n) n.value = (v??''); };
 
 function fillSelectors(){
-  // فلتر الفئة
+  // فلتر الفئات فوق
   const f = el('category');
   if (f) {
     f.innerHTML = '<option value="">الفئة (الكل)</option>' +
       CATEGORIES.map(c=>`<option value="${c}">${c}</option>`).join('');
   }
-  // فئة داخل النموذج
-  const formSel = el('category_in');
-  if (formSel) {
-    formSel.innerHTML = CATEGORIES.map(c=>`<option value="${c}">${c}</option>`).join('');
+  // datalist للنموذج
+  const dl = document.getElementById('cats');
+  if (dl) {
+    dl.innerHTML = CATEGORIES.map(c=>`<option value="${c}">`).join('');
   }
 }
 
@@ -97,11 +97,12 @@ function render(list){
 
 /* === المحرر === */
 function openEditor(data){
+  el('formTitle').textContent = data ? 'تعديل صنف' : 'إضافة صنف';
   setText('docId', data?.id||'');
   setText('name_ar', data?.name_ar);
   setText('brand_ar', data?.brand_ar);
   setText('desc_ar', data?.desc_ar);
-  el('category_in').value = data?.category || CATEGORIES[0];
+  setText('category_in', data?.category || '');
   setText('imageUrl', data?.imageUrl);
   setText('gi', data?.gi??'');
 
@@ -158,8 +159,10 @@ const nOrNull=v=>v===''?null:+v;
 
 function validate(p){
   if(!p.name_ar) throw new Error('الاسم العربي مطلوب');
-  if(!CATEGORIES.includes(p.category)) throw new Error('الفئة غير معتمدة');
-  if(Array.isArray(p.dietTags)) p.dietTags = p.dietTags.filter(t=>DIET_TAGS.includes(t));
+  if (!CATEGORIES.includes(p.category)) {
+    // نسمح بحرية، أو نطبّع:
+    p.category = 'اخرى';
+  }
   return p;
 }
 
@@ -168,7 +171,7 @@ function gather(){
     name_ar: el('name_ar').value.trim(),
     brand_ar: el('brand_ar').value.trim()||null,
     desc_ar: el('desc_ar').value.trim()||null,
-    category: el('category_in').value,
+    category: el('category_in').value.trim(),
     imageUrl: el('imageUrl').value.trim()||null,
     gi: el('gi').value?+el('gi').value:null,
     nutrPer100g:{
@@ -206,6 +209,90 @@ async function softDelete(id){
   await updateDoc(doc(window.db, ...collPath, id), {isActive:false, deleted:true, updatedAt:serverTimestamp()});
 }
 
+/* === استيراد Excel =============================== */
+const toNum = (v) => {
+  if (v === undefined || v === null) return null;
+  const s = (''+v).toString().trim().replace(',', '.');
+  if (s === '') return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+};
+
+// measures cell example: "رغيف:120 | كوب:100"
+function parseMeasures(cell){
+  const raw = (cell||'').toString().trim();
+  if (!raw) return [];
+  return raw.split('|').map(p=>p.trim()).filter(Boolean).map(p=>{
+    const [name, grams] = p.split(':').map(z=>z.trim());
+    return name ? { name, grams: toNum(grams)||0 } : null;
+  }).filter(Boolean);
+}
+
+function buildPayloadFromRow(r){
+  const g = (keys)=> { for (const k of keys) if (r[k] !== undefined) return r[k]; return undefined; };
+
+  const name_ar  = g(['name_ar','الاسم','اسم AR']);
+  const category = (g(['category','الفئة']) || '').toString().trim();
+
+  const payload = {
+    name_ar: (name_ar||'').toString().trim(),
+    brand_ar: (g(['brand_ar','البراند'])||null) || null,
+    desc_ar:  (g(['desc_ar','الوصف'])||null)  || null,
+    category,
+    imageUrl: (g(['imageUrl','رابط صورة'])||'').toString().trim() || null,
+    gi: toNum(g(['gi','GI'])),
+
+    nutrPer100g: {
+      cal_kcal:  toNum(g(['cal_kcal','kcal','السعرات','سعرات'])),
+      carbs_g:   toNum(g(['carbs_g','carbs','الكارب'])),
+      fiber_g:   toNum(g(['fiber_g','الألياف'])),
+      protein_g: toNum(g(['protein_g','البروتين'])),
+      fat_g:     toNum(g(['fat_g','الدهون'])),
+      sodium_mg: toNum(g(['sodium_mg','الصوديوم'])),
+    },
+
+    tags:      splitCSV(g(['tags','#Tags','الوسوم'])),
+    dietTags:  splitCSV(g(['dietTags','الأنظمة'])),
+    allergens: splitCSV(g(['allergens','الحساسية'])),
+    measures:  parseMeasures(g(['measures','المقادير'])),
+    isActive: (()=>{
+      const v = (g(['isActive','نشط']) ?? '1').toString().trim();
+      return ['1','true','نعم','yes','y'].includes(v.toLowerCase());
+    })()
+  };
+
+  if (!CATEGORIES.includes(payload.category)) payload.category = 'اخرى';
+  return payload;
+}
+
+async function importExcelFile(file){
+  if (!window.XLSX) { alert('مكتبة Excel غير محمّلة'); return; }
+  const buf = await file.arrayBuffer();
+  const wb  = window.XLSX.read(buf, { type: 'array' });
+  const ws  = wb.Sheets[wb.SheetNames[0]];
+  const rows = window.XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+  if (!rows.length) { alert('الملف لا يحتوي صفوفاً'); return; }
+  if (!confirm(`سيتم استيراد ${rows.length} صف. هل تريد المتابعة؟`)) return;
+
+  const BATCH_LIMIT = 400;
+  let count = 0;
+  let batch = writeBatch(window.db);
+
+  for (let i=0; i<rows.length; i++){
+    try{
+      const payload = buildPayloadFromRow(rows[i]);
+      if (!payload.name_ar) continue;
+      const ref = doc(collection(window.db, ...collPath));
+      batch.set(ref, { ...payload, createdAt: serverTimestamp() });
+      count++;
+      if (count % BATCH_LIMIT === 0){ await batch.commit(); batch = writeBatch(window.db); }
+    }catch(err){ console.error('Import row error @', i+1, err); }
+  }
+  await batch.commit();
+  alert(`تم استيراد ${count} صنف بنجاح ✅`);
+}
+
 /* === ربط الأحداث === */
 function wire(){
   ['q','category','onlyActive'].forEach(id=>{
@@ -220,10 +307,10 @@ function wire(){
   el('addMeasure')?.addEventListener('click',addMeasure);
   el('save')?.addEventListener('click',save);
 
+  // تعديل/حذف من الجريد
   grid.addEventListener('click',(e)=>{
     const t=e.target;
     if(t.dataset.edit){
-      // جلب العنصر وفتحه للتحرير
       getDocs(query(collection(window.db, ...collPath))).then(s=>{
         const it=s.docs.map(d=>({id:d.id,...d.data()})).find(x=>x.id===t.dataset.edit);
         openEditor(it);
@@ -232,6 +319,19 @@ function wire(){
       softDelete(t.dataset.del);
     }
   });
+
+  // الاستيراد من Excel
+  const btnImport = el('btnImport');
+  const inpExcel  = el('excelFile');
+  if (btnImport && inpExcel){
+    btnImport.addEventListener('click', ()=> inpExcel.click());
+    inpExcel.addEventListener('change', async (e)=>{
+      const file = e.target.files?.[0]; if (!file) return;
+      try{ await importExcelFile(file); watch(); }
+      catch(err){ console.error(err); alert('فشل استيراد الملف'); }
+      finally{ inpExcel.value=''; }
+    });
+  }
 }
 
 /* === تشغيل === */
