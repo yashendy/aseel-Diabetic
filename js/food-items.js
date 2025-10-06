@@ -1,421 +1,378 @@
-// ===================== Firebase (CDN modular) =====================
+// ====== 0) Firebase Init ======
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  initializeApp, getApps, getApp
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-  getAuth, onAuthStateChanged, signOut
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import {
-  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
-  getDocs, query, where, orderBy, serverTimestamp
+  getFirestore, collection, getDocs, addDoc, setDoc, doc, deleteDoc,
+  updateDoc, query, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getAuth, onAuthStateChanged, GoogleAuthProvider, GithubAuthProvider,
+  signInWithPopup, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-// TODO: firebaseConfig
-const firebaseConfig = {
-  // ضع مفاتيح مشروعك هنا
-};
+// === ضع بيانات مشروعك الصحيح هنا (من Project settings → Web app) ===
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
 
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
+    authDomain: "sugar-kids-tracker.firebaseapp.com",
+    projectId: "sugar-kids-tracker",
+    storageBucket: "sugar-kids-tracker.firebasestorage.app",
+    messagingSenderId: "251830888114",
+    appId: "1:251830888114:web:a20716d3d4ad86a6724bab",
+    measurementId: "G-L7YGX3PHLB"
+  };
 
-// المجموعة: admin/global/foodItems
-const FOOD_COL = collection(db, 'admin', 'global', 'foodItems');
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
 
-// ===================== Utilities =====================
-const $ = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
-const num = v => (v==='' || v==null || isNaN(+v)) ? 0 : +v;
+function showBanner(msg){ console.warn(msg); alert(msg); }
 
-function el(tag, cls, text){ const e = document.createElement(tag); if(cls) e.className=cls; if(text) e.textContent=text; return e; }
-
-// ===================== Elements =====================
-const els = {
-  adminName: $('#adminName'),
-  btnLogout: $('#btnLogout'),
-  btnAdd: $('#btnAdd'),
-  btnRefresh: $('#btnRefresh'),
-  btnExport: $('#btnExport'),
-  fileExcel: $('#fileExcel'),
-
-  search: $('#txtSearch'),
-  cat: $('#ddlCategory'),
-  active: $('#chkActive'),
-  cards: $('#cards'),
-
-  dlg: $('#dlg'),
-  dlgTitle: $('#dlgTitle'),
-  dlgClose: $('#dlgClose'),
-  btnSave: $('#btnSave'),
-  btnCancel: $('#btnCancel'),
-
-  // form fields
-  f_nameAR: $('#f_nameAR'),
-  f_category: $('#f_category'),
-  f_imageUrl: $('#f_imageUrl'),
-  f_gi: $('#f_gi'),
-  f_active: $('#f_active'),
-
-  n_cal: $('#n_cal'),
-  n_carb: $('#n_carb'),
-  n_fat: $('#n_fat'),
-  n_protein: $('#n_protein'),
-  n_sodium: $('#n_sodium'),
-  n_fiber: $('#n_fiber'),
-
-  // chips
-  chipsTags: $('#chipsTags'),
-  chipsTagsSug: $('#chipsTagsSug'),
-  chipsDiets: $('#chipsDiets'),
-  chipsDietsSug: $('#chipsDietsSug'),
-  btnAutoSuggest: $('#btnAutoSuggest'),
-};
-
-let CURRENT_ID = null;     // للتعديل
-let ALL_ITEMS = [];        // الكاش المحلي
-
-// chips state
-let chipsTags = new Set();
-let chipsDiets = new Set();
-let sugTags = new Set();
-let sugDiets = new Set();
-
-// ===================== Auth (admin name) =====================
-onAuthStateChanged(auth, async (user)=>{
-  if(!user){
-    els.adminName.textContent = '—';
-  }else{
-    // حاول تقرأ displayName أو وثيقة users/{uid}.name
-    let name = user.displayName || '';
-    try{
-      const usersCol = collection(db,'users');
-      const qs = await getDocs(query(usersCol, where('__name__','==', user.uid)));
-      if(!name && !qs.empty){
-        const d = qs.docs[0].data();
-        name = d.name || d.displayName || '';
-      }
-    }catch(e){}
-    els.adminName.textContent = name || (user.email ?? '—');
-  }
-});
-
-els.btnLogout.addEventListener('click', ()=> signOut(auth));
-
-// ===================== Listing / Rendering =====================
-async function fetchItems(){
-  const conds = [];
-  // (نقرأ كل العناصر ونفلتر محليا لسرعة التطوير)
-  const snap = await getDocs( query(FOOD_COL, orderBy('nameAR')) );
-  ALL_ITEMS = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-  renderCards();
+let app, db, auth;
+try{
+  app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+}catch(e){
+  showBanner("فشل تهيئة فايربيس: " + e.message);
 }
 
-function renderCards(){
-  const q = els.search.value.trim().toLowerCase();
-  const cat = els.cat.value.trim();
-  const onlyActive = els.active.checked;
+// ====== 1) Elements ======
+const cards = document.getElementById("cards");
+const onlyActive = document.getElementById("onlyActive");
+const catSelect = document.getElementById("catSelect");
+const searchBox = document.getElementById("searchBox");
+const adminNameEl = document.getElementById("adminName");
+const logoutBtn = document.getElementById("logoutBtn");
+const addBtn = document.getElementById("addBtn");
+const refreshBtn = document.getElementById("refreshBtn");
+const exportBtn = document.getElementById("exportBtn");
+const importFile = document.getElementById("importFile");
 
-  const filtered = ALL_ITEMS.filter(x=>{
-    if(onlyActive && !x.isActive) return false;
-    if(cat && x.category !== cat) return false;
+// dialog fields
+const dlg = document.getElementById("itemDialog");
+const closeDlg = document.getElementById("closeDlg");
+const itemForm = document.getElementById("itemForm");
+const nameAr = document.getElementById("nameAr");
+const descAr = document.getElementById("descAr");
+const imageUrl = document.getElementById("imageUrl");
+const category = document.getElementById("category");
+const gi = document.getElementById("gi");
+const isActive = document.getElementById("isActive");
+const cal = document.getElementById("cal");
+const carb = document.getElementById("carb");
+const prot = document.getElementById("prot");
+const fat = document.getElementById("fat");
+const fiber = document.getElementById("fiber");
+const sodium = document.getElementById("sodium");
+const measureName = document.getElementById("measureName");
+const measureGrams = document.getElementById("measureGrams");
+const tagsInput = document.getElementById("tagsInput");
+const dietChips = document.getElementById("dietChips");
+const autoChips = document.getElementById("autoChips");
+const deleteBtn = document.getElementById("deleteBtn");
+const saveBtn = document.getElementById("saveBtn");
 
-    if(!q) return true;
-    const hay = [
-      x.nameAR, x.category, ...(x.tags||[]), ...(x.dietTags||[])
-    ].join(' ').toLowerCase();
-    return hay.includes(q);
+// ====== 2) Helpers ======
+const COLL = () => db ? collection(db, "admin", "global", "foodItems") : null;
+let currentId = null;
+let itemsCache = [];
+
+const parseTags = (str) => {
+  if(!str) return [];
+  return [...new Set(
+    str.split(/[\s,،]+/).map(t => t.trim()).filter(Boolean)
+  )];
+};
+const joinTags = (arr) => (arr||[]).join(" ");
+
+function suggestDiet(n){ // thresholds قابلة للتعديل
+  const out = [];
+  const carb = +n.carb || 0;
+  const fat = +n.fat || 0;
+  const prot = +n.prot || 0;
+  const sod = +n.sodium || 0;
+
+  if(carb <= 5) out.push("كيتو","لو_كارب");
+  if(carb <= 20) out.push("لو_كارب");
+  if(fat >= 15 && carb <= 10) out.push("كيتو_صحي");
+  if(prot >= 20) out.push("هاي_بروتين");
+  if(sod <= 140) out.push("قليل_الملح");
+  return [...new Set(out)];
+}
+
+function chip(label, active=false){
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = "chip" + (active ? " active":"");
+  el.textContent = label;
+  el.onclick = ()=> el.classList.toggle("active");
+  return el;
+}
+
+function buildDietChips(current=[]) {
+  dietChips.innerHTML = "";
+  ["كيتو","لو_كارب","هاي_بروتين","قليل_الملح"].forEach(d=>{
+    dietChips.appendChild(chip(d, current.includes(d)));
   });
+}
 
-  els.cards.innerHTML = '';
-  filtered.forEach(x=>{
-    const card = el('div','card');
+function buildAutoChips(nutr) {
+  autoChips.innerHTML = "";
+  suggestDiet(nutr).forEach(d=>{
+    autoChips.appendChild(chip(d, true));
+  });
+}
 
-    const img = el('img','thumb');
-    img.src = x.imageUrl || 'https://via.placeholder.com/200x140?text=Image';
-    card.appendChild(img);
+function collectSelectedChips(container){
+  return [...container.querySelectorAll(".chip.active")].map(c => c.textContent.trim());
+}
 
-    const mid = el('div','grow');
-
-    const title = el('div','title', x.nameAR || '—');
-    const cat = el('div','cat', x.category || '—');
-    mid.append(title, cat);
-
-    if(x.tags?.length){
-      const tags = el('div','tags');
-      x.tags.forEach(t=> tags.appendChild(el('span','tag',t)));
-      mid.appendChild(tags);
+// ====== 3) Auth (عرض اسم الأدمن) ======
+if(auth){
+  onAuthStateChanged(auth, async (user)=>{
+    if(user){
+      adminNameEl.textContent = user.displayName || user.email || "admin";
+    }else{
+      adminNameEl.textContent = "غير مسجل";
+      // مسموح نقرأ عموميًا لو القواعد تسمح
     }
-
-    card.appendChild(mid);
-
-    const side = el('div','col');
-    const btnDel = el('button','btn danger sm','حذف');
-    btnDel.onclick = ()=> onDelete(x.id);
-
-    const btnEdit = el('button','btn sm','تعديل');
-    btnEdit.style.marginTop = '6px';
-    btnEdit.onclick = ()=> openEdit(x);
-
-    side.append(btnDel, btnEdit);
-    card.appendChild(side);
-
-    els.cards.appendChild(card);
   });
 }
+logoutBtn.onclick = ()=> auth ? signOut(auth) : null;
 
-// ===================== Add / Edit / Delete =====================
-function resetForm(){
-  CURRENT_ID = null;
-  els.f_nameAR.value = '';
-  els.f_category.value = '';
-  els.f_imageUrl.value = '';
-  els.f_gi.value = '';
-  els.f_active.checked = true;
+// ====== 4) Load & Render ======
+async function loadItems(){
+  const c = COLL();
+  if(!c){ showBanner("لم يتم الاتصال بفايربيس. تأكد من firebaseConfig."); return; }
 
-  els.n_cal.value = '';
-  els.n_carb.value = '';
-  els.n_fat.value = '';
-  els.n_protein.value = '';
-  els.n_sodium.value = '';
-  els.n_fiber.value = '';
-
-  chipsTags = new Set();
-  chipsDiets = new Set();
-  sugTags = new Set();
-  sugDiets = new Set();
-  renderAllChips();
-  recomputeSmart();
+  const q = query(c, orderBy("createdAt","desc"));
+  const snap = await getDocs(q);
+  itemsCache = snap.docs.map(d=> ({ id:d.id, ...d.data() }));
+  render();
 }
 
-function fillForm(item){
-  CURRENT_ID = item?.id ?? null;
-  els.f_nameAR.value = item?.nameAR ?? '';
-  els.f_category.value = item?.category ?? '';
-  els.f_imageUrl.value = item?.imageUrl ?? '';
-  els.f_gi.value = item?.gi ?? '';
-  els.f_active.checked = item?.isActive ?? true;
+function render(){
+  const s = (searchBox.value||"").trim().toLowerCase();
+  const cat = (catSelect.value||"").trim();
+  const only = onlyActive.checked;
 
-  const n = item?.nutrPer100g || {};
-  els.n_cal.value = n.cal_kcal ?? '';
-  els.n_carb.value = n.carbs_g ?? '';
-  els.n_fat.value = n.fat_g ?? '';
-  els.n_protein.value = n.protein_g ?? '';
-  els.n_sodium.value = n.sodium_mg ?? '';
-  els.n_fiber.value = n.fiber_g ?? '';
+  const list = itemsCache.filter(it=>{
+    if(only && it.isActive===false) return false;
+    if(cat && it.category !== cat) return false;
 
-  chipsTags = new Set(item?.tags || []);
-  chipsDiets = new Set(item?.dietTags || []);
-  recomputeSmart(); // يحسب الاقتراحات ويرسم
+    if(s){
+      const hay = `${it.nameAr||""} ${it.descAr||""} ${(it.tags||[]).join(" ")} ${(it.dietTags||[]).join(" ")}`.toLowerCase();
+      if(!hay.includes(s)) return false;
+    }
+    return true;
+  });
+
+  cards.innerHTML = "";
+  for(const it of list){
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerHTML = `
+      <img class="thumb" src="${it.imageUrl||""}" onerror="this.src='https://via.placeholder.com/160x120?text=%20'"/>
+      <div class="grow">
+        <div class="title">${it.nameAr||"—"}</div>
+        <div class="cat">${it.category||""}</div>
+        <div class="tags">
+          ${(it.tags||[]).map(t=>`<span class="tag">${t}</span>`).join("")}
+          ${(it.dietTags||[]).map(t=>`<span class="tag">#${t}</span>`).join("")}
+        </div>
+      </div>
+      <div class="row gap-8">
+        <button class="btn danger sm" data-del>حذف</button>
+        <button class="btn sm" data-edit>تعديل</button>
+      </div>
+    `;
+    el.querySelector("[data-edit]").onclick = ()=> openEdit(it);
+    el.querySelector("[data-del]").onclick = ()=> removeItem(it.id);
+    cards.appendChild(el);
+  }
+}
+
+// ====== 5) Add/Edit ======
+function resetForm(){
+  currentId = null;
+  itemForm.reset();
+  isActive.checked = true;
+  deleteBtn.hidden = true;
+  dietChips.innerHTML = "";
+  autoChips.innerHTML = "";
 }
 
 function openAdd(){
   resetForm();
-  els.dlgTitle.textContent = 'إضافة صنف';
-  els.dlg.showModal();
-}
-function openEdit(item){
-  fillForm(item);
-  els.dlgTitle.textContent = 'تعديل صنف';
-  els.dlg.showModal();
-}
-els.btnAdd.addEventListener('click', openAdd);
-els.dlgClose.addEventListener('click', ()=> els.dlg.close());
-els.btnCancel.addEventListener('click', ()=> els.dlg.close());
-
-async function onDelete(id){
-  if(!confirm('حذف الصنف نهائيًا؟')) return;
-  await deleteDoc( doc(FOOD_COL, id) );
-  await fetchItems();
+  buildDietChips([]);
+  buildAutoChips({carb:0,fat:0,prot:0,sodium:0});
+  dlg.showModal();
 }
 
-// ===================== Smart suggestions (Tags/Diets) =====================
-function buildSuggestions(nutr){
-  const sTags = new Set();
-  const sDiets = new Set();
+function openEdit(it){
+  resetForm();
+  currentId = it.id;
+  nameAr.value = it.nameAr||"";
+  descAr.value = it.descAr||"";
+  imageUrl.value = it.imageUrl||"";
+  category.value = it.category||"";
+  gi.value = it.gi||"";
+  isActive.checked = it.isActive!==false;
 
-  if (num(nutr.carbs_g) <= 5)  { sDiets.add('كيتو'); sDiets.add('لو-كارب'); sTags.add('كارب_منخفض'); }
-  if (num(nutr.fat_g) >= 15)   { sTags.add('دهون_مرتفعة'); }
-  if (num(nutr.protein_g) >=15){ sDiets.add('هاي-بروتين'); sTags.add('بروتين'); }
-  if (num(nutr.sodium_mg) <=120){ sDiets.add('قليل-الملح'); sTags.add('قليل_الصوديوم'); }
-  if (num(nutr.fiber_g) >=5)   { sTags.add('ألياف'); }
+  const n = it.nutrPer100g||{};
+  cal.value = n.cal||"";
+  carb.value = n.carb||"";
+  prot.value = n.prot||"";
+  fat.value = n.fat||"";
+  fiber.value = n.fiber||"";
+  sodium.value = n.sodium||"";
 
-  return { sTags, sDiets };
+  const m = (it.measures||[])[0]||{};
+  measureName.value = m.name||"";
+  measureGrams.value = m.grams||"";
+
+  tagsInput.value = joinTags(it.tags||[]);
+
+  buildDietChips(it.dietTags||[]);
+  buildAutoChips({carb:carb.value, fat:fat.value, prot:prot.value, sodium:sodium.value});
+
+  deleteBtn.hidden = false;
+  dlg.showModal();
 }
 
-function renderChipContainer(container, set){
-  container.innerHTML = '';
-  Array.from(set).forEach(v=>{
-    const c = el('span','chip'+(set.has(v)?' active':''), v);
-    c.onclick = ()=>{
-      if(set.has(v)) set.delete(v); else set.add(v);
-      renderAllChips();
-    };
-    container.appendChild(c);
-  });
-}
-function renderAllChips(){
-  renderChipContainer(els.chipsTags, chipsTags);
-  renderChipContainer(els.chipsDiets, chipsDiets);
-  // الاقتراحات
-  els.chipsTagsSug.innerHTML=''; els.chipsDietsSug.innerHTML='';
-  Array.from(sugTags).forEach(v=>{
-    const c = el('span','chip', v);
-    c.onclick = ()=>{ chipsTags.add(v); renderAllChips(); };
-    els.chipsTagsSug.appendChild(c);
-  });
-  Array.from(sugDiets).forEach(v=>{
-    const c = el('span','chip', v);
-    c.onclick = ()=>{ chipsDiets.add(v); renderAllChips(); };
-    els.chipsDietsSug.appendChild(c);
-  });
-}
-
-function recomputeSmart(){
+function gatherPayload(){
   const nutr = {
-    cal_kcal: num(els.n_cal.value),
-    carbs_g : num(els.n_carb.value),
-    fat_g   : num(els.n_fat.value),
-    protein_g: num(els.n_protein.value),
-    sodium_mg: num(els.n_sodium.value),
-    fiber_g : num(els.n_fiber.value),
+    cal:+(cal.value||0),
+    carb:+(carb.value||0),
+    prot:+(prot.value||0),
+    fat:+(fat.value||0),
+    fiber:+(fiber.value||0),
+    sodium:+(sodium.value||0),
   };
-  const { sTags, sDiets } = buildSuggestions(nutr);
-  sugTags = sTags; sugDiets = sDiets;
-  renderAllChips();
-}
-['n_cal','n_carb','n_fat','n_protein','n_sodium','n_fiber'].forEach(id=>{
-  els[id].addEventListener('input', recomputeSmart);
-});
-els.btnAutoSuggest.addEventListener('click', ()=>{
-  sugTags.forEach(t => chipsTags.add(t));
-  sugDiets.forEach(d => chipsDiets.add(d));
-  renderAllChips();
-});
-
-// تجميع بيانات الحفظ
-function collectPayload(){
-  const payload = {
-    nameAR: els.f_nameAR.value.trim(),
-    category: els.f_category.value.trim(),
-    imageUrl: els.f_imageUrl.value.trim(),
-    gi: num(els.f_gi.value),
-    isActive: !!els.f_active.checked,
-    nutrPer100g:{
-      cal_kcal: num(els.n_cal.value),
-      carbs_g : num(els.n_carb.value),
-      fat_g   : num(els.n_fat.value),
-      protein_g: num(els.n_protein.value),
-      sodium_mg: num(els.n_sodium.value),
-      fiber_g : num(els.n_fiber.value),
-    },
-    tags: Array.from(chipsTags),
-    dietTags: Array.from(chipsDiets),
-    updatedAt: serverTimestamp(),
-    createdAt: serverTimestamp(),
+  const base = {
+    nameAr: nameAr.value.trim(),
+    descAr: descAr.value.trim()||null,
+    imageUrl: imageUrl.value.trim()||null,
+    category: category.value.trim()||null,
+    gi: gi.value? +gi.value : null,
+    isActive: !!isActive.checked,
+    nutrPer100g: nutr,
+    measures: measureName.value ? [{ name: measureName.value.trim(), grams: +(measureGrams.value||0) }] : [],
+    tags: parseTags(tagsInput.value),
   };
-  // (هنا نقدر ندمج الاقتراح تلقائيًا لو حابة، حالياً المستخدم يتحكم بالchips)
-  return payload;
+  const manualDiet = collectSelectedChips(dietChips);
+  const autoDiet = collectSelectedChips(autoChips);
+  base.dietTags = [...new Set([...(base.dietTags||[]), ...manualDiet, ...autoDiet])];
+  return base;
 }
 
-els.btnSave.addEventListener('click', async ()=>{
-  const p = collectPayload();
-  if(!p.nameAR){ alert('الاسم العربي مطلوب'); return; }
-  if(CURRENT_ID){
-    await updateDoc(doc(FOOD_COL, CURRENT_ID), p);
+async function saveItem(){
+  const data = gatherPayload();
+  if(!data.nameAr){ alert("الاسم العربي مطلوب"); return; }
+
+  const c = COLL(); if(!c){ showBanner("لا يوجد اتصال بفايربيس"); return; }
+
+  if(currentId){
+    await updateDoc(doc(c, currentId), {...data, updatedAt: serverTimestamp()});
   }else{
-    await addDoc(FOOD_COL, p);
+    await addDoc(c, {...data, createdAt: serverTimestamp()});
   }
-  els.dlg.close();
-  await fetchItems();
-});
-
-// ===================== Export =====================
-async function exportToExcel(){
-  let XLSXmod = window.XLSX;
-  if(!XLSXmod){
-    const m = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm');
-    XLSXmod = m.XLSX || m;
-  }
-
-  const snap = await getDocs(FOOD_COL);
-  const rows = [];
-  snap.forEach(d=>{
-    const x = d.data();
-    rows.push({
-      'الاسم': x.nameAR||'',
-      'الفئة': x.category||'',
-      'GI': x.gi||0,
-      'السعرات': x.nutrPer100g?.cal_kcal || 0,
-      'الكارب(g)': x.nutrPer100g?.carbs_g || 0,
-      'الدهون(g)': x.nutrPer100g?.fat_g || 0,
-      'البروتين(g)': x.nutrPer100g?.protein_g || 0,
-      'الصوديوم(mg)': x.nutrPer100g?.sodium_mg || 0,
-      'الألياف(g)': x.nutrPer100g?.fiber_g || 0,
-      'نشط': x.isActive ? 1 : 0,
-      'tags': (x.tags||[]).join(','),
-      'diets': (x.dietTags||[]).join(','),
-    });
-  });
-
-  const ws = XLSXmod.utils.json_to_sheet(rows);
-  const wb = XLSXmod.utils.book_new();
-  XLSXmod.utils.book_append_sheet(wb, ws, 'foodItems');
-  XLSXmod.writeFile(wb, 'foodItems.xlsx');
+  dlg.close();
+  loadItems();
 }
-els.btnExport.addEventListener('click', exportToExcel);
 
-// ===================== Import =====================
-els.fileExcel.addEventListener('change', async (e)=>{
-  const file = e.target.files?.[0];
-  if(!file) return;
+async function removeItem(id){
+  if(!confirm("حذف الصنف؟")) return;
+  const c = COLL(); if(!c){ showBanner("لا يوجد اتصال بفايربيس"); return; }
+  await deleteDoc(doc(c, id));
+  loadItems();
+}
 
-  const m = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm');
-  const XLSXmod = m.XLSX || m;
+// ====== 6) Excel Export/Import ======
+// Export
+exportBtn.onclick = async ()=>{
+  const rows = itemsCache.map(it=>({
+    id: it.id,
+    nameAr: it.nameAr||"",
+    descAr: it.descAr||"",
+    category: it.category||"",
+    imageUrl: it.imageUrl||"",
+    gi: it.gi||"",
+    isActive: it.isActive!==false ? 1 : 0,
+    cal: it.nutrPer100g?.cal||"",
+    carb: it.nutrPer100g?.carb||"",
+    prot: it.nutrPer100g?.prot||"",
+    fat: it.nutrPer100g?.fat||"",
+    fiber: it.nutrPer100g?.fiber||"",
+    sodium: it.nutrPer100g?.sodium||"",
+    measureName: it.measures?.[0]?.name||"",
+    measureGrams: it.measures?.[0]?.grams||"",
+    tags: (it.tags||[]).join(" "),
+    dietTags: (it.dietTags||[]).join(" "),
+  }));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "foodItems");
+  XLSX.writeFile(wb, "foodItems.xlsx");
+};
+
+// Import
+importFile.onchange = async (e)=>{
+  const file = e.target.files[0]; if(!file) return;
   const data = await file.arrayBuffer();
-  const wb = XLSXmod.read(data, {type:'array'});
+  const wb = XLSX.read(data);
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSXmod.utils.sheet_to_json(ws); // يفترض عناوين عربية كما في التصدير
+  const rows = XLSX.utils.sheet_to_json(ws);
 
-  // تحويل الصفوف إلى payloads
-  const normalized = rows.map(r=>{
+  const c = COLL(); if(!c){ showBanner("لا يوجد اتصال بفايربيس"); return; }
+
+  for(const r of rows){
     const payload = {
-      nameAR: (r['الاسم']||'').toString().trim(),
-      category: (r['الفئة']||'').toString().trim(),
-      imageUrl: '', // اختياري
-      gi: num(r['GI']),
-      isActive: !!num(r['نشط']),
-      nutrPer100g:{
-        cal_kcal: num(r['السعرات']),
-        carbs_g : num(r['الكارب(g)']),
-        fat_g   : num(r['الدهون(g)']),
-        protein_g: num(r['البروتين(g)']),
-        sodium_mg: num(r['الصوديوم(mg)']),
-        fiber_g : num(r['الألياف(g)']),
+      nameAr: r.nameAr||"",
+      descAr: r.descAr||"",
+      category: r.category||"",
+      imageUrl: r.imageUrl||"",
+      gi: r.gi? +r.gi : null,
+      isActive: r.isActive? !!r.isActive : true,
+      nutrPer100g: {
+        cal: +r.cal||0, carb:+r.carb||0, prot:+r.prot||0, fat:+r.fat||0, fiber:+r.fiber||0, sodium:+r.sodium||0
       },
-      tags: (r['tags']? r['tags'].toString().split(',').map(x=>x.trim()).filter(Boolean):[]),
-      dietTags: (r['diets']? r['diets'].toString().split(',').map(x=>x.trim()).filter(Boolean):[]),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      measures: r.measureName ? [{name:r.measureName, grams:+(r.measureGrams||0)}] : [],
+      tags: parseTags(r.tags||""),
+      dietTags: parseTags(r.dietTags||""),
+      createdAt: serverTimestamp()
     };
-    return payload;
-  });
-
-  if(!confirm(`سيتم إضافة/تحديث ${normalized.length} صف. متابعة؟`)) return;
-
-  // إضافة فقط (لتسريع التنفيذ — لو عايزة نعمل upsert حسب الاسم نقدر نطورها)
-  for(const p of normalized){
-    if(!p.nameAR) continue;
-    await addDoc(FOOD_COL, p);
+    if(r.id){ // update-or-set
+      await setDoc(doc(c, r.id), payload, { merge:true });
+    }else{
+      await addDoc(c, payload);
+    }
   }
+  alert("تم الاستيراد.");
+  loadItems();
+};
 
-  alert('تم الاستيراد.');
-  await fetchItems();
-  e.target.value = '';
-});
+// ====== 7) Events ======
+addBtn.onclick = openAdd;
+closeDlg.onclick = ()=> dlg.close();
+saveBtn.onclick = (e)=>{ e.preventDefault(); saveItem(); };
+deleteBtn.onclick = async ()=> { if(currentId) await removeItem(currentId); };
 
-// ===================== Filters & actions =====================
-[els.search, els.cat, els.active].forEach(x=> x.addEventListener('input', renderCards));
-els.btnRefresh.addEventListener('click', fetchItems);
+[onlyActive, catSelect, searchBox].forEach(el => el.addEventListener("input", render));
+[carb, fat, prot, sodium].forEach(el => el.addEventListener("input", ()=>{
+  buildAutoChips({carb:carb.value, fat:fat.value, prot:prot.value, sodium:sodium.value});
+}));
 
-// أول تشغيل
-fetchItems();
+refreshBtn.onclick = loadItems;
+
+// ====== 8) Start ======
+loadItems();
