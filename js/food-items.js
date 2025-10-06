@@ -1,74 +1,127 @@
-// ====== Admin Food Items page (نسخة كاملة مع استيراد Excel) ======
+// ====== Admin Food Items page ======
 import {
-  collection, doc, addDoc, updateDoc, onSnapshot, getDocs,
+  collection, doc, addDoc, updateDoc, onSnapshot, getDocs, getDoc,
   query, orderBy, serverTimestamp, writeBatch
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 
 if (!window.db) throw new Error('Firestore not initialized (window.db)!');
 
+// ===== Constants =====
 const collPath = ['admin','global','foodItems'];
 const el = (id)=>document.getElementById(id);
 const grid = el('grid');
 const dlg  = el('editor');
 
-/* === القوائم المعتمدة === */
 const CATEGORIES = [
   'النشويات','منتجات الحليب','الفاكهة','الخضروات',
   'منتجات اللحوم','الدهون','الحلويات','اخرى'
 ];
-const DIET_TAGS = [
-  'low-gi','low-carb','high-protein','gluten-free','lactose-free',
-  'vegetarian','vegan','keto','diabetic-friendly','halal'
-];
 
-/* === أدوات بسيطة === */
-const placeholderImg = 'https://via.placeholder.com/72';
+const placeholderImg =
+  'data:image/svg+xml;utf8,'+encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72">
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+      <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle"
+            font-size="10" fill="#999">no image</text>
+    </svg>`
+  );
+
+// ===== Admin guard =====
+async function requireAdmin() {
+  if (!window.__uid) throw new Error('يرجى تسجيل الدخول أولًا.');
+  const snap = await getDoc(doc(window.db, 'users', window.__uid));
+  if (!snap.exists() || snap.data().role !== 'admin') {
+    throw new Error('ليست لديك صلاحية (admin).');
+  }
+}
+
+// ===== UI helpers =====
 const setText = (id,v)=>{ const n=el(id); if(n) n.value = (v??''); };
+const splitCSV=s=>(s||'').split(',').map(x=>x.trim()).filter(Boolean);
+const nOrNull=v=>v===''?null:+v;
 
+// اسماء الأعمدة المحتملة
+const ALIASES = {
+  name_ar:  ['name_ar','الاسم','اسم AR','الاسم AR','Arabic Name','name','الاسم (AR)'],
+  category: ['category','الفئة'],
+  imageUrl: ['imageUrl','رابط صورة','image','صورة'],
+  gi:       ['gi','GI'],
+  cal_kcal: ['cal_kcal','kcal','السعرات','سعرات'],
+  carbs_g:  ['carbs_g','carbs','الكارب'],
+  fiber_g:  ['fiber_g','الألياف'],
+  protein_g:['protein_g','البروتين'],
+  fat_g:    ['fat_g','الدهون'],
+  sodium_mg:['sodium_mg','الصوديوم'],
+  tags:     ['tags','#Tags','الوسوم'],
+  dietTags: ['dietTags','الأنظمة'],
+  allergens:['allergens','الحساسية'],
+  measures: ['measures','المقادير','المقادير البيتية'],
+  brand_ar: ['brand_ar','البراند'],
+  desc_ar:  ['desc_ar','الوصف']
+};
+
+function normalizeKey(s){
+  return (s||'').toString()
+    .replace(/[\u200f\u200e]/g,'')
+    .replace(/[()\[\]{}]/g,'')
+    .replace(/\s+/g,'')
+    .toLowerCase();
+}
+function gByAliases(row, aliases){
+  const map = {};
+  for (const k of Object.keys(row)) map[normalizeKey(k)] = row[k];
+  for (const a of aliases) {
+    const v = map[normalizeKey(a)];
+    if (v !== undefined) return v;
+  }
+  return undefined;
+}
+
+// ===== Fill selectors =====
 function fillSelectors(){
-  // فلتر الفئات فوق
   const f = el('category');
   if (f) {
     f.innerHTML = '<option value="">الفئة (الكل)</option>' +
       CATEGORIES.map(c=>`<option value="${c}">${c}</option>`).join('');
   }
-  // datalist للنموذج
   const dl = document.getElementById('cats');
   if (dl) {
     dl.innerHTML = CATEGORIES.map(c=>`<option value="${c}">`).join('');
   }
 }
+fillSelectors();
 
-/* === الاستماع المباشر === */
+// ===== Live watch =====
 let unsub=null;
 function watch(){
-  const qx = query(collection(window.db, ...collPath), orderBy('createdAt','desc'));
-  if (unsub) unsub();
-  unsub = onSnapshot(qx, (snap)=>{
-    const items = snap.docs.map(d=>({id:d.id, ...d.data()}));
-    render(items);
-  });
-}
-
-/* === العرض === */
-function render(list){
-  grid.innerHTML='';
   const kw=(el('q')?.value||'').trim().toLowerCase();
   const cat=el('category')?.value||'';
   const only=el('onlyActive')?.checked;
 
-  const m = list.filter(it=>{
-    if (only && it.isActive===false) return false;
-    if (cat && it.category!==cat) return false;
-    if (!kw) return true;
-    const hay=[it.name_ar,it.brand_ar,it.category,...(it.tags||[]),(it.dietTags||[])]
-      .join(' ').toLowerCase();
-    return hay.includes(kw.replace('#',''));
+  const qx = query(collection(window.db, ...collPath), orderBy('createdAt','desc'));
+  if (unsub) unsub();
+  unsub = onSnapshot(qx, (snap)=>{
+    let items = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    // client filtering
+    items = items.filter(it=>{
+      if (only && it.isActive===false) return false;
+      if (cat && it.category!==cat) return false;
+      if (!kw) return true;
+      const hay=[it.name_ar,it.brand_ar,it.category,...(it.tags||[]),(it.dietTags||[])]
+        .join(' ').toLowerCase();
+      return hay.includes(kw.replace('#',''));
+    });
+    render(items);
   });
+}
+watch();
 
-  if(!m.length){ grid.innerHTML='<div class="card">لا توجد أصناف مطابقة.</div>'; return; }
+// ===== Render =====
+function render(list){
+  grid.innerHTML='';
+  if(!list.length){ grid.innerHTML='<div class="card">لا توجد أصناف مطابقة.</div>'; return; }
 
-  m.forEach(it=>{
+  list.forEach(it=>{
     const card=document.createElement('div');
     card.className='card';
     card.innerHTML=`
@@ -95,7 +148,7 @@ function render(list){
   });
 }
 
-/* === المحرر === */
+// ===== Editor =====
 function openEditor(data){
   el('formTitle').textContent = data ? 'تعديل صنف' : 'إضافة صنف';
   setText('docId', data?.id||'');
@@ -153,19 +206,12 @@ document.addEventListener('click',(e)=>{
   }
 });
 
-/* === حفظ/حذف Firestore === */
-const splitCSV=s=>(s||'').split(',').map(x=>x.trim()).filter(Boolean);
-const nOrNull=v=>v===''?null:+v;
-
+// ===== Validation & save =====
 function validate(p){
   if(!p.name_ar) throw new Error('الاسم العربي مطلوب');
-  if (!CATEGORIES.includes(p.category)) {
-    // نسمح بحرية، أو نطبّع:
-    p.category = 'اخرى';
-  }
+  if (!CATEGORIES.includes(p.category)) p.category = 'اخرى';
   return p;
 }
-
 function gather(){
   const p={
     name_ar: el('name_ar').value.trim(),
@@ -193,6 +239,7 @@ function gather(){
 
 async function save(){
   try{
+    await requireAdmin();
     const data=gather();
     const id=el('docId').value;
     if(id){
@@ -205,20 +252,32 @@ async function save(){
 }
 
 async function softDelete(id){
-  if(!confirm('حذف ناعم؟ سيتم إخفاء الصنف.')) return;
-  await updateDoc(doc(window.db, ...collPath, id), {isActive:false, deleted:true, updatedAt:serverTimestamp()});
+  try{
+    await requireAdmin();
+    if(!confirm('حذف ناعم؟ سيتم إخفاء الصنف.')) return;
+    await updateDoc(doc(window.db, ...collPath, id), {isActive:false, deleted:true, updatedAt:serverTimestamp()});
+  }catch(err){ console.error(err); alert(err.message||'لا تملك صلاحية'); }
 }
 
-/* === استيراد Excel =============================== */
-const toNum = (v) => {
+// ===== Import (Preview then Save) =====
+const btnPreviewImport = el('btnPreviewImport');
+const fileInput       = el('excelFile');
+const importBox       = el('importPreview');
+const previewTable    = el('previewTable');
+const selectAllRows   = el('selectAllRows');
+const confirmImport   = el('confirmImport');
+const cancelImport    = el('cancelImport');
+
+let _previewRows = []; // normalized objects
+let _selectedMap = new Map();
+
+function toNum(v){ // safely convert
   if (v === undefined || v === null) return null;
-  const s = (''+v).toString().trim().replace(',', '.');
+  const s = (''+v).trim().replace(',', '.');
   if (s === '') return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
-};
-
-// measures cell example: "رغيف:120 | كوب:100"
+}
 function parseMeasures(cell){
   const raw = (cell||'').toString().trim();
   if (!raw) return [];
@@ -227,73 +286,159 @@ function parseMeasures(cell){
     return name ? { name, grams: toNum(grams)||0 } : null;
   }).filter(Boolean);
 }
-
 function buildPayloadFromRow(r){
-  const g = (keys)=> { for (const k of keys) if (r[k] !== undefined) return r[k]; return undefined; };
-
-  const name_ar  = g(['name_ar','الاسم','اسم AR']);
-  const category = (g(['category','الفئة']) || '').toString().trim();
-
+  const name_ar  = gByAliases(r, ALIASES.name_ar);
+  const category = (gByAliases(r, ALIASES.category) || '').toString().trim();
   const payload = {
     name_ar: (name_ar||'').toString().trim(),
-    brand_ar: (g(['brand_ar','البراند'])||null) || null,
-    desc_ar:  (g(['desc_ar','الوصف'])||null)  || null,
+    brand_ar: (gByAliases(r,ALIASES.brand_ar)||null) || null,
+    desc_ar:  (gByAliases(r,ALIASES.desc_ar)||null)  || null,
     category,
-    imageUrl: (g(['imageUrl','رابط صورة'])||'').toString().trim() || null,
-    gi: toNum(g(['gi','GI'])),
-
+    imageUrl: (gByAliases(r, ALIASES.imageUrl)||'').toString().trim() || null,
+    gi: toNum(gByAliases(r, ALIASES.gi)),
     nutrPer100g: {
-      cal_kcal:  toNum(g(['cal_kcal','kcal','السعرات','سعرات'])),
-      carbs_g:   toNum(g(['carbs_g','carbs','الكارب'])),
-      fiber_g:   toNum(g(['fiber_g','الألياف'])),
-      protein_g: toNum(g(['protein_g','البروتين'])),
-      fat_g:     toNum(g(['fat_g','الدهون'])),
-      sodium_mg: toNum(g(['sodium_mg','الصوديوم'])),
+      cal_kcal:  toNum(gByAliases(r, ALIASES.cal_kcal)),
+      carbs_g:   toNum(gByAliases(r, ALIASES.carbs_g)),
+      fiber_g:   toNum(gByAliases(r, ALIASES.fiber_g)),
+      protein_g: toNum(gByAliases(r, ALIASES.protein_g)),
+      fat_g:     toNum(gByAliases(r, ALIASES.fat_g)),
+      sodium_mg: toNum(gByAliases(r, ALIASES.sodium_mg)),
     },
-
-    tags:      splitCSV(g(['tags','#Tags','الوسوم'])),
-    dietTags:  splitCSV(g(['dietTags','الأنظمة'])),
-    allergens: splitCSV(g(['allergens','الحساسية'])),
-    measures:  parseMeasures(g(['measures','المقادير'])),
-    isActive: (()=>{
-      const v = (g(['isActive','نشط']) ?? '1').toString().trim();
-      return ['1','true','نعم','yes','y'].includes(v.toLowerCase());
-    })()
+    tags:      splitCSV(gByAliases(r, ALIASES.tags)),
+    dietTags:  splitCSV(gByAliases(r, ALIASES.dietTags)),
+    allergens: splitCSV(gByAliases(r, ALIASES.allergens)),
+    measures:  parseMeasures(gByAliases(r, ALIASES.measures)),
+    isActive: true
   };
-
+  if (!payload.name_ar) payload._error = 'الاسم (AR) مفقود';
   if (!CATEGORIES.includes(payload.category)) payload.category = 'اخرى';
   return payload;
 }
 
-async function importExcelFile(file){
-  if (!window.XLSX) { alert('مكتبة Excel غير محمّلة'); return; }
-  const buf = await file.arrayBuffer();
-  const wb  = window.XLSX.read(buf, { type: 'array' });
-  const ws  = wb.Sheets[wb.SheetNames[0]];
-  const rows = window.XLSX.utils.sheet_to_json(ws, { defval: '' });
+function renderPreviewTable(rows){
+  // header
+  const head = `
+    <tr>
+      <th><input type="checkbox" id="headSel" ${selectAllRows.checked?'checked':''}></th>
+      <th>الاسم</th><th>الفئة</th><th>kcal</th><th>كارب</th><th>بروتين</th><th>دهون</th><th>ملاحظات</th>
+    </tr>`;
+  previewTable.querySelector('thead').innerHTML = head;
 
-  if (!rows.length) { alert('الملف لا يحتوي صفوفاً'); return; }
-  if (!confirm(`سيتم استيراد ${rows.length} صف. هل تريد المتابعة؟`)) return;
+  const tb = previewTable.querySelector('tbody');
+  tb.innerHTML = '';
+  _selectedMap.clear();
 
-  const BATCH_LIMIT = 400;
-  let count = 0;
-  let batch = writeBatch(window.db);
+  rows.forEach((r, i)=>{
+    const ok = !r._error;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="checkbox" class="rowSel" data-idx="${i}" ${ok && selectAllRows.checked ? 'checked':''} ${ok? '':'disabled'}></td>
+      <td>${r.name_ar||''}</td>
+      <td>${r.category||''}</td>
+      <td>${r.nutrPer100g?.cal_kcal??''}</td>
+      <td>${r.nutrPer100g?.carbs_g??''}</td>
+      <td>${r.nutrPer100g?.protein_g??''}</td>
+      <td>${r.nutrPer100g?.fat_g??''}</td>
+      <td style="color:${ok?'#16a34a':'#b91c1c'}">${ok?'جاهز':r._error}</td>
+    `;
+    tb.appendChild(tr);
+    _selectedMap.set(i, ok && selectAllRows.checked);
+  });
 
-  for (let i=0; i<rows.length; i++){
-    try{
-      const payload = buildPayloadFromRow(rows[i]);
-      if (!payload.name_ar) continue;
-      const ref = doc(collection(window.db, ...collPath));
-      batch.set(ref, { ...payload, createdAt: serverTimestamp() });
-      count++;
-      if (count % BATCH_LIMIT === 0){ await batch.commit(); batch = writeBatch(window.db); }
-    }catch(err){ console.error('Import row error @', i+1, err); }
-  }
-  await batch.commit();
-  alert(`تم استيراد ${count} صنف بنجاح ✅`);
+  // head checkbox control
+  const headSel = document.getElementById('headSel');
+  if (headSel) headSel.addEventListener('change', ()=>{
+    selectAllRows.checked = headSel.checked;
+    tb.querySelectorAll('.rowSel').forEach(ch=>{
+      if (!ch.disabled) { ch.checked = headSel.checked; _selectedMap.set(+ch.dataset.idx, headSel.checked); }
+    });
+  });
+
+  tb.addEventListener('change', (e)=>{
+    if (e.target.classList.contains('rowSel')) {
+      _selectedMap.set(+e.target.dataset.idx, e.target.checked);
+    }
+  });
 }
 
-/* === ربط الأحداث === */
+btnPreviewImport?.addEventListener('click', ()=> fileInput.click());
+fileInput?.addEventListener('change', async (e)=>{
+  const file = e.target.files?.[0]; if (!file) return;
+  try{
+    const buf = await file.arrayBuffer();
+    const wb  = window.XLSX.read(buf, { type:'array' });
+    const ws  = wb.Sheets[wb.SheetNames[0]];
+    const rows = window.XLSX.utils.sheet_to_json(ws, { defval: '' });
+    _previewRows = rows.map(buildPayloadFromRow);
+    importBox.style.display = '';
+    renderPreviewTable(_previewRows);
+  }catch(err){ console.error(err); alert('فشل قراءة الملف'); }
+  finally{ fileInput.value=''; }
+});
+selectAllRows?.addEventListener('change', ()=> renderPreviewTable(_previewRows));
+cancelImport?.addEventListener('click', ()=> { importBox.style.display='none'; _previewRows=[]; });
+
+confirmImport?.addEventListener('click', async ()=>{
+  try{
+    await requireAdmin();
+    const chosen = _previewRows
+      .map((r,i)=> (_selectedMap.get(i) ? r : null))
+      .filter(Boolean)
+      .filter(r=>!r._error);
+
+    if (!chosen.length) return alert('لم يتم اختيار صفوف صالحة.');
+    if (!confirm(`سيتم حفظ ${chosen.length} عنصر. متابعة؟`)) return;
+
+    const BATCH_LIMIT = 400;
+    let count = 0;
+    let batch = writeBatch(window.db);
+
+    for (let i=0;i<chosen.length;i++){
+      const ref = doc(collection(window.db, ...collPath));
+      batch.set(ref, { ...chosen[i], createdAt: serverTimestamp() });
+      count++;
+      if (count % BATCH_LIMIT === 0){ await batch.commit(); batch = writeBatch(window.db); }
+    }
+    await batch.commit();
+    alert(`تم حفظ ${count} عنصر ✅`);
+    importBox.style.display = 'none';
+    _previewRows = [];
+  }catch(err){ console.error(err); alert(err.message||'فشل الحفظ'); }
+});
+
+// ===== Export to Excel =====
+el('btnExport')?.addEventListener('click', async ()=>{
+  try{
+    const snap = await getDocs(query(collection(window.db, ...collPath)));
+    const rows = snap.docs.map(d=>{
+      const v = d.data();
+      return {
+        id: d.id,
+        name_ar: v.name_ar||'',
+        category: v.category||'',
+        imageUrl: v.imageUrl||'',
+        gi: v.gi??'',
+        cal_kcal: v.nutrPer100g?.cal_kcal??'',
+        carbs_g:  v.nutrPer100g?.carbs_g??'',
+        fiber_g:  v.nutrPer100g?.fiber_g??'',
+        protein_g:v.nutrPer100g?.protein_g??'',
+        fat_g:    v.nutrPer100g?.fat_g??'',
+        sodium_mg:v.nutrPer100g?.sodium_mg??'',
+        tags: (v.tags||[]).join(', '),
+        dietTags: (v.dietTags||[]).join(', '),
+        allergens:(v.allergens||[]).join(', '),
+        measures: (v.measures||[]).map(m=>`${m.name}:${m.grams}`).join(' | '),
+        isActive: v.isActive!==false
+      };
+    });
+    const ws = window.XLSX.utils.json_to_sheet(rows);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, 'foodItems');
+    window.XLSX.writeFile(wb, 'foodItems-export.xlsx');
+  }catch(err){ console.error(err); alert('فشل التصدير'); }
+});
+
+// ===== Wire =====
 function wire(){
   ['q','category','onlyActive'].forEach(id=>{
     const n=el(id); if(!n) return;
@@ -301,13 +446,11 @@ function wire(){
     n.addEventListener('input',handler);
     if(n.tagName==='SELECT') n.addEventListener('change',handler);
   });
-
   el('btnNew')?.addEventListener('click',()=>openEditor(null));
   el('closeModal')?.addEventListener('click',()=>dlg.close());
   el('addMeasure')?.addEventListener('click',addMeasure);
   el('save')?.addEventListener('click',save);
 
-  // تعديل/حذف من الجريد
   grid.addEventListener('click',(e)=>{
     const t=e.target;
     if(t.dataset.edit){
@@ -319,22 +462,5 @@ function wire(){
       softDelete(t.dataset.del);
     }
   });
-
-  // الاستيراد من Excel
-  const btnImport = el('btnImport');
-  const inpExcel  = el('excelFile');
-  if (btnImport && inpExcel){
-    btnImport.addEventListener('click', ()=> inpExcel.click());
-    inpExcel.addEventListener('change', async (e)=>{
-      const file = e.target.files?.[0]; if (!file) return;
-      try{ await importExcelFile(file); watch(); }
-      catch(err){ console.error(err); alert('فشل استيراد الملف'); }
-      finally{ inpExcel.value=''; }
-    });
-  }
 }
-
-/* === تشغيل === */
-fillSelectors();
 wire();
-watch();
