@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>لوحة الأصناف | أسيل</title>
   <link rel="stylesheet" href="css/food-items.css" />
+  <link rel="icon" href="images/favicon.png" />
   <!-- SheetJS (Excel/CSV) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <img src="images/logo.svg" alt="Aseel" onerror="this.style.display='none'"/>
+      <img src="images/logo.svg" alt="" onerror="this.style.display='none'"/>
       <span>لوحة الأصناف</span>
     </div>
 
@@ -24,33 +25,50 @@
       </label>
       <button id="btn-add" class="btn primary">+ إضافة صنف</button>
     </div>
+
+    <div class="userbox">
+      <span id="admin-name">—</span>
+      <button id="btn-signout" class="btn light">تسجيل خروج</button>
+    </div>
   </header>
 
   <section class="filters">
     <div class="group">
-      <input id="q" type="search" placeholder="ابحث بالاسم/الوسوم..." />
+      <input id="q" type="search" placeholder="ابحث بالاسم/الوسوم/الهاشتاجات..." />
     </div>
     <div class="group">
-      <select id="category">
-        <option value="">كل الفئات</option>
-        <option>خضروات</option>
-        <option>فواكه</option>
-        <option>ألبان</option>
-        <option>بروتين</option>
-        <option>حبوب</option>
-        <option>مشروبات</option>
-        <option>وجبات خفيفة</option>
-        <option>أخرى</option>
+      <!-- فئة (Combobox) -->
+      <input list="cats" id="category" placeholder="كل الفئات" />
+      <datalist id="cats">
+        <option value="نشويات"></option>
+        <option value="منتجات الحليب"></option>
+        <option value="فواكه"></option>
+        <option value="خضروات"></option>
+        <option value="منتجات اللحوم"></option>
+        <option value="الدهون"></option>
+        <option value="اخرى"></option>
+      </datalist>
+
+      <select id="dietSystem">
+        <option value="">كل الأنظمة</option>
+        <option value="كيتو">كيتو</option>
+        <option value="قليل الملح">قليل الملح</option>
+        <option value="بعد التمرين">بعد التمرين</option>
+        <option value="صديق لمرضى السكري">صديق لمرضى السكري</option>
+        <option value="قليل الكربوهيدرات">قليل الكربوهيدرات</option>
       </select>
-      <label class="switch">
-        <input type="checkbox" id="onlyActive" checked />
-        <span>نشط فقط</span>
-      </label>
+
       <select id="sortBy">
         <option value="createdAt_desc">الأحدث</option>
         <option value="name_asc">الاسم (أ-ي)</option>
       </select>
+
+      <label class="switch">
+        <input type="checkbox" id="onlyActive" checked />
+        <span>نشط فقط</span>
+      </label>
     </div>
+
     <div class="group tabs">
       <button id="tab-cards" class="tab active">🗂️ بطاقات</button>
       <button id="tab-table" class="tab">📊 جدول</button>
@@ -121,33 +139,53 @@
     <form id="edit-form">
       <div class="grid">
         <label>الاسم <input name="name" required /></label>
+
         <label>الفئة
-          <select name="category">
-            <option>خضروات</option><option>فواكه</option><option>ألبان</option>
-            <option>بروتين</option><option>حبوب</option><option>مشروبات</option>
-            <option>وجبات خفيفة</option><option>أخرى</option>
-          </select>
+          <input list="cats" name="category" placeholder="اختر أو اكتب..." />
         </label>
-        <label>صورة (رابط) <input name="imageUrl" placeholder="https://..." /></label>
+
+        <label>صورة (رابط)
+          <div class="img-row">
+            <input name="imageUrl" placeholder="https://..." />
+            <label class="file-input">
+              <input id="image-file" type="file" accept="image/*" />
+              <span>رفع صورة</span>
+            </label>
+            <img id="image-preview" class="thumb-mini" />
+          </div>
+        </label>
+
         <label class="switch-inline">
           <input type="checkbox" name="isActive" checked />
           <span>نشط</span>
         </label>
 
         <label>سعرات/100g <input type="number" step="0.1" name="cal_kcal" /></label>
-        <label>كارب/100g <input type="number" step="0.1" name="carbs_g" /></label>
+        <label>كارب/100g   <input type="number" step="0.1" name="carbs_g" /></label>
         <label>بروتين/100g <input type="number" step="0.1" name="protein_g" /></label>
-        <label>دهون/100g <input type="number" step="0.1" name="fat_g" /></label>
-        <label>ألياف/100g <input type="number" step="0.1" name="fiber_g" /></label>
-        <label>GI <input type="number" step="1" name="gi" /></label>
+        <label>دهون/100g   <input type="number" step="0.1" name="fat_g" /></label>
+        <label>ألياف/100g  <input type="number" step="0.1" name="fiber_g" /></label>
+        <label>GI          <input type="number" step="1"   name="gi" /></label>
+        <label>صوديوم mg/100g (اختياري) <input type="number" step="1" name="sodium_mg" /></label>
       </div>
 
       <label>وسوم المستخدم (افصل بفواصل)
         <input name="dietTagsManual" placeholder="منخفض الكربوهيدرات, خالي اللاكتوز" />
       </label>
 
+      <label>أنظمة غذائية (يدوي — افصل بفواصل)
+        <input name="dietSystemsManual" placeholder="كيتو, قليل الملح, بعد التمرين" />
+      </label>
+
+      <label>هاشتاجات البحث (يدوي — افصل بفواصل)
+        <input name="hashTagsManual" placeholder="#فطور, #snack, #خبز" />
+      </label>
+
       <div class="tags-area">
+        <div><strong>وسوم تلقائية:</strong></div>
         <div class="tags-auto" id="auto-tags"></div>
+        <div style="margin-top:8px"><strong>أنظمة غذائية (تلقائي + قابل للتعديل):</strong></div>
+        <div class="tags-auto" id="auto-diets"></div>
       </div>
 
       <menu class="dialog-actions">
@@ -157,7 +195,6 @@
     </form>
   </dialog>
 
-  <!-- سكربت الصفحة (ESM) -->
   <script type="module" src="js/food-items.js"></script>
 </body>
 </html>
