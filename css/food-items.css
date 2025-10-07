@@ -83,3 +83,15 @@ label input:focus, label select:focus{border-color:#b6e1e3;box-shadow:0 0 0 3px 
 .import-stats{padding:10px 16px;color:#0f172a;background:#f1fafb;border-radius:12px;margin:10px 16px}
 .progress{height:10px;background:#ecfeff;border-radius:999px;overflow:hidden;margin:10px 16px}
 .progress>div{height:100%;width:0%;background:var(--primary);transition:width .3s}
+
+/* شعار صغير في الهيدر فقط */
+.topbar .brand img{
+  height: 38px;      /* غيّريها لـ 28 أو 32 لو عايزة أصغر */
+  width: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.topbar{ padding: 10px 14px; }     /* يقلّل ارتفاع الشريط */
+.brand span{ font-size: 16px; }    /* تصغير عنوان اللوحة قليلاً */
+
