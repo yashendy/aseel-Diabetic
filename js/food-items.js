@@ -1,5 +1,3 @@
-// js/food-items.js  — كل منطق الصفحة + تهيئة Firebase داخل الملف
-
 // ============ Firebase SDK via CDN ============
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js";
 import {
@@ -29,127 +27,90 @@ const storage = getStorage(app);
 // ============ Constants / State ============
 const COLL_PATH = ["admin","global","foodItems"];
 const PAGE_SIZE = 20;
-
-const state = {
-  page: 1,
-  lastDoc: null,
-  q: "",
-  category: "",
-  dietSystem: "",
-  onlyActive: true,
-  sortBy: "createdAt_desc",
-  cache: new Map(),
-  currentDocs: [],
-  view: "cards"
-};
+const state = { page:1,lastDoc:null,q:"",category:"",dietSystem:"",onlyActive:true,sortBy:"createdAt_desc",cache:new Map(),currentDocs:[],view:"cards" };
 
 // ============ Utils ============
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const toNum = v => (v==="" || v==null) ? null : Number(v);
 function debounce(fn, ms=300){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
-
-// 🔗 توحيد مسارات الصور (repo/Storage/خارجي)
 function resolveImageUrl(path){
   if (!path) return "";
-  if (/^https?:\/\//i.test(path)) return path; // رابط كامل
+  if (/^https?:\/\//i.test(path)) return path;
   const isGH = location.hostname.endsWith("github.io");
-  const base = isGH
-    ? location.origin + "/" + location.pathname.split("/")[1] + "/"
-    : location.origin + "/";
+  const base = isGH ? location.origin + "/" + location.pathname.split("/")[1] + "/" : location.origin + "/";
   return base + path.replace(/^\/+/, "");
 }
-
-// وسوم غذائية تلقائية
-function autoDietTags({ gi, carbs_g, protein_g, fat_g, fiber_g, cal_kcal }) {
-  const tags = new Set(); const n=x=>typeof x==='number'&&!isNaN(x);
-  if (n(gi)) { if (gi < 55) tags.add("منخفض GI"); else if (gi >= 70) tags.add("مرتفع GI"); }
-  if (n(carbs_g) && carbs_g < 15) tags.add("منخفض الكربوهيدرات");
-  if (n(protein_g) && protein_g >= 15) tags.add("عالي البروتين");
-  if (n(fat_g) && fat_g < 3) tags.add("منخفض الدهون");
-  if (n(fiber_g) && fiber_g >= 5) tags.add("غني بالألياف");
-  if (n(cal_kcal) && cal_kcal < 80) tags.add("منخفض السعرات");
-  if ((n(carbs_g) && carbs_g < 15) || (n(gi) && gi < 55)) tags.add("صديق لمرضى السكري");
-  return [...tags];
-}
-// أنظمة غذائية تلقائية
-function autoDietSystems({ carbs_g, fat_g, gi, protein_g, sodium_mg }){
-  const tags = new Set(); const n=x=>typeof x==='number'&&!isNaN(x);
-  if (n(carbs_g) && carbs_g <= 10 && n(fat_g) && fat_g >= 10) tags.add("كيتو");
-  if (n(carbs_g) && carbs_g < 15) tags.add("قليل الكربوهيدرات");
-  if (n(sodium_mg) && sodium_mg <= 120) tags.add("قليل الملح");
-  if (n(protein_g) && protein_g >= 20 && n(carbs_g) && carbs_g >= 10 && carbs_g <= 30) tags.add("بعد التمرين");
-  if ((n(gi) && gi < 55) || (n(carbs_g) && carbs_g < 15)) tags.add("صديق لمرضى السكري");
-  return [...tags];
-}
-// هاشتاجات تلقائية
-function autoHashTags(item){
-  const base = [
-    item.category, item.name,
-    ...(item.dietTagsManual||[]), ...(item.dietTagsAuto||[]),
-    ...(item.dietSystemsManual||[]), ...(item.dietSystemsAuto||[])
-  ].filter(Boolean).join(" ").toLowerCase();
-  const words = base.replace(/[^\p{L}\p{N}\s]/gu," ").split(/\s+/).filter(w=>w.length>=3);
+const toSearchText = (item)=>[
+  item.name,item.category,
+  ...(item.dietTagsManual||[]),...(item.dietTagsAuto||[]),
+  ...(item.dietSystemsManual||[]),...(item.dietSystemsAuto||[]),
+  ...(item.hashTags||[])
+].filter(Boolean).join(" ").toLowerCase();
+const filterByKeyword=(list,kw)=> !kw? list : list.filter(x=>(x.searchText||"").includes(kw.toLowerCase())||(x.name||"").toLowerCase().includes(kw.toLowerCase()));
+const setPageInfo=(n)=> $("#page-info").textContent=`صفحة ${state.page} — ${n} عنصر`;
+const n=x=>typeof x==='number'&&!isNaN(x);
+const autoDietTags=({gi,carbs_g,protein_g,fat_g,fiber_g,cal_kcal})=>{
+  const t=new Set(); if(n(gi)){if(gi<55)t.add("منخفض GI"); else if(gi>=70)t.add("مرتفع GI");}
+  if(n(carbs_g)&&carbs_g<15)t.add("منخفض الكربوهيدرات");
+  if(n(protein_g)&&protein_g>=15)t.add("عالي البروتين");
+  if(n(fat_g)&&fat_g<3)t.add("منخفض الدهون");
+  if(n(fiber_g)&&fiber_g>=5)t.add("غني بالألياف");
+  if(n(cal_kcal)&&cal_kcal<80)t.add("منخفض السعرات");
+  if((n(carbs_g)&&carbs_g<15)||(n(gi)&&gi<55))t.add("صديق لمرضى السكري");
+  return [...t];
+};
+const autoDietSystems=({carbs_g,fat_g,gi,protein_g,sodium_mg})=>{
+  const t=new Set(); if(n(carbs_g)&&carbs_g<=10&&n(fat_g)&&fat_g>=10)t.add("كيتو");
+  if(n(carbs_g)&&carbs_g<15)t.add("قليل الكربوهيدرات");
+  if(n(sodium_mg)&&sodium_mg<=120)t.add("قليل الملح");
+  if(n(protein_g)&&protein_g>=20&&n(carbs_g)&&carbs_g>=10&&carbs_g<=30)t.add("بعد التمرين");
+  if((n(gi)&&gi<55)||(n(carbs_g)&&carbs_g<15))t.add("صديق لمرضى السكري");
+  return [...t];
+};
+const autoHashTags=(item)=>{
+  const base=[item.category,item.name, ...(item.dietTagsManual||[]),...(item.dietTagsAuto||[]), ...(item.dietSystemsManual||[]),...(item.dietSystemsAuto||[])]
+    .filter(Boolean).join(" ").toLowerCase();
+  const words=base.replace(/[^\p{L}\p{N}\s]/gu," ").split(/\s+/).filter(w=>w.length>=3);
   return [...new Set(words)].slice(0,12).map(w=>"#"+w.replace(/^#+/,""));
-}
-function toSearchText(item){
-  return [
-    item.name, item.category,
-    ...(item.dietTagsManual||[]), ...(item.dietTagsAuto||[]),
-    ...(item.dietSystemsManual||[]), ...(item.dietSystemsAuto||[]),
-    ...(item.hashTags||[])
-  ].filter(Boolean).join(" ").toLowerCase();
-}
-function filterByKeyword(list, kw){
-  if (!kw) return list;
-  kw = kw.toLowerCase();
-  return list.filter(x => (x.searchText || "").includes(kw) || (x.name||"").toLowerCase().includes(kw));
-}
-function setPageInfo(totalInPage){ $("#page-info").textContent = `صفحة ${state.page} — ${totalInPage} عنصر`; }
-
-// تحويل أسماء قديمة
+};
 function normalizeLegacyFields(d){
-  const map = {...d};
-  map.cal_kcal  = (d.cal_kcal ?? d.calories ?? d.kcal ?? null);
-  map.carbs_g   = (d.carbs_g ?? d.carb ?? d.carbs ?? null);
-  map.protein_g = (d.protein_g ?? d.protein ?? null);
-  map.fat_g     = (d.fat_g ?? d.fat ?? null);
-  map.fiber_g   = (d.fiber_g ?? d.fiber ?? null);
-  map.gi        = (d.gi ?? d.GI ?? null);
-  map.category  = (d.category || "اخرى");
-  map.sodium_mg = (d.sodium_mg ?? d.sodium ?? null);
-  map.dietTagsManual = Array.isArray(d.dietTagsManual) ? d.dietTagsManual : (d.dietTagsManual||"").toString().split(",").map(s=>s.trim()).filter(Boolean);
-  map.dietSystemsManual = Array.isArray(d.dietSystemsManual) ? d.dietSystemsManual : (d.dietSystemsManual||"").toString().split(",").map(s=>s.trim()).filter(Boolean);
-  map.hashTagsManual = Array.isArray(d.hashTagsManual) ? d.hashTagsManual : (d.hashTagsManual||"").toString().split(",").map(s=>s.trim()).filter(Boolean);
-  map.dietTagsAuto = d.dietTagsAuto || autoDietTags(map);
-  map.dietSystemsAuto = d.dietSystemsAuto || autoDietSystems(map);
-  return map;
+  const m={...d};
+  m.cal_kcal=(d.cal_kcal??d.calories??d.kcal??null);
+  m.carbs_g=(d.carbs_g??d.carb??d.carbs??null);
+  m.protein_g=(d.protein_g??d.protein??null);
+  m.fat_g=(d.fat_g??d.fat??null);
+  m.fiber_g=(d.fiber_g??d.fiber??null);
+  m.gi=(d.gi??d.GI??null);
+  m.category=(d.category||"اخرى");
+  m.sodium_mg=(d.sodium_mg??d.sodium??null);
+  m.dietTagsManual=Array.isArray(d.dietTagsManual)?d.dietTagsManual:(d.dietTagsManual||"").toString().split(",").map(s=>s.trim()).filter(Boolean);
+  m.dietSystemsManual=Array.isArray(d.dietSystemsManual)?d.dietSystemsManual:(d.dietSystemsManual||"").toString().split(",").map(s=>s.trim()).filter(Boolean);
+  m.hashTagsManual=Array.isArray(d.hashTagsManual)?d.hashTagsManual:(d.hashTagsManual||"").toString().split(",").map(s=>s.trim()).filter(Boolean);
+  m.dietTagsAuto=d.dietTagsAuto||autoDietTags(m);
+  m.dietSystemsAuto=d.dietSystemsAuto||autoDietSystems(m);
+  return m;
 }
 
-// ============ Query builder ============
+// ============ Query ============
 function buildQuery(){
   const base = collection(db, ...COLL_PATH);
-  let qy = [];
-  if (state.onlyActive) qy.push(where("isActive","==", true));
-  if (state.category)   qy.push(where("category","==", state.category));
-  if (state.dietSystem) qy.push(where("dietSystems","array-contains", state.dietSystem));
-
-  if (state.sortBy === "name_asc") qy.push(orderBy("name"));
-  else qy.push(orderBy("createdAt","desc"));
-
-  let q = query(base, ...qy, limit(PAGE_SIZE));
-  if (state.lastDoc) q = query(base, ...qy, startAfter(state.lastDoc), limit(PAGE_SIZE));
+  const qs=[];
+  if(state.onlyActive) qs.push(where("isActive","==",true));
+  if(state.category)   qs.push(where("category","==",state.category));
+  if(state.dietSystem) qs.push(where("dietSystems","array-contains",state.dietSystem));
+  if(state.sortBy==="name_asc") qs.push(orderBy("name")); else qs.push(orderBy("createdAt","desc"));
+  let q=query(base,...qs,limit(PAGE_SIZE));
+  if(state.lastDoc) q=query(base,...qs,startAfter(state.lastDoc),limit(PAGE_SIZE));
   return q;
 }
 
-// ============ Rendering ============
+// ============ Render ============
 function renderCards(items){
-  const host = $("#cards-view"); host.innerHTML = "";
+  const host=$("#cards-view"); host.innerHTML="";
   items.forEach(item=>{
-    const card = document.createElement("article");
-    card.className = "card";
-    const imgSrc = resolveImageUrl(item.imageUrl||"");
-    card.innerHTML = `
+    const card=document.createElement("article"); card.className="card";
+    const imgSrc=resolveImageUrl(item.imageUrl||"");
+    card.innerHTML=`
       <img class="thumb" src="${imgSrc}" alt="" onerror="this.src='';this.style.background='#eef2f7'">
       <div class="name">${item.name||"—"}</div>
       <div class="meta">
@@ -169,18 +130,17 @@ function renderCards(items){
         <button class="btn ${item.isActive? 'danger' : 'primary'}" data-toggle="${item.id}">
           ${item.isActive? 'تعطيل' : 'تفعيل'}
         </button>
-      </div>
-    `;
+      </div>`;
     host.appendChild(card);
   });
-  afterRender();
+  bindRowActions(); setPageInfo(items.length);
 }
 function renderTable(items){
-  const tb = $("#table-body"); tb.innerHTML = "";
+  const tb=$("#table-body"); tb.innerHTML="";
   items.forEach(item=>{
-    const tr = document.createElement("tr");
-    const imgSrc = resolveImageUrl(item.imageUrl||"");
-    tr.innerHTML = `
+    const imgSrc=resolveImageUrl(item.imageUrl||"");
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
       <td><img class="thumb" src="${imgSrc}" onerror="this.src='';this.style.background='#eef2f7'"/></td>
       <td>${item.name||"—"}</td>
       <td>${item.category||"—"}</td>
@@ -196,389 +156,149 @@ function renderTable(items){
         <button class="btn ${item.isActive? 'danger' : 'primary'}" data-toggle="${item.id}">
           ${item.isActive? 'تعطيل' : 'تفعيل'}
         </button>
-      </td>
-    `;
+      </td>`;
     tb.appendChild(tr);
   });
-  afterRender();
+  bindRowActions(); setPageInfo(items.length);
 }
 function bindRowActions(){
-  $$("[data-edit]").forEach(btn=> btn.onclick = ()=> openEditDialog(btn.getAttribute("data-edit")));
-  $$("[data-toggle]").forEach(btn=> btn.onclick = ()=> quickToggle(btn.getAttribute("data-toggle")));
-}
-function afterRender(){
-  setPageInfo(state.currentDocs.length);
-  bindRowActions();
+  $$("[data-edit]").forEach(b=>b.onclick=()=>openEditDialog(b.dataset.edit));
+  $$("[data-toggle]").forEach(b=>b.onclick=()=>quickToggle(b.dataset.toggle));
 }
 
 // ============ Fetch ============
 async function fetchAndRender(reset=false){
-  if (reset){ state.page = 1; state.lastDoc = null; }
-  const qRef = buildQuery();
-  try {
-    const snap = await getDocs(qRef);
-    const docs = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-    state.currentDocs = docs;
-
-    docs.forEach(d=>{
-      d.searchText = d.searchText || toSearchText(d);
-      state.cache.set(d.id, d);
-    });
-
-    const filtered = filterByKeyword(docs, state.q);
-    state.view === "table" ? renderTable(filtered) : renderCards(filtered);
-
-    state.lastDoc = snap.docs[snap.docs.length-1] || null;
-  } catch(e){
-    if (e?.code === "failed-precondition" && e?.message?.includes("index")){
-      console.warn(e.message);
-      alert("الاستعلام محتاج فهرس (اندكست). افتحي الرابط في الكونسول لإنشائه ثم أعيدي التحميل.");
-    } else { console.error(e); alert("تعذّر جلب البيانات."); }
+  if(reset){state.page=1;state.lastDoc=null;}
+  try{
+    const snap=await getDocs(buildQuery());
+    const docs=snap.docs.map(d=>({id:d.id,...d.data()}));
+    state.currentDocs=docs; docs.forEach(d=>{d.searchText=d.searchText||toSearchText(d); state.cache.set(d.id,d);});
+    const filtered=filterByKeyword(docs,state.q);
+    state.view==="table"?renderTable(filtered):renderCards(filtered);
+    state.lastDoc=snap.docs[snap.docs.length-1]||null;
+  }catch(e){
+    if(e?.code==="failed-precondition" && e?.message?.includes("index")) alert("الاستعلام محتاج فهرس. أنشئيه ثم أعيدي التحميل.");
+    else { console.error(e); alert("تعذّر جلب البيانات."); }
   }
 }
 
-// ============ Filters / Events ============
-$("#q").addEventListener("input", debounce(e=>{ state.q = e.target.value.trim(); fetchAndRender(true); }, 300));
-$("#category").addEventListener("input", e=>{ state.category = (e.target.value||"").trim(); fetchAndRender(true); });
-$("#onlyActive").addEventListener("change", e=>{ state.onlyActive = e.target.checked; fetchAndRender(true); });
-$("#sortBy").addEventListener("change", e=>{ state.sortBy = e.target.value; fetchAndRender(true); });
-$("#dietSystem").addEventListener("change", e=>{ state.dietSystem = e.target.value; fetchAndRender(true); });
-
-$("#next-page").onclick = async ()=>{ if (!state.lastDoc) return; state.page++; await fetchAndRender(false); };
-$("#prev-page").onclick = async ()=>{
-  if (state.page===1) return;
-  state.page--; state.lastDoc = null;
-  for(let i=1;i<state.page;i++) await getDocs(buildQuery()); // advance cursor سريع
-  await fetchAndRender(false);
-};
-
-$("#tab-cards").onclick = ()=>{ state.view="cards"; $("#tab-cards").classList.add("active"); $("#tab-table").classList.remove("active"); $("#cards-view").classList.remove("hidden"); $("#table-view").classList.add("hidden"); };
-$("#tab-table").onclick = ()=>{ state.view="table"; $("#tab-table").classList.add("active"); $("#tab-cards").classList.remove("active"); $("#table-view").classList.remove("hidden"); $("#cards-view").classList.add("hidden"); };
+// ============ Filters ============
+$("#q").addEventListener("input",debounce(e=>{state.q=e.target.value.trim();fetchAndRender(true);},300));
+$("#category").addEventListener("input",e=>{state.category=(e.target.value||"").trim();fetchAndRender(true);});
+$("#onlyActive").addEventListener("change",e=>{state.onlyActive=e.target.checked;fetchAndRender(true);});
+$("#sortBy").addEventListener("change",e=>{state.sortBy=e.target.value;fetchAndRender(true);});
+$("#dietSystem").addEventListener("change",e=>{state.dietSystem=e.target.value;fetchAndRender(true);});
+$("#next-page").onclick=async()=>{if(!state.lastDoc)return;state.page++;await fetchAndRender(false);};
+$("#prev-page").onclick=async()=>{if(state.page===1)return;state.page--;state.lastDoc=null;for(let i=1;i<state.page;i++)await getDocs(buildQuery());await fetchAndRender(false);};
+$("#tab-cards").onclick=()=>{state.view="cards";$("#tab-cards").classList.add("active");$("#tab-table").classList.remove("active");$("#cards-view").classList.remove("hidden");$("#table-view").classList.add("hidden");};
+$("#tab-table").onclick=()=>{state.view="table";$("#tab-table").classList.add("active");$("#tab-cards").classList.remove("active");$("#table-view").classList.remove("hidden");$("#cards-view").classList.add("hidden");};
 
 // ============ Add / Edit ============
-$("#btn-add").onclick = ()=> openEditDialog(null);
+$("#btn-add").onclick=()=>openEditDialog(null);
 
 async function openEditDialog(id){
-  const dlg = $("#edit-dialog");
-  const form = $("#edit-form");
-  $("#btn-delete").classList.toggle("hidden", !id);
-  $("#edit-title").textContent = id ? "تعديل صنف" : "إضافة صنف";
-  form.reset(); form.dataset.id = id || "";
+  const dlg=$("#edit-dialog"), form=$("#edit-form");
+  $("#btn-delete").classList.toggle("hidden",!id);
+  $("#edit-title").textContent=id?"تعديل صنف":"إضافة صنف";
+  form.reset(); form.dataset.id=id||"";
+  let data={}; if(id){ data=state.cache.get(id) || (await getDoc(doc(db,...COLL_PATH,id))).data() || {}; }
+  data=normalizeLegacyFields(data);
 
-  let data = {};
-  if (id){
-    data = state.cache.get(id) || (await getDoc(doc(db, ...COLL_PATH, id))).data() || {};
-  }
-  data = normalizeLegacyFields(data);
+  form.elements["name"].value=data.name||"";
+  form.elements["category"].value=data.category||"اخرى";
+  form.elements["imageUrl"].value=data.imageUrl||"";
+  form.elements["isActive"].checked=(data.isActive!==false);
+  form.elements["cal_kcal"].value=data.cal_kcal??"";
+  form.elements["carbs_g"].value=data.carbs_g??"";
+  form.elements["protein_g"].value=data.protein_g??"";
+  form.elements["fat_g"].value=data.fat_g??"";
+  form.elements["fiber_g"].value=data.fiber_g??"";
+  form.elements["gi"].value=data.gi??"";
+  form.elements["sodium_mg"].value=data.sodium_mg??"";
+  form.elements["dietTagsManual"].value=(data.dietTagsManual||[]).join(", ");
+  form.elements["dietSystemsManual"].value=(data.dietSystemsManual||[]).join(", ");
+  form.elements["hashTagsManual"].value=(data.hashTagsManual||[]).join(", ");
 
-  // تعبئة الحقول
-  form.elements["name"].value = data.name || "";
-  form.elements["category"].value = data.category || "اخرى";
-  form.elements["imageUrl"].value = data.imageUrl || "";
-  form.elements["isActive"].checked = (data.isActive !== false);
-  form.elements["cal_kcal"].value = data.cal_kcal ?? "";
-  form.elements["carbs_g"].value = data.carbs_g ?? "";
-  form.elements["protein_g"].value = data.protein_g ?? "";
-  form.elements["fat_g"].value = data.fat_g ?? "";
-  form.elements["fiber_g"].value = data.fiber_g ?? "";
-  form.elements["gi"].value = data.gi ?? "";
-  form.elements["sodium_mg"].value = data.sodium_mg ?? "";
-  form.elements["dietTagsManual"].value = (data.dietTagsManual||[]).join(", ");
-  form.elements["dietSystemsManual"].value = (data.dietSystemsManual||[]).join(", ");
-  form.elements["hashTagsManual"].value = (data.hashTagsManual||[]).join(", ");
+  $("#image-preview").src=resolveImageUrl(data.imageUrl||"");
+  form.elements["imageUrl"].addEventListener("input",e=>{
+    $("#image-preview").src=resolveImageUrl(e.target.value.trim()||"");
+  });
 
-  // معاينة صورة (تدعم repo/Storage)
-  $("#image-preview").src = resolveImageUrl(data.imageUrl || "");
-
-  // تحديث المعاينة عند الكتابة يدويًا في الرابط
-  form.elements["imageUrl"].addEventListener("input", e=>{
-    $("#image-preview").src = resolveImageUrl(e.target.value.trim() || "");
-  }, { once:false });
-
-  renderAutoTagsPreview();
-  dlg.showModal();
+  renderAutoTagsPreview(); dlg.showModal();
 }
 
-// تحديث معاينة الوسوم/الأنظمة عند أي تغيير
 ["cal_kcal","carbs_g","protein_g","fat_g","fiber_g","gi","sodium_mg","category","name","dietTagsManual","dietSystemsManual"]
-  .forEach(n=>{ $("#edit-form").elements[n]?.addEventListener("input", renderAutoTagsPreview); });
+  .forEach(n=>{$("#edit-form").elements[n]?.addEventListener("input",renderAutoTagsPreview);});
 
-function toggleManualChip(form, inputName, value){
-  const inp = form.elements[inputName];
-  const list = (inp.value||"").split(",").map(s=>s.trim()).filter(Boolean);
-  const i = list.indexOf(value);
-  if (i>=0) list.splice(i,1); else list.push(value);
-  inp.value = list.join(", ");
-}
-function renderAutoTagsPreview() {
-  const form = $("#edit-form");
-  const payload = getFormData(form);
-  const dietTags = autoDietTags(payload);
-  const dietSystems = autoDietSystems(payload);
+function toggleManualChip(form,inputName,value){
+  const inp=form.elements[inputName];
+  const list=(inp.value||"").split(",").map(s=>s.trim()).filter(Boolean);
+  const i=list.indexOf(value); if(i>=0)list.splice(i,1); else list.push(value);
+  inp.value=list.join(", "); }
 
-  // وسوم التغذية
-  const auto = $("#auto-tags"); auto.innerHTML = "";
-  dietTags.forEach(t=>{
-    const s=document.createElement("span");
-    s.className="chip green auto";
-    s.textContent=t;
-    s.onclick = ()=>{ toggleManualChip(form, "dietTagsManual", t); renderAutoTagsPreview(); };
-    auto.appendChild(s);
-  });
-
-  // أنظمة غذائية
-  const diets = $("#auto-diets"); diets.innerHTML = "";
-  dietSystems.forEach(t=>{
-    const s=document.createElement("span");
-    s.className="chip yellow auto";
-    s.textContent=t;
-    s.onclick = ()=>{ toggleManualChip(form, "dietSystemsManual", t); renderAutoTagsPreview(); };
-    diets.appendChild(s);
-  });
+function renderAutoTagsPreview(){
+  const form=$("#edit-form");
+  const fd=new FormData(form);
+  const payload=Object.fromEntries(fd.entries());
+  ["cal_kcal","carbs_g","protein_g","fat_g","fiber_g","gi","sodium_mg"].forEach(k=>payload[k]=payload[k]===""?null:Number(payload[k]));
+  const dietTags=autoDietTags(payload), dietSystems=autoDietSystems(payload);
+  const auto=$("#auto-tags"); auto.innerHTML="";
+  dietTags.forEach(t=>{const s=document.createElement("span");s.className="chip green auto";s.textContent=t;s.onclick=()=>{toggleManualChip(form,"dietTagsManual",t);renderAutoTagsPreview();};auto.appendChild(s);});
+  const diets=$("#auto-diets"); diets.innerHTML="";
+  dietSystems.forEach(t=>{const s=document.createElement("span");s.className="chip yellow auto";s.textContent=t;s.onclick=()=>{toggleManualChip(form,"dietSystemsManual",t);renderAutoTagsPreview();};diets.appendChild(s);});
 }
 
-function getFormData(form){
-  const fd = new FormData(form);
-  const obj = Object.fromEntries(fd.entries());
-  obj.isActive = form.elements["isActive"].checked;
-  ["cal_kcal","carbs_g","protein_g","fat_g","fiber_g","gi","sodium_mg"].forEach(k=>{
-    obj[k] = (obj[k]==="" ? null : Number(obj[k]));
-  });
-  obj.dietTagsManual = (obj.dietTagsManual||"").split(",").map(s=>s.trim()).filter(Boolean);
-  obj.dietSystemsManual = (obj.dietSystemsManual||"").split(",").map(s=>s.trim()).filter(Boolean);
-  obj.hashTagsManual = (obj.hashTagsManual||"").split(",").map(s=>s.trim()).filter(Boolean);
-  obj.category = (obj.category||"اخرى").trim() || "اخرى";
-  return obj;
-}
-
-// حفظ
-$("#edit-form").addEventListener("submit", async (e)=>{
+$("#edit-form").addEventListener("submit",async(e)=>{
   e.preventDefault();
-  const id = e.currentTarget.dataset.id || null;
-  const payload = getFormData(e.currentTarget);
+  const id=e.currentTarget.dataset.id||null;
+  const fd=new FormData(e.currentTarget);
+  const payload=Object.fromEntries(fd.entries());
+  payload.isActive=$("#edit-form").elements["isActive"].checked;
+  ["cal_kcal","carbs_g","protein_g","fat_g","fiber_g","gi","sodium_mg"].forEach(k=>payload[k]=payload[k]===""?null:Number(payload[k]));
+  payload.dietTagsManual=(payload.dietTagsManual||"").split(",").map(s=>s.trim()).filter(Boolean);
+  payload.dietSystemsManual=(payload.dietSystemsManual||"").split(",").map(s=>s.trim()).filter(Boolean);
+  payload.hashTagsManual=(payload.hashTagsManual||"").split(",").map(s=>s.trim()).filter(Boolean);
 
-  payload.dietTagsAuto    = autoDietTags(payload);
-  payload.dietSystemsAuto = autoDietSystems(payload);
-  payload.dietSystems     = [...new Set([...(payload.dietSystemsManual||[]), ...(payload.dietSystemsAuto||[])])];
+  payload.dietTagsAuto=autoDietTags(payload);
+  payload.dietSystemsAuto=autoDietSystems(payload);
+  payload.dietSystems=[...new Set([...(payload.dietSystemsManual||[]),...(payload.dietSystemsAuto||[])])];
+  const hashAuto=autoHashTags(payload), hashManual=payload.hashTagsManual||[];
+  payload.hashTagsAuto=hashAuto; payload.hashTags=[...new Set([...hashManual,...hashAuto])];
+  payload.searchText=toSearchText(payload);
 
-  const hashAuto   = autoHashTags(payload);
-  const hashManual = payload.hashTagsManual || [];
-  const hashTags   = [...new Set([...hashManual, ...hashAuto])];
-  payload.hashTagsAuto = hashAuto;
-  payload.hashTags     = hashTags;
-
-  payload.searchText = toSearchText(payload);
-
-  const now = serverTimestamp();
-  const ref = id ? doc(db, ...COLL_PATH, id) : doc(collection(db, ...COLL_PATH));
-  const batch = writeBatch(db);
-  batch.set(ref, {
-    ...payload,
-    createdAt: id ? (state.cache.get(id)?.createdAt || now) : now,
-    updatedAt: now
-  }, { merge:true });
-  await batch.commit();
-
-  $("#edit-dialog").close();
-  await fetchAndRender(true);
+  const now=serverTimestamp();
+  const ref=id?doc(db,...COLL_PATH,id):doc(collection(db,...COLL_PATH));
+  const batch=writeBatch(db);
+  batch.set(ref,{...payload,createdAt:id?(state.cache.get(id)?.createdAt||now):now,updatedAt:now},{merge:true});
+  await batch.commit(); $("#edit-dialog").close(); await fetchAndRender(true);
 });
 
-// حذف (ناعم)
-$("#btn-delete").onclick = async ()=>{
-  const id = $("#edit-form").dataset.id;
-  if (!id) return;
-  const batch = writeBatch(db);
-  batch.set(doc(db, ...COLL_PATH, id), { isActive:false, updatedAt:serverTimestamp() }, { merge:true });
-  await batch.commit();
-  $("#edit-dialog").close();
-  await fetchAndRender(true);
-};
-
-// ============ Quick Toggle ============
-async function quickToggle(id){
-  const item = state.cache.get(id) || (await getDoc(doc(db, ...COLL_PATH, id))).data();
-  const next = !(item?.isActive!==false);
-  const batch = writeBatch(db);
-  batch.set(doc(db, ...COLL_PATH, id), { isActive: next, updatedAt: serverTimestamp() }, { merge:true });
-  await batch.commit();
-  fetchAndRender(true);
-}
-
-// ============ Export ============
-async function exportToXlsx(items, filename){
-  const rows = items.map(x=>({
-    id: x.id || "",
-    name: x.name||"",
-    category: x.category||"",
-    imageUrl: x.imageUrl||"",
-    isActive: x.isActive!==false,
-    cal_kcal: x.cal_kcal??"",
-    carbs_g: x.carbs_g??"",
-    protein_g: x.protein_g??"",
-    fat_g: x.fat_g??"",
-    fiber_g: x.fiber_g??"",
-    gi: x.gi??"",
-    sodium_mg: x.sodium_mg??"",
-    dietTagsManual: (x.dietTagsManual||[]).join(", "),
-    dietSystemsManual: (x.dietSystemsManual||[]).join(", "),
-    dietTagsAuto: (x.dietTagsAuto||[]).join(", "),
-    dietSystemsAuto: (x.dietSystemsAuto||[]).join(", "),
-    hashTags: (x.hashTags||[]).join(" ")
-  }));
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "foodItems");
-  XLSX.writeFile(wb, filename);
-}
-$("#btn-export-current").onclick = ()=> exportToXlsx(state.currentDocs, "foodItems-current.xlsx");
-$("#btn-export-all").onclick = async ()=>{
-  const snap = await getDocs(query(collection(db, ...COLL_PATH), orderBy("createdAt","desc")));
-  const all = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-  exportToXlsx(all, "foodItems-all.xlsx");
-};
-
-// ============ Import (Preview + Save Valid) ============
-const importState = { rows:[], valid:[], invalid:[] };
-
-$("#file-import").addEventListener("change", async (e)=>{
-  const file = e.target.files[0]; if (!file) return;
-  await readAndPreview(file);
-});
-
-async function readAndPreview(file){
-  const data = await file.arrayBuffer();
-  const wb = XLSX.read(data, { type:"array" });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  let rows = XLSX.utils.sheet_to_json(ws, { defval:"" });
-
-  rows = rows.map(r=>{
-    const item = {
-      id: r.id || "",
-      name: r.name || r["الاسم"] || "",
-      category: r.category || r["الفئة"] || "اخرى",
-      imageUrl: r.imageUrl || "",
-      isActive: (typeof r.isActive==="boolean" ? r.isActive : (String(r.isActive||"").trim()!=="false")),
-      cal_kcal: Number(r.cal_kcal ?? r.cal ?? r.kcal ?? "") || null,
-      carbs_g: Number(r.carbs_g ?? r.carbs ?? r.carb ?? "") || null,
-      protein_g: Number(r.protein_g ?? r.protein ?? "") || null,
-      fat_g: Number(r.fat_g ?? r.fat ?? "") || null,
-      fiber_g: Number(r.fiber_g ?? r.fiber ?? "") || null,
-      gi: Number(r.gi ?? r["GI"] ?? "") || null,
-      sodium_mg: Number(r.sodium_mg ?? r.sodium ?? "") || null,
-      dietTagsManual: (r.dietTagsManual || r.tags || "").toString(),
-      dietSystemsManual: (r.dietSystemsManual || r.systems || "").toString(),
-      hashTagsManual: (r.hashTagsManual || r.hashtags || "").toString(),
-    };
-    item.dietTagsAuto = autoDietTags(item);
-    item.dietSystemsAuto = autoDietSystems(item);
-    item.dietSystems = [...new Set([
-      ...item.dietTagsManual.split(",").map(s=>s.trim()).filter(Boolean), // لو كانت قديمة بداخل tags
-      ...item.dietSystemsManual.split(",").map(s=>s.trim()).filter(Boolean),
-      ...item.dietSystemsAuto
-    ])];
-    item.hashTagsAuto = autoHashTags(item);
-    item.hashTags = [...new Set([...(item.hashTagsManual||"").split(",").map(s=>s.trim()).filter(Boolean), ...item.hashTagsAuto])];
-    item.searchText = toSearchText({
-      ...item,
-      dietTagsManual: item.dietTagsManual.split(",").map(s=>s.trim()).filter(Boolean),
-      dietSystemsManual: item.dietSystemsManual.split(",").map(s=>s.trim()).filter(Boolean)
-    });
-    return item;
-  });
-
-  const valid=[], invalid=[];
-  rows.forEach(row=>{
-    const errs=[];
-    if (!row.name) errs.push("name");
-    if (!row.category) errs.push("category");
-    ["cal_kcal","carbs_g","protein_g","fat_g","fiber_g","gi","sodium_mg"].forEach(k=>{
-      if (row[k]!=null && isNaN(row[k])) errs.push(k);
-    });
-    (errs.length? invalid:valid).push({...row, __errors:errs});
-  });
-
-  importState.rows = rows; importState.valid = valid; importState.invalid = invalid;
-
-  const dlg = $("#import-dialog");
-  $("#import-stats").innerHTML = `✅ صالحة: <b>${valid.length}</b> — ❌ بها أخطاء: <b>${invalid.length}</b> — إجمالي: <b>${rows.length}</b>`;
-  const cols = ["id","name","category","imageUrl","isActive","cal_kcal","carbs_g","protein_g","fat_g","fiber_g","gi","sodium_mg","dietTagsManual","dietSystemsManual","hashTagsManual"];
-  $("#import-thead").innerHTML = `<tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr>`;
-  $("#import-tbody").innerHTML = rows.map(r=>{
-    const cls = (r.__errors?.length) ? ' style="background:#fff1f2;"' : "";
-    return `<tr${cls}>${cols.map(c=>`<td>${(c==="dietTagsManual"||c==="dietSystemsManual"||c==="hashTagsManual")? r[c] : (r[c]??"")}</td>`).join("")}</tr>`;
-  }).join("");
-
-  dlg.showModal();
-}
-$("#btn-export-errors").onclick = ()=>{
-  const ws = XLSX.utils.json_to_sheet(importState.invalid.map(r=>({ ...r, errors: (r.__errors||[]).join("|") })));
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "errors"); XLSX.writeFile(wb, "foodItems-import-errors.xlsx");
-};
-$("#btn-save-valid").onclick = async ()=>{
-  const dlg = $("#import-dialog");
-  const bar = $("#import-progress"); const barInner = bar.firstElementChild;
-  bar.classList.remove("hidden");
-
-  const rows = importState.valid; let done = 0;
-  for (let i=0; i<rows.length; i+=400){
-    const chunk = rows.slice(i, i+400);
-    const batch = writeBatch(db);
-    chunk.forEach(row=>{
-      const id = (row.id||"").trim();
-      const ref = id ? doc(db, ...COLL_PATH, id) : doc(collection(db, ...COLL_PATH));
-      const payload = {
-        name: row.name, category: row.category||"اخرى", imageUrl: row.imageUrl||"",
-        isActive: row.isActive!==false,
-        cal_kcal: row.cal_kcal ?? null, carbs_g: row.carbs_g ?? null, protein_g: row.protein_g ?? null,
-        fat_g: row.fat_g ?? null, fiber_g: row.fiber_g ?? null, gi: row.gi ?? null, sodium_mg: row.sodium_mg ?? null,
-        dietTagsManual: (row.dietTagsManual||"").split(",").map(s=>s.trim()).filter(Boolean),
-        dietSystemsManual: (row.dietSystemsManual||"").split(",").map(s=>s.trim()).filter(Boolean),
-        dietTagsAuto: autoDietTags(row),
-        dietSystemsAuto: autoDietSystems(row),
-        dietSystems: [...new Set([...(row.dietSystemsManual||"").split(",").map(s=>s.trim()).filter(Boolean), ...autoDietSystems(row)])],
-        hashTagsManual: (row.hashTagsManual||"").split(",").map(s=>s.trim()).filter(Boolean),
-        hashTagsAuto: autoHashTags(row),
-        hashTags: [...new Set([...(row.hashTagsManual||"").split(",").map(s=>s.trim()).filter(Boolean), ...autoHashTags(row)])],
-        searchText: toSearchText(row),
-        updatedAt: serverTimestamp(),
-      };
-      if (!id) payload.createdAt = serverTimestamp();
-      batch.set(ref, payload, { merge:true });
-    });
-    await batch.commit();
-    done += chunk.length; barInner.style.width = `${Math.round((done/rows.length)*100)}%`;
-  }
-  bar.classList.add("hidden"); dlg.close(); await fetchAndRender(true);
+$("#btn-delete").onclick=async()=>{
+  const id=$("#edit-form").dataset.id; if(!id) return;
+  const batch=writeBatch(db);
+  batch.set(doc(db,...COLL_PATH,id),{isActive:false,updatedAt:serverTimestamp()},{merge:true});
+  await batch.commit(); $("#edit-dialog").close(); await fetchAndRender(true);
 };
 
 // ============ Image Upload (Storage) ============
-const imgInput = $("#image-file");
-if (imgInput) imgInput.addEventListener("change", async (e)=>{
-  const file = e.target.files?.[0]; if (!file) return;
-  const form = $("#edit-form");
-  const uid  = auth.currentUser?.uid || "anon";
-  const path = `food-items/${uid}/${Date.now()}-${file.name}`;
-  const ref  = sRef(storage, path);
-  try {
-    await uploadBytes(ref, file);
-    const url = await getDownloadURL(ref);
-    form.elements["imageUrl"].value = url;
-    const img = $("#image-preview"); if (img) img.src = url;
-  } catch(err){ console.error(err); alert("تعذّر رفع الصورة. تأكدي من قواعد Storage وتسجيل الدخول."); }
+const imgInput=$("#image-file");
+if(imgInput) imgInput.addEventListener("change",async (e)=>{
+  const file=e.target.files?.[0]; if(!file) return;
+  const form=$("#edit-form"); const uid=auth.currentUser?.uid||"anon";
+  const path=`food-items/${uid}/${Date.now()}-${file.name}`; const ref=sRef(storage,path);
+  try{ await uploadBytes(ref,file); const url=await getDownloadURL(ref);
+    form.elements["imageUrl"].value=url; $("#image-preview").src=url;
+  }catch(err){ console.error(err); alert("تعذّر رفع الصورة. تحقّقي من Storage Rules وتسجيل الدخول."); }
 });
 
 // ============ Auth ============
 onAuthStateChanged(auth, async (user)=>{
-  if (!user){
-    try { await signInWithPopup(auth, new GoogleAuthProvider()); }
-    catch(e){ console.error(e); alert("يلزم تسجيل الدخول."); return; }
-  } else {
-    const name = user.displayName || user.email || "مسؤول";
-    const el = $("#admin-name"); if (el) el.textContent = name;
-    fetchAndRender(true);
-  }
+  if(!user){ try{ await signInWithPopup(auth,new GoogleAuthProvider()); }catch(e){console.error(e); alert("يلزم تسجيل الدخول."); return; } }
+  const name=auth.currentUser?.displayName||auth.currentUser?.email||"مسؤول";
+  const el=$("#admin-name"); if(el) el.textContent=name;
+  fetchAndRender(true);
 });
-$("#btn-signout")?.addEventListener("click", ()=> signOut(auth));
+$("#btn-signout")?.addEventListener("click",()=>signOut(auth));
 
 // ============ Close dialogs ============
-$$("dialog [data-close]").forEach(b=>b.onclick = ()=> b.closest("dialog").close());
+$$("dialog [data-close]").forEach(b=>b.onclick=()=>b.closest("dialog").close());
