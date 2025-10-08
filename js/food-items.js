@@ -11,7 +11,7 @@ import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signO
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL }
   from "https://www.gstatic.com/firebasejs/10.12.1/firebase-storage.js";
 
-// --------- Firebase Config (استخدمي قيم مشروعك) ---------
+// --------- Firebase Config ---------
 const firebaseConfig = {
   apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
   authDomain: "sugar-kids-tracker.firebaseapp.com",
@@ -48,6 +48,17 @@ const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const toNum = v => (v==="" || v==null) ? null : Number(v);
 function debounce(fn, ms=300){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+
+// 🔗 توحيد مسارات الصور (repo/Storage/خارجي)
+function resolveImageUrl(path){
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path; // رابط كامل
+  const isGH = location.hostname.endsWith("github.io");
+  const base = isGH
+    ? location.origin + "/" + location.pathname.split("/")[1] + "/"
+    : location.origin + "/";
+  return base + path.replace(/^\/+/, "");
+}
 
 // وسوم غذائية تلقائية
 function autoDietTags({ gi, carbs_g, protein_g, fat_g, fiber_g, cal_kcal }) {
@@ -137,8 +148,9 @@ function renderCards(items){
   items.forEach(item=>{
     const card = document.createElement("article");
     card.className = "card";
+    const imgSrc = resolveImageUrl(item.imageUrl||"");
     card.innerHTML = `
-      <img class="thumb" src="${item.imageUrl||""}" alt="" onerror="this.src='';this.style.background='#eef2f7'">
+      <img class="thumb" src="${imgSrc}" alt="" onerror="this.src='';this.style.background='#eef2f7'">
       <div class="name">${item.name||"—"}</div>
       <div class="meta">
         <span>${item.category||"غير مصنّف"}</span>
@@ -167,8 +179,9 @@ function renderTable(items){
   const tb = $("#table-body"); tb.innerHTML = "";
   items.forEach(item=>{
     const tr = document.createElement("tr");
+    const imgSrc = resolveImageUrl(item.imageUrl||"");
     tr.innerHTML = `
-      <td><img class="thumb" src="${item.imageUrl||""}" onerror="this.src='';this.style.background='#eef2f7'"/></td>
+      <td><img class="thumb" src="${imgSrc}" onerror="this.src='';this.style.background='#eef2f7'"/></td>
       <td>${item.name||"—"}</td>
       <td>${item.category||"—"}</td>
       <td>${item.cal_kcal ?? "—"}</td>
@@ -274,9 +287,13 @@ async function openEditDialog(id){
   form.elements["dietSystemsManual"].value = (data.dietSystemsManual||[]).join(", ");
   form.elements["hashTagsManual"].value = (data.hashTagsManual||[]).join(", ");
 
-  // معاينة صورة
-  const prev = $("#image-preview");
-  prev.src = data.imageUrl || "";
+  // معاينة صورة (تدعم repo/Storage)
+  $("#image-preview").src = resolveImageUrl(data.imageUrl || "");
+
+  // تحديث المعاينة عند الكتابة يدويًا في الرابط
+  form.elements["imageUrl"].addEventListener("input", e=>{
+    $("#image-preview").src = resolveImageUrl(e.target.value.trim() || "");
+  }, { once:false });
 
   renderAutoTagsPreview();
   dlg.showModal();
