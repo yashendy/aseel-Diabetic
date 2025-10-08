@@ -219,12 +219,15 @@ async function openEditDialog(id){
   form.elements["dietSystemsManual"].value=(data.dietSystemsManual||[]).join(", ");
   form.elements["hashTagsManual"].value=(data.hashTagsManual||[]).join(", ");
 
-  $("#image-preview").src=resolveImageUrl(data.imageUrl||"");
-  form.elements["imageUrl"].addEventListener("input",e=>{
-    $("#image-preview").src=resolveImageUrl(e.target.value.trim()||"");
-  });
+  const prev=$("#image-preview"); if(prev) prev.src=resolveImageUrl(data.imageUrl||"");
+  if (form.elements["imageUrl"]) {
+    form.elements["imageUrl"].addEventListener("input",e=>{
+      const img=$("#image-preview"); if(img) img.src=resolveImageUrl(e.target.value.trim()||"");
+    }, { once:true });
+  }
 
-  renderAutoTagsPreview(); dlg.showModal();
+  dlg.showModal();
+  ensureImageControls(); // ← يضمن وجود زر الرفع حتى لو HTML قديم
 }
 
 ["cal_kcal","carbs_g","protein_g","fat_g","fiber_g","gi","sodium_mg","category","name","dietTagsManual","dietSystemsManual"]
@@ -238,14 +241,13 @@ function toggleManualChip(form,inputName,value){
 
 function renderAutoTagsPreview(){
   const form=$("#edit-form");
+  if(!form) return;
   const fd=new FormData(form);
   const payload=Object.fromEntries(fd.entries());
   ["cal_kcal","carbs_g","protein_g","fat_g","fiber_g","gi","sodium_mg"].forEach(k=>payload[k]=payload[k]===""?null:Number(payload[k]));
   const dietTags=autoDietTags(payload), dietSystems=autoDietSystems(payload);
-  const auto=$("#auto-tags"); auto.innerHTML="";
-  dietTags.forEach(t=>{const s=document.createElement("span");s.className="chip green auto";s.textContent=t;s.onclick=()=>{toggleManualChip(form,"dietTagsManual",t);renderAutoTagsPreview();};auto.appendChild(s);});
-  const diets=$("#auto-diets"); diets.innerHTML="";
-  dietSystems.forEach(t=>{const s=document.createElement("span");s.className="chip yellow auto";s.textContent=t;s.onclick=()=>{toggleManualChip(form,"dietSystemsManual",t);renderAutoTagsPreview();};diets.appendChild(s);});
+  const auto=$("#auto-tags"); if(auto){ auto.innerHTML=""; dietTags.forEach(t=>{const s=document.createElement("span");s.className="chip green auto";s.textContent=t;s.onclick=()=>{toggleManualChip(form,"dietTagsManual",t);renderAutoTagsPreview();};auto.appendChild(s);}); }
+  const diets=$("#auto-diets"); if(diets){ diets.innerHTML=""; dietSystems.forEach(t=>{const s=document.createElement("span");s.className="chip yellow auto";s.textContent=t;s.onclick=()=>{toggleManualChip(form,"dietSystemsManual",t);renderAutoTagsPreview();};diets.appendChild(s);}); }
 }
 
 $("#edit-form").addEventListener("submit",async(e)=>{
@@ -280,42 +282,98 @@ $("#btn-delete").onclick=async()=>{
   await batch.commit(); $("#edit-dialog").close(); await fetchAndRender(true);
 };
 
-// ============ Image Upload (Storage) ============
-const imageUrlInput = document.querySelector('#edit-form input[name="imageUrl"]');
-imageUrlInput?.addEventListener('input', e=>{
-  const v=(e.target.value||'').trim();
-  const img=document.getElementById('image-preview');
-  if(img) img.src=v||'';
-});
+// ============ Image controls (guaranteed) ============
+function ensureImageControls() {
+  const form = document.getElementById('edit-form');
+  if (!form) return;
 
-const imageFileInput = document.getElementById('image-file');
-if (imageFileInput){
-  imageFileInput.addEventListener('change', async (e)=>{
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const form   = document.getElementById('edit-form');
-    const status = document.getElementById('image-status');
-    const uid    = auth.currentUser?.uid || 'anon';
-    const path = `food-items/${uid}/${Date.now()}-${file.name}`;
-    const ref  = sRef(storage, path);
-    try{
-      status.textContent = 'جارِ الرفع...';
-      const task = uploadBytesResumable(ref, file);
-      task.on('state_changed', (snap)=>{
-        const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
-        status.textContent = `جارِ الرفع… ${pct}%`;
-      });
-      await task;
-      const url = await getDownloadURL(ref);
-      form.elements['imageUrl'].value = url;
-      document.getElementById('image-preview').src = url;
-      status.textContent = '✔️ تم الرفع وحُفِظ الرابط';
-    }catch(err){
-      console.error(err);
-      status.textContent = '❌ تعذّر الرفع — تحقّقي من القواعد وتسجيل الدخول';
-      alert('تعذّر رفع الصورة. تحقّقي من قواعد Storage وتسجيل الدخول.');
-    }
-  });
+  let urlInput = form.querySelector('input[name="imageUrl"]');
+  if (!urlInput) {
+    const firstLabel = form.querySelector('.grid label') || form;
+    const wrapper = document.createElement('label');
+    wrapper.innerHTML = `
+      صورة (رابط)
+      <div class="img-row">
+        <input name="imageUrl" placeholder="https://..." />
+        <label class="file-input">
+          <input id="image-file" type="file" accept="image/*" />
+          <span>تحميل صورة</span>
+        </label>
+        <img id="image-preview" class="thumb-mini" alt="" />
+        <small id="image-status" class="muted"></small>
+      </div>`;
+    firstLabel.parentElement.insertBefore(wrapper, firstLabel);
+    urlInput = wrapper.querySelector('input[name="imageUrl"]');
+  }
+
+  let row = urlInput.closest('.img-row');
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'img-row';
+    urlInput.parentElement.appendChild(row);
+    row.appendChild(urlInput);
+  }
+
+  let fileInput = row.querySelector('#image-file');
+  if (!fileInput) {
+    const fileLabel = document.createElement('label');
+    fileLabel.className = 'file-input';
+    fileLabel.innerHTML = `<input id="image-file" type="file" accept="image/*" /><span>تحميل صورة</span>`;
+    row.appendChild(fileLabel);
+    fileInput = fileLabel.querySelector('#image-file');
+  }
+
+  let preview = row.querySelector('#image-preview');
+  if (!preview) {
+    preview = document.createElement('img');
+    preview.id = 'image-preview';
+    preview.className = 'thumb-mini';
+    row.appendChild(preview);
+  }
+
+  let status = row.querySelector('#image-status');
+  if (!status) {
+    status = document.createElement('small');
+    status.id = 'image-status';
+    status.className = 'muted';
+    row.appendChild(status);
+  }
+
+  if (!urlInput._boundPreview) {
+    urlInput.addEventListener('input', e=>{
+      const v=(e.target.value||'').trim();
+      preview.src = v || '';
+    });
+    urlInput._boundPreview = true;
+  }
+
+  if (!fileInput._boundUpload) {
+    fileInput.addEventListener('change', async (e)=>{
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const uid = auth.currentUser?.uid || 'anon';
+      const path = `food-items/${uid}/${Date.now()}-${file.name}`;
+      const ref  = sRef(storage, path);
+      try{
+        status.textContent = 'جارِ الرفع...';
+        const task = uploadBytesResumable(ref, file);
+        task.on('state_changed', (snap)=>{
+          const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+          status.textContent = `جارِ الرفع… ${pct}%`;
+        });
+        await task;
+        const url = await getDownloadURL(ref);
+        urlInput.value = url;
+        preview.src    = url;
+        status.textContent = '✔️ تم الرفع وحُفِظ الرابط';
+      }catch(err){
+        console.error(err);
+        status.textContent = '❌ تعذّر الرفع — تحقّقي من القواعد وتسجيل الدخول';
+        alert('تعذّر رفع الصورة. تحقّقي من قواعد Storage وتسجيل الدخول.');
+      }
+    });
+    fileInput._boundUpload = true;
+  }
 }
 
 // ============ Auth ============
