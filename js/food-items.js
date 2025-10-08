@@ -1,5 +1,5 @@
 /* eslint-disable no-alert */
-import { auth, db, storage } from "./js/firebase-config.js";
+import { auth, db, storage } from "./firebase-config.js";
 import {
   collection, query, where, orderBy, limit, startAfter, getDocs,
   addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp
