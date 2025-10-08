@@ -3,11 +3,9 @@
   --primary:#2ea4ab; --primary-600:#208e95; --danger:#ef4444;
   --chip:#eef2ff; --shadow:0 10px 20px rgba(0,0,0,.05); --radius:18px;
 }
-
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
   font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Kufi Arabic",Tahoma,sans-serif;}
-
 .topbar{
   position:sticky;top:0;z-index:10;background:var(--panel);
   display:grid;grid-template-columns:1fr auto auto;align-items:center;
@@ -17,7 +15,6 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
 .brand span{font-size:18px}
 .actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .userbox{display:flex;align-items:center;gap:10px;font-weight:600;color:var(--muted)}
-
 .btn{border:0;border-radius:12px;padding:10px 14px;cursor:pointer;
   color:#fff;background:linear-gradient(180deg,#34c6cd,#2ea4ab);box-shadow:var(--shadow);font-weight:700}
 .btn:hover{filter:brightness(.97)}
@@ -27,7 +24,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
 
 .file-input{position:relative;overflow:hidden}
 .file-input input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.file-input span{display:inline-block;background:#eef8f8;padding:10px 14px;border-radius:12px}
+.file-input span{display:inline-block;background:#eef8f8;padding:10px 14px;border-radius:12px;border:1px solid #dfe7ea}
 
 .filters{display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:14px 18px}
 .filters .group{display:flex;gap:10px;align-items:center}
@@ -79,18 +76,13 @@ label input, label select{background:#fff;border:1px solid #e5e7eb;border-radius
 label input:focus, label select:focus{border-color:#b6e1e3;box-shadow:0 0 0 3px rgba(46,164,171,.15)}
 .img-row{display:flex;gap:8px;align-items:center}
 .thumb-mini{width:56px;height:40px;object-fit:cover;border-radius:8px;background:#f1f5f9}
+.muted{color:#6b7280}
 
 .import-stats{padding:10px 16px;color:#0f172a;background:#f1fafb;border-radius:12px;margin:10px 16px}
 .progress{height:10px;background:#ecfeff;border-radius:999px;overflow:hidden;margin:10px 16px}
 .progress>div{height:100%;width:0%;background:var(--primary);transition:width .3s}
 
 /* شعار صغير في الهيدر فقط */
-.topbar .brand img{
-  height: 38px;
-  width: auto;
-  display: block;
-  object-fit: contain;
-}
-
-.topbar{ padding: 10px 14px; }
-.brand span{ font-size: 16px; }
+.topbar .brand img{height:38px;width:auto;display:block;object-fit:contain}
+.topbar{padding:10px 14px}
+.brand span{font-size:16px}
