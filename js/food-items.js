@@ -7,17 +7,17 @@ import {
   addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 import {
-  getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider
+  getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 import {
   getStorage, ref as sRef, uploadBytesResumable, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
-/* ========= تهيئة Firebase ========= */
+/* ================= Firebase Init ================= */
 const app = getApps().length
   ? getApps()[0]
   : initializeApp(window.__FIREBASE_CONFIG__ || {
-      // ⚠️ ضعي إعدادات مشروعك هنا إن لم تكن مهيأة عالميًا.
+      // ضـعي إعدادات مشروعك هنا لو مش محطوطة عالميًا في window.__FIREBASE_CONFIG__
       apiKey: "YOUR_API_KEY",
       authDomain: "YOUR_AUTH_DOMAIN",
       projectId: "YOUR_PROJECT_ID",
@@ -29,9 +29,13 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-/* ========= عناصر DOM ========= */
+/* ================= DOM helpers ================= */
 const $ = (id)=> document.getElementById(id);
+const on = (el, ev, cb, name) => { if (el) el.addEventListener(ev, cb); else console.warn(`[UI] عنصر مفقود: ${name}`); };
+
+/* عناصر الصفحة */
 const els = {
+  // filters & views
   search: $("search"),
   fCategory: $("filter-category"),
   fDiet: $("filter-diet"),
@@ -67,16 +71,58 @@ const els = {
   preview: $("preview"),
   btnDelete: $("delete"),
 
-  // admin
+  // admin badge (لو موجودة في الهيدر)
   adminName: $("admin-name"),
   adminRole: $("admin-role"),
+  btnAuth: $("btn-auth"),
 };
 
+/* ================= State ================= */
 let user = null;
+let isAdmin = false;
 let paging = { page: 1, pageSize: 20, lastDoc: null };
 let currentQuerySnapshot = null;
 
-/* ========= أدوات ========= */
+/* ================= Gate Overlay =================
+   طبقة شفافة لحظر الواجهة لغير الأدمن/غير المسجّل.
+================================================= */
+const gate = (()=> {
+  let el = document.getElementById("admin-gate");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "admin-gate";
+    el.style.cssText = `
+      position: fixed; inset: 0; display: none; z-index: 9999;
+      align-items: center; justify-content: center;
+      background: rgba(24,31,55,.35); backdrop-filter: blur(2px);
+    `;
+    el.innerHTML = `
+      <div style="background:#fff; border:1px solid #e6ecf5; border-radius:16px; box-shadow:0 20px 60px rgba(27,35,48,.18); padding:20px; max-width:480px; width:92%;">
+        <h3 style="margin:0 0 8px; font-family:inherit; font-weight:800; color:#1b2330">صلاحيات الوصول</h3>
+        <p id="gate-msg" style="margin:0 0 12px; color:#4b5875">هذه الصفحة مخصصة للمشرفين (Admins) فقط.</p>
+        <div style="display:flex; gap:10px; justify-content:flex-end">
+          <button id="gate-close" class="btn light" style="padding:8px 12px">إغلاق</button>
+          <button id="gate-auth" class="btn primary" style="padding:8px 12px">تسجيل الدخول</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(el);
+    on(el.querySelector("#gate-close"), "click", ()=> el.style.display = "none", "gate-close");
+    on(el.querySelector("#gate-auth"), "click", async ()=>{
+      await signIn();
+    }, "gate-auth");
+  }
+  return {
+    show(msg){
+      const p = document.getElementById("gate-msg");
+      if (p) p.textContent = msg || "هذه الصفحة مخصصة للمشرفين (Admins) فقط.";
+      el.style.display = "flex";
+    },
+    hide(){ el.style.display = "none"; }
+  };
+})();
+
+/* ================= Utils ================= */
 const sleep = (ms)=> new Promise(r=>setTimeout(r, ms));
 
 function toSearchText(item){
@@ -85,7 +131,6 @@ function toSearchText(item){
   const diet = (item.dietSystems || []).map(s=>`#${s}`).join(" ");
   return [item.name || "", item.category || "", tags, diet].join(" ").toLowerCase();
 }
-
 function createChip(label, active){
   const el = document.createElement("span");
   el.className = "chip" + (active ? " active" : "");
@@ -94,24 +139,47 @@ function createChip(label, active){
   return el;
 }
 
-/* ====== ربط أحداث آمن ====== */
-const on = (el, ev, cb, name) => {
-  if (!el) { console.warn(`[UI] عنصر مفقود: ${name}`); return; }
-  el.addEventListener(ev, cb);
-};
+/* ================= Auth ================= */
+async function signIn(){
+  const provider = new GoogleAuthProvider();
+  try{
+    await signInWithPopup(auth, provider);
+  }catch(e){
+    console.warn("Sign-in canceled/failed", e.message);
+  }
+}
+function setAdminBadge(u, profile, roleText){
+  if(!els.adminName) return;
+  const name =
+    (profile && (profile.displayName || profile.name)) ||
+    u?.displayName || (u?.email || "").split("@")[0] || "مستخدم";
+  els.adminName.textContent = name;
+  if(els.adminRole) els.adminRole.textContent = roleText || "";
+  if(els.btnAuth) els.btnAuth.textContent = u ? "تسجيل الخروج" : "تسجيل الدخول";
+}
+async function loadMyProfile(u){
+  if(!u) return {role: null, data: null};
+  try{
+    const snap = await getDoc(doc(db, "users", u.uid));
+    const data = snap.exists() ? snap.data() : null;
+    const role = data?.role || null;
+    return {role, data};
+  }catch(e){
+    console.warn("Failed to read users/{uid}", e.message);
+    return {role: null, data: null};
+  }
+}
 
-/* ===== Household Measures Editor ===== */
+/* ================= Measures Editor ================= */
 const MEASURE_PRESETS = [
   { name: "ملعقة", grams: 5 },
   { name: "كوب",   grams: 240 },
   { name: "طبق",   grams: 150 },
   { name: "حبة",   grams: 80 },
 ];
-
 function renderMeasuresEditor(data){
-  const host = els.measuresList;
-  if(!host) return;
-  host.innerHTML = "";
+  if(!els.measuresList) return;
+  els.measuresList.innerHTML = "";
 
   const current = Array.isArray(data?.measures) ? data.measures
     : (data?.measureQty && typeof data.measureQty==='object')
@@ -138,31 +206,27 @@ function renderMeasuresEditor(data){
       if(g){ row.querySelector(".m-grams").value = g; }
     });
     row.querySelector(".m-del").onclick = ()=> row.remove();
-    host.appendChild(row);
+    els.measuresList.appendChild(row);
   }
 
   if(current.length){ current.forEach(addRow); } else { addRow({}); }
-  if(els.addMeasure){ els.addMeasure.onclick = ()=> addRow({}); }
+  on(els.addMeasure, "click", ()=> addRow({}), "add-measure");
 }
-
 function readMeasuresFromForm(){
-  const rows = document.querySelectorAll("#measures-list .measure-row");
-  return Array.from(rows).map(r=>{
+  return Array.from(document.querySelectorAll("#measures-list .measure-row")).map(r=>{
     const name = r.querySelector(".m-name")?.value?.trim() || "";
     const grams = Number(r.querySelector(".m-grams")?.value);
     return { name, grams: Number.isFinite(grams) ? grams : 0 };
   }).filter(m=> m.name && m.grams>0);
 }
 
-/* ===== رفع صورة إلى Storage ===== */
+/* ================= Image Upload (Storage) ================= */
 function ensureUpload(){
   if(!els.uploadBtn) return;
-
   els.uploadBtn.onclick = async ()=>{
-    if(!user){
-      await signIn();
-      if(!user) return;
-    }
+    if(!user){ gate.show("سجّلي الدخول أولًا لرفع الصور."); return; }
+    if(!isAdmin){ gate.show("هذه العملية متاحة للمشرفين فقط."); return; }
+
     const file = els.imageFile?.files?.[0];
     if(!file){ alert("اختاري ملف صورة أولًا"); return; }
 
@@ -183,7 +247,7 @@ function ensureUpload(){
       const url = await getDownloadURL(task.snapshot.ref);
       if(els.imageUrl) els.imageUrl.value = url;
       if(els.preview) els.preview.src = url;
-      await sleep(300);
+      await sleep(200);
       if(els.progress) els.progress.value = 100;
     });
   };
@@ -195,7 +259,7 @@ function ensureUpload(){
   }
 }
 
-/* ========= وسوم مقترحة ========= */
+/* ================= Auto Tags ================= */
 const SUGGESTED = ["#منخفض_GI", "#غني_بالألياف", "#بدون_جلوتين", "#نباتي", "#موسمي"];
 function renderAutoTags(existing=""){
   if(!els.autoTags) return;
@@ -206,36 +270,9 @@ function renderAutoTags(existing=""){
   });
 }
 
-/* ========= مصادقة ========= */
-async function signIn(){
-  const provider = new GoogleAuthProvider();
-  try{ await signInWithPopup(auth, provider); }
-  catch(e){ console.warn("Sign-in canceled/failed", e.message); }
-}
-
-/* ========= عرض اسم الأدمن ========= */
-async function showAdmin(u){
-  if(!u || !els.adminName) return;
-  // حاول قراءة الوثيقة من users/{uid}
-  try{
-    const uref = doc(db, "users", u.uid);
-    const snap = await getDoc(uref);
-    const data = snap.exists() ? snap.data() : {};
-    const name = data.displayName || data.name || u.displayName || (u.email || "").split("@")[0] || "مستخدم";
-    const role = data.role || "";
-    els.adminName.textContent = name;
-    els.adminRole.textContent = role ? role : "";
-  }catch(e){
-    console.warn("Failed to load user profile", e.message);
-    const fallback = u.displayName || (u.email || "").split("@")[0] || "مستخدم";
-    els.adminName.textContent = fallback;
-    els.adminRole.textContent = "";
-  }
-}
-
-/* ========= فتح/إغلاق الحوار ========= */
+/* ================= Dialog open/close ================= */
 function openDialog(data){
-  if(!els.dlg) return;
+  if(!isAdmin){ gate.show("هذه الصفحة للمديرين فقط."); return; }
   els.dlgTitle.textContent = data?.id ? "تعديل صنف" : "إضافة صنف";
   els.id.value = data?.id || "";
   els.name.value = data?.name || "";
@@ -249,20 +286,20 @@ function openDialog(data){
   renderMeasuresEditor(data || {});
   ensureUpload();
 
-  els.btnDelete.hidden = !data?.id;
-  els.dlg.showModal();
+  if(els.btnDelete) els.btnDelete.hidden = !data?.id;
+  els.dlg?.showModal();
 }
-
 function closeDialog(){ els.dlg?.close(); }
 
-/* ========= CRUD ========= */
+/* ================= CRUD (Admins only) ================= */
 const colFood = collection(db, "fooditems");
 
 async function createOrUpdate(e){
   e.preventDefault();
+  if(!isAdmin){ gate.show("هذه العملية متاحة للمشرفين فقط."); return; }
 
   const payload = {
-    name: els.name.value.trim(),
+    name: (els.name.value || "").trim(),
     category: els.category.value,
     isActive: !!els.isActive.checked,
     tags: (els.tags.value || "").trim(),
@@ -276,15 +313,17 @@ async function createOrUpdate(e){
     payload.tags = [payload.tags, ...autoSelected].filter(Boolean).join(" ");
   }
 
-  // المقادير البيتية
+  // المقادير
   payload.measures = readMeasuresFromForm();
-  payload.measureQty = Object.fromEntries(payload.measures.map(m=>[m.name, m.grams])); // توافق
-  // أنظمة غذائية (مثال مبسط من الوسوم)
+  payload.measureQty = Object.fromEntries(payload.measures.map(m=>[m.name, m.grams])); // توافق مع صفحات أخرى
+
+  // أنظمة غذائية (مثال مبسّط من الوسوم)
   const diets = [];
   if(payload.tags.includes("#منخفض_GI")) diets.push("lowGi");
   if(payload.tags.includes("#بدون_جلوتين")) diets.push("glutenFree");
   if(payload.tags.includes("#نباتي")) diets.push("vegan");
   payload.dietSystems = [...new Set(diets)];
+
   payload.searchText = toSearchText(payload);
 
   const id = els.id.value;
@@ -299,6 +338,7 @@ async function createOrUpdate(e){
 }
 
 async function removeItem(){
+  if(!isAdmin){ gate.show("هذه العملية متاحة للمشرفين فقط."); return; }
   const id = els.id.value;
   if(!id) return;
   if(!confirm("تأكيد حذف الصنف؟")) return;
@@ -307,7 +347,7 @@ async function removeItem(){
   await fetchAndRender(true);
 }
 
-/* ========= الاستعلام + التصفية + التصفح ========= */
+/* ================= Querying & Rendering ================= */
 function buildQuery(){
   const filters = [];
   if(els.fActive?.checked) filters.push(where("isActive", "==", true));
@@ -315,13 +355,11 @@ function buildQuery(){
   if(els.fDiet?.value) filters.push(where("dietSystems", "array-contains", els.fDiet.value));
   return query(colFood, ...filters, orderBy("name"), limit(paging.pageSize));
 }
-
 function textMatch(item){
   const q = (els.search?.value || "").trim().toLowerCase();
   if(!q) return true;
   return (item.searchText || toSearchText(item)).includes(q);
 }
-
 async function fetchAndRender(reset=false){
   if(!els.cards || !els.tableBody) return;
 
@@ -346,16 +384,21 @@ async function fetchAndRender(reset=false){
   if(els.next) els.next.disabled = snap.size < paging.pageSize;
 
   const items = snap.docs.map(d=>({ id: d.id, ...d.data() })).filter(textMatch);
+
   renderCards(items);
   renderTable(items);
-}
 
+  // لو مفيش عناصر، أعرض بطاقة ودّية
+  if(!items.length && els.cards){
+    const empty = document.createElement("div");
+    empty.className = "card";
+    empty.style.cssText = "padding:16px; text-align:center;";
+    empty.textContent = "لا توجد نتائج مطابقة.";
+    els.cards.appendChild(empty);
+  }
+}
 function renderCards(items){
   if(!els.cards) return;
-  if(!items.length){
-    els.cards.innerHTML = `<div class="card" style="padding:16px;text-align:center">لا توجد نتائج مطابقة.</div>`;
-    return;
-  }
   const frag = document.createDocumentFragment();
   items.forEach(item=>{
     const card = document.createElement("div");
@@ -402,7 +445,6 @@ function renderCards(items){
   });
   els.cards.appendChild(frag);
 }
-
 function renderTable(items){
   if(!els.tableBody) return;
   const frag = document.createDocumentFragment();
@@ -430,7 +472,7 @@ function renderTable(items){
   els.tableBody.appendChild(frag);
 }
 
-/* ========= مستمعو UI (آمن) ========= */
+/* ================= UI Listeners ================= */
 [["search","input"], ["filter-category","input"], ["filter-diet","input"]].forEach(([id,ev])=>{
   on($(id), ev, ()=> fetchAndRender(true), id);
 });
@@ -468,20 +510,40 @@ on($("prev"), "click", async ()=>{
   paging.page -= 1;
   await fetchAndRender(true);
 }, "prev");
-
 on($("next"), "click", async ()=>{
   if(!currentQuerySnapshot || currentQuerySnapshot.size < paging.pageSize) return;
   paging.page += 1;
   await fetchAndRender(false);
 }, "next");
 
-/* ========= تشغيل ========= */
+/* زر الدخول/الخروج (في الهيدر إن وُجد) */
+on(els.btnAuth, "click", async ()=>{
+  if(auth.currentUser) await signOut(auth);
+  else await signIn();
+}, "btn-auth");
+
+/* ================= Boot ================= */
 onAuthStateChanged(auth, async (u)=>{
   user = u || null;
-  await showAdmin(u);     // عرض اسم الأدمن في الهيدر
+
+  // حمّل بروفايل المستخدم ودوره
+  const {role, data} = await loadMyProfile(user);
+  isAdmin = role === "admin";
+
+  // حدّث شارة الهيدر لو موجودة
+  setAdminBadge(user, data, isAdmin ? "admin" : (role || ""));
+
+  // Gate
+  if(!user){
+    gate.show("سجّلي الدخول لمتابعة العمل على صفحة الأصناف.");
+    return; // لحد ما تسجّل دخول
+  }
+  if(!isAdmin){
+    gate.show("صلاحيات غير كافية. هذه الصفحة للمشرفين فقط.");
+    return;
+  }
+
+  gate.hide();           // أدمن → اسمحي بالدخول
+  ensureUpload();        // تفعيل الرفع
   await fetchAndRender(true);
 });
-
-// معاينة فورية للرابط + تفعيل الرفع
-if(els.imageUrl && els.preview){ els.imageUrl.addEventListener("input", ()=> els.preview.src = els.imageUrl.value || ""); }
-ensureUpload();
