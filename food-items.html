@@ -37,7 +37,6 @@
       <input id="q" type="search" placeholder="ابحث بالاسم/الوسوم/الهاشتاجات..." />
     </div>
     <div class="group">
-      <!-- فئة (Combobox) -->
       <input list="cats" id="category" placeholder="كل الفئات" />
       <datalist id="cats">
         <option value="نشويات"></option>
@@ -76,32 +75,20 @@
   </section>
 
   <main>
-    <!-- بطاقات -->
     <section id="cards-view" class="cards"></section>
 
-    <!-- جدول -->
     <section id="table-view" class="table-wrap hidden">
       <table>
         <thead>
           <tr>
-            <th>صورة</th>
-            <th>الاسم</th>
-            <th>الفئة</th>
-            <th>سعرات</th>
-            <th>كارب</th>
-            <th>بروتين</th>
-            <th>دهون</th>
-            <th>ألياف</th>
-            <th>GI</th>
-            <th>نشط؟</th>
-            <th>إجراءات</th>
+            <th>صورة</th><th>الاسم</th><th>الفئة</th><th>سعرات</th>
+            <th>كارب</th><th>بروتين</th><th>دهون</th><th>ألياف</th><th>GI</th><th>نشط؟</th><th>إجراءات</th>
           </tr>
         </thead>
         <tbody id="table-body"></tbody>
       </table>
     </section>
 
-    <!-- تنقّل صفحات -->
     <div class="pager">
       <button id="prev-page" class="btn light">&larr; السابق</button>
       <span id="page-info">صفحة 1</span>
@@ -144,17 +131,17 @@
           <input list="cats" name="category" placeholder="اختر أو اكتب..." />
         </label>
 
+        <!-- ✅ صورة (رفع + رابط + معاينة) -->
         <label>صورة (رابط)
-  <div class="img-row">
-    <input name="imageUrl" placeholder="https://..." />
-    <label class="file-input">
-      <input id="image-file" type="file" accept="image/*" />
-      <span>رفع صورة</span>
-    </label>
-    <img id="image-preview" class="thumb-mini" />
-  </div>
-</label>
-
+          <div class="img-row">
+            <input name="imageUrl" placeholder="https://..." />
+            <label class="file-input">
+              <input id="image-file" type="file" accept="image/*" />
+              <span>رفع صورة</span>
+            </label>
+            <img id="image-preview" class="thumb-mini" alt="" />
+          </div>
+        </label>
 
         <label class="switch-inline">
           <input type="checkbox" name="isActive" checked />
