@@ -17,8 +17,8 @@
     </div>
 
     <div class="actions">
-      <button id="btn-export-current" class="btn light">تصدير المعروض</button>
-      <button id="btn-export-all" class="btn">تصدير الكل</button>
+      <button id="btn-export" class="btn">تصدير الكل</button>
+      <button id="btn-export-active" class="btn light">تصدير المعروض</button>
       <label class="file-input">
         <input id="file-import" type="file" accept=".xlsx,.xls,.csv" />
         <span>استيراد Excel/CSV</span>
@@ -33,71 +33,48 @@
   </header>
 
   <section class="filters">
-    <div class="group">
-      <input id="q" type="search" placeholder="ابحث بالاسم/الوسوم/الهاشتاجات..." />
-    </div>
-
-    <div class="group">
-      <input list="cats" id="category" placeholder="كل الفئات" />
-      <datalist id="cats">
-        <option value="نشويات"></option>
-        <option value="منتجات الحليب"></option>
-        <option value="فواكه"></option>
-        <option value="خضروات"></option>
-        <option value="منتجات اللحوم"></option>
-        <option value="الدهون"></option>
-        <option value="اخرى"></option>
-      </datalist>
-
-      <select id="dietSystem">
-        <option value="">كل الأنظمة</option>
-        <option value="كيتو">كيتو</option>
-        <option value="قليل الملح">قليل الملح</option>
-        <option value="بعد التمرين">بعد التمرين</option>
-        <option value="صديق لمرضى السكري">صديق لمرضى السكري</option>
-        <option value="قليل الكربوهيدرات">قليل الكربوهيدرات</option>
+    <div class="filter-row">
+      <select id="view-mode">
+        <option value="cards">بطاقات</option>
+        <option value="table">جدول</option>
       </select>
 
-      <select id="sortBy">
+      <select id="active-filter">
+        <option value="">الكل</option>
+        <option value="active-only" selected>نشط فقط</option>
+        <option value="inactive-only">غير نشط فقط</option>
+      </select>
+
+      <select id="category-filter">
+        <option value="">كل الفئات</option>
+      </select>
+
+      <select id="diet-filter">
+        <option value="">كل الأنظمة</option>
+      </select>
+
+      <input id="q" placeholder="ابحث بالاسم/الوسوم/الملاحظات..." />
+
+      <select id="sort">
         <option value="createdAt_desc">الأحدث</option>
         <option value="name_asc">الاسم (أ-ي)</option>
       </select>
 
-      <label class="switch">
-        <input type="checkbox" id="onlyActive" checked />
-        <span>نشط فقط</span>
-      </label>
-    </div>
-
-    <div class="group tabs">
-      <button id="tab-cards" class="tab active">🗂️ بطاقات</button>
-      <button id="tab-table" class="tab">📊 جدول</button>
+      <div class="right">
+        <button id="btn-refresh" class="icon-btn" title="تحديث">⟳</button>
+        <span id="page-info">—</span>
+      </div>
     </div>
   </section>
 
-  <main>
-    <section id="cards-view" class="cards"></section>
+  <main id="list" class="cards"></main>
 
-    <section id="table-view" class="table-wrap hidden">
-      <table>
-        <thead>
-          <tr>
-            <th>صورة</th><th>الاسم</th><th>الفئة</th><th>سعرات</th>
-            <th>كارب</th><th>بروتين</th><th>دهون</th><th>ألياف</th><th>GI</th><th>نشط؟</th><th>إجراءات</th>
-          </tr>
-        </thead>
-        <tbody id="table-body"></tbody>
-      </table>
-    </section>
+  <footer class="pager">
+    <button id="prev" class="btn light">السابق</button>
+    <button id="next" class="btn light">التالي</button>
+  </footer>
 
-    <div class="pager">
-      <button id="prev-page" class="btn light">&larr; السابق</button>
-      <span id="page-info">صفحة 1</span>
-      <button id="next-page" class="btn light">التالي &rarr;</button>
-    </div>
-  </main>
-
-  <!-- معاينة الاستيراد -->
+  <!-- حوار الاستيراد -->
   <dialog id="import-dialog">
     <div class="dialog-head">
       <h3>معاينة الاستيراد</h3>
@@ -114,74 +91,67 @@
       <button id="btn-export-errors" class="btn light">تصدير الأخطاء</button>
       <button id="btn-save-valid" class="btn primary">حفظ الصالح فقط</button>
     </div>
-    <div id="import-progress" class="progress hidden"><div></div></div>
   </dialog>
 
-  <!-- إضافة/تعديل صنف -->
+  <!-- حوار التعديل/الإضافة -->
   <dialog id="edit-dialog">
     <div class="dialog-head">
-      <h3 id="edit-title">إضافة صنف</h3>
+      <h3 id="edit-title">تعديل صنف</h3>
       <button class="icon-btn" data-close>&times;</button>
     </div>
 
-    <form id="edit-form">
-      <div class="grid">
-        <label>الاسم <input name="name" required /></label>
+    <form id="edit-form" class="grid">
+      <label>الاسم <input name="name" required /></label>
+      <label>الفئة <input name="category" list="cat-list" /></label>
+      <datalist id="cat-list"></datalist>
 
-        <label>الفئة
-          <input list="cats" name="category" placeholder="اختر أو اكتب..." />
-        </label>
+      <!-- صورة المنتج: زر رفع فقط + معاينة + حالة. الحقل الداخلي مخفي (يُملأ تلقائيًا) -->
+      <label>صورة المنتج
+        <div class="img-row">
+          <input name="imageUrl" type="hidden" />
+          <label class="file-input">
+            <input id="image-file" type="file" accept="image/*" />
+            <span>تحميل صورة</span>
+          </label>
+          <img id="image-preview" class="thumb-mini" alt="" />
+          <small id="image-status" class="muted"></small>
+        </div>
+      </label>
 
-        <!-- ✅ صورة (تحميل للمخزن + رابط + معاينة) -->
-        <label>صورة تحميل للمخزن (رابط)
-          <div class="img-row">
-            <input name="imageUrl" placeholder="https://..." />
-            <label class="file-input">
-              <input id="image-file" type="file" accept="image/*" />
-              <span>تحميل صورة</span>
-            </label>
-            <img id="image-preview" class="thumb-mini" alt="" />
-            <small id="image-status" class="muted"></small>
-          </div>
-        </label>
+      <label class="switch-inline">
+        <input type="checkbox" name="isActive" checked />
+        <span>نشط</span>
+      </label>
 
-        <label class="switch-inline">
-          <input type="checkbox" name="isActive" checked />
-          <span>نشط</span>
-        </label>
+      <label>سعرات/100g <input type="number" step="0.1" name="cal_kcal" /></label>
+      <label>كارب/100g   <input type="number" step="0.1" name="carbs_g" /></label>
+      <label>بروتين/100g <input type="number" step="0.1" name="protein_g" /></label>
+      <label>دهون/100g   <input type="number" step="0.1" name="fat_g" /></label>
+      <label>ألياف/100g  <input type="number" step="0.1" name="fiber_g" /></label>
+      <label>GI <input type="number" step="0.1" name="gi" /></label>
+      <label>صوديوم mg/100g (اختياري) <input type="number" step="1" name="sodium_mg" /></label>
 
-        <label>سعرات/100g <input type="number" step="0.1" name="cal_kcal" /></label>
-        <label>كارب/100g   <input type="number" step="0.1" name="carbs_g" /></label>
-        <label>بروتين/100g <input type="number" step="0.1" name="protein_g" /></label>
-        <label>دهون/100g   <input type="number" step="0.1" name="fat_g" /></label>
-        <label>ألياف/100g  <input type="number" step="0.1" name="fiber_g" /></label>
-        <label>GI          <input type="number" step="1"   name="gi" /></label>
-        <label>صوديوم mg/100g (اختياري) <input type="number" step="1" name="sodium_mg" /></label>
+      <label>وسوم المستخدم (أفضل بتفاصيل)
+        <input name="hashTagsManual" placeholder="منفصل بـ فاصلة، مثل: عالي الألياف، خالي السكر" />
+      </label>
+
+      <label>أنظمة غذائية (يدوي — أفضل بتفاصيل)
+        <input name="dietSystemsManual" placeholder="مثل: كيتو، لو-كارب، مناسب لمرضى السكر" />
+      </label>
+
+      <label>هاشتاجات البحث (يدوي — أفضل بتفاصيل)
+        <input name="dietTagsManual" placeholder="مثل: #سناك #فطور #جبن" />
+      </label>
+
+      <div class="auto-tags-box">
+        <div><strong>وسوم تلقائية:</strong> <span id="auto-tags"></span></div>
+        <div><strong>أنظمة غذائية (تلقائي + قابل للتعديل):</strong> <span id="auto-diets"></span></div>
       </div>
 
-      <label>وسوم المستخدم (افصل بفواصل)
-        <input name="dietTagsManual" placeholder="منخفض الكربوهيدرات, خالي اللاكتوز" />
-      </label>
-
-      <label>أنظمة غذائية (يدوي — افصل بفواصل)
-        <input name="dietSystemsManual" placeholder="كيتو, قليل الملح, بعد التمرين" />
-      </label>
-
-      <label>هاشتاجات البحث (يدوي — افصل بفواصل)
-        <input name="hashTagsManual" placeholder="#فطور, #snack, #خبز" />
-      </label>
-
-      <div class="tags-area">
-        <div><strong>وسوم تلقائية:</strong></div>
-        <div class="tags-auto" id="auto-tags"></div>
-        <div style="margin-top:8px"><strong>أنظمة غذائية (تلقائي + قابل للتعديل):</strong></div>
-        <div class="tags-auto" id="auto-diets"></div>
-      </div>
-
-      <menu class="dialog-actions">
-        <button type="button" id="btn-delete" class="btn danger hidden">حذف</button>
+      <div class="dialog-actions">
         <button type="submit" class="btn primary">حفظ</button>
-      </menu>
+        <button type="button" id="btn-delete" class="btn danger">حذف</button>
+      </div>
     </form>
   </dialog>
 
