@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>الأصناف - Sugar Kids Tracker</title>
-  <link rel="stylesheet" href="./css/food-items.css" />
+  <link rel="stylesheet" href="./food-items.css" />
 </head>
 <body>
 
@@ -27,6 +27,7 @@
       <span class="avatar">👤</span>
       <span id="admin-name" class="name">غير مسجّل</span>
       <span id="admin-role" class="role"></span>
+      <button id="btn-auth" class="btn light" style="margin-inline-start:8px">تسجيل الدخول</button>
     </div>
   </header>
 
@@ -186,6 +187,8 @@
     </form>
   </dialog>
 
-  <script type="module" src="./js/food-items.js"></script>
+  <!-- التحميل: ملف التهيئة الموحّد ثم كود الصفحة -->
+  <script type="module" src="./js/firebase-config.js"></script>
+  <script type="module" src="./food-items.js"></script>
 </body>
 </html>
