@@ -27,7 +27,7 @@ const storage = getStorage(app);
 // ============ Constants / State ============
 const COLL_PATH = ["admin","global","foodItems"];
 const PAGE_SIZE = 20;
-const state = { page:1,lastDoc:null,q:"",category:"",dietSystem:"",sort:"createdAt_desc",cache:new Map(),currentDocs:[],view:"cards" };
+const state = { page:1,lastDoc:null,q:"",category:"",dietSystem:"",onlyActive:true,sortBy:"createdAt_desc",cache:new Map(),currentDocs:[],view:"cards" };
 
 // ============ Utils ============
 const $ = s => document.querySelector(s);
@@ -38,179 +38,160 @@ function resolveImageUrl(path){
   if (/^https?:\/\//i.test(path)) return path;
   const isGH = location.hostname.endsWith("github.io");
   const base = isGH ? location.origin + "/" + location.pathname.split("/")[1] + "/" : location.origin + "/";
-  return base + (path[0]==="/" ? path.slice(1) : path);
+  return base + path.replace(/^\/+/, "");
+}
+const toSearchText = (item)=>[
+  item.name,item.category,
+  ...(item.dietTagsManual||[]),...(item.dietTagsAuto||[]),
+  ...(item.dietSystemsManual||[]),...(item.dietSystemsAuto||[]),
+  ...(item.hashTags||[])
+].filter(Boolean).join(" ").toLowerCase();
+const filterByKeyword=(list,kw)=> !kw? list : list.filter(x=>(x.searchText||"").includes(kw.toLowerCase())||(x.name||"").toLowerCase().includes(kw.toLowerCase()));
+const setPageInfo=(n)=> $("#page-info").textContent=`صفحة ${state.page} — ${n} عنصر`;
+const n=x=>typeof x==='number'&&!isNaN(x);
+const autoDietTags=({gi,carbs_g,protein_g,fat_g,fiber_g,cal_kcal})=>{
+  const t=new Set(); if(n(gi)){if(gi<55)t.add("منخفض GI"); else if(gi>=70)t.add("مرتفع GI");}
+  if(n(carbs_g)&&carbs_g<15)t.add("منخفض الكربوهيدرات");
+  if(n(protein_g)&&protein_g>=15)t.add("عالي البروتين");
+  if(n(fat_g)&&fat_g<3)t.add("منخفض الدهون");
+  if(n(fiber_g)&&fiber_g>=5)t.add("غني بالألياف");
+  if(n(cal_kcal)&&cal_kcal<80)t.add("منخفض السعرات");
+  if((n(carbs_g)&&carbs_g<15)||(n(gi)&&gi<55))t.add("صديق لمرضى السكري");
+  return [...t];
+};
+const autoDietSystems=({carbs_g,fat_g,gi,protein_g,sodium_mg})=>{
+  const t=new Set(); if(n(carbs_g)&&carbs_g<=10&&n(fat_g)&&fat_g>=10)t.add("كيتو");
+  if(n(carbs_g)&&carbs_g<15)t.add("قليل الكربوهيدرات");
+  if(n(sodium_mg)&&sodium_mg<=120)t.add("قليل الملح");
+  if(n(protein_g)&&protein_g>=20&&n(carbs_g)&&carbs_g>=10&&carbs_g<=30)t.add("بعد التمرين");
+  if((n(gi)&&gi<55)||(n(carbs_g)&&carbs_g<15))t.add("صديق لمرضى السكري");
+  return [...t];
+};
+const autoHashTags=(item)=>{
+  const base=[item.category,item.name, ...(item.dietTagsManual||[]),...(item.dietTagsAuto||[]), ...(item.dietSystemsManual||[]),...(item.dietSystemsAuto||[])]
+    .filter(Boolean).join(" ").toLowerCase();
+  const words=base.replace(/[^\p{L}\p{N}\s]/gu," ").split(/\s+/).filter(w=>w.length>=3);
+  return [...new Set(words)].slice(0,12).map(w=>"#"+w.replace(/^#+/,""));
+};
+function normalizeLegacyFields(d){
+  const m={...d};
+  m.cal_kcal=(d.cal_kcal??d.calories??d.kcal??null);
+  m.carbs_g=(d.carbs_g??d.carb??d.carbs??null);
+  m.protein_g=(d.protein_g??d.protein??null);
+  m.fat_g=(d.fat_g??d.fat??null);
+  m.fiber_g=(d.fiber_g??d.fiber??null);
+  m.gi=(d.gi??d.GI??null);
+  m.category=(d.category||"اخرى");
+  m.sodium_mg=(d.sodium_mg??d.sodium??null);
+  m.dietTagsManual=Array.isArray(d.dietTagsManual)?d.dietTagsManual:(d.dietTagsManual||"").toString().split(",").map(s=>s.trim()).filter(Boolean);
+  m.dietSystemsManual=Array.isArray(d.dietSystemsManual)?d.dietSystemsManual:(d.dietSystemsManual||"").toString().split(",").map(s=>s.trim()).filter(Boolean);
+  m.hashTagsManual=Array.isArray(d.hashTagsManual)?d.hashTagsManual:(d.hashTagsManual||"").toString().split(",").map(s=>s.trim()).filter(Boolean);
+  m.dietTagsAuto=d.dietTagsAuto||autoDietTags(m);
+  m.dietSystemsAuto=d.dietSystemsAuto||autoDietSystems(m);
+  return m;
 }
 
-// ============ Renderers ============
-// (الكروت والجدول – نفس منطقك)
-function cardTpl(id, data){
-  const img = resolveImageUrl(data.imageUrl || "");
-  const activeBadge = data.isActive!==false ? `<span class="badge green">نشط</span>` : `<span class="badge gray">غير نشط</span>`;
-  return `
-    <div class="card" data-id="${id}">
-      <div class="head">
-        <div class="title">${data.name||"-"}</div>
-        ${activeBadge}
-      </div>
-      <img class="thumb" src="${img}" alt="" onerror="this.src='';this.style.background='#f1f5f9'"/>
-      <div class="muted">${data.category||"—"}</div>
-      <div class="muted">GI: ${data.gi??"—"} | كارب/100g: ${data.carbs_g??"—"}</div>
-      <div class="actions">
-        <button class="btn light" data-edit="${id}">تعديل</button>
-      </div>
-    </div>`;
-}
-
-function renderCards(docs){
-  const el = $("#list");
-  el.className = "cards";
-  el.innerHTML = docs.map(d => cardTpl(d.id, d.data())).join("") || `<div class="muted">لا توجد نتائج</div>`;
-  $$("#list [data-edit]").forEach(b=>b.onclick=()=>openEditDialog(b.dataset.edit));
-}
-
-function renderTable(docs){
-  const el = $("#list");
-  el.className = "table-wrap";
-  const rows = docs.map(d => {
-    const data = d.data();
-    const img = resolveImageUrl(data.imageUrl || "");
-    return `<tr>
-      <td><img class="thumb" src="${img}" alt="" onerror="this.src='';this.style.background='#f1f5f9'"/></td>
-      <td>${data.name||"-"}</td>
-      <td>${data.category||"-"}</td>
-      <td>${data.gi??"—"}</td>
-      <td>${data.carbs_g??"—"}</td>
-      <td>${data.isActive!==false?"نشط":"غير نشط"}</td>
-      <td><button class="btn light" data-edit="${d.id}">تعديل</button></td>
-    </tr>`;
-  }).join("");
-  el.innerHTML = `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>صورة</th><th>الاسم</th><th>الفئة</th><th>GI</th><th>كارب/100g</th><th>الحالة</th><th></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="7" class="muted">لا توجد نتائج</td></tr>`}</tbody>
-      </table>
-    </div>`;
-  $$("#list [data-edit]").forEach(b=>b.onclick=()=>openEditDialog(b.dataset.edit));
-}
-
-// ============ Query builder ============
+// ============ Query ============
 function buildQuery(){
   const base = collection(db, ...COLL_PATH);
-  const filters = [];
-  if (state.onlyActive === true)  filters.push(where("isActive","==",true));
-  if (state.onlyActive === false) filters.push(where("isActive","==",false));
-  if (state.category) filters.push(where("category","==",state.category));
-  if (state.dietSystem) filters.push(where("dietSystems","array-contains",state.dietSystem));
+  const qs=[];
+  if(state.onlyActive) qs.push(where("isActive","==",true));
+  if(state.category)   qs.push(where("category","==",state.category));
+  if(state.dietSystem) qs.push(where("dietSystems","array-contains",state.dietSystem));
+  if(state.sortBy==="name_asc") qs.push(orderBy("name")); else qs.push(orderBy("createdAt","desc"));
+  let q=query(base,...qs,limit(PAGE_SIZE));
+  if(state.lastDoc) q=query(base,...qs,startAfter(state.lastDoc),limit(PAGE_SIZE));
+  return q;
+}
 
-  let qy;
-  if ((state.sortBy||state.sort)==="name_asc") {
-   qy = query(base, ...filters, orderBy("name","asc"), limit(PAGE_SIZE));
-  } else {
-   qy = query(base, ...filters, orderBy("createdAt","desc"), limit(PAGE_SIZE));
-  }
-  if (state.lastDoc) qy = query(qy, startAfter(state.lastDoc));
-  return qy;
+// ============ Render ============
+function renderCards(items){
+  const host=$("#cards-view"); host.innerHTML="";
+  items.forEach(item=>{
+    const card=document.createElement("article"); card.className="card";
+    const imgSrc=resolveImageUrl(item.imageUrl||"");
+    card.innerHTML=`
+      <img class="thumb" src="${imgSrc}" alt="" onerror="this.src='';this.style.background='#eef2f7'">
+      <div class="name">${item.name||"—"}</div>
+      <div class="meta">
+        <span>${item.category||"غير مصنّف"}</span>
+        <span>سعرات: ${item.cal_kcal ?? "—"}</span>
+        <span>كارب: ${item.carbs_g ?? "—"}</span>
+        <span>GI: ${item.gi ?? "—"}</span>
+        <span>${item.isActive? "نشط" : "غير نشط"}</span>
+      </div>
+      <div class="chips">
+        ${(item.dietTagsAuto||[]).map(t=>`<span class="chip green">${t}</span>`).join("")}
+        ${(item.dietSystems||item.dietSystemsAuto||[]).map(t=>`<span class="chip yellow">${t}</span>`).join("")}
+        ${(item.dietTagsManual||[]).map(t=>`<span class="chip">${t}</span>`).join("")}
+      </div>
+      <div class="actions">
+        <button class="btn light" data-edit="${item.id}">تعديل</button>
+        <button class="btn ${item.isActive? 'danger' : 'primary'}" data-toggle="${item.id}">
+          ${item.isActive? 'تعطيل' : 'تفعيل'}
+        </button>
+      </div>`;
+    host.appendChild(card);
+  });
+  bindRowActions(); setPageInfo(items.length);
+}
+function renderTable(items){
+  const tb=$("#table-body"); tb.innerHTML="";
+  items.forEach(item=>{
+    const imgSrc=resolveImageUrl(item.imageUrl||"");
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td><img class="thumb" src="${imgSrc}" onerror="this.src='';this.style.background='#eef2f7'"/></td>
+      <td>${item.name||"—"}</td>
+      <td>${item.category||"—"}</td>
+      <td>${item.cal_kcal ?? "—"}</td>
+      <td>${item.carbs_g ?? "—"}</td>
+      <td>${item.protein_g ?? "—"}</td>
+      <td>${item.fat_g ?? "—"}</td>
+      <td>${item.fiber_g ?? "—"}</td>
+      <td>${item.gi ?? "—"}</td>
+      <td>${item.isActive? "✅" : "❌"}</td>
+      <td>
+        <button class="btn light" data-edit="${item.id}">تعديل</button>
+        <button class="btn ${item.isActive? 'danger' : 'primary'}" data-toggle="${item.id}">
+          ${item.isActive? 'تعطيل' : 'تفعيل'}
+        </button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+  bindRowActions(); setPageInfo(items.length);
+}
+function bindRowActions(){
+  $$("[data-edit]").forEach(b=>b.onclick=()=>openEditDialog(b.dataset.edit));
+  $$("[data-toggle]").forEach(b=>b.onclick=()=>quickToggle(b.dataset.toggle));
 }
 
 // ============ Fetch ============
-async function fetchAndRender(reset=true){
-  if (reset){ state.page=1; state.lastDoc=null; }
-  const qy = buildQuery();
-  const snap = await getDocs(qy);
-  state.currentDocs = snap.docs;
-  state.lastDoc = snap.docs[snap.docs.length-1] || null;
-
-  const mode = state.view || "cards";
-  if (mode === "table") renderTable(snap.docs);
-  else renderCards(snap.docs);
-
-  $("#page-info") && ( $("#page-info").textContent = `صفحة ${state.page}` );
-}
-
-// ============ Normalizers / Helpers ============
-function normalizeLegacyFields(d){
-  // تطبيع حقول قديمة لو موجودة
-  if (typeof d.createdAt === "string") d.createdAt = new Date(d.createdAt);
-  return d;
+async function fetchAndRender(reset=false){
+  if(reset){state.page=1;state.lastDoc=null;}
+  try{
+    const snap=await getDocs(buildQuery());
+    const docs=snap.docs.map(d=>({id:d.id,...d.data()}));
+    state.currentDocs=docs; docs.forEach(d=>{d.searchText=d.searchText||toSearchText(d); state.cache.set(d.id,d);});
+    const filtered=filterByKeyword(docs,state.q);
+    state.view==="table"?renderTable(filtered):renderCards(filtered);
+    state.lastDoc=snap.docs[snap.docs.length-1]||null;
+  }catch(e){
+    if(e?.code==="failed-precondition" && e?.message?.includes("index")) alert("الاستعلام محتاج فهرس. أنشئيه ثم أعيدي التحميل.");
+    else { console.error(e); alert("تعذّر جلب البيانات."); }
+  }
 }
 
 // ============ Filters ============
-// Helper: safe bind that ignores missing elements
-const bind = (el, ev, fn) => { if (el) el.addEventListener(ev, fn); };
-
-// search
-bind($("#q"), "input", debounce(e => {
-  state.q = e.target.value.trim();
-  fetchAndRender(true);
-}, 300));
-
-// category: support #category or #category-filter
-const elCategory = $("#category") || $("#category-filter");
-bind(elCategory, "input", e => {
-  state.category = (e.target.value || "").trim();
-  fetchAndRender(true);
-});
-
-// active only: checkbox(#onlyActive) or select(#active-filter)
-const elOnlyActiveChk = $("#onlyActive");
-const elActiveSelect = $("#active-filter");
-if (elOnlyActiveChk) {
-  bind(elOnlyActiveChk, "change", e => {
-    state.onlyActive = e.target.checked;
-    fetchAndRender(true);
-  });
-} else if (elActiveSelect) {
-  bind(elActiveSelect, "change", e => {
-    const v = e.target.value;
-    state.onlyActive = v === "active-only" ? true : v === "inactive-only" ? false : undefined;
-    fetchAndRender(true);
-  });
-}
-
-// sort: #sortBy or #sort
-const elSort = $("#sortBy") || $("#sort");
-bind(elSort, "change", e => {
-  state.sortBy = e.target.value;
-  fetchAndRender(true);
-});
-
-// diet system: #dietSystem or #diet-filter
-const elDiet = $("#dietSystem") || $("#diet-filter");
-bind(elDiet, "change", e => {
-  state.dietSystem = e.target.value;
-  fetchAndRender(true);
-});
-
-// paging
-$("#next-page")?.addEventListener("click", async () => {
-  if (!state.lastDoc) return;
-  state.page++;
-  await fetchAndRender(false);
-});
-$("#prev-page")?.addEventListener("click", async () => {
-  if (state.page === 1) return;
-  state.page--;
-  state.lastDoc = null;
-  for (let i = 1; i < state.page; i++) await getDocs(buildQuery());
-  await fetchAndRender(false);
-});
-
-// view tabs (keep original if present)
-$("#tab-cards")?.addEventListener("click", () => {
-  state.view = "cards";
-  $("#tab-cards").classList.add("active");
-  $("#tab-table").classList.remove("active");
-  $("#cards-view").classList.remove("hidden");
-  $("#table-view").classList.add("hidden");
-});
-$("#tab-table")?.addEventListener("click", () => {
-  state.view = "table";
-  $("#tab-table").classList.add("active");
-  $("#tab-cards").classList.remove("active");
-  $("#table-view").classList.remove("hidden");
-  $("#cards-view").classList.add("hidden");
-});
+$("#q").addEventListener("input",debounce(e=>{state.q=e.target.value.trim();fetchAndRender(true);},300));
+$("#category").addEventListener("input",e=>{state.category=(e.target.value||"").trim();fetchAndRender(true);});
+$("#onlyActive").addEventListener("change",e=>{state.onlyActive=e.target.checked;fetchAndRender(true);});
+$("#sortBy").addEventListener("change",e=>{state.sortBy=e.target.value;fetchAndRender(true);});
+$("#dietSystem").addEventListener("change",e=>{state.dietSystem=e.target.value;fetchAndRender(true);});
+$("#next-page").onclick=async()=>{if(!state.lastDoc)return;state.page++;await fetchAndRender(false);};
+$("#prev-page").onclick=async()=>{if(state.page===1)return;state.page--;state.lastDoc=null;for(let i=1;i<state.page;i++)await getDocs(buildQuery());await fetchAndRender(false);};
+$("#tab-cards").onclick=()=>{state.view="cards";$("#tab-cards").classList.add("active");$("#tab-table").classList.remove("active");$("#cards-view").classList.remove("hidden");$("#table-view").classList.add("hidden");};
+$("#tab-table").onclick=()=>{state.view="table";$("#tab-table").classList.add("active");$("#tab-cards").classList.remove("active");$("#table-view").classList.remove("hidden");$("#cards-view").classList.add("hidden");};
 
 // ============ Add / Edit ============
 $("#btn-add").onclick=()=>openEditDialog(null);
@@ -227,13 +208,13 @@ async function openEditDialog(id){
   form.elements["category"].value=data.category||"اخرى";
   form.elements["imageUrl"].value=data.imageUrl||"";
   form.elements["isActive"].checked=(data.isActive!==false);
-  form.elements["cal_kcal"].value=(data.cal_kcal??"");
-  form.elements["carbs_g"].value=(data.carbs_g??"");
-  form.elements["protein_g"].value=(data.protein_g??"");
-  form.elements["fat_g"].value=(data.fat_g??"");
-  form.elements["fiber_g"].value=(data.fiber_g??"");
-  form.elements["gi"].value=(data.gi??"");
-  form.elements["sodium_mg"].value=(data.sodium_mg??"");
+  form.elements["cal_kcal"].value=data.cal_kcal??"";
+  form.elements["carbs_g"].value=data.carbs_g??"";
+  form.elements["protein_g"].value=data.protein_g??"";
+  form.elements["fat_g"].value=data.fat_g??"";
+  form.elements["fiber_g"].value=data.fiber_g??"";
+  form.elements["gi"].value=data.gi??"";
+  form.elements["sodium_mg"].value=data.sodium_mg??"";
   form.elements["dietTagsManual"].value=(data.dietTagsManual||[]).join(", ");
   form.elements["dietSystemsManual"].value=(data.dietSystemsManual||[]).join(", ");
   form.elements["hashTagsManual"].value=(data.hashTagsManual||[]).join(", ");
@@ -252,58 +233,56 @@ async function openEditDialog(id){
 ["cal_kcal","carbs_g","protein_g","fat_g","fiber_g","gi","sodium_mg","category","name","dietTagsManual","dietSystemsManual"]
   .forEach(n=>{$("#edit-form").elements[n]?.addEventListener("input",renderAutoTagsPreview);});
 
+function toggleManualChip(form,inputName,value){
+  const inp=form.elements[inputName];
+  const list=(inp.value||"").split(",").map(s=>s.trim()).filter(Boolean);
+  const i=list.indexOf(value); if(i>=0)list.splice(i,1); else list.push(value);
+  inp.value=list.join(", "); }
+
 function renderAutoTagsPreview(){
-  const f=$("#edit-form"); if(!f) return;
-  const h=f.elements["hashTagsManual"].value.trim();
-  const d=f.elements["dietSystemsManual"].value.trim();
-  $("#auto-tags").textContent = h || "—";
-  $("#auto-diets").textContent = d || "—";
+  const form=$("#edit-form");
+  if(!form) return;
+  const fd=new FormData(form);
+  const payload=Object.fromEntries(fd.entries());
+  ["cal_kcal","carbs_g","protein_g","fat_g","fiber_g","gi","sodium_mg"].forEach(k=>payload[k]=payload[k]===""?null:Number(payload[k]));
+  const dietTags=autoDietTags(payload), dietSystems=autoDietSystems(payload);
+  const auto=$("#auto-tags"); if(auto){ auto.innerHTML=""; dietTags.forEach(t=>{const s=document.createElement("span");s.className="chip green auto";s.textContent=t;s.onclick=()=>{toggleManualChip(form,"dietTagsManual",t);renderAutoTagsPreview();};auto.appendChild(s);}); }
+  const diets=$("#auto-diets"); if(diets){ diets.innerHTML=""; dietSystems.forEach(t=>{const s=document.createElement("span");s.className="chip yellow auto";s.textContent=t;s.onclick=()=>{toggleManualChip(form,"dietSystemsManual",t);renderAutoTagsPreview();};diets.appendChild(s);}); }
 }
 
-// ============ Save ============
 $("#edit-form").addEventListener("submit",async(e)=>{
   e.preventDefault();
   const id=e.currentTarget.dataset.id||null;
   const fd=new FormData(e.currentTarget);
   const payload=Object.fromEntries(fd.entries());
   payload.isActive=$("#edit-form").elements["isActive"].checked;
-  if(payload.imageUrl && !/^https?:\/\//.test(payload.imageUrl)){ payload.imageUrl=''; }
   ["cal_kcal","carbs_g","protein_g","fat_g","fiber_g","gi","sodium_mg"].forEach(k=>payload[k]=payload[k]===""?null:Number(payload[k]));
   payload.dietTagsManual=(payload.dietTagsManual||"").split(",").map(s=>s.trim()).filter(Boolean);
   payload.dietSystemsManual=(payload.dietSystemsManual||"").split(",").map(s=>s.trim()).filter(Boolean);
   payload.hashTagsManual=(payload.hashTagsManual||"").split(",").map(s=>s.trim()).filter(Boolean);
 
-  const batch = writeBatch(db);
-  let docRef;
-  if(id){
-    docRef = doc(db, ...COLL_PATH, id);
-    batch.update(docRef, { ...payload, updatedAt: serverTimestamp() });
-  } else {
-    // إضافة جديدة: ننشئ doc id أولًا حتى نقدر نرفق له صورة لاحقًا
-    docRef = doc(collection(db, ...COLL_PATH));
-    batch.set(docRef, { ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-  }
-  await batch.commit();
-  $("#edit-dialog").close();
-  await fetchAndRender(true);
+  payload.dietTagsAuto=autoDietTags(payload);
+  payload.dietSystemsAuto=autoDietSystems(payload);
+  payload.dietSystems=[...new Set([...(payload.dietSystemsManual||[]),...(payload.dietSystemsAuto||[])])];
+  const hashAuto=autoHashTags(payload), hashManual=payload.hashTagsManual||[];
+  payload.hashTagsAuto=hashAuto; payload.hashTags=[...new Set([...hashManual,...hashAuto])];
+  payload.searchText=toSearchText(payload);
+
+  const now=serverTimestamp();
+  const ref=id?doc(db,...COLL_PATH,id):doc(collection(db,...COLL_PATH));
+  const batch=writeBatch(db);
+  batch.set(ref,{...payload,createdAt:id?(state.cache.get(id)?.createdAt||now):now,updatedAt:now},{merge:true});
+  await batch.commit(); $("#edit-dialog").close(); await fetchAndRender(true);
 });
 
-// ============ Delete ============
 $("#btn-delete").onclick=async()=>{
-  const id=$("#edit-form").dataset.id;
-  if(!id) return;
-  if(!confirm("هل أنتِ متأكدة من حذف هذا الصنف؟")) return;
-  const b = writeBatch(db);
-  b.update(doc(db, ...COLL_PATH, id), { isActive:false, updatedAt: serverTimestamp() });
-  await b.commit();
-  $("#edit-dialog").close();
-  await fetchAndRender(true);
+  const id=$("#edit-form").dataset.id; if(!id) return;
+  const batch=writeBatch(db);
+  batch.set(doc(db,...COLL_PATH,id),{isActive:false,updatedAt:serverTimestamp()},{merge:true});
+  await batch.commit(); $("#edit-dialog").close(); await fetchAndRender(true);
 };
 
-// ============ Import / Export (مختصر كما هو عندك) ============
-// ... (لو عندك دوال الاستيراد/التصدير، تظل كما هي) ...
-
-// ============ رفع الصورة + حفظ الرابط ============
+// ============ Image controls (guaranteed) ============
 function ensureImageControls() {
   const form = document.getElementById('edit-form');
   if (!form) return;
@@ -325,17 +304,9 @@ function ensureImageControls() {
       </div>`;
     firstLabel.parentElement.insertBefore(wrapper, firstLabel);
     urlInput = wrapper.querySelector('input[name="imageUrl"]');
-    if(urlInput){ urlInput.readOnly=true; urlInput.classList.add('visually-hidden'); }
-  }
-
-  if (form.elements["imageUrl"]) {
-    form.elements["imageUrl"].addEventListener("input",e=>{
-      const img=$("#image-preview"); if(img) img.src=resolveImageUrl(e.target.value.trim()||"");
-    }, { once:true });
   }
 
   let row = urlInput.closest('.img-row');
-  if(urlInput){ urlInput.readOnly=true; urlInput.classList.add('visually-hidden'); }
   if (!row) {
     row = document.createElement('div');
     row.className = 'img-row';
@@ -380,9 +351,6 @@ function ensureImageControls() {
     fileInput.addEventListener('change', async (e)=>{
       const file = e.target.files?.[0];
       if (!file) return;
-      if(!/^image\//.test(file.type)){ alert('الملف المختار ليس صورة'); return; }
-      if(file.size > 5*1024*1024){ alert('حجم الصورة كبير، الحد الأقصى 5MB'); return; }
-
       const uid = auth.currentUser?.uid || 'anon';
       const path = `food-items/${uid}/${Date.now()}-${file.name}`;
       const ref  = sRef(storage, path);
@@ -398,27 +366,10 @@ function ensureImageControls() {
         urlInput.value = url;
         preview.src    = url;
         status.textContent = '✔️ تم الرفع وحُفِظ الرابط';
-        // إن كان الصنف موجودًا (تعديل)، حدّث Firestore فورًا ليظهر في الموقع مباشرة
-        try{
-          const itemId = form.dataset.id;
-          if (itemId) {
-            const b = writeBatch(db);
-            const dref = doc(collection(db, ...COLL_PATH), itemId);
-            b.update(dref, { imageUrl: url, updatedAt: serverTimestamp() });
-            await b.commit();
-            status.textContent = '✔️ تم الرفع والحفظ في قاعدة البيانات';
-          } else {
-            status.textContent = '✔️ تم الرفع — سيتم الحفظ عند حفظ النموذج';
-          }
-        }catch(err){
-          console.error(err);
-          status.textContent = 'تم الرفع لكن تعذّر الحفظ التلقائي، احفظي النموذج يدويًا';
-          alert('تم رفع الصورة، لكن لم يُحدّث المستند تلقائيًا. احفظي النموذج.');
-        }
       }catch(err){
         console.error(err);
-        alert('تعذّر رفع الصورة. تحققي من الاتصال والصلاحيات.');
-        status.textContent = 'فشل الرفع';
+        status.textContent = '❌ تعذّر الرفع — تحقّقي من القواعد وتسجيل الدخول';
+        alert('تعذّر رفع الصورة. تحقّقي من قواعد Storage وتسجيل الدخول.');
       }
     });
     fileInput._boundUpload = true;
@@ -427,10 +378,7 @@ function ensureImageControls() {
 
 // ============ Auth ============
 onAuthStateChanged(auth, async (user)=>{
-  if(!user){
-    try{ await signInWithPopup(auth,new GoogleAuthProvider()); }
-    catch(e){ console.error(e); alert("يلزم تسجيل الدخول."); return; }
-  }
+  if(!user){ try{ await signInWithPopup(auth,new GoogleAuthProvider()); }catch(e){console.error(e); alert("يلزم تسجيل الدخول."); return; } }
   const name=auth.currentUser?.displayName||auth.currentUser?.email||"مسؤول";
   const el=$("#admin-name"); if(el) el.textContent=name;
   fetchAndRender(true);
