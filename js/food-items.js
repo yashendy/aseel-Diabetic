@@ -18,11 +18,11 @@ const app = getApps().length
   ? getApps()[0]
   : initializeApp(window.__FIREBASE_CONFIG__ || {
       // ضـعي إعدادات مشروعك هنا لو مش محطوطة عالميًا في window.__FIREBASE_CONFIG__
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_AUTH_DOMAIN",
+      apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
+      authDomain: "sugar-kids-tracker.firebaseapp.com",
       projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_BUCKET",
-      appId: "YOUR_APP_ID"
+      storageBucket: "sugar-kids-tracker",
+      appId: "1:251830888114:web:a20716d3d4ad86a6724bab"
     });
 
 const db = getFirestore(app);
