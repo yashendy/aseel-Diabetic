@@ -6,7 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js";
-import { getStorage, ref as sRef, uploadBytes, getDownloadURL }
+import { getStorage, ref as sRef, uploadBytesResumable, getDownloadURL }
   from "https://www.gstatic.com/firebasejs/10.12.1/firebase-storage.js";
 
 // --------- Firebase Config ---------
@@ -281,15 +281,42 @@ $("#btn-delete").onclick=async()=>{
 };
 
 // ============ Image Upload (Storage) ============
-const imgInput=$("#image-file");
-if(imgInput) imgInput.addEventListener("change",async (e)=>{
-  const file=e.target.files?.[0]; if(!file) return;
-  const form=$("#edit-form"); const uid=auth.currentUser?.uid||"anon";
-  const path=`food-items/${uid}/${Date.now()}-${file.name}`; const ref=sRef(storage,path);
-  try{ await uploadBytes(ref,file); const url=await getDownloadURL(ref);
-    form.elements["imageUrl"].value=url; $("#image-preview").src=url;
-  }catch(err){ console.error(err); alert("تعذّر رفع الصورة. تحقّقي من Storage Rules وتسجيل الدخول."); }
+const imageUrlInput = document.querySelector('#edit-form input[name="imageUrl"]');
+imageUrlInput?.addEventListener('input', e=>{
+  const v=(e.target.value||'').trim();
+  const img=document.getElementById('image-preview');
+  if(img) img.src=v||'';
 });
+
+const imageFileInput = document.getElementById('image-file');
+if (imageFileInput){
+  imageFileInput.addEventListener('change', async (e)=>{
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const form   = document.getElementById('edit-form');
+    const status = document.getElementById('image-status');
+    const uid    = auth.currentUser?.uid || 'anon';
+    const path = `food-items/${uid}/${Date.now()}-${file.name}`;
+    const ref  = sRef(storage, path);
+    try{
+      status.textContent = 'جارِ الرفع...';
+      const task = uploadBytesResumable(ref, file);
+      task.on('state_changed', (snap)=>{
+        const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+        status.textContent = `جارِ الرفع… ${pct}%`;
+      });
+      await task;
+      const url = await getDownloadURL(ref);
+      form.elements['imageUrl'].value = url;
+      document.getElementById('image-preview').src = url;
+      status.textContent = '✔️ تم الرفع وحُفِظ الرابط';
+    }catch(err){
+      console.error(err);
+      status.textContent = '❌ تعذّر الرفع — تحقّقي من القواعد وتسجيل الدخول';
+      alert('تعذّر رفع الصورة. تحقّقي من قواعد Storage وتسجيل الدخول.');
+    }
+  });
+}
 
 // ============ Auth ============
 onAuthStateChanged(auth, async (user)=>{
