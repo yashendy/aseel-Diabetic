@@ -86,12 +86,11 @@ label input:focus, label select:focus{border-color:#b6e1e3;box-shadow:0 0 0 3px 
 
 /* شعار صغير في الهيدر فقط */
 .topbar .brand img{
-  height: 38px;      /* غيّريها لـ 28 أو 32 لو عايزة أصغر */
+  height: 38px;
   width: auto;
   display: block;
   object-fit: contain;
 }
 
-.topbar{ padding: 10px 14px; }     /* يقلّل ارتفاع الشريط */
-.brand span{ font-size: 16px; }    /* تصغير عنوان اللوحة قليلاً */
-
+.topbar{ padding: 10px 14px; }
+.brand span{ font-size: 16px; }
