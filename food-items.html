@@ -36,6 +36,7 @@
     <div class="group">
       <input id="q" type="search" placeholder="ابحث بالاسم/الوسوم/الهاشتاجات..." />
     </div>
+
     <div class="group">
       <input list="cats" id="category" placeholder="كل الفئات" />
       <datalist id="cats">
@@ -131,24 +132,18 @@
           <input list="cats" name="category" placeholder="اختر أو اكتب..." />
         </label>
 
-        <!-- ✅ صورة (رفع + رابط + معاينة) -->
-       <!-- 🔄 استبدلي الجزء القديم الخاص بالصورة بهذا البلوك -->
-<label>صورة (رابط)
-  <div class="img-row">
-    <!-- رابط مباشر (لو عندك URL جاهز) -->
-    <input name="imageUrl" placeholder="https://..." />
-
-    <!-- زر رفع الصورة إلى Firebase Storage -->
-    <label class="file-input">
-      <input id="image-file" type="file" accept="image/*" />
-      <span>رفع صورة</span>
-    </label>
-
-    <!-- معاينة فورية -->
-    <img id="image-preview" class="thumb-mini" alt="" />
-  </div>
-</label>
-
+        <!-- ✅ صورة (تحميل للمخزن + رابط + معاينة) -->
+        <label>صورة (رابط)
+          <div class="img-row">
+            <input name="imageUrl" placeholder="https://..." />
+            <label class="file-input">
+              <input id="image-file" type="file" accept="image/*" />
+              <span>تحميل صورة</span>
+            </label>
+            <img id="image-preview" class="thumb-mini" alt="" />
+            <small id="image-status" class="muted"></small>
+          </div>
+        </label>
 
         <label class="switch-inline">
           <input type="checkbox" name="isActive" checked />
