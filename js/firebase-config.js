@@ -17,7 +17,7 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 // Site key الخاص بـ App Check (بعد التسجيل)
 initializeAppCheck(app, {
-  provider: new ReCaptchaV3Provider("6Leov-MrAAAAAJ982eHqf7CWxf-k1ntDF7-nDnWX"),
+  provider: new ReCaptchaV3Provider("6Leov-MrAAAAAOsZWaCyZ3laOW4In6TO5fzme80i"),
   isTokenAutoRefreshEnabled: true,
 });
 
