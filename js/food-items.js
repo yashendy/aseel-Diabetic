@@ -1,5 +1,5 @@
 /* eslint-disable no-alert */
-/* ===== التهيئة الموحّدة (v12.1.0) ===== */
+/* ===== التهيئة الموحدة (v12.1.0) ===== */
 import { auth, db, storage } from "./firebase-config.js";
 
 /* ===== Firebase v12.1.0 ===== */
@@ -11,12 +11,13 @@ import {
   onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  ref as sRef, uploadBytesResumable, getDownloadURL
+  ref as sRef, uploadBytesResumable, getDownloadURL, uploadBytes
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
 /* ========= DOM helpers ========= */
 const $ = (id)=> document.getElementById(id);
 const on = (el, ev, cb, name)=>{ if(el) el.addEventListener(ev, cb); else console.warn(`[UI] عنصر مفقود: ${name}`); };
+const num = (x)=> (x===null||x===undefined||x==="") ? null : Number(x);
 
 /* عناصر الصفحة */
 const els = {
@@ -43,10 +44,25 @@ const els = {
   name: $("name"),
   category: $("category"),
   isActive: $("isActive"),
-  tags: $("tags"),
-  autoTags: $("auto-tags"),
+
+  // وسوم
+  searchTags: $("searchTags"),
+  dietChips: $("diet-chips"),
+  autoTags: $("auto-tags"), // (غير مستخدم الآن)
+
+  // مقادير
   measuresList: $("measures-list"),
   addMeasure: $("add-measure"),
+
+  // تغذية
+  cal_kcal: $("cal_kcal"),
+  carbs_g: $("carbs_g"),
+  protein_g: $("protein_g"),
+  fat_g: $("fat_g"),
+  fiber_g: $("fiber_g"),
+  sodium_mg: $("sodium_mg"),
+
+  // صورة
   imageUrl: $("image-url"),
   imageFile: $("image-file"),
   uploadBtn: $("btn-upload"),
@@ -54,9 +70,12 @@ const els = {
   preview: $("preview"),
   btnDelete: $("delete"),
 
+  // Auth UI
   adminName: $("admin-name"),
   adminRole: $("admin-role"),
   btnAuth: $("btn-auth"),
+
+  btnAi: $("btn-ai-tags"),
 };
 
 /* ========= State ========= */
@@ -73,7 +92,7 @@ const gate = (()=> {
     el.id = "admin-gate";
     el.style.cssText = "position:fixed;inset:0;display:none;z-index:9999;align-items:center;justify-content:center;background:rgba(24,31,55,.35);backdrop-filter:blur(2px)";
     el.innerHTML = `
-      <div style="background:#fff;border:1px solid #e6ecf5;border-radius:16px;box-shadow:0 20px 60px rgba(27,35,48,.18);padding:20px;max-width:480px;width:92%;">
+      <div style="background:#fff;border:1px solid #e6ecf5;border-radius:16px;box-shadow:0 20px 60px rgba(27,35,48,.18);padding:20px;max-width:520px;width:92%;">
         <h3 style="margin:0 0 8px;font-weight:800;color:#1b2330">صلاحيات الوصول</h3>
         <p id="gate-msg" style="margin:0 0 12px;color:#4b5875">هذه الصفحة مخصصة للمشرفين (Admins) فقط.</p>
         <div style="display:flex;gap:10px;justify-content:flex-end">
@@ -95,7 +114,7 @@ const gate = (()=> {
 /* ========= Utils ========= */
 const sleep = (ms)=> new Promise(r=>setTimeout(r, ms));
 
-/* تحويل/تطبيع الأنظمة الغذائية من العربي إلى أكواد داخلية للفلترة */
+/* تطبيع أنظمة غذائية من العربي -> أكواد */
 const DIET_MAP = {
   "منخفض gi": "lowGi",
   "منخفض_gi": "lowGi",
@@ -114,25 +133,41 @@ function normalizeDiet(value){
            .filter(Boolean);
 }
 
+/* Diet chips UI */
+const DIET_LABELS = [
+  {code:"lowGi",      label:"#منخفض_GI"},
+  {code:"glutenFree", label:"#بدون_جلوتين"},
+  {code:"dairyFree",  label:"#بدون_ألبان"},
+  {code:"vegan",      label:"#نباتي"},
+  {code:"keto",       label:"#كيتو"}
+];
+function renderDietChips(selected=[]){
+  if(!els.dietChips) return;
+  els.dietChips.innerHTML="";
+  const set = new Set(selected);
+  DIET_LABELS.forEach(d=>{
+    const chip = document.createElement("span");
+    chip.className = "chip" + (set.has(d.code) ? " active" : "");
+    chip.textContent = d.label;
+    chip.onclick = ()=> chip.classList.toggle("active");
+    chip.dataset.code = d.code;
+    els.dietChips.appendChild(chip);
+  });
+}
+function getDietCodesFromChips(){
+  return Array.from(document.querySelectorAll("#diet-chips .chip.active")).map(x=>x.dataset.code);
+}
+
 /* نص البحث */
 function toSearchText(item){
   const tagsText = [
-    item.tags || "",
     item.searchTags || "",
+    Array.isArray(item.tags) ? item.tags.join(" ") : (item.tags || ""),
     (item.dietTagsAuto || []).join(" "),
     (item.dietTagsManual || []).join(" ")
   ].filter(Boolean).join(" ");
   const diet = (item.dietSystems || []).map(s=>`#${s}`).join(" ");
   return [item.name || "", item.category || "", tagsText, diet].join(" ").toLowerCase();
-}
-
-/* إنشاء شِب (وسم بصري) */
-function createChip(label, active){
-  const el = document.createElement("span");
-  el.className = "chip" + (active ? " active" : "");
-  el.textContent = label;
-  el.onclick = ()=> el.classList.toggle("active");
-  return el;
 }
 
 /* ========= Auth ========= */
@@ -157,15 +192,15 @@ async function loadMyProfile(u){
   }
 }
 function setAdminBadge(u, profile, roleText){
-  if(!els.adminName) return;
+  if(!$("admin-name")) return;
   const name = (profile && (profile.displayName || profile.name))
     || u?.displayName || (u?.email||"").split("@")[0] || "مستخدم";
-  els.adminName.textContent = name;
-  if(els.adminRole) els.adminRole.textContent = roleText || "";
+  $("admin-name").textContent = name;
+  if($("admin-role")) $("admin-role").textContent = roleText || "";
   if(els.btnAuth) els.btnAuth.textContent = u ? "تسجيل الخروج" : "تسجيل الدخول";
 }
 
-/* ========= Measures Editor ========= */
+/* ========= Measures ========= */
 const MEASURE_PRESETS = [
   { name: "ملعقة", grams: 5 },
   { name: "كوب",   grams: 240 },
@@ -210,115 +245,161 @@ function readMeasuresFromForm(){
   }).filter(m=> m.name && m.grams>0);
 }
 
-/* ========= Upload ========= */
-function ensureUpload(){
-  if(!els.uploadBtn) return;
-  els.uploadBtn.onclick = async ()=>{
-    if(!user){ gate.show("سجّلي الدخول أولًا لرفع الصور."); return; }
-    if(!isAdmin){ gate.show("الرفع متاح للأدمن فقط."); return; }
-    const file = els.imageFile?.files?.[0];
-    if(!file){ alert("اختاري ملف صورة أولًا"); return; }
-    const safe = file.name.replace(/[^\w.\-]+/g,"_");
-    const path = `food-items/${user.uid}/${Date.now()}-${safe}`;
-    const ref = sRef(storage, path);
-    const task = uploadBytesResumable(ref, file, { contentType: file.type });
-    if(els.progress) els.progress.value = 0;
-    task.on("state_changed", (snap)=>{
-      if(els.progress) els.progress.value = Math.round((snap.bytesTransferred/snap.totalBytes)*100);
-    }, (err)=>{
-      console.error(err); alert("تعذّر رفع الصورة: " + err.message);
-    }, async ()=>{
-      const url = await getDownloadURL(task.snapshot.ref);
-      if(els.imageUrl) els.imageUrl.value = url;
-      if(els.preview) els.preview.src = url;
-      await sleep(200);
-      if(els.progress) els.progress.value = 100;
-    });
+/* ========= Nutrition ========= */
+function pickNutrition(raw){
+  const n = raw.nutrPer100g || {};
+  const v = (k)=> raw[k] ?? n[k];
+  return {
+    cal_kcal:  num(v("cal_kcal")),
+    carbs_g:   num(v("carbs_g")),
+    protein_g: num(v("protein_g")),
+    fat_g:     num(v("fat_g")),
+    fiber_g:   num(v("fiber_g")),
+    sodium_mg: num(v("sodium_mg"))
   };
-  if(els.imageUrl && els.preview){
-    els.imageUrl.addEventListener("input", ()=> els.preview.src = els.imageUrl.value.trim() || "");
-  }
+}
+function readNutritionFromForm(){
+  return {
+    cal_kcal:  num(els.cal_kcal.value),
+    carbs_g:   num(els.carbs_g.value),
+    protein_g: num(els.protein_g.value),
+    fat_g:     num(els.fat_g.value),
+    fiber_g:   num(els.fiber_g.value),
+    sodium_mg: num(els.sodium_mg.value)
+  };
+}
+function fillNutritionForm(n){
+  els.cal_kcal.value  = n.cal_kcal  ?? "";
+  els.carbs_g.value   = n.carbs_g   ?? "";
+  els.protein_g.value = n.protein_g ?? "";
+  els.fat_g.value     = n.fat_g     ?? "";
+  els.fiber_g.value   = n.fiber_g   ?? "";
+  els.sodium_mg.value = n.sodium_mg ?? "";
+}
+function nutritionLine(n){
+  const parts=[];
+  if(n.cal_kcal!=null) parts.push(`${n.cal_kcal} kcal`);
+  if(n.carbs_g !=null) parts.push(`كربوهيدرات ${n.carbs_g} جم`);
+  if(n.protein_g!=null) parts.push(`بروتين ${n.protein_g} جم`);
+  if(n.fat_g    !=null) parts.push(`دهون ${n.fat_g} جم`);
+  return parts.join(" · ");
 }
 
-/* ========= مصادر البيانات ========= */
-const colTopLevel = collection(db, "fooditems"); // الجديدة
-const colLegacy   = collection(db, "admin", "global", "foodItems"); // القديمة
+/* ========= AI Tags (قواعد بسيطة) ========= */
+function aiSuggestTags(n){
+  const search = new Set();
+  const diets  = new Set();
 
-/* تطبيع عنصر ليكون موحّد الشكل */
+  if (n.carbs_g != null) {
+    if (n.carbs_g <= 15) diets.add("lowGi");
+    if (n.carbs_g >= 40) search.add("نشويات_عالية");
+  }
+  if (n.fiber_g != null) {
+    if (n.fiber_g >= 4) search.add("غني_بالألياف");
+  }
+  if (n.fat_g != null) {
+    if (n.fat_g <= 3) search.add("قليل_الدهون");
+    if (n.fat_g >= 17) search.add("دهون_مرتفعة");
+  }
+  if (n.protein_g != null && n.protein_g >= 10) {
+    search.add("غني_بالبروتين");
+  }
+  if (n.sodium_mg != null && n.sodium_mg >= 400) {
+    search.add("صوديوم_مرتفع");
+  }
+  return {
+    searchTags: Array.from(search).join(" "),
+    dietSystemsAuto: Array.from(diets)
+  };
+}
+on(els.btnAi, "click", ()=>{
+  const s = aiSuggestTags(readNutritionFromForm());
+  const cur = (els.searchTags.value||"").trim();
+  els.searchTags.value = [cur, s.searchTags].filter(Boolean).join(" ").trim();
+  renderDietChips([...new Set([...getDietCodesFromChips(), ...s.dietSystemsAuto])]);
+});
+
+/* ========= مصادر البيانات ========= */
+const colNew    = collection(db, "fooditems");
+const colLegacy = collection(db, "admin", "global", "foodItems");
+
+/* توحيد عنصر */
 function normalizeItem(raw, id){
   const diet = [
     ...normalizeDiet(raw.dietSystems),
     ...normalizeDiet(raw.dietSystemsAuto),
     ...normalizeDiet(raw.dietSystemsManual),
   ];
-  // نجمع وسوم البحث
-  const tagsText = [
-    raw.tags || "",
-    raw.searchTags || "",
-    Array.isArray(raw.dietTagsAuto) ? raw.dietTagsAuto.join(" ") : "",
-    Array.isArray(raw.dietTagsManual) ? raw.dietTagsManual.join(" ") : ""
-  ].filter(Boolean).join(" ").trim();
-
+  const tags = Array.isArray(raw.tags) ? raw.tags
+               : (raw.tags ? String(raw.tags).split(" ") : []);
+  const nutr = pickNutrition(raw);
   const measures = Array.isArray(raw.measures) ? raw.measures
     : (raw.measureQty && typeof raw.measureQty === "object")
       ? Object.entries(raw.measureQty).map(([name,grams])=>({name, grams:Number(grams)||0}))
       : [];
 
-  return {
+  const item = {
     id,
-    name: raw.name || raw.title || "",
+    name: raw.name || raw.title || raw.name_ar || "",
     category: raw.category || "أخرى",
     isActive: (raw.isActive !== undefined) ? !!raw.isActive : true,
     imageUrl: raw.imageUrl || raw.photoUrl || "",
-    // تغذية
-    cal_kcal: raw.cal_kcal ?? raw.kcal ?? null,
-    carbs_g:  raw.carbs_g  ?? raw.carbs ?? null,
-    protein_g:raw.protein_g?? raw.protein ?? null,
-    fat_g:    raw.fat_g    ?? raw.fat ?? null,
-    fiber_g:  raw.fiber_g  ?? raw.fiber ?? null,
-    sugar_g:  raw.sugar_g  ?? raw.sugars ?? null,
-    sodium_mg:raw.sodium_mg?? raw.sodium ?? null,
 
-    // وسوم وأنظمة
-    tags: tagsText,
+    // وسوم
+    tags,
+    searchTags: raw.searchText || raw.searchTags || "",
+    dietTagsAuto: raw.dietTagsAuto || [],
+    dietTagsManual: raw.dietTagsManual || [],
     dietSystems: Array.from(new Set(diet)),
+
+    // تغذية
+    ...nutr,
 
     // مقادير
     measures,
     measureQty: Object.fromEntries(measures.map(m=>[m.name, m.grams])),
-
-    // نص بحث موحّد
-    searchText: ""
   };
+  item.searchText = toSearchText(item);
+  return item;
 }
 
 /* ========= CRUD ========= */
 async function createOrUpdate(e){
   e.preventDefault();
   if(!isAdmin){ gate.show("هذه العملية متاحة للأدمن فقط."); return; }
+
+  const nutr = readNutritionFromForm();
   const payload = {
     name: (els.name.value||"").trim(),
     category: els.category.value,
     isActive: !!els.isActive.checked,
-    tags: (els.tags.value||"").trim(),
     imageUrl: (els.imageUrl.value||"").trim(),
+
+    // وسوم
+    searchTags: (els.searchTags.value||"").trim(),
+    dietSystems: getDietCodesFromChips(),
+
+    // مقادير
+    measures: readMeasuresFromForm(),
+    measureQty: {},
+
+    // تغذية (مسطحة + nested للتوافق)
+    cal_kcal: nutr.cal_kcal,
+    carbs_g: nutr.carbs_g,
+    protein_g: nutr.protein_g,
+    fat_g: nutr.fat_g,
+    fiber_g: nutr.fiber_g,
+    sodium_mg: nutr.sodium_mg,
+    nutrPer100g: { ...nutr },
+
     updatedAt: serverTimestamp(),
   };
-  const autoSel = Array.from(els.autoTags.querySelectorAll(".chip.active")).map(c=>c.textContent);
-  if(autoSel.length) payload.tags = [payload.tags, ...autoSel].filter(Boolean).join(" ");
-  payload.measures = readMeasuresFromForm();
   payload.measureQty = Object.fromEntries(payload.measures.map(m=>[m.name, m.grams]));
-
-  // استنتاج أنظمة من الوسوم العربية
-  const diets=[]; if(payload.tags.includes("منخفض")||payload.tags.includes("GI")) diets.push("lowGi");
-  if(payload.tags.includes("بدون جلوتين")) diets.push("glutenFree");
-  if(payload.tags.includes("نباتي")) diets.push("vegan");
-  payload.dietSystems=[...new Set(diets)];
   payload.searchText = toSearchText(payload);
 
   const id = els.id.value;
   if(id) await updateDoc(doc(db, "fooditems", id), payload);
-  else   await addDoc(colTopLevel, { ...payload, createdAt: serverTimestamp() });
+  else   await addDoc(colNew, { ...payload, createdAt: serverTimestamp() });
 
   closeDialog(); await fetchAndRender(true);
 }
@@ -326,59 +407,56 @@ async function removeItem(){
   if(!isAdmin){ gate.show("هذه العملية متاحة للأدمن فقط."); return; }
   const id = els.id.value; if(!id) return;
   if(!confirm("تأكيد حذف الصنف؟")) return;
-  await deleteDoc(doc(db, "fooditems", id)); // الحذف يتم من المجموعة الجديدة فقط
+  await deleteDoc(doc(db, "fooditems", id));
   closeDialog(); await fetchAndRender(true);
 }
 
-/* ========= بناء الاستعلام (لمجموعة الجديدة فقط) ========= */
+/* ========= بناء الاستعلام (للجديدة فقط) ========= */
 function buildQueryNew(){
   const filters=[];
   if(els.fActive?.checked) filters.push(where("isActive","==",true));
   if(els.fCategory?.value) filters.push(where("category","==",els.fCategory.value));
   if(els.fDiet?.value)     filters.push(where("dietSystems","array-contains",els.fDiet.value));
-  return query(colTopLevel, ...filters, orderBy("name"), limit(paging.pageSize));
+  return query(colNew, ...filters, orderBy("name"), limit(paging.pageSize));
 }
 
-/* ========= جلب ودمج المصدرين ========= */
+/* ========= جلب ودمج ========= */
 async function fetchAndRender(reset=false){
   if(!els.cards || !els.tableBody) return;
   els.cards.innerHTML=""; els.tableBody.innerHTML="";
 
   if(reset){ paging.page=1; paging.lastDoc=null; currentQuerySnapshot=null; }
-  // 1) من المجموعة الجديدة (بفلاتر Firestore)
+  // 1) الجديدة بفلاتر Firestore
   let q = buildQueryNew(); if(paging.lastDoc) q = query(q, startAfter(paging.lastDoc));
   const snapNew = await getDocs(q);
   currentQuerySnapshot = snapNew;
   paging.lastDoc = snapNew.docs[snapNew.docs.length-1] || null;
 
-  // 2) من المجموعة القديمة admin/global/foodItems (نجيب ثم نفلتر client-side)
-  const snapOld = await getDocs(collection(db, "admin", "global", "foodItems"));
+  // 2) القديمة (بدون فلاتر، نفلتر client-side)
+  const snapOld = await getDocs(colLegacy);
 
-  // دمج وتطبيع
   let items = [
     ...snapOld.docs.map(d=> normalizeItem(d.data(), d.id)),
     ...snapNew.docs.map(d=> normalizeItem(d.data(), d.id))
   ];
 
-  // فلترة client-side بحسب الفلاتر المختارة
+  // فلترة client-side
   const qText = (els.search?.value||"").trim().toLowerCase();
   const onlyActive = !!els.fActive?.checked;
   const cat = els.fCategory?.value || "";
   const dietSel = els.fDiet?.value || "";
 
-  items.forEach(i=> i.searchText = toSearchText(i));
   if(onlyActive) items = items.filter(i=> i.isActive !== false);
   if(cat)        items = items.filter(i=> (i.category||"") === cat);
   if(dietSel)    items = items.filter(i=> (i.dietSystems||[]).includes(dietSel));
-  if(qText)      items = items.filter(i=> i.searchText.includes(qText));
+  if(qText)      items = items.filter(i=> (i.searchText||toSearchText(i)).includes(qText));
 
-  // ترتيب بالاسم
+  // ترتيب
   items.sort((a,b)=> (a.name||"").localeCompare(b.name||"", "ar"));
 
-  // تحديث واجهة الصفحة
   if(els.pageLabel) els.pageLabel.textContent = `صفحة ${paging.page}`;
   if(els.prev) els.prev.disabled = paging.page<=1;
-  if(els.next) els.next.disabled = snapNew.size < paging.pageSize; // الترقيم للـ new فقط
+  if(els.next) els.next.disabled = snapNew.size < paging.pageSize;
 
   renderCards(items);
   renderTable(items);
@@ -393,14 +471,6 @@ async function fetchAndRender(reset=false){
 }
 
 /* ========= العرض ========= */
-function nutritionLine(it){
-  const parts=[];
-  if(it.cal_kcal != null) parts.push(`${it.cal_kcal} kcal`);
-  if(it.carbs_g  != null) parts.push(`كربوهيدرات ${it.carbs_g} جم`);
-  if(it.protein_g!= null) parts.push(`بروتين ${it.protein_g} جم`);
-  if(it.fat_g    != null) parts.push(`دهون ${it.fat_g} جم`);
-  return parts.join(" · ");
-}
 function renderCards(items){
   if(!els.cards) return;
   const frag=document.createDocumentFragment();
@@ -411,9 +481,7 @@ function renderCards(items){
     const name=document.createElement("h3"); name.className="name"; name.textContent=item.name;
     const meta=document.createElement("div"); meta.className="meta";
     meta.innerHTML=`<span>${item.category||"-"}</span><span>${item.isActive===false?"موقوف ⛔":"نشط ✅"}</span>`;
-    const nutr = nutritionLine(item);
-    const nutrEl = document.createElement("div"); nutrEl.className="muted"; nutrEl.style.marginTop="6px"; nutrEl.textContent = nutr;
-
+    const nutrEl = document.createElement("div"); nutrEl.className="muted"; nutrEl.style.marginTop="6px"; nutrEl.textContent = nutritionLine(item);
     const chips=document.createElement("div"); chips.className="chips";
     (item.measures||[]).slice(0,3).forEach(m=>{ const c=document.createElement("span"); c.className="chip"; c.textContent=`${m.name}: ${m.grams}جم`; chips.appendChild(c); });
 
@@ -452,27 +520,33 @@ function openDialog(data){
   els.name.value = data?.name || "";
   els.category.value = data?.category || "";
   els.isActive.checked = data?.isActive !== false;
-  els.tags.value = data?.tags || "";
+
+  // وسوم
+  els.searchTags.value = data?.searchTags || (Array.isArray(data?.tags) ? data.tags.join(" ") : (data?.tags||""));
+  renderDietChips(data?.dietSystems || []);
+
+  // مقادير
+  renderMeasuresEditor(data || {});
+
+  // تغذية
+  fillNutritionForm({
+    cal_kcal:  data?.cal_kcal,
+    carbs_g:   data?.carbs_g,
+    protein_g: data?.protein_g,
+    fat_g:     data?.fat_g,
+    fiber_g:   data?.fiber_g,
+    sodium_mg: data?.sodium_mg
+  });
+
+  // صورة
   els.imageUrl.value = data?.imageUrl || "";
   els.preview.src = els.imageUrl.value || "";
-  renderAutoTags(els.tags.value);
-  renderMeasuresEditor(data || {});
+
   ensureUpload();
-  if(els.btnDelete) els.btnDelete.hidden = !data?.id; // الحذف للمجموعة الجديدة فقط
+  if(els.btnDelete) els.btnDelete.hidden = !data?.id;
   els.dlg?.showModal();
 }
 function closeDialog(){ els.dlg?.close(); }
-
-/* ========= Auto Tags ========= */
-const SUGGESTED = ["#منخفض_GI", "#غني_بالألياف", "#بدون_جلوتين", "#نباتي", "#موسمي"];
-function renderAutoTags(existing=""){
-  if(!els.autoTags) return;
-  els.autoTags.innerHTML = "";
-  const set = new Set(existing.split(" ").filter(Boolean));
-  SUGGESTED.forEach(tag=>{
-    els.autoTags.appendChild(createChip(tag, set.has(tag)));
-  });
-}
 
 /* ========= UI Listeners ========= */
 [["search","input"], ["filter-category","input"], ["filter-diet","input"]].forEach(([id,ev])=>{
@@ -500,6 +574,56 @@ on($("btn-table"), "click", ()=>{
 }, "btn-table");
 on($("prev"), "click", async ()=>{ if(paging.page<=1) return; paging.page-=1; await fetchAndRender(true); }, "prev");
 on($("next"), "click", async ()=>{ if(!currentQuerySnapshot || currentQuerySnapshot.size<paging.pageSize) return; paging.page+=1; await fetchAndRender(false); }, "next");
+
+/* ========= Upload (مع إعادة تلقائية) ========= */
+function humanizeStorageError(err){
+  const msg = err?.message || "";
+  if (msg.includes("storage/retry-limit-exceeded")) return "تعذّر رفع الصورة: فشل الاتصال (انقطاع أو حظر متصفح). جرّبي مجددًا أو افتحي الصفحة بمتصفح آخر.";
+  if (msg.includes("app-check")) return "App Check يمنع الوصول. عطّلي Enforce مؤقتًا أو فعّلي Web Recaptcha.";
+  if (msg.includes("storage/unauthorized")) return "لا تملكين صلاحية الرفع لهذا المسار.";
+  if (msg.includes("storage/canceled")) return "تم إلغاء الرفع.";
+  return "تعذّر رفع الصورة: " + msg;
+}
+function ensureUpload(){
+  if(!els.uploadBtn) return;
+  els.uploadBtn.onclick = async ()=>{
+    if(!user){ gate.show("سجّلي الدخول أولًا لرفع الصور."); return; }
+    if(!isAdmin){ gate.show("الرفع متاح للأدمن فقط."); return; }
+    const file = els.imageFile?.files?.[0];
+    if(!file){ alert("اختاري ملف صورة أولًا"); return; }
+
+    const safe = file.name.replace(/[^\w.\-]+/g,"_");
+    const path = `food-items/${user.uid}/${Date.now()}-${safe}`;
+    const ref = sRef(storage, path);
+
+    // نحاول resumable، ولو فشل بسبب CORS/شبكة نجرب uploadBytes كبديل سريع
+    try {
+      if(els.progress) els.progress.value = 0;
+      await new Promise((resolve, reject)=>{
+        const task = uploadBytesResumable(ref, file, { contentType: file.type });
+        task.on("state_changed", (snap)=>{
+          if(els.progress) els.progress.value = Math.round((snap.bytesTransferred/snap.totalBytes)*100);
+        }, reject, ()=> resolve());
+      });
+      const url = await getDownloadURL(ref);
+      els.imageUrl.value = url; els.preview.src = url;
+      if(els.progress) els.progress.value = 100;
+    } catch (e1) {
+      console.warn("Resumable upload failed, fallback to uploadBytes", e1);
+      try {
+        await uploadBytes(ref, file, { contentType: file.type });
+        const url = await getDownloadURL(ref);
+        els.imageUrl.value = url; els.preview.src = url;
+        if(els.progress) els.progress.value = 100;
+      } catch (e2) {
+        alert(humanizeStorageError(e2));
+      }
+    }
+  };
+  if(els.imageUrl && els.preview){
+    els.imageUrl.addEventListener("input", ()=> els.preview.src = els.imageUrl.value.trim() || "");
+  }
+}
 
 /* ========= Boot ========= */
 onAuthStateChanged(auth, async (u)=>{
