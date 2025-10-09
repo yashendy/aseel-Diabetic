@@ -1,15 +1,20 @@
 /* eslint-disable no-alert */
-import { auth, db, storage } from "./firebase-config.js";
+/* ===== اعتمدي التهيئة الموحّدة من js/firebase-config.js ===== */
+import { auth, db, storage } from "./js/firebase-config.js";
+
+/* ===== Firebase v12.1.0 imports (موحّدة مع ملف التهيئة) ===== */
 import {
   collection, query, where, orderBy, limit, startAfter, getDocs,
   addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
 import {
   onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut
-} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+
 import {
   ref as sRef, uploadBytesResumable, getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
 /* ========= DOM helpers ========= */
 const $ = (id)=> document.getElementById(id);
@@ -325,6 +330,17 @@ function openDialog(data){
   els.dlg?.showModal();
 }
 function closeDialog(){ els.dlg?.close(); }
+
+/* ========= Auto Tags ========= */
+const SUGGESTED = ["#منخفض_GI", "#غني_بالألياف", "#بدون_جلوتين", "#نباتي", "#موسمي"];
+function renderAutoTags(existing=""){
+  if(!els.autoTags) return;
+  els.autoTags.innerHTML = "";
+  const set = new Set(existing.split(" ").filter(Boolean));
+  SUGGESTED.forEach(tag=>{
+    els.autoTags.appendChild(createChip(tag, set.has(tag)));
+  });
+}
 
 /* ========= UI Listeners ========= */
 [["search","input"], ["filter-category","input"], ["filter-diet","input"]].forEach(([id,ev])=>{
