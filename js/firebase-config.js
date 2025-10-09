@@ -38,7 +38,7 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 // 🔐 فعّلي App Check بالـ Site Key
 initializeAppCheck(app, {
-  provider: new ReCaptchaV3Provider("RECAPTCHA_SITE_KEY_HERE"),
+  provider: new ReCaptchaV3Provider("6Leov-MrAAAAAJ982eHqf7CWxf-k1ntDF7-nDnWX"),
   isTokenAutoRefreshEnabled: true,
 });
 
