@@ -10,7 +10,9 @@ import {
   ReCaptchaV3Provider,
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app-check.js";
 
-// ✅ إعدادات مشروعك (زي ما هي)
+/* ------------------------------------------------------------------
+   ⚙️ التهيئة الأساسية لمشروعك
+------------------------------------------------------------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
   authDomain: "sugar-kids-tracker.firebaseapp.com",
@@ -19,30 +21,28 @@ const firebaseConfig = {
   appId: "1:251830888114:web:a20716d3d4ad86a6724bab"
 };
 
-// تهيئة التطبيق مرة واحدة
+// منع تهيئة مكرّرة
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 /* ------------------------------------------------------------------
-   App Check (reCAPTCHA v3)
-   ملاحظات مهمة:
-   1) في Firebase Console → App Check → sugarKidsWeb → Register reCAPTCHA
-      ضيفي الـ Secret Key (اللي جيبتيه من Google reCAPTCHA).
-   2) بعد التسجيل هتلاقي **Site key** داخل App Check — انسخيه.
-   3) استبدلي النص RECAPTCHA_SITE_KEY_HERE بالـ Site key الحقيقي.
-   4) خلى Storage → App Check Enforcement = Off مؤقتًا للتجربة،
-      وبعد نجاح الرفع فعّليه = On.
+   🔐 App Check (reCAPTCHA v3)
+   - تأكدي أنك سجّلتِ reCAPTCHA داخل App Check وأضفتِ الـ Secret key هناك.
+   - الدومينات المسموح بها يجب أن تتضمن: yashendy.github.io (+ localhost للتجربة).
+   - جرّبي الرفع و Enforce = Off، وبعد النجاح فعّليه = On.
 ------------------------------------------------------------------- */
 
-// للتطوير المحلي فقط (اختياري):
+// للتجربة المحلية فقط (اختياري):
 // self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
 
-// 🔐 فعّلي App Check بالـ Site Key
+// ✅ Site key المستخدم في الواجهة (App Check reCAPTCHA v3)
 initializeAppCheck(app, {
   provider: new ReCaptchaV3Provider("6Leov-MrAAAAAJ982eHqf7CWxf-k1ntDF7-nDnWX"),
   isTokenAutoRefreshEnabled: true,
 });
 
-// تصدير الخدمات لاستخدامها في بقية الصفحات
+/* ------------------------------------------------------------------
+   تصدير الخدمات
+------------------------------------------------------------------- */
 export const auth    = getAuth(app);
 export const db      = getFirestore(app);
 export const storage = getStorage(app);
