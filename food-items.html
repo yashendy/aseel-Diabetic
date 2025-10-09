@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>الأصناف - Sugar Kids Tracker</title>
-  <link rel="stylesheet" href="./css/food-items.css" />
+  <title>الأصناف - Sugar Kids</title>
+  <link rel="stylesheet" href="./food-items.css" />
 </head>
 <body>
 
@@ -17,13 +17,13 @@
     <div class="header-actions">
       <button id="btn-add" class="btn primary">+ إضافة صنف</button>
       <div class="view-toggle">
-        <button id="btn-cards" class="btn toggle active" title="عرض كبطاقات">بطاقات</button>
-        <button id="btn-table" class="btn toggle" title="عرض كجدول">جدول</button>
+        <button id="btn-cards" class="btn toggle active">بطاقات</button>
+        <button id="btn-table" class="btn toggle">جدول</button>
       </div>
     </div>
 
     <!-- شارة الأدمن -->
-    <div class="admin-pill" id="admin-pill" title="المستخدم الحالي">
+    <div class="admin-pill" id="admin-pill">
       <span class="avatar">👤</span>
       <span id="admin-name" class="name">غير مسجّل</span>
       <span id="admin-role" class="role"></span>
@@ -33,9 +33,21 @@
 
   <section class="filters-card card">
     <div class="filters-row">
+      <div class="filter small">
+        <label>نشط فقط</label>
+        <input id="filter-active" type="checkbox" checked />
+      </div>
+
       <div class="filter">
-        <label>بحث</label>
-        <input id="search" type="text" placeholder="ابحث بالاسم أو الوسوم #..." />
+        <label>نظام غذائي</label>
+        <select id="filter-diet">
+          <option value="">الكل</option>
+          <option value="lowGi">منخفض GI</option>
+          <option value="glutenFree">بدون جلوتين</option>
+          <option value="dairyFree">بدون ألبان</option>
+          <option value="vegan">نباتي</option>
+          <option value="keto">كيتو</option>
+        </select>
       </div>
 
       <div class="filter">
@@ -53,24 +65,13 @@
         </select>
       </div>
 
-      <div class="filter">
-        <label>نظام غذائي</label>
-        <select id="filter-diet">
-          <option value="">الكل</option>
-          <option value="lowGi">منخفض GI</option>
-          <option value="glutenFree">بدون جلوتين</option>
-          <option value="dairyFree">بدون ألبان</option>
-          <option value="vegan">نباتي</option>
-          <option value="keto">كيتو</option>
-        </select>
-      </div>
-
-      <div class="filter small">
-        <label>نشط فقط</label>
-        <input id="filter-active" type="checkbox" checked />
+      <div class="filter grow">
+        <label>بحث</label>
+        <input id="search" type="text" placeholder="ابحث بالاسم أو الوسوم #..." />
       </div>
 
       <div class="filter">
+        <label>&nbsp;</label>
         <button id="btn-clear" class="btn light">مسح الفلاتر</button>
       </div>
     </div>
@@ -89,6 +90,7 @@
             <th>الاسم</th>
             <th>الفئة</th>
             <th>نشط</th>
+            <th>تغذية (ملخّص)</th>
             <th>مقادير</th>
             <th>إجراءات</th>
           </tr>
@@ -104,7 +106,7 @@
     </div>
   </main>
 
-  <!-- Dialog -->
+  <!-- Dialog (إضافة/تعديل) -->
   <dialog id="edit-dialog" class="dialog">
     <form id="edit-form" method="dialog">
       <header class="dialog-header">
@@ -117,7 +119,7 @@
 
         <div class="form-group">
           <label>الاسم</label>
-          <input id="name" required placeholder="مثال: تفاح أحمر" />
+          <input id="name" required placeholder="مثال: أرز مسلوق" />
         </div>
 
         <div class="form-group">
@@ -143,19 +145,23 @@
           </label>
         </div>
 
-        <div class="form-group">
-          <label>وسوم (اختياري)</label>
-          <input id="tags" placeholder="#منخفض_GI #موسمي ..." />
-          <small class="muted">اكتب الوسوم مفصولة بمسافة، ويمكن الضغط على الوسوم المقترحة لإضافتها.</small>
+        <div class="form-group grow">
+          <label>وسوم بحث (اختياري)</label>
+          <input id="searchTags" placeholder="اكتب كلمات مفتاحية...">
+          <small class="muted">تُستخدم للبحث العام (مثال: أرز، نشويات، مالح...).</small>
         </div>
 
         <div class="form-group">
-          <label>وسوم مقترحة</label>
-          <div id="auto-tags" class="chips"></div>
+          <label>وسوم النظام الغذائي</label>
+          <div id="diet-chips" class="chips"></div>
+          <div class="row" style="gap:8px">
+            <button type="button" id="btn-ai-tags" class="btn light">توليد تلقائي بالذكاء الاصطناعي</button>
+            <small class="muted">يتم الاقتراح من القيم الغذائية ويمكن تعديل الوسوم يدويًا.</small>
+          </div>
         </div>
 
         <!-- المقادير البيتية -->
-        <fieldset id="measures-fieldset" class="fieldset">
+        <fieldset class="fieldset">
           <legend>المقادير البيتية</legend>
           <div id="measures-list"></div>
           <div class="row">
@@ -164,7 +170,38 @@
           </div>
         </fieldset>
 
-        <!-- رفع صورة -->
+        <!-- القيم الغذائية -->
+        <fieldset class="fieldset">
+          <legend>القيم الغذائية (لكل 100 جم)</legend>
+          <div class="grid nutr-grid">
+            <div class="form-group">
+              <label>سعرات (kcal)</label>
+              <input id="cal_kcal" type="number" step="0.1" placeholder="مثال: 130">
+            </div>
+            <div class="form-group">
+              <label>كربوهيدرات (جم)</label>
+              <input id="carbs_g" type="number" step="0.1">
+            </div>
+            <div class="form-group">
+              <label>بروتين (جم)</label>
+              <input id="protein_g" type="number" step="0.1">
+            </div>
+            <div class="form-group">
+              <label>دهون (جم)</label>
+              <input id="fat_g" type="number" step="0.1">
+            </div>
+            <div class="form-group">
+              <label>ألياف (جم)</label>
+              <input id="fiber_g" type="number" step="0.1">
+            </div>
+            <div class="form-group">
+              <label>صوديوم (ملج)</label>
+              <input id="sodium_mg" type="number" step="1">
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- الصورة -->
         <div class="form-group">
           <label>الصورة</label>
           <div class="image-uploader">
@@ -176,7 +213,7 @@
               <button id="btn-upload" type="button" class="btn">رفع للصنف</button>
             </div>
           </div>
-          <small class="muted">يمكنك إدخال رابط مباشر للصورة أو اختيار ملف من جهازك. الرفع يحفظ في Storage ويملأ الرابط تلقائيًا.</small>
+          <small class="muted">يمكن إدخال رابط مباشر للصورة أو اختيار ملف من جهازك. عند الرفع يتم الحفظ في Storage ويُملأ الرابط تلقائيًا.</small>
         </div>
       </section>
 
@@ -187,7 +224,7 @@
     </form>
   </dialog>
 
-  <!-- التحميل: ملف التهيئة الموحّد ثم كود الصفحة -->
+  <!-- التهيئة الموحدة ثم كود الصفحة -->
   <script type="module" src="./js/firebase-config.js"></script>
   <script type="module" src="./js/food-items.js"></script>
 </body>
