@@ -1,6 +1,6 @@
 /* eslint-disable no-alert */
 /* ===== اعتمدي التهيئة الموحّدة من js/firebase-config.js ===== */
-import { auth, db, storage } from "./js/firebase-config.js";
+import { auth, db, storage } from "./firebase-config.js";
 
 /* ===== Firebase v12.1.0 imports (موحّدة مع ملف التهيئة) ===== */
 import {
