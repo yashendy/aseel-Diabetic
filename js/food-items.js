@@ -1,8 +1,9 @@
+/* js/food-items.js */
 /* eslint-disable no-alert */
 import { auth, db, storage } from "./firebase-config.js";
 import {
   collection, query, where, orderBy, limit, startAfter, getDocs,
-  addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp
+  addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, setDoc
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {
   onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut
@@ -11,10 +12,12 @@ import {
   ref as sRef, uploadBytesResumable, getDownloadURL, uploadBytes
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
+/* ---------- Helpers ---------- */
 const $ = (id)=> document.getElementById(id);
 const on = (el,ev,cb)=> el && el.addEventListener(ev,cb);
 const num = (x)=> (x===""||x==null)?null:Number(x);
 
+/* ---------- Elements ---------- */
 const els = {
   search: $("search"), fCategory: $("filter-category"), fDiet: $("filter-diet"), fActive: $("filter-active"),
   btnClear: $("btn-clear"), cards: $("cards"), tableWrap: $("table-wrap"), tableBody: $("table-body"),
@@ -31,7 +34,7 @@ const els = {
 
 let user=null, isAdmin=false, paging={page:1,pageSize:20,lastDoc:null}, currentQuerySnapshot=null;
 
-/* ===== Gate overlay لمنع غير الأدمن ===== */
+/* ---------- Admin Gate Overlay ---------- */
 const gate = (()=> {
   let el = document.getElementById("admin-gate");
   if(!el){
@@ -53,7 +56,7 @@ const gate = (()=> {
   return { show(msg){$("gate-msg").textContent=msg||"هذه الصفحة للمشرفين فقط."; el.style.display="flex";}, hide(){el.style.display="none";} };
 })();
 
-/* ===== auth ===== */
+/* ---------- Auth ---------- */
 async function signIn(){ try{ await signInWithPopup(auth,new GoogleAuthProvider()); }catch(e){ console.warn(e.message);} }
 on(els.btnAuth,"click",async()=>{ if(auth.currentUser) await signOut(auth); else await signIn(); });
 
@@ -69,12 +72,12 @@ function setAdminBadge(u,profile,roleText){
   if(els.btnAuth) els.btnAuth.textContent = u ? "تسجيل الخروج" : "تسجيل الدخول";
 }
 
-/* ===== diet chips ===== */
+/* ---------- Diet chips ---------- */
 const DIET_LABELS=[{code:"lowGi",label:"#منخفض_GI"},{code:"glutenFree",label:"#بدون_جلوتين"},{code:"dairyFree",label:"#بدون_ألبان"},{code:"vegan",label:"#نباتي"},{code:"keto",label:"#كيتو"}];
 function renderDietChips(selected=[]){ els.dietChips.innerHTML=""; const set=new Set(selected); DIET_LABELS.forEach(d=>{ const s=document.createElement("span"); s.className="chip"+(set.has(d.code)?" active":""); s.dataset.code=d.code; s.textContent=d.label; s.onclick=()=>s.classList.toggle("active"); els.dietChips.appendChild(s); });}
 const getDietCodes=()=> Array.from(document.querySelectorAll("#diet-chips .chip.active")).map(x=>x.dataset.code);
 
-/* ===== measures ===== */
+/* ---------- Measures ---------- */
 const PRESETS=[{name:"ملعقة",grams:5},{name:"كوب",grams:240},{name:"طبق",grams:150},{name:"حبة",grams:80}];
 function renderMeasuresEditor(data){
   els.measuresList.innerHTML="";
@@ -97,17 +100,17 @@ function renderMeasuresEditor(data){
 }
 const readMeasures=()=> Array.from(document.querySelectorAll("#measures-list .measure-row")).map(r=>({name:r.querySelector(".m-name").value.trim(), grams:Number(r.querySelector(".m-grams").value)||0})).filter(m=>m.name && m.grams>0);
 
-/* ===== nutrition ===== */
+/* ---------- Nutrition ---------- */
 const pickNutr=(raw)=>{ const n=raw?.nutrPer100g||{}; const v=(k)=> raw?.[k] ?? n?.[k]; return { cal_kcal:num(v("cal_kcal")), carbs_g:num(v("carbs_g")), protein_g:num(v("protein_g")), fat_g:num(v("fat_g")), fiber_g:num(v("fiber_g")), sodium_mg:num(v("sodium_mg")), }; };
 const readNutr=()=>({ cal_kcal:num(els.cal_kcal.value), carbs_g:num(els.carbs_g.value), protein_g:num(els.protein_g.value), fat_g:num(els.fat_g.value), fiber_g:num(els.fiber_g.value), sodium_mg:num(els.sodium_mg.value) });
 const fillNutr=(n)=>{ els.cal_kcal.value=n.cal_kcal??""; els.carbs_g.value=n.carbs_g??""; els.protein_g.value=n.protein_g??""; els.fat_g.value=n.fat_g??""; els.fiber_g.value=n.fiber_g??""; els.sodium_mg.value=n.sodium_mg??""; };
 const nutrLine=(n)=>{ const a=[]; if(n.cal_kcal!=null)a.push(`${n.cal_kcal} kcal`); if(n.carbs_g!=null)a.push(`كربوهيدرات ${n.carbs_g} جم`); if(n.protein_g!=null)a.push(`بروتين ${n.protein_g} جم`); if(n.fat_g!=null)a.push(`دهون ${n.fat_g} جم`); return a.join(" · "); };
 
-/* ===== AI tags بسيطة ===== */
+/* ---------- AI tags (بسيطة) ---------- */
 function aiSuggest(n){ const search=new Set(), diets=new Set(); if(n.carbs_g!=null && n.carbs_g<=15) diets.add("lowGi"); if(n.carbs_g!=null && n.carbs_g>=40) search.add("نشويات_عالية"); if(n.fiber_g!=null && n.fiber_g>=4) search.add("غني_بالألياف"); if(n.fat_g!=null && n.fat_g<=3) search.add("قليل_الدهون"); if(n.fat_g!=null && n.fat_g>=17) search.add("دهون_مرتفعة"); if(n.protein_g!=null && n.protein_g>=10) search.add("غني_بالبروتين"); if(n.sodium_mg!=null && n.sodium_mg>=400) search.add("صوديوم_مرتفع"); return { searchTags:Array.from(search).join(" "), dietSystemsAuto:Array.from(diets) }; }
 on(els.btnAi,"click",()=>{ const s=aiSuggest(readNutr()); els.searchTags.value=[(els.searchTags.value||"").trim(), s.searchTags].filter(Boolean).join(" ").trim(); renderDietChips([...new Set([...getDietCodes(), ...s.dietSystemsAuto])]); });
 
-/* ===== مصادر البيانات ===== */
+/* ---------- Collections ---------- */
 const colNew = collection(db,"fooditems");
 const colOld = collection(db,"admin","global","foodItems");
 const toSearch=(it)=> [it.name||"", it.category||"", it.searchTags||"", (it.tags||[]).join(" "), (it.dietSystems||[]).map(x=>`#${x}`).join(" ")].join(" ").toLowerCase();
@@ -121,7 +124,7 @@ function normalize(raw,id){
   const item = {
     id,
     name: raw.name || raw.title || raw.name_ar || "",
-    category: raw.category || "أخرى",
+    category: raw.category || "other",
     isActive: raw.isActive!==false,
     imageUrl: raw.imageUrl || raw.photoUrl || "",
     tags, searchTags: raw.searchText || raw.searchTags || "",
@@ -132,37 +135,13 @@ function normalize(raw,id){
   item.searchText = toSearch(item);
   return item;
 }
+const fromNew = (d)=>({ ...normalize(d.data(), d.id), source:"new" });
+const fromOld = (d)=>({ ...normalize(d.data(), d.id), source:"old" });
 
-/* ===== CRUD ===== */
-async function saveItem(e){
-  e.preventDefault();
-  if(!isAdmin){ gate.show("هذه العملية متاحة للأدمن فقط."); return; }
-
-  const nutr=readNutr();
-  const payload={
-    name:(els.name.value||"").trim(),
-    category:els.category.value,
-    isActive:!!els.isActive.checked,
-    imageUrl:(els.imageUrl.value||"").trim(),
-    searchTags:(els.searchTags.value||"").trim(),
-    dietSystems:getDietCodes(),
-    measures:readMeasures(),
-    nutrPer100g:{...nutr},
-    cal_kcal:nutr.cal_kcal, carbs_g:nutr.carbs_g, protein_g:nutr.protein_g, fat_g:nutr.fat_g, fiber_g:nutr.fiber_g, sodium_mg:nutr.sodium_mg,
-    updatedAt:serverTimestamp(),
-  };
-  payload.measureQty=Object.fromEntries(payload.measures.map(m=>[m.name,m.grams]));
-  payload.searchText=toSearch({...payload});
-
-  const id=els.id.value;
-  if(id) await updateDoc(doc(db,"fooditems",id),payload);
-  else   await addDoc(colNew,{...payload,createdAt:serverTimestamp()});
-
-  closeDialog(); await fetchAndRender(true);
-}
+/* ---------- CRUD ---------- */
 async function delItem(){ if(!isAdmin) return; const id=els.id.value; if(!id) return; if(!confirm("تأكيد حذف الصنف؟")) return; await deleteDoc(doc(db,"fooditems",id)); closeDialog(); await fetchAndRender(true); }
 
-/* ===== استعلام + جلب ===== */
+/* ---------- Query/Fetch ---------- */
 const buildQuery=()=>{ const f=[]; if(els.fActive?.checked) f.push(where("isActive","==",true)); if(els.fCategory?.value) f.push(where("category","==",els.fCategory.value)); if(els.fDiet?.value) f.push(where("dietSystems","array-contains",els.fDiet.value)); return query(colNew, ...f, orderBy("name"), limit(paging.pageSize)); };
 
 async function fetchAndRender(reset=false){
@@ -173,7 +152,7 @@ async function fetchAndRender(reset=false){
   const snapNew=await getDocs(q); currentQuerySnapshot=snapNew; paging.lastDoc=snapNew.docs[snapNew.docs.length-1]||null;
   const snapOld=await getDocs(colOld);
 
-  let items=[ ...snapOld.docs.map(d=>normalize(d.data(),d.id)), ...snapNew.docs.map(d=>normalize(d.data(),d.id)) ];
+  let items=[ ...snapOld.docs.map(fromOld), ...snapNew.docs.map(fromNew) ];
   const qText=(els.search?.value||"").trim().toLowerCase(), only=!!els.fActive?.checked, cat=els.fCategory?.value||"", diet=els.fDiet?.value||"";
   if(only) items=items.filter(i=>i.isActive!==false); if(cat) items=items.filter(i=>i.category===cat); if(diet) items=items.filter(i=>(i.dietSystems||[]).includes(diet)); if(qText) items=items.filter(i=>(i.searchText||toSearch(i)).includes(qText));
   items.sort((a,b)=>(a.name||"").localeCompare(b.name||"","ar"));
@@ -186,7 +165,7 @@ async function fetchAndRender(reset=false){
   if(!items.length){ const e=document.createElement("div"); e.className="card"; e.style.padding="16px"; e.style.textAlign="center"; e.textContent="لا توجد نتائج مطابقة."; els.cards.appendChild(e); }
 }
 
-/* ===== عرض ===== */
+/* ---------- Render ---------- */
 function renderCards(items){
   const frag=document.createDocumentFragment();
   items.forEach(it=>{
@@ -215,7 +194,7 @@ function renderTable(items){
   els.tableBody.appendChild(frag);
 }
 
-/* ===== dialog ===== */
+/* ---------- Dialog ---------- */
 function openDialog(data){
   if(!isAdmin){ gate.show("هذه الصفحة للمديرين فقط."); return; }
   els.dlgTitle.textContent=data?.id?"تعديل صنف":"إضافة صنف";
@@ -225,38 +204,113 @@ function openDialog(data){
   renderMeasuresEditor(data||{});
   fillNutr({ cal_kcal:data?.cal_kcal, carbs_g:data?.carbs_g, protein_g:data?.protein_g, fat_g:data?.fat_g, fiber_g:data?.fiber_g, sodium_mg:data?.sodium_mg });
   els.imageUrl.value=data?.imageUrl||""; els.preview.src=els.imageUrl.value||"";
+  els.form.dataset.source = data?.source || ""; // "old" | "new"
   setupUploader();
-  els.btnDelete.hidden=!data?.id;
+  els.btnDelete.hidden=!data?.id || (data?.source!=="new");
   els.dlg.showModal();
 }
 function closeDialog(){ els.dlg.close(); }
 
-/* ===== upload (معاينة + fallback) ===== */
-function humanize(e){ const m=e?.message||""; if(m.includes("storage/retry-limit-exceeded")) return "تعذّر الرفع: فشل الاتصال. جرّبي متصفح آخر أو أعيدي المحاولة."; if(m.includes("app-check")) return "App Check يمنع الوصول. تأكدي من المفتاح والدومين."; if(m.includes("storage/unauthorized")) return "لا تملكين صلاحية الرفع."; return "تعذّر الرفع: "+m; }
+/* ---------- Upload ---------- */
+function humanize(e){ const m=e?.message||""; if(m.includes("storage/retry-limit-exceeded")) return "تعذّر الرفع: فشل الاتصال. جرّبي لاحقًا."; if(m.includes("app-check")) return "App Check يمنع الوصول. تأكدي من المفتاح وترتيب التحميل."; if(m.includes("storage/unauthorized")) return "لا تملكين صلاحية الرفع."; return "تعذّر الرفع: "+m; }
+
+if (els.imageFile && els.preview) {
+  els.imageFile.addEventListener("change", (ev) => {
+    const f = ev.target.files?.[0];
+    if (f) els.preview.src = URL.createObjectURL(f);
+  });
+}
+
+async function uploadImageAndGetUrl(){
+  if (!auth.currentUser) throw new Error("يجب تسجيل الدخول للرفع.");
+  const file = els.imageFile?.files?.[0];
+  if (!file) throw new Error("اختاري ملف صورة أولاً.");
+
+  const safe = file.name.replace(/[^\w.\-]+/g, "_");
+  const path = `food-items/${auth.currentUser.uid}/${Date.now()}-${safe}`;
+  const ref  = sRef(storage, path);
+
+  try {
+    await new Promise((res, rej) => {
+      const task = uploadBytesResumable(ref, file, { contentType: file.type });
+      task.on("state_changed", (s) => {
+        if (els.progress) els.progress.value = Math.round((s.bytesTransferred/s.totalBytes)*100);
+      }, rej, res);
+    });
+    return await getDownloadURL(ref);
+  } catch (e1) {
+    await uploadBytes(ref, file, { contentType: file.type });
+    return await getDownloadURL(ref);
+  }
+}
 
 function setupUploader(){
-  // preview فوري
-  if(els.imageFile && els.preview){
-    els.imageFile.onchange=(ev)=>{ const f=ev.target.files?.[0]; if(f) els.preview.src = URL.createObjectURL(f); };
-  }
   if(!els.uploadBtn) return;
   els.uploadBtn.onclick = async ()=>{
-    if(!auth.currentUser){ gate.show("سجّلي الدخول أولًا لرفع الصور."); return; }
-    if(!isAdmin){ gate.show("الرفع متاح للأدمن فقط."); return; }
-    const file=els.imageFile?.files?.[0]; if(!file){ alert("اختاري ملف صورة"); return; }
-    const safe=file.name.replace(/[^\w.\-]+/g,"_"); const path=`food-items/${auth.currentUser.uid}/${Date.now()}-${safe}`; const ref=sRef(storage,path);
     try{
-      els.progress.value=0;
-      await new Promise((res,rej)=>{ const t=uploadBytesResumable(ref,file,{contentType:file.type}); t.on("state_changed",(s)=>{ els.progress.value=Math.round((s.bytesTransferred/s.totalBytes)*100); },rej,res); });
-      const url=await getDownloadURL(ref); els.imageUrl.value=url; els.preview.src=url; els.progress.value=100;
-    }catch(e1){
-      try{ await uploadBytes(ref,file,{contentType:file.type}); const url=await getDownloadURL(ref); els.imageUrl.value=url; els.preview.src=url; els.progress.value=100; }
-      catch(e2){ console.error("upload fail",e2); alert(humanize(e2)); }
-    }
+      const url=await uploadImageAndGetUrl();
+      els.imageUrl.value=url; els.preview.src=url; if(els.progress) els.progress.value=100;
+    }catch(e){ console.error("upload fail",e); alert(humanize(e)); }
   };
 }
 
-/* ===== listeners ===== */
+/* ---------- Save (create/update smart) ---------- */
+async function saveItem(e){
+  e.preventDefault();
+  if (!isAdmin) { gate.show("هذه العملية متاحة للأدمن فقط."); return; }
+
+  // رفع تلقائي إن كان ملف مختار ولم يُرفع بعد
+  if (els.imageFile?.files?.length && !els.imageUrl.value) {
+    try {
+      const url = await uploadImageAndGetUrl();
+      els.imageUrl.value = url;
+      els.preview.src = url;
+    } catch (e) {
+      console.error("auto-upload on save failed:", e);
+      alert("تعذّر رفع الصورة قبل الحفظ: " + (e?.message||e));
+      return;
+    }
+  }
+
+  const nutr=readNutr();
+  const payload={
+    name:(els.name.value||"").trim(),
+    category:els.category.value,
+    isActive:!!els.isActive.checked,
+    imageUrl:(els.imageUrl.value||"").trim(),
+    searchTags:(els.searchTags.value||"").trim(),
+    dietSystems:getDietCodes(),
+    measures:readMeasures(),
+    nutrPer100g:{...nutr},
+    cal_kcal:nutr.cal_kcal, carbs_g:nutr.carbs_g, protein_g:nutr.protein_g, fat_g:nutr.fat_g, fiber_g:nutr.fiber_g, sodium_mg:nutr.sodium_mg,
+    searchText: toSearch({
+      name:(els.name.value||"").trim(),
+      category:els.category.value,
+      searchTags:(els.searchTags.value||"").trim(),
+      dietSystems:getDietCodes(),
+      tags:(els.searchTags.value||"").split(/\s+/),
+    }),
+    updatedAt:serverTimestamp(),
+  };
+  payload.measureQty=Object.fromEntries(payload.measures.map(m=>[m.name,m.grams]));
+
+  const id=(els.id.value||"").trim();
+  const source=els.form.dataset.source||""; // "new" | "old" | ""
+
+  try{
+    if (id && source==="new") {
+      await setDoc(doc(db,"fooditems",id), payload, { merge:true });
+    } else {
+      await addDoc(collection(db,"fooditems"), { ...payload, createdAt:serverTimestamp() });
+    }
+    closeDialog(); await fetchAndRender(true);
+  }catch(err){
+    console.error("save failed:", err);
+    alert("تعذّر الحفظ: " + (err?.message || err));
+  }
+}
+
+/* ---------- Listeners ---------- */
 [["search","input"],["filter-category","input"],["filter-diet","input"]].forEach(([id,ev])=> on($(id),ev,()=>fetchAndRender(true)));
 on(els.fActive,"change",()=>fetchAndRender(true));
 on(els.btnClear,"click",()=>{ els.search.value=""; els.fCategory.value=""; els.fDiet.value=""; els.fActive.checked=true; fetchAndRender(true); });
@@ -269,7 +323,7 @@ on(els.btnTable,"click",()=>{ els.btnTable.classList.add("active"); els.btnCards
 on(els.prev,"click",async()=>{ if(paging.page<=1) return; paging.page-=1; await fetchAndRender(true); });
 on(els.next,"click",async()=>{ if(!currentQuerySnapshot || currentQuerySnapshot.size<paging.pageSize) return; paging.page+=1; await fetchAndRender(false); });
 
-/* ===== boot ===== */
+/* ---------- Boot ---------- */
 onAuthStateChanged(auth, async (u)=>{
   user=u||null;
   const {role,data} = await loadProfile(user);
