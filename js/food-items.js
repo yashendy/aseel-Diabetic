@@ -13,6 +13,19 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
 /* ---------- Helpers ---------- */
+function mapCategoryArabic(raw){
+  const c=(raw||'').trim();
+  const isIn=(arr)=>arr.includes(c);
+  if(isIn(['النشويات','حبوب','خبز','معكرونة','مأكولات'])) return 'النشويات';
+  if(isIn(['منتجات الألبان','ألبان','حليب','جبن','أجبان'])) return 'منتجات الألبان';
+  if(isIn(['الفاكهة','فاكهة'])) return 'الفاكهة';
+  if(isIn(['الخضروات','خضروات','خضار'])) return 'الخضروات';
+  if(isIn(['منتجات اللحوم','لحوم','دواجن','أسماك','مأكولات بحرية'])) return 'منتجات اللحوم';
+  if(isIn(['الدهون','دهون','زيوت'])) return 'الدهون';
+  if(isIn(['الحلويات','حلويات','مسليات'])) return 'الحلويات';
+  return 'أخرى';
+}
+
 const $ = (id)=> document.getElementById(id);
 const on = (el,ev,cb)=> el && el.addEventListener(ev,cb);
 const num = (x)=> (x===""||x==null)?null:Number(x);
@@ -124,7 +137,7 @@ function normalize(raw,id){
   const item = {
     id,
     name: raw.name || raw.title || raw.name_ar || "",
-    category: raw.category || "other",
+    category: mapCategoryArabic(raw.category || 'أخرى'),
     isActive: raw.isActive!==false,
     imageUrl: raw.imageUrl || raw.photoUrl || "",
     tags, searchTags: raw.searchText || raw.searchTags || "",
@@ -298,11 +311,13 @@ async function saveItem(e){
   const source=els.form.dataset.source||""; // "new" | "old" | ""
 
   try{
-    if (id && source==="new") {
-      await setDoc(doc(db,"fooditems",id), payload, { merge:true });
-    } else {
-      await addDoc(collection(db,"fooditems"), { ...payload, createdAt:serverTimestamp() });
-    }
+  if (id) {
+    const refPath = (source === 'old') ? ['admin','global','foodItems', id] : ['fooditems', id];
+    await setDoc(doc(db, ...refPath), payload, { merge: true });
+  } else {
+    await addDoc(collection(db, 'fooditems'), { ...payload, createdAt: serverTimestamp() });
+  }
+}
     closeDialog(); await fetchAndRender(true);
   }catch(err){
     console.error("save failed:", err);
