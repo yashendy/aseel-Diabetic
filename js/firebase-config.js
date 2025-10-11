@@ -9,7 +9,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
   authDomain: "sugar-kids-tracker.firebaseapp.com",
   projectId: "sugar-kids-tracker",
-  storageBucket: "sugar-kids-tracker.appspot.com",
+  storageBucket: "sugar-kids-tracker.firebasestorage.app",
   appId: "1:251830888114:web:a20716d3d4ad86a6724bab"
 };
 
