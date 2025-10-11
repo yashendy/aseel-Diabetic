@@ -272,21 +272,17 @@ async function saveItem(e){
     }
   }
 
-  // نبني الـpayload
-  const payload = {
+  const nutr=readNutr();
+  const payload={
     name:(els.name.value||"").trim(),
     category:els.category.value,
     isActive:!!els.isActive.checked,
     imageUrl:(els.imageUrl.value||"").trim(),
-    measures: readMeasuresFromUI(), // (name, grams)
-    ...pickNutr({
-      cal_kcal:Number(els.cal_kcal.value)||0,
-      carbs_g:Number(els.carbs_g.value)||0,
-      protein_g:Number(els.protein_g.value)||0,
-      fat_g:Number(els.fat_g.value)||0,
-      fiber_g:Number(els.fiber_g.value)||0,
-      sodium_mg:Number(els.sodium_mg.value)||0,
-    }),
+    searchTags:(els.searchTags.value||"").trim(),
+    dietSystems:getDietCodes(),
+    measures:readMeasures(),
+    nutrPer100g:{...nutr},
+    cal_kcal:nutr.cal_kcal, carbs_g:nutr.carbs_g, protein_g:nutr.protein_g, fat_g:nutr.fat_g, fiber_g:nutr.fiber_g, sodium_mg:nutr.sodium_mg,
     searchText: toSearch({
       name:(els.name.value||"").trim(),
       category:els.category.value,
@@ -302,15 +298,10 @@ async function saveItem(e){
   const source=els.form.dataset.source||""; // "new" | "old" | ""
 
   try{
-    if (id) {
-      // نحدّث في نفس المصدر (قديم/جديد)
-      const refPath = (source === "old")
-        ? ["admin","global","foodItems", id]
-        : ["fooditems", id];
-      await setDoc(doc(db, ...refPath), payload, { merge:true });
+    if (id && source==="new") {
+      await setDoc(doc(db,"fooditems",id), payload, { merge:true });
     } else {
-      // إنشاء جديد في الكولكشن الجديد فقط
-      await addDoc(collection(db, "fooditems"), { ...payload, createdAt:serverTimestamp() });
+      await addDoc(collection(db,"fooditems"), { ...payload, createdAt:serverTimestamp() });
     }
     closeDialog(); await fetchAndRender(true);
   }catch(err){
