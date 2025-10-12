@@ -189,7 +189,7 @@ function drawPie({TIR,TBR,TAR}){
   const ctx=$('pieTIR').getContext('2d');
   if(pie) pie.destroy();
   pie=new Chart(ctx,{type:'doughnut',
-    data:{labels:['داخل النطاق','انخفاض','ارتفاع'], datasets:[{data:[TIR,TBR,TAR]}]},
+    data:{labels:['داخل النطاق','انخفـــــاض','ارتـــــــفاع'], datasets:[{data:[TIR,TBR,TAR]}]},
     options:{plugins:{legend:{position:'bottom'}}, cutout:'70%'}
   });
 }
