@@ -96,7 +96,7 @@ function addMonths(date, m=4){
   if (d.getDate() < day) d.setDate(0);
   return d;
 }
-// === Helpers: شهور + أيام والعدّ التنازلي ===
+// === Helpers for visits countdown ===
 function monthsDaysBetween(from, to){
   let m = (to.getFullYear()-from.getFullYear())*12 + (to.getMonth()-from.getMonth());
   let anchor = addMonths(from, m);
@@ -231,16 +231,8 @@ onAuthStateChanged(auth, async (user)=>{
     setText(todayMealsEl,    mealsCount);
     setText(miniMealsEl,     mealsCount);
 
-    setText(nextVisitEl,     displayFollow);
-    setText(miniFollowUpEl,  displayFollow);
-    // آخر زيارة داخل بطاقة الزيارات
-    try {
-      const snapLast = await getDocs(query(visitsRef, orderBy("date","desc"), limit(1)));
-      const lastVisit = !snapLast.empty ? (snapLast.docs[0].data().date || "—") : "—";
-      const miniLastVisitEl = document.getElementById("miniLastVisit");
-      if (miniLastVisitEl) miniLastVisitEl.textContent = lastVisit;
-    } catch (e) { console.error("فشل جلب آخر زيارة:", e); }
-
+    setText(nextVisitEl, displayFollow);
+    setText(miniFollowUpEl, displayFollow);
 
     // ----- بطاقة التحاليل الطبية -----
     await renderLabCard(user.uid);
