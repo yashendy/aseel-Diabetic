@@ -96,19 +96,16 @@ function addMonths(date, m=4){
   if (d.getDate() < day) d.setDate(0);
   return d;
 }
-// شهور + أيام بين تاريخين (لا تحتسب القيم السالبة)
+
+// شهور + أيام بين تاريخين
 function monthsDaysBetween(from, to){
   let m = (to.getFullYear()-from.getFullYear())*12 + (to.getMonth()-from.getMonth());
   let anchor = addMonths(from, m);
-  if (to.getDate() < from.getDate()){
-    m -= 1;
-    anchor = addMonths(from, m);
-  }
+  if (to.getDate() < from.getDate()) { m -= 1; anchor = addMonths(from, m); }
   const d = Math.max(0, dayDiff(to, anchor));
   return { months: Math.max(0, m), days: d };
 }
 
-// تنسيق العدّ التنازلي
 function formatCountdown(baseDate, dueDate){
   const dLeft = dayDiff(dueDate, baseDate);
   if (dLeft < 0) return `متأخر ${Math.abs(dLeft)} يوم`;
@@ -119,7 +116,6 @@ function formatCountdown(baseDate, dueDate){
   if (md.days > 0) parts.push(`${md.days} يوم`);
   return `باقي ${parts.join(" و ")}`;
 }
-
 
 // زر خروج (اختياري لو عندك بالهيدر)
 document.getElementById('logoutBtn')?.addEventListener('click', ()=> signOut(auth).catch(()=>{}));
@@ -239,14 +235,6 @@ onAuthStateChanged(auth, async (user)=>{
 
     setText(nextVisitEl,     nextFollow);
     setText(miniFollowUpEl,  displayFollow);
-    // آخر زيارة (date الأحدث)
-    try {
-      const snapLast = await getDocs(query(visitsRef, orderBy("date","desc"), limit(1)));
-      const lastVisit = !snapLast.empty ? (snapLast.docs[0].data().date || "—") : "—";
-      const lastVisitEl = document.getElementById("lastVisit");
-      if (lastVisitEl) lastVisitEl.textContent = lastVisit;
-    } catch (e) { console.error("فشل جلب آخر زيارة:", e); }
-
 
     // ----- بطاقة التحاليل الطبية -----
     await renderLabCard(user.uid);
