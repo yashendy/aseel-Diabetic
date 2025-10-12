@@ -64,8 +64,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple
 /* حجم صغير وثابت للرسم الدائري */
 .summary { grid-template-columns: 1fr auto; } /* العمود الثاني على قدّ المحتوى */
 .pie-box {
-  width: 160px;      /* صغّري/كبّري هنا: 140–200px حسب رغبتك */
-  height: 160px;
+  width: 260px;      /* صغّري/كبّري هنا: 140–200px حسب رغبتك */
+  height: 260px;
   justify-self: center;  /* تتمركز بين الاثنين */
   align-self: center;
 }
