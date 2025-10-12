@@ -1,184 +1,146 @@
-/* ========================= child-edit.js (FULL) =========================
-   - Loads child doc, fills the form
-   - Saves child doc with dietaryFlags + specialDiet mirror
-   - Saves preferred / disliked if widgets are present
-   - Defensive against missing elements / RTL glyphs / trailing commas
-   - Firebase v9 modular style
-========================================================================= */
-
-/* ===== Imports (assumes you already initialize firebase app elsewhere) ===== */
-// If your project uses global firebase, comment these imports and use window.firebase
+// js/child-edit.js
+// يستورد التهيئة الموحّدة (v12) + نستخدم الكائنات المصدّرة
+import { app, auth, db, storage } from "./js/firebase-config.js";
 import {
-  getFirestore, doc, getDoc, setDoc, updateDoc
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+  doc, getDoc, setDoc, updateDoc
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-/* ===== Config (you can change these selectors/IDs to your actual DOM) ===== */
-const db = getFirestore();
+// ===== Helpers =====
+const $ = (sel) => document.querySelector(sel);
+const qs = new URLSearchParams(location.search);
+const parentId = qs.get("parentId") || "";
+const childId  = qs.get("id")       || "";
 
-/** Helpers to get DOM values safely */
-function $(id) { return document.getElementById(id); }
-function valNum(id) {
-  const v = $(id)?.value?.toString().trim();
-  if (v === '' || v == null) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
 function valStr(id) {
-  const v = $(id)?.value;
-  return (v == null ? '' : String(v)).trim();
+  const el = document.getElementById(id);
+  return el ? (el.value ?? "").toString().trim() : "";
+}
+function valNum(id) {
+  const el = document.getElementById(id);
+  if (!el || el.value === "") return undefined;
+  const n = Number(el.value);
+  return Number.isFinite(n) ? n : undefined;
+}
+function setVal(id, v) {
+  const el = document.getElementById(id);
+  if (el != null && v != null) el.value = v;
 }
 
-/** Chips widgets (optional): expected to expose .get() that returns string[] */
-function getWidgetValues(widgetRef) {
-  try {
-    if (widgetRef && typeof widgetRef.get === 'function') return widgetRef.get();
-  } catch {}
-  return [];
-}
-
-/* ===== Diet flags collection from checkboxes (customize if needed) ===== */
 function collectDietFlags() {
-  // Expect checkboxes with name="diet-flag" and value codes e.g. halal, vegetarian, ...
-  const boxes = document.querySelectorAll('input[name="diet-flag"]');
+  const boxes = document.querySelectorAll("input.diet-flag");
   const out = [];
-  boxes.forEach(b => { if (b.checked && b.value) out.push(b.value); });
+  boxes.forEach((b) => { if (b.checked && b.value) out.push(b.value); });
   return out;
 }
-
-/* ===== Build payload safely (single source of truth) ===== */
-function buildChildPayloadSafe() {
-  const flags = collectDietFlags();
-
-  const payload = {
-    /* Basic identity */
-    name:         valStr('childName'),
-    gender:       valStr('childGender'),
-    birthDate:    valStr('childBirthDate'),
-    glucoseUnit:  valStr('childGlucoseUnit'),
-    nationalId:   valStr('childNationalId'),
-
-    /* Body measurements */
-    height:       valNum('childHeight'),
-    weight:       valNum('childWeight'),
-
-    /* Preferences (widgets are optional) */
-    preferred:    getWidgetValues(window.preferred),
-    disliked:     getWidgetValues(window.disliked),
-
-    /* Diet flags: source + mirror for backward compatibility */
-    dietaryFlags: flags,
-    specialDiet:  flags,
-
-    /* Timestamp */
-    updatedAt:    new Date().toISOString()
-  };
-
-  // Remove explicit nulls that Firestore may not need
-  Object.keys(payload).forEach(k => {
-    if (payload[k] === undefined) delete payload[k];
-  });
-
-  return payload;
-}
-
-/* ===== Fill form from doc data (defensive) ===== */
-function setVal(id, v) { if ($(id)) $(id).value = (v ?? ''); }
-function checkDietFlags(flags=[]) {
-  const set = new Set(Array.isArray(flags) ? flags : []);
-  document.querySelectorAll('input[name="diet-flag"]').forEach(b => {
+function checkDietFlags(flags = []) {
+  const set = new Set(flags);
+  document.querySelectorAll("input.diet-flag").forEach((b) => {
     b.checked = set.has(b.value);
   });
 }
 
-async function fillFormFromDoc(parentId, childId) {
+// ويدجت اختيار (لو غير موجودة ترجع [])
+function getWidgetValues(widget) {
   try {
-    const ref = doc(db, 'parents', parentId, 'children', childId);
+    if (!widget || typeof widget.getValues !== "function") return [];
+    const v = widget.getValues();
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+function buildChildPayloadSafe() {
+  const flags = collectDietFlags();
+  const payload = {
+    // الهوية
+    name:        valStr("f_name"),
+    gender:      valStr("f_gender"),
+    birthDate:   valStr("f_birthDate"),
+    glucoseUnit: valStr("f_unit"),
+    nationalId:  valStr("f_civilId"),
+
+    // القياسات
+    height:      valNum("f_heightCm"),
+    weight:      valNum("f_weightKg"),
+
+    // تفضيلات (اختياري)
+    preferred:   getWidgetValues(window.preferred),
+    disliked:    getWidgetValues(window.disliked),
+
+    // الأنظمة الغذائية (اسمين للتوافق)
+    dietaryFlags: flags,
+    specialDiet:  flags,
+
+    updatedAt:   new Date().toISOString(),
+  };
+
+  // تنظيف القيم غير المعرّفة
+  Object.keys(payload).forEach((k) => {
+    if (payload[k] === undefined || payload[k] === null) delete payload[k];
+  });
+  return payload;
+}
+
+async function fillFormFromDoc(pId, cId) {
+  if (!pId || !cId) return;
+  try {
+    const ref = doc(db, "parents", pId, "children", cId);
     const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      console.warn('Child doc not found');
-      return;
-    }
+    if (!snap.exists()) return;
     const d = snap.data() || {};
 
-    setVal('childName',        d.name);
-    setVal('childGender',      d.gender);
-    setVal('childBirthDate',   d.birthDate);
-    setVal('childGlucoseUnit', d.glucoseUnit);
-    setVal('childNationalId',  d.nationalId);
-
-    if ($( 'childHeight')) $( 'childHeight').value = d.height ?? '';
-    if ($( 'childWeight')) $( 'childWeight').value = d.weight ?? '';
+    setVal("f_name",       d.name);
+    setVal("f_gender",     d.gender);
+    setVal("f_birthDate",  d.birthDate);
+    setVal("f_unit",       d.glucoseUnit);
+    setVal("f_civilId",    d.nationalId);
+    setVal("f_heightCm",   d.height ?? "");
+    setVal("f_weightKg",   d.weight ?? "");
 
     const flags = Array.isArray(d.dietaryFlags) ? d.dietaryFlags :
                   (Array.isArray(d.specialDiet) ? d.specialDiet : []);
     checkDietFlags(flags);
-
-    // If your preferred/disliked widgets support .set(array)
-    try { if (window.preferred && typeof preferred.set === 'function') preferred.set(d.preferred || []); } catch {}
-    try { if (window.disliked  && typeof disliked.set  === 'function') disliked.set (d.disliked  || []); } catch {}
-
   } catch (e) {
-    console.error('fillFormFromDoc error', e);
+    console.error("fillFormFromDoc error", e);
+    alert("تعذّر تحميل بيانات الطفل.");
   }
 }
 
-/* ===== Save handlers ===== */
-async function saveChild(parentId, childId) {
-  const ref = doc(db, 'parents', parentId, 'children', childId);
+async function saveChild(pId, cId) {
+  if (!pId || !cId) throw new Error("مفقود parentId/childId");
   const payload = buildChildPayloadSafe();
-  // merge = true to avoid overwriting other sub-objects unintentionally
+  const ref = doc(db, "parents", pId, "children", cId);
+  // merge للحفاظ على الحقول الأخرى
   await setDoc(ref, payload, { merge: true });
-  toastOk('تم حفظ بيانات الطفل');
-  return payload;
 }
 
-function toastOk(msg) {
-  try {
-    if (window.Toastify) {
-      window.Toastify({ text: msg, gravity: 'top', position: 'center', className: 'toast-ok' }).showToast();
-    } else {
-      console.log('✓', msg);
-    }
-  } catch { console.log('✓', msg); }
-}
-
-/* ===== Wire up events ===== */
 function initChildEditPage() {
-  // Read parentId & childId from URL or a data-* attribute
-  const parentId = document.body.dataset.parentId || window.PARENT_ID || '';
-  const childId  = document.body.dataset.childId  || window.CHILD_ID  || '';
-  if (!parentId || !childId) {
-    console.warn('Missing parentId/childId');
-  } else {
-    fillFormFromDoc(parentId, childId);
-  }
+  // حمّل البيانات
+  if (parentId && childId) fillFormFromDoc(parentId, childId);
 
-  // Save button
-  const saveBtn = $('saveChildBtn') || document.querySelector('[data-action="save-child"]');
+  // زر الحفظ
+  const saveBtn = document.getElementById("btnSave");
   if (saveBtn) {
-    saveBtn.addEventListener('click', async () => {
+    saveBtn.addEventListener("click", async () => {
       try {
         await saveChild(parentId, childId);
+        alert("تم الحفظ بنجاح");
       } catch (e) {
-        console.error('Save error', e);
-        alert('حدث خطأ أثناء الحفظ، حاول مرة أخرى');
+        console.error(e);
+        alert("تعذّر الحفظ. تأكد من الصلاحيات والاتصال.");
       }
     });
   }
 
-  // When any diet-flag changes, we could auto-save or just mark dirty
-  document.querySelectorAll('input[name="diet-flag"]').forEach(b => {
-    b.addEventListener('change', () => {
-      // markDirtyUI(); // optional
+  // زر الرئيسية → child.html بنفس البارامترات
+  const home = document.getElementById("nav-home");
+  if (home && parentId && childId) {
+    home.addEventListener("click", (e) => {
+      e.preventDefault();
+      location.href = `child.html?parentId=${encodeURIComponent(parentId)}&id=${encodeURIComponent(childId)}`;
     });
-  });
+  }
 }
 
-/* ===== Kick-off on DOM ready ===== */
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initChildEditPage);
-} else {
-  initChildEditPage();
-}
-
-/* ======================= END child-edit.js (FULL) ======================= */
+window.addEventListener("DOMContentLoaded", initChildEditPage);
