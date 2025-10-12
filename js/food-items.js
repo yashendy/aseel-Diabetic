@@ -77,7 +77,7 @@ async function loadLibrary(){
     g2.forEach(s=> rows.push(mapFood(s)));
   }catch(e){ console.warn("fooditems read failed:", e?.message||e); }
 
-  // إزالة التكرار (بالاسم lower + الفئة) – الأحدث يغلب بشكل تقريبي
+  // إزالة التكرار (بالاسم lower) – الأحدث يغلب بشكل تقريبي
   const seen = new Map();
   for(const f of rows){
     const key = `${f.name}`.toLowerCase();
@@ -311,11 +311,30 @@ function authInit(){
     }
     if(els.btnAuth) els.btnAuth.style.display="none";
     if(els.btnLogout) els.btnLogout.style.display="inline-block";
-    if(els.adminName) els.adminName.textContent = user.displayName || user.email || "مشرف";
-    try{
+
+    try {
       const u = await getDoc(doc(db, "users", user.uid));
-      if(els.adminRole) els.adminRole.textContent = u.exists() ? (u.data().role || "") : "";
-    }catch{ /* تجاهل */ }
+
+      // الدور (نعرضه بعربي فقط في الواجهة، من غير ما نغيّر الداتا/القواعد)
+      const role = u.exists() ? (u.data().role || "") : "";
+      const roleLabel =
+        role === "admin" ? "أدمن" :
+        role === "doctor" ? "طبيب" :
+        role === "doctor-pending" ? "طبيب (قيد المراجعة)" :
+        role === "parent" ? "ولي أمر" :
+        (role || "");
+      if (els.adminRole) els.adminRole.textContent = roleLabel;
+
+      // الاسم: users/{uid}.name ثم displayName (بدون ما نعرض الإيميل)
+      const profileName = (u.exists() && u.data().name)
+        ? u.data().name
+        : (user.displayName || "");
+      if (els.adminName) els.adminName.textContent = profileName || "مشرف";
+    } catch {
+      // fallback بسيط
+      if (els.adminRole) els.adminRole.textContent = "";
+      if (els.adminName) els.adminName.textContent = user.displayName || "مشرف";
+    }
   });
 
   els.btnAuth?.addEventListener('click', async ()=>{
