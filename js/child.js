@@ -210,12 +210,12 @@ onAuthStateChanged(auth, async (user)=>{
     const visitsRef  = collection(db, `parents/${user.uid}/children/${childId}/visits`);
     const qVisits    = query(
       visitsRef,
-      where('followUpDate','>=', today),
-      orderBy('followUpDate','asc'),
+      where('date','>=', today),
+      orderBy('date','asc'),
       limit(1)
     );
     const snapVisit  = await getDocs(qVisits);
-    const nextFollow = !snapVisit.empty ? (snapVisit.docs[0].data().followUpDate || '—') : '—';
+    const nextFollow = !snapVisit.empty ? (snapVisit.docs[0].data().date || '—') : '—';
     let displayFollow = nextFollow || "—";
     if (nextFollow && nextFollow !== "—"){
       const due  = new Date(nextFollow);
