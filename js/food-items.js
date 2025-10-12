@@ -1,13 +1,13 @@
 /* js/food-items.js */
 import { auth, db, storage } from "./firebase-config.js";
 import {
-  collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp
+  collection, getDocs, doc, getDoc, setDoc, addDoc, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {
   onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  ref as sRef, uploadBytesResumable, getDownloadURL
+  ref as sRef, uploadBytesResumable, getDownloadURL, deleteObject
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
 /* ========== Helpers ========== */
@@ -77,7 +77,7 @@ async function loadLibrary(){
     g2.forEach(s=> rows.push(mapFood(s)));
   }catch(e){ console.warn("fooditems read failed:", e?.message||e); }
 
-  // إزالة التكرار (بالاسم lower) – الأحدث يغلب بشكل تقريبي
+  // إزالة التكرار بالاسم (lowercase)
   const seen = new Map();
   for(const f of rows){
     const key = `${f.name}`.toLowerCase();
@@ -189,6 +189,43 @@ async function saveItem(){
   }
 }
 
+/* ========== حذف الصنف ========== */
+async function deleteItem(){
+  const id = norm(els.id?.value);
+  if(!id) return;
+
+  if(!confirm("هل تريد حذف هذا الصنف نهائيًا؟ لا يمكن التراجع.")) return;
+
+  try{
+    // حاول نحذف الصورة أولًا (اختياري)
+    try{
+      const snap = await getDoc(doc(db, "fooditems", id));
+      if(snap.exists()){
+        const d = snap.data() || {};
+        if(d.imageUrl){
+          // ref() يقبل رابط https مباشر
+          const imgRef = sRef(storage, d.imageUrl);
+          await deleteObject(imgRef);
+        }
+      }
+    }catch(e){
+      // تجاهل لو فشل حذف الصورة (مثلاً صلاحيات)
+      console.warn("فشل حذف الصورة:", e?.message||e);
+    }
+
+    // احذف وثيقة الصنف
+    await deleteDoc(doc(db, "fooditems", id));
+
+    // حدّث الواجهة
+    await loadLibrary();
+    render();
+    els.dlg?.close();
+    alert("تم حذف الصنف.");
+  }catch(e){
+    alert("فشل الحذف: " + (e?.message || e));
+  }
+}
+
 /* ========== رفع الصورة للمخزن ========== */
 function bindUpload(){
   if(!els.imageFile) return;
@@ -272,7 +309,7 @@ function bindUI(){
   els.dlgClose?.addEventListener('click', ()=> els.dlg?.close());
   els.btnAdd?.addEventListener('click', ()=> openEdit(""));
   $("btn-save")?.addEventListener('click', (e)=>{ e.preventDefault(); saveItem(); });
-  $("btn-delete")?.addEventListener('click', (e)=>{ e.preventDefault(); alert("الحذف ممكن إضافته لاحقًا."); });
+  $("btn-delete")?.addEventListener('click', (e)=>{ e.preventDefault(); deleteItem(); });
 
   els.btnCards?.addEventListener('click', ()=>{
     els.btnCards.classList.add('active'); els.btnTable?.classList.remove('active');
@@ -315,7 +352,7 @@ function authInit(){
     try {
       const u = await getDoc(doc(db, "users", user.uid));
 
-      // الدور (نعرضه بعربي فقط في الواجهة، من غير ما نغيّر الداتا/القواعد)
+      // الدور (عرض عربي فقط)
       const role = u.exists() ? (u.data().role || "") : "";
       const roleLabel =
         role === "admin" ? "أدمن" :
@@ -325,13 +362,12 @@ function authInit(){
         (role || "");
       if (els.adminRole) els.adminRole.textContent = roleLabel;
 
-      // الاسم: users/{uid}.name ثم displayName (بدون ما نعرض الإيميل)
+      // الاسم: users/{uid}.name ثم displayName
       const profileName = (u.exists() && u.data().name)
         ? u.data().name
         : (user.displayName || "");
       if (els.adminName) els.adminName.textContent = profileName || "مشرف";
     } catch {
-      // fallback بسيط
       if (els.adminRole) els.adminRole.textContent = "";
       if (els.adminName) els.adminName.textContent = user.displayName || "مشرف";
     }
