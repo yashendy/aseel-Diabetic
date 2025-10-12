@@ -9,14 +9,12 @@ const firebaseConfig = {
   apiKey: "AIzaSyBs6rFN0JH26Yz9tiGdBcFK8ULZ2zeXiq4",
   authDomain: "sugar-kids-tracker.firebaseapp.com",
   projectId: "sugar-kids-tracker",
-  // ✅ المهم: اسم البكَت الصح لازم يكون .firebasestorage.app
   storageBucket: "sugar-kids-tracker.firebasestorage.app",
   appId: "1:251830888114:web:a20716d3d4ad86a6724bab"
 };
 
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// App Check (reCAPTCHA v3)
 initializeAppCheck(app, {
   provider: new ReCaptchaV3Provider("6Leov-MrAAAAAJ982eHqf7CWxf-k1ntDF7-nDnWX"),
   isTokenAutoRefreshEnabled: true,
