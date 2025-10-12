@@ -216,11 +216,11 @@ async function runCompare(){
 
   $('cmpTable').innerHTML = `
     <div>المؤشر</div><div>الحالية</div><div>السابقة</div><div>الفرق</div>
-    ${rowCmp('TIR',pa.TIR,pb.TIR,'%')}
-    ${rowCmp('TBR',pa.TBR,pb.TBR,'%')}
-    ${rowCmp('TAR',pa.TAR,pb.TAR,'%')}
+    ${rowCmp('داخل النطاق',pa.TIR,pb.TIR,'%')}
+    ${rowCmp('انخفاض',pa.TBR,pb.TBR,'%')}
+    ${rowCmp('ارتفاع',pa.TAR,pb.TAR,'%')}
     ${rowCmp('المتوسط',meanA,meanB,'num')}
-    ${rowCmp('SD',sdA,sdB,'num')}
+    ${rowCmp('SDالانحراف',sdA,sdB,'num')}
     ${rowCmp('عدد القياسات',nA,nB,'num')}
   `;
 }
