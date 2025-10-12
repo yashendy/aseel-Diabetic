@@ -13,10 +13,8 @@
  */
 
 import { auth, db } from './firebase-config.js';
-import {
-  collection, doc, getDoc, getDocs, addDoc,
-  query, orderBy, limit, serverTimestamp
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import {collection, doc, getDoc, getDocs, addDoc,
+  query, orderBy, limit, serverTimestamp, onSnapshot} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* ============ Tiny utils ============ */
@@ -69,6 +67,7 @@ const childId = (params.get('child')||'').trim();
 let currentUser=null, childRef=null, childData=null;
 let mealsCol=null, measurementsCol=null, presetsCol=null;
 let foodCache=[], items=[];
+let unsubscribeFood=null;
 let manualCarb=false, manualCorr=false, manualTotal=false;
 let presetsCache=[];
 let plannedChanges=[]; // auto-tuner proposed ops
@@ -385,13 +384,21 @@ function mapFood(s){
 }
 function ADMIN_FOOD_COLLECTION(){ return collection(db,'admin','global','foodItems'); }
 async function ensureFoodCache(){
-  if(foodCache.length) return;
+  // اشتراك حيّ على مكتبة الأدمن بحيث أي تعديل يظهر فورًا
+  if (unsubscribeFood) return;
   try{
-    const snap=await getDocs(ADMIN_FOOD_COLLECTION());
-    const arr=[]; snap.forEach(s=>arr.push(mapFood(s)));
-    arr.sort((a,b)=> (a.name||'').localeCompare(b.name||'', 'ar',{numeric:true}));
-    foodCache=arr;
-  }catch(e){ console.error(e); toast('تعذّر تحميل مكتبة الأدمن (صلاحيات؟)','error'); foodCache=[]; }
+    unsubscribeFood = onSnapshot(ADMIN_FOOD_COLLECTION(), (snap)=>{
+      const arr=[];
+      snap.forEach(s=>arr.push(mapFood(s)));
+      arr.sort((a,b)=> (a.name||'').localeCompare(b.name||'', 'ar',{numeric:true}));
+      foodCache=arr;
+      renderPicker(); // يحدث نتائج البحث لو نافذة الالتقاط مفتوحة
+    });
+  }catch(e){
+    console.error(e);
+    toast('تعذّر الاشتراك في مكتبة الأدمن (صلاحيات؟)','error');
+    foodCache=[];
+  }
 }
 
 /* ============ Picker ============ */
@@ -410,20 +417,38 @@ function violatesDiet(f){
 }
 function getPref(itemId){ return (childData?.preferences||{})[itemId]; }
 
+// ---- بحث موحّد (تطبيع عربي + توكنز + هاشتاج) ----
+function normalizeArabic(s=''){
+  return (s||'').toString().toLowerCase()
+    .replace(/[إأآا]/g,'ا').replace(/ى/g,'ي').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ة/g,'ه')
+    .replace(/[^a-z0-9\u0621-\u064A#]+/g,' ')
+    .trim();
+}
+function textIndex(f){
+  const measNames = (Array.isArray(f.measures)?f.measures:[]).map(m=>m.name||'').join(' ');
+  const tags = (Array.isArray(f.tags)?f.tags:[]).map(t=>`#${t}`).join(' ');
+  return normalizeArabic([f.name, f.brand||'', f.category||'', measNames, tags].join(' '));
+}
 function renderPicker(){
   if(!pickerGrid) return;
   const qtxt=(pickSearchEl?.value||'').trim();
   const cat=(pickCategoryEl?.value||'الكل').trim();
   const hideA=!!hideAllergyEl?.checked, hideD=!!hideDietEl?.checked;
 
-  const list=foodCache.filter(f=>{
-    const matchQ=!qtxt || f.name.includes(qtxt) || f.brand?.includes(qtxt) || f.category?.includes(qtxt) || (qtxt.startsWith('#') && f.tags?.includes(qtxt.slice(1)));
-    const matchC=(cat==='الكل')||(f.category===cat);
-    const allergy=childHasAllergy(f), diet=violatesDiet(f);
-    const passA = hideA ? !allergy : true;
-    const passD = hideD ? !diet : true;
-    return matchQ && matchC && passA && passD;
-  });
+  const qtxtRaw = (pickSearchEl?.value||'').trim();
+const qtxt = normalizeArabic(qtxtRaw);
+const tokens = qtxt.split(/\s+/).filter(Boolean);
+const list=foodCache.filter(f=>{
+  const matchC=(cat==='الكل')||(f.category===cat);
+  const idx = textIndex(f);
+  const matchQ = tokens.length===0 || tokens.every(t=>idx.includes(t));
+  const hashOk = !qtxtRaw.includes('#') || idx.includes(qtxt);
+  const allergy=childHasAllergy(f), diet=violatesDiet(f);
+  const passA = hideA ? !allergy : true;
+  const passD = hideD ? !diet : true;
+  return matchC && matchQ && hashOk && passA && passD;
+});
+
 
   pickerEmpty?.classList.toggle('hidden',list.length>0);
   pickerGrid.innerHTML=list.map(f=>{
