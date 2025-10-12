@@ -96,8 +96,7 @@ function addMonths(date, m=4){
   if (d.getDate() < day) d.setDate(0);
   return d;
 }
-
-// شهور + أيام بين تاريخين
+// === Helpers: شهور + أيام والعدّ التنازلي ===
 function monthsDaysBetween(from, to){
   let m = (to.getFullYear()-from.getFullYear())*12 + (to.getMonth()-from.getMonth());
   let anchor = addMonths(from, m);
@@ -105,7 +104,6 @@ function monthsDaysBetween(from, to){
   const d = Math.max(0, dayDiff(to, anchor));
   return { months: Math.max(0, m), days: d };
 }
-
 function formatCountdown(baseDate, dueDate){
   const dLeft = dayDiff(dueDate, baseDate);
   if (dLeft < 0) return `متأخر ${Math.abs(dLeft)} يوم`;
@@ -116,6 +114,7 @@ function formatCountdown(baseDate, dueDate){
   if (md.days > 0) parts.push(`${md.days} يوم`);
   return `باقي ${parts.join(" و ")}`;
 }
+
 
 // زر خروج (اختياري لو عندك بالهيدر)
 document.getElementById('logoutBtn')?.addEventListener('click', ()=> signOut(auth).catch(()=>{}));
@@ -221,8 +220,7 @@ onAuthStateChanged(auth, async (user)=>{
     if (nextFollow && nextFollow !== "—"){
       const due  = new Date(nextFollow);
       const base = new Date(today);
-      const label = formatCountdown(base, due);
-      displayFollow = `${nextFollow} — ${label}`;
+      displayFollow = `${nextFollow} — ${formatCountdown(base, due)}`;
     }
 
 
@@ -233,8 +231,16 @@ onAuthStateChanged(auth, async (user)=>{
     setText(todayMealsEl,    mealsCount);
     setText(miniMealsEl,     mealsCount);
 
-    setText(nextVisitEl,     nextFollow);
+    setText(nextVisitEl,     displayFollow);
     setText(miniFollowUpEl,  displayFollow);
+    // آخر زيارة داخل بطاقة الزيارات
+    try {
+      const snapLast = await getDocs(query(visitsRef, orderBy("date","desc"), limit(1)));
+      const lastVisit = !snapLast.empty ? (snapLast.docs[0].data().date || "—") : "—";
+      const miniLastVisitEl = document.getElementById("miniLastVisit");
+      if (miniLastVisitEl) miniLastVisitEl.textContent = lastVisit;
+    } catch (e) { console.error("فشل جلب آخر زيارة:", e); }
+
 
     // ----- بطاقة التحاليل الطبية -----
     await renderLabCard(user.uid);
