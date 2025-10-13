@@ -17,8 +17,7 @@ import {
   collection, doc, getDoc, getDocs, addDoc,
   query, orderBy, limit, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { onSnapshot } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
+import { getStorage, ref as sRef, getDownloadURL, onSnapshot } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* ============ Tiny utils ============ */
@@ -71,7 +70,6 @@ const childId = (params.get('child')||'').trim();
 let currentUser=null, childRef=null, childData=null;
 let mealsCol=null, measurementsCol=null, presetsCol=null;
 let foodCache=[], items=[];
-let _unsubAdmin=null, _unsubTop=null;
 let manualCarb=false, manualCorr=false, manualTotal=false;
 let presetsCache=[];
 let plannedChanges=[]; // auto-tuner proposed ops
@@ -374,6 +372,7 @@ function normalizeMeasures(d){
   if(Array.isArray(d?.measures)) return d.measures.filter(m=>m&&Number(m.grams)>0).map(m=>({name:m.name,grams:Number(m.grams)}));
   if(d?.measureQty && typeof d.measureQty==='object') return Object.entries(d.measureQty).filter(([n,g])=>n&&Number(g)>0).map(([n,g])=>({name:n,grams:Number(g)}));
   if(Array.isArray(d?.householdUnits)) return d.householdUnits.filter(m=>m&&Number(m.grams)>0).map(m=>({name:m.name,grams:Number(m.grams)}));
+  if(Array.isArray(d?.units)) return d.units.filter(u=>u&&u.label&&Number(u.grams)>0).map(u=>({name:u.label,grams:Number(u.grams)}));
   return [];
 }
 function pickNumber(...candidates){ for(const v of candidates){ if(v!=null && !Number.isNaN(Number(v))) return Number(v); } return 0; }
@@ -388,8 +387,7 @@ function mapFood(s){
 }
 function ADMIN_FOOD_COLLECTION(){ return collection(db,'admin','global','foodItems'); }
 async function ensureFoodCache(){
-  // Start live subscriptions if not started
-  if(_unsubAdmin || _unsubTop){ return; }
+  if(window._unsubAdmin || window._unsubTop) return;
   try{
     const storage = getStorage();
     let snap1=null, snap2=null;
@@ -399,31 +397,28 @@ async function ensureFoodCache(){
       if(snap1){ snap1.forEach(s => list.push(mapFood(s))); }
       if(snap2){ snap2.forEach(s => list.push(mapFood(s))); }
       // de-dup by id
-      const mapById = new Map();
-      list.forEach(f=>{ if(f && f.id) { if(!mapById.has(f.id)) mapById.set(f.id, f); } });
-      let arr = Array.from(mapById.values());
+      const byId = new Map();
+      for(const f of list){ if(f&&f.id&&!byId.has(f.id)) byId.set(f.id,f); }
+      let arr = Array.from(byId.values());
       // sort
       arr.sort((a,b)=> (a.name||'').localeCompare(b.name||'','ar',{numeric:true}));
-      // resolve storage paths to HTTPS
+      // resolve storage paths
       await Promise.all(arr.map(async f=>{
         if(f.imageUrl && !/^https?:\/\//.test(f.imageUrl)){
-          try { f.imageUrl = await getDownloadURL(sRef(storage, f.imageUrl)); } catch(e){ /* ignore */ }
+          try{ f.imageUrl = await getDownloadURL(sRef(storage, f.imageUrl)); }catch(e){}
         }
       }));
       foodCache = arr;
       // refresh picker if open
-      try{
-        if(typeof renderPicker==='function' && pickerModal && !pickerModal.classList.contains('hidden')){
-          renderPicker();
-        }
-      }catch(_){}
+      if(typeof renderPicker==='function' && typeof pickerModal!=='undefined' && pickerModal && !pickerModal.classList.contains('hidden')){
+        renderPicker();
+      }
     };
 
-    _unsubAdmin = onSnapshot(ADMIN_FOOD_COLLECTION(), s=>{ snap1=s; apply(); }, err=>console.warn('admin/global onSnapshot:', err?.message||err));
-    _unsubTop   = onSnapshot(collection(db,'fooditems'), s=>{ snap2=s; apply(); }, err=>console.warn('fooditems onSnapshot:', err?.message||err));
+    window._unsubAdmin = onSnapshot(ADMIN_FOOD_COLLECTION(), s=>{ snap1=s; apply(); });
+    window._unsubTop   = onSnapshot(collection(db,'fooditems'), s=>{ snap2=s; apply(); });
   }catch(e){ console.error(e); toast('تعذّر الاشتراك في مكتبة الأصناف','error'); }
 }
-
 
 /* ============ Picker ============ */
 function openPicker(){ pickerModal?.classList.remove('hidden'); document.body.style.overflow='hidden'; renderPicker(); }
@@ -1203,7 +1198,7 @@ onAuthStateChanged(auth, async (user)=>{
 });
 
 function stopFoodSubscriptions(){
-  try{ if(_unsubAdmin){ _unsubAdmin(); _unsubAdmin=null; } }catch(_){}
-  try{ if(_unsubTop){ _unsubTop(); _unsubTop=null; } }catch(_){}
+  try{ if(window._unsubAdmin){ window._unsubAdmin(); window._unsubAdmin=null; } }catch(_){}
+  try{ if(window._unsubTop){ window._unsubTop(); window._unsubTop=null; } }catch(_){}
 }
 window.addEventListener('beforeunload', stopFoodSubscriptions);
