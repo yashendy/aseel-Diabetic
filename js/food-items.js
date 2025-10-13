@@ -123,7 +123,13 @@ function applyFilters(){
   const onlyActive = !!els.filterActive?.checked;
 
   let list = allItems.slice();
-  if(q) list = list.filter(x => (x.name + " " + x.category + " " + x.searchText + " " + (x.hashTagsManual||[]).join(" ")).toLowerCase().includes(q));
+  if (q) {
+    list = list.filter(x => {
+      const unitsTxt = (x.units || []).map(u => u.label).join(" ");
+      const hay = (x.name + " " + x.category + " " + x.searchText + " " + (x.hashTagsManual||[]).join(" ") + " " + unitsTxt).toLowerCase();
+      return hay.includes(q);
+    });
+  }
   if(cat) list = list.filter(x => x.category === cat);
   if(onlyActive) list = list.filter(x => x.isActive);
 
