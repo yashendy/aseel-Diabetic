@@ -1,20 +1,20 @@
 // /js/food-items.js — FULL REPLACEMENT
-// ✅ يحفظ على Schema v2
-// ✅ يرفع الصور إلى food-items/items/{itemId}/main.jpg
-// ✅ يقرأ السكيمات القديمة ويحوّلها قبل الحفظ
-// ✅ يبني searchText ويدمج الوسوم
-// ✅ يعرض صورة مصغّرة داخل البطاقة بنفس المساحة بدون تغيير أبعادها
+// ✅ Schema v2
+// ✅ رفع الصور إلى food-items/items/{itemId}/main.jpg
+// ✅ تحويل image.path ➜ HTTPS عبر getDownloadURL
+// ✅ searchText والوسوم
+// ✅ صورة مصغّرة داخل البطاقة بدون تغيير مساحة الكرت
 
 import { app, db, auth, storage } from './firebase-config.js';
 import {
-  getFirestore, collection, doc, getDoc, setDoc, deleteDoc,
+  collection, doc, getDoc, setDoc, deleteDoc,
   onSnapshot, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 import {
-  ref as sRef, uploadBytesResumable
+  ref as sRef, uploadBytesResumable, getDownloadURL
 } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js';
 import {
-  getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut
+  onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut
 } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 
 // ---------- عناصر الواجهة
@@ -30,7 +30,6 @@ const els = {
   btnCards:     document.getElementById('btn-cards'),
   btnTable:     document.getElementById('btn-table'),
 
-  // dialog
   dlg:          document.getElementById('edit-dialog'),
   dlgTitle:     document.getElementById('dlg-title'),
   dlgClose:     document.getElementById('dlg-close'),
@@ -51,7 +50,6 @@ const els = {
   chipsUnits:   document.querySelectorAll('.chips [data-unit]'),
   hashTagsManual: document.getElementById('hashTagsManual'),
   dietAutoView: document.getElementById('diet-auto-view'),
-  // image
   imageUrl:     document.getElementById('imageUrl'),
   imageFile:    document.getElementById('imageFile'),
   btnPick:      document.getElementById('btn-pick'),
@@ -59,11 +57,9 @@ const els = {
   uploadBar:    document.getElementById('upload-bar'),
   uploadFill:   document.getElementById('upload-bar-fill'),
   imagePreview: document.getElementById('imagePreview'),
-  // actions
   btnDelete:    document.getElementById('btn-delete'),
   btnCancel:    document.getElementById('btn-cancel'),
   btnSave:      document.getElementById('btn-save'),
-  // auth
   adminName:    document.getElementById('admin-name'),
   adminRole:    document.getElementById('admin-role'),
   btnAuth:      document.getElementById('btn-auth'),
@@ -76,16 +72,11 @@ let cache = [];
 let currentImagePath = '';
 let lastPickedFile = null;
 
-// ---------- Utils
+// ---------- Helpers
 const num = v => (v === '' || v == null) ? null : Number(v);
 const tidy = s => (s || '').toString().trim();
-const toArabicSearch = s =>
-  (s || '').toString().toLowerCase()
-    .replace(/[أإآا]/g,'ا')
-    .replace(/[ى]/g,'ي')
-    .replace(/[ؤئ]/g,'ء')
-    .replace(/\s+/g,' ')
-    .trim();
+const toArabicSearch = s => (s||'').toLowerCase()
+  .replace(/[أإآا]/g,'ا').replace(/[ى]/g,'ي').replace(/[ؤئ]/g,'ء').replace(/\s+/g,' ').trim();
 
 function unitRow(u = { label:'', grams:null, default:false }) {
   const row = document.createElement('div');
@@ -103,7 +94,6 @@ function unitRow(u = { label:'', grams:null, default:false }) {
   };
   return row;
 }
-
 function readUnits() {
   const list = [...els.unitsList.querySelectorAll('.unit-row')].map(r => {
     const label = tidy(r.querySelector('.unit-label').value);
@@ -118,27 +108,31 @@ function readUnits() {
   }
   return list;
 }
-function fillUnits(units=[]) {
-  els.unitsList.innerHTML = '';
-  units.forEach(u => els.unitsList.appendChild(unitRow(u)));
-}
-function parseUnitChip(str) {
-  const [key,label,grams] = (str||'').split('|');
-  return { key, label, grams: Number(grams), default:false };
-}
-function buildSearchText(data) {
-  const ulabels = (data.units||[]).map(u=>u.label).join(' ');
-  const allTags = [...(data.dietTags||[]), ...(data.hashTags||[])].join(' ');
-  return toArabicSearch(`${data.name} ${data.category} ${allTags} ${ulabels}`);
-}
-function mergeTags(manualStr, autoArr) {
-  const manual = (manualStr||'').split('#').map(x=>'#'+x.trim()).filter(x=>x!=='#');
-  const set = new Set([...(autoArr||[]), ...manual]);
-  return [...set];
+function fillUnits(units=[]) { els.unitsList.innerHTML = ''; units.forEach(u => els.unitsList.appendChild(unitRow(u))); }
+function parseUnitChip(str){ const [k,l,g]=(str||'').split('|'); return {key:k,label:l,grams:Number(g),default:false}; }
+function buildSearchText(d){ const u=(d.units||[]).map(v=>v.label).join(' '); const t=[...(d.dietTags||[]),...(d.hashTags||[])].join(' '); return toArabicSearch(`${d.name} ${d.category} ${t} ${u}`); }
+function mergeTags(manualStr,autoArr){ const manual=(manualStr||'').split('#').map(x=>'#'+x.trim()).filter(x=>x!=='#'); return [...new Set([...(autoArr||[]),...manual])]; }
+
+// تحويل مسارات التخزين إلى روابط HTTPS لاستخدامها في العرض
+async function resolveImages(list){
+  await Promise.all(list.map(async x=>{
+    const path = x.image?.path || x.imagePath;
+    const hasUrl = x.image?.url || x.imageUrl;
+    if (!hasUrl && path && !/^https?:\/\//.test(path)){
+      try{
+        const url = await getDownloadURL(sRef(storage, path));
+        // خزّنه داخل عنصر الكاش لسهولة العرض
+        if (!x.image) x.image = {};
+        x.image.url = url;
+      }catch(e){
+        // تجاهل الأخطاء الفردية
+      }
+    }
+  }));
 }
 
+// ---------- Map Doc <-> Form
 function mapDocToForm(d){
-  // يقرأ سكيمة قديمة/جديدة ويملأ النموذج
   els.id.value       = d.id || '';
   els.name.value     = d.name || '';
   els.category.value = d.category || 'أخرى';
@@ -162,13 +156,11 @@ function mapDocToForm(d){
     || [];
   fillUnits(units);
 
-  // صورة
   const image = d.image || {};
-  currentImagePath = image.path || d.imagePath || ''; // legacy
+  currentImagePath = image.path || d.imagePath || '';
   els.imageUrl.value = image.url || d.imageUrl || '';
   els.imagePreview.src = els.imageUrl.value || '';
 
-  // وسوم
   const dietTags = d.dietTags || [...(d.dietTagsAuto||[]), ...(d.dietTagsManual||[])];
   const hashTags = d.hashTags || [...(d.hashTagsAuto||[]), ...(d.hashTagsManual||[])];
   els.hashTagsManual.value = (hashTags||[]).join(' ');
@@ -189,18 +181,12 @@ function mapFormToPayload() {
   const units = readUnits();
   const dietTags = mergeTags('', []);
   const hashTags = mergeTags(els.hashTagsManual.value, []);
-  const image = {
-    url: tidy(els.imageUrl.value),
-    path: currentImagePath || ''
-  };
+  const image = { url: tidy(els.imageUrl.value), path: currentImagePath || '' };
   const payload = {
     name: tidy(els.name.value),
     category: tidy(els.category.value),
     isActive: (els.isActive.value === 'true'),
-    per100,
-    units,
-    image,
-    dietTags, hashTags,
+    per100, units, image, dietTags, hashTags,
     searchText: buildSearchText({ name: els.name.value, category: els.category.value, units, dietTags, hashTags }),
     schemaVersion: 2,
     updatedAt: serverTimestamp()
@@ -211,18 +197,17 @@ function mapFormToPayload() {
 
 // ---------- رفع الصورة
 els.btnPick?.addEventListener('click', ()=> els.imageFile.click());
-els.imageFile?.addEventListener('change', async (e)=>{
+els.imageFile?.addEventListener('change', (e)=>{
   const file = e.target.files?.[0];
   if(!file) return;
   lastPickedFile = file;
   els.fileName.textContent = file.name;
   els.imagePreview.src = URL.createObjectURL(file);
 });
-
-// رفع الملف عند الحفظ (لو تم اختياره)
 async function uploadImageIfNeeded(itemId){
-  if(!lastPickedFile) return; // لا يوجد اختيار جديد
-  const path = `food-items/items/${itemId}/main.${(lastPickedFile.name.split('.').pop()||'jpg').toLowerCase()}`;
+  if(!lastPickedFile) return;
+  const ext = (lastPickedFile.name.split('.').pop()||'jpg').toLowerCase();
+  const path = `food-items/items/${itemId}/main.${ext}`;
   const r = sRef(storage, path);
   if (els.uploadBar) els.uploadBar.style.display = 'block';
   if (els.uploadFill) els.uploadFill.style.width = '0%';
@@ -231,68 +216,50 @@ async function uploadImageIfNeeded(itemId){
     task.on('state_changed', snap=>{
       if (els.uploadFill) {
         const pct = Math.round((snap.bytesTransferred/snap.totalBytes)*100);
-        els.uploadFill.style.width = `${pct}%`;
+        els.uploadFill.style.width = pct + '%';
       }
     }, reject, ()=> resolve());
   });
   if (els.uploadBar) els.uploadBar.style.display = 'none';
-  currentImagePath = path; // حدّث المسار للصورة
+  currentImagePath = path;
 }
 
 // ---------- CRUD
 async function openEditor(id=null){
-  els.form.reset();
-  els.unitsList.innerHTML = '';
-  currentImagePath = '';
-  lastPickedFile = null;
-  els.imagePreview.src = '';
-  els.hashTagsManual.value = '';
-  els.dietAutoView.innerHTML = '';
-
+  els.form.reset(); els.unitsList.innerHTML=''; currentImagePath=''; lastPickedFile=null;
+  els.imagePreview.src=''; els.hashTagsManual.value=''; els.dietAutoView.innerHTML='';
   if(id){
-    els.dlgTitle.textContent = 'تعديل صنف';
+    els.dlgTitle.textContent='تعديل صنف';
     const snap = await getDoc(doc(FOODS, id));
-    if(snap.exists()){
-      mapDocToForm({ id: snap.id, ...snap.data() });
-    }
-  } else {
-    els.dlgTitle.textContent = 'إضافة صنف';
-    // قيمة أولية 100 جم
+    if(snap.exists()) mapDocToForm({ id:snap.id, ...snap.data() });
+  }else{
+    els.dlgTitle.textContent='إضافة صنف';
     fillUnits([{ key:'g100', label:'100 جم', grams:100, default:true }]);
   }
   els.dlg.showModal();
 }
-
 async function saveItem(){
-  const id  = tidy(els.id.value);
+  const id = tidy(els.id.value);
   const newId = id || doc(FOODS).id;
   await uploadImageIfNeeded(newId);
   const payload = mapFormToPayload();
   if(currentImagePath) payload.image.path = currentImagePath;
-
-  if(id){
-    await setDoc(doc(FOODS, id), payload, { merge:true });
-  } else {
-    await setDoc(doc(FOODS, newId), { ...payload, createdAt: serverTimestamp() }, { merge:true });
-    els.id.value = newId;
-  }
+  if(id){ await setDoc(doc(FOODS,id), payload, {merge:true}); }
+  else  { await setDoc(doc(FOODS,newId), { ...payload, createdAt: serverTimestamp() }, {merge:true}); els.id.value=newId; }
   els.dlg.close();
 }
-
 async function removeItem(){
   const id = tidy(els.id.value);
   if(!id) return els.dlg.close();
   if(!confirm('هل تريد حذف هذا الصنف؟')) return;
-  await deleteDoc(doc(FOODS, id));
-  els.dlg.close();
+  await deleteDoc(doc(FOODS,id)); els.dlg.close();
 }
 
-// ---------- عرض القائمة (مع صورة مصغّرة داخل البطاقة)
+// ---------- عرض (مع صورة مصغّرة)
 function render(){
   const q = toArabicSearch(els.search?.value);
   const cat = tidy(els.filterCat?.value);
   const activeOnly = !!els.filterActive?.checked;
-
   let list = [...cache];
 
   if (q) {
@@ -305,10 +272,9 @@ function render(){
   if (cat) list = list.filter(x => x.category === cat);
   if (activeOnly) list = list.filter(x => x.isActive !== false);
 
-  // البطاقات بنفس المقاس + صورة مصغّرة في الفراغ
   if (els.grid) {
     els.grid.innerHTML = list.map(x=>{
-      const img = (x.image && (x.image.url || x.imagePath)) ? (x.image.url || '') : (x.imageUrl || '');
+      const img = x.image?.url || x.imageUrl || ''; // بعد resolveImages
       return `
         <article class="card-item ${img ? '' : 'no-thumb'}">
           ${img ? `<img class="card-thumb" src="${img}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
@@ -326,7 +292,6 @@ function render(){
     els.grid.querySelectorAll('[data-edit]').forEach(b=> b.onclick = ()=> openEditor(b.dataset.edit));
   }
 
-  // الجدول (مختصر)
   if (els.tableBody){
     els.tableBody.innerHTML = list.map(x=>`
       <tr>
@@ -344,22 +309,24 @@ function render(){
   }
 }
 
-// ---------- اشتراك لحظي
+// ---------- اشتراك لحظي + حلّ الصور
 function startLive(){
   if (unsubscribe) return;
-  unsubscribe = onSnapshot(FOODS, snap=>{
-    cache = [];
+  unsubscribe = onSnapshot(FOODS, async snap=>{
+    const arr = [];
     snap.forEach(s=>{
       const d = { id:s.id, ...s.data() };
       d.per100 = d.per100 || d.nutrPer100g || {};
       d.units  = d.units || d.measures || d.householdUnits || [];
-      cache.push(d);
+      arr.push(d);
     });
+    await resolveImages(arr); // 👈 هنا التحويل لرابط HTTPS
+    cache = arr;
     render();
   });
 }
 
-// ---------- أحداث الواجهة
+// ---------- أحداث
 els.btnAdd?.addEventListener('click', ()=> openEditor(null));
 els.dlgClose?.addEventListener('click', ()=> els.dlg.close());
 els.btnCancel?.addEventListener('click', ()=> els.dlg.close());
@@ -368,45 +335,27 @@ els.btnDelete?.addEventListener('click', ()=> removeItem().catch(err=>alert(err.
 els.search?.addEventListener('input', render);
 els.filterCat?.addEventListener('change', render);
 els.filterActive?.addEventListener('change', render);
-els.btnClear?.addEventListener('click', ()=>{
-  if(els.search) els.search.value='';
-  if(els.filterCat) els.filterCat.value='';
-  if(els.filterActive) els.filterActive.checked=true;
-  render();
-});
+els.btnClear?.addEventListener('click', ()=>{ if(els.search) els.search.value=''; if(els.filterCat) els.filterCat.value=''; if(els.filterActive) els.filterActive.checked=true; render(); });
 els.btnAddUnit?.addEventListener('click', ()=> els.unitsList.appendChild(unitRow()));
-els.chipsUnits.forEach(ch=> ch.addEventListener('click', ()=>{
-  els.unitsList.appendChild(unitRow(parseUnitChip(ch.dataset.unit)));
-}));
+els.chipsUnits.forEach(ch=> ch.addEventListener('click', ()=> els.unitsList.appendChild(unitRow(parseUnitChip(ch.dataset.unit))) ));
+els.btnCards?.addEventListener('click', ()=>{ els.btnCards?.classList.add('active'); els.btnTable?.classList.remove('active'); els.grid.style.display='grid'; els.tableWrap.style.display='none'; });
+els.btnTable?.addEventListener('click', ()=>{ els.btnTable?.classList.add('active'); els.btnCards?.classList.remove('active'); els.grid.style.display='none'; els.tableWrap.style.display='block'; });
 
-// عرض/إخفاء الشبكة/الجدول
-els.btnCards?.addEventListener('click', ()=>{
-  if(!els.btnCards||!els.btnTable) return;
-  els.btnCards.classList.add('active'); els.btnTable.classList.remove('active');
-  els.grid.style.display='grid'; els.tableWrap.style.display='none';
-});
-els.btnTable?.addEventListener('click', ()=>{
-  if(!els.btnCards||!els.btnTable) return;
-  els.btnTable.classList.add('active'); els.btnCards.classList.remove('active');
-  els.grid.style.display='none'; els.tableWrap.style.display='block';
-});
-
-// ---------- مصادقة بسيطة (اختياري)
 const provider = new GoogleAuthProvider();
 els.btnAuth?.addEventListener('click', ()=> signInWithPopup(auth, provider));
 els.btnLogout?.addEventListener('click', ()=> signOut(auth));
 onAuthStateChanged(auth, (u)=>{
   if(u){
-    if (els.adminName) els.adminName.textContent = u.displayName || u.email || 'Admin';
-    if (els.adminRole) els.adminRole.textContent = 'admin';
-    if (els.btnAuth) els.btnAuth.style.display='none';
-    if (els.btnLogout) els.btnLogout.style.display='inline-flex';
+    els.adminName && (els.adminName.textContent = u.displayName || u.email || 'Admin');
+    els.adminRole && (els.adminRole.textContent = 'admin');
+    els.btnAuth && (els.btnAuth.style.display='none');
+    els.btnLogout && (els.btnLogout.style.display='inline-flex');
     startLive();
   } else {
-    if (els.adminName) els.adminName.textContent = '';
-    if (els.adminRole) els.adminRole.textContent = '';
-    if (els.btnAuth) els.btnAuth.style.display='inline-flex';
-    if (els.btnLogout) els.btnLogout.style.display='none';
+    els.adminName && (els.adminName.textContent = '');
+    els.adminRole && (els.adminRole.textContent = '');
+    els.btnAuth && (els.btnAuth.style.display='inline-flex');
+    els.btnLogout && (els.btnLogout.style.display='none');
     if(unsubscribe){ unsubscribe(); unsubscribe=null; }
     cache = []; render();
   }
