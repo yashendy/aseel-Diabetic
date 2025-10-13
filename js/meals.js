@@ -13,11 +13,7 @@
  */
 
 import { auth, db } from './firebase-config.js';
-import {
-  collection, doc, getDoc, getDocs, addDoc,
-  query, orderBy, limit, serverTimestamp
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { getStorage, ref as sRef, getDownloadURL, onSnapshot } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
+import { addDoc, collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* ============ Tiny utils ============ */
@@ -372,12 +368,11 @@ function normalizeMeasures(d){
   if(Array.isArray(d?.measures)) return d.measures.filter(m=>m&&Number(m.grams)>0).map(m=>({name:m.name,grams:Number(m.grams)}));
   if(d?.measureQty && typeof d.measureQty==='object') return Object.entries(d.measureQty).filter(([n,g])=>n&&Number(g)>0).map(([n,g])=>({name:n,grams:Number(g)}));
   if(Array.isArray(d?.householdUnits)) return d.householdUnits.filter(m=>m&&Number(m.grams)>0).map(m=>({name:m.name,grams:Number(m.grams)}));
-  if(Array.isArray(d?.units)) return d.units.filter(u=>u&&u.label&&Number(u.grams)>0).map(u=>({name:u.label,grams:Number(u.grams)}));
   return [];
 }
 function pickNumber(...candidates){ for(const v of candidates){ if(v!=null && !Number.isNaN(Number(v))) return Number(v); } return 0; }
 function mapFood(s){
-  const d={id:s.id,...s.data()}, nutr=d.nutrPer100g||d.per100||{};
+  const d={id:s.id,...s.data()}, nutr=d.nutrPer100g||{};
   const per100={ cal:pickNumber(nutr.cal,nutr.cal_kcal,nutr.kcal), carbs:pickNumber(nutr.carbs,nutr.carbs_g),
                  fat:pickNumber(nutr.fat,nutr.fat_g), fiber:pickNumber(nutr.fiber,nutr.fiber_g),
                  prot:pickNumber(nutr.prot,nutr.protein,nutr.protein_g), gi:nutr.gi ?? null };
@@ -387,37 +382,13 @@ function mapFood(s){
 }
 function ADMIN_FOOD_COLLECTION(){ return collection(db,'admin','global','foodItems'); }
 async function ensureFoodCache(){
-  if(window._unsubAdmin || window._unsubTop) return;
+  if(foodCache.length) return;
   try{
-    const storage = getStorage();
-    let snap1=null, snap2=null;
-
-    const apply = async () => {
-      const list = [];
-      if(snap1){ snap1.forEach(s => list.push(mapFood(s))); }
-      if(snap2){ snap2.forEach(s => list.push(mapFood(s))); }
-      // de-dup by id
-      const byId = new Map();
-      for(const f of list){ if(f&&f.id&&!byId.has(f.id)) byId.set(f.id,f); }
-      let arr = Array.from(byId.values());
-      // sort
-      arr.sort((a,b)=> (a.name||'').localeCompare(b.name||'','ar',{numeric:true}));
-      // resolve storage paths
-      await Promise.all(arr.map(async f=>{
-        if(f.imageUrl && !/^https?:\/\//.test(f.imageUrl)){
-          try{ f.imageUrl = await getDownloadURL(sRef(storage, f.imageUrl)); }catch(e){}
-        }
-      }));
-      foodCache = arr;
-      // refresh picker if open
-      if(typeof renderPicker==='function' && typeof pickerModal!=='undefined' && pickerModal && !pickerModal.classList.contains('hidden')){
-        renderPicker();
-      }
-    };
-
-    window._unsubAdmin = onSnapshot(ADMIN_FOOD_COLLECTION(), s=>{ snap1=s; apply(); });
-    window._unsubTop   = onSnapshot(collection(db,'fooditems'), s=>{ snap2=s; apply(); });
-  }catch(e){ console.error(e); toast('تعذّر الاشتراك في مكتبة الأصناف','error'); }
+    const snap=await getDocs(ADMIN_FOOD_COLLECTION());
+    const arr=[]; snap.forEach(s=>arr.push(mapFood(s)));
+    arr.sort((a,b)=> (a.name||'').localeCompare(b.name||'', 'ar',{numeric:true}));
+    foodCache=arr;
+  }catch(e){ console.error(e); toast('تعذّر تحميل مكتبة الأدمن (صلاحيات؟)','error'); foodCache=[]; }
 }
 
 /* ============ Picker ============ */
@@ -1196,9 +1167,3 @@ onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.replace('index.html'); return; }
   try{ await boot(user); }catch(e){ console.error(e); toast('حدث خطأ غير متوقع','error'); }
 });
-
-function stopFoodSubscriptions(){
-  try{ if(window._unsubAdmin){ window._unsubAdmin(); window._unsubAdmin=null; } }catch(_){}
-  try{ if(window._unsubTop){ window._unsubTop(); window._unsubTop=null; } }catch(_){}
-}
-window.addEventListener('beforeunload', stopFoodSubscriptions);
