@@ -1,13 +1,14 @@
 // /js/food-items.js — FULL REPLACEMENT
 // ✅ يحفظ على Schema v2
 // ✅ يرفع الصور إلى food-items/items/{itemId}/main.jpg
-// ✅ يقرأ السكيمات القديمة ويحّولها قبل الحفظ
-// ✅ يبني searchText، ويدمج الوسوم، ولا يمسّ الألوان/الستايل
+// ✅ يقرأ السكيمات القديمة ويحوّلها قبل الحفظ
+// ✅ يبني searchText ويدمج الوسوم
+// ✅ يعرض صورة مصغّرة داخل البطاقة بنفس المساحة بدون تغيير أبعادها
 
 import { app, db, auth, storage } from './firebase-config.js';
 import {
-  getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
-  query, where, orderBy, limit, onSnapshot, serverTimestamp
+  getFirestore, collection, doc, getDoc, setDoc, deleteDoc,
+  onSnapshot, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 import {
   ref as sRef, uploadBytesResumable
@@ -16,7 +17,7 @@ import {
   getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut
 } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 
-// ---------- عناصر الواجهة (تأكدي أن الـ IDs دي موجودة في HTML)
+// ---------- عناصر الواجهة
 const els = {
   search:       document.getElementById('search'),
   filterCat:    document.getElementById('filter-category'),
@@ -49,9 +50,7 @@ const els = {
   btnAddUnit:   document.getElementById('btn-add-unit'),
   chipsUnits:   document.querySelectorAll('.chips [data-unit]'),
   hashTagsManual: document.getElementById('hashTagsManual'),
-  dietManual:   document.getElementById('diet-manual'),
   dietAutoView: document.getElementById('diet-auto-view'),
-  btnDietAuto:  document.getElementById('btn-diet-auto'),
   // image
   imageUrl:     document.getElementById('imageUrl'),
   imageFile:    document.getElementById('imageFile'),
@@ -119,24 +118,19 @@ function readUnits() {
   }
   return list;
 }
-
 function fillUnits(units=[]) {
   els.unitsList.innerHTML = '';
   units.forEach(u => els.unitsList.appendChild(unitRow(u)));
 }
-
 function parseUnitChip(str) {
-  // "cup_cooked|كوب (مطبوخ)|160"
   const [key,label,grams] = (str||'').split('|');
   return { key, label, grams: Number(grams), default:false };
 }
-
 function buildSearchText(data) {
   const ulabels = (data.units||[]).map(u=>u.label).join(' ');
   const allTags = [...(data.dietTags||[]), ...(data.hashTags||[])].join(' ');
   return toArabicSearch(`${data.name} ${data.category} ${allTags} ${ulabels}`);
 }
-
 function mergeTags(manualStr, autoArr) {
   const manual = (manualStr||'').split('#').map(x=>'#'+x.trim()).filter(x=>x!=='#');
   const set = new Set([...(autoArr||[]), ...manual]);
@@ -193,8 +187,7 @@ function mapFormToPayload() {
     gi:       num(els.gi.value) ?? 0,
   };
   const units = readUnits();
-  const dietTagsAuto = []; // ممكن توليد تلقائي لاحقًا
-  const dietTags = mergeTags('', dietTagsAuto);
+  const dietTags = mergeTags('', []);
   const hashTags = mergeTags(els.hashTagsManual.value, []);
   const image = {
     url: tidy(els.imageUrl.value),
@@ -272,11 +265,9 @@ async function openEditor(id=null){
 
 async function saveItem(){
   const id  = tidy(els.id.value);
-  // ارفع الصورة لو تم اختيارها
-  const newId = id || doc(FOODS).id; // لو إضافة جديدة
+  const newId = id || doc(FOODS).id;
   await uploadImageIfNeeded(newId);
   const payload = mapFormToPayload();
-  // أضف مسار الصورة بعد الرفع
   if(currentImagePath) payload.image.path = currentImagePath;
 
   if(id){
@@ -296,7 +287,7 @@ async function removeItem(){
   els.dlg.close();
 }
 
-// ---------- عرض القائمة
+// ---------- عرض القائمة (مع صورة مصغّرة داخل البطاقة)
 function render(){
   const q = toArabicSearch(els.search?.value);
   const cat = tidy(els.filterCat?.value);
@@ -314,23 +305,25 @@ function render(){
   if (cat) list = list.filter(x => x.category === cat);
   if (activeOnly) list = list.filter(x => x.isActive !== false);
 
-  // البطاقات
+  // البطاقات بنفس المقاس + صورة مصغّرة في الفراغ
   if (els.grid) {
-    els.grid.innerHTML = list.map(x=>`
-      <article class="card">
-        <div class="card-body">
-          <div class="title">${x.name||'—'}</div>
-          <div class="muted">${x.category||''}</div>
-          <div class="muted sm">kcal/100g: ${x.per100?.cal_kcal ?? x.nutrPer100g?.cal_kcal ?? '—'}</div>
-        </div>
-        <div class="card-actions">
-          <button class="btn ghost" data-edit="${x.id}">تعديل</button>
-        </div>
-      </article>
-    `).join('');
-    els.grid.querySelectorAll('[data-edit]').forEach(b=>{
-      b.onclick = ()=> openEditor(b.dataset.edit);
-    });
+    els.grid.innerHTML = list.map(x=>{
+      const img = (x.image && (x.image.url || x.imagePath)) ? (x.image.url || '') : (x.imageUrl || '');
+      return `
+        <article class="card-item ${img ? '' : 'no-thumb'}">
+          ${img ? `<img class="card-thumb" src="${img}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+
+          <div class="name">${x.name || '—'}</div>
+          <div class="meta">${x.category || ''}</div>
+          <div class="meta">kcal/100g: ${x.per100?.cal_kcal ?? x.nutrPer100g?.cal_kcal ?? '—'}</div>
+
+          <div class="card-actions" style="margin-top:8px">
+            <button class="btn ghost" data-edit="${x.id}">تعديل</button>
+          </div>
+        </article>
+      `;
+    }).join('');
+    els.grid.querySelectorAll('[data-edit]').forEach(b=> b.onclick = ()=> openEditor(b.dataset.edit));
   }
 
   // الجدول (مختصر)
@@ -347,9 +340,7 @@ function render(){
         <td><button class="btn ghost" data-edit="${x.id}">تعديل</button></td>
       </tr>
     `).join('');
-    els.tableBody.querySelectorAll('[data-edit]').forEach(b=>{
-      b.onclick = ()=> openEditor(b.dataset.edit);
-    });
+    els.tableBody.querySelectorAll('[data-edit]').forEach(b=> b.onclick = ()=> openEditor(b.dataset.edit));
   }
 }
 
@@ -360,7 +351,6 @@ function startLive(){
     cache = [];
     snap.forEach(s=>{
       const d = { id:s.id, ...s.data() };
-      // تطبيع بسيط لضمان وجود per100/units
       d.per100 = d.per100 || d.nutrPer100g || {};
       d.units  = d.units || d.measures || d.householdUnits || [];
       cache.push(d);
