@@ -70,9 +70,24 @@ input:focus,select:focus,textarea:focus{ border-color:#c7d2fe; box-shadow:0 0 0 
 
 .card-item{
   background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow:var(--shadow);
+  position:relative; /* لإتاحة تموضع الصورة داخل البطاقة */
 }
 .card-item .name{ font-weight:700; margin-bottom:6px }
 .card-item .meta{ color:var(--muted); font-size:14px; margin-bottom:8px }
+
+/* الصورة المصغّرة داخل البطاقة – نفس المساحة بدون تغيير أبعاد العنصر */
+.card-item .card-thumb{
+  position:absolute;
+  inset-inline-end:14px;   /* جانب الفراغ في RTL */
+  inset-block-end:14px;    /* أسفل قليلاً */
+  width:56px; height:56px;
+  border-radius:12px;
+  object-fit:cover;
+  opacity:.95;
+  box-shadow:0 6px 16px rgba(0,0,0,.08);
+  pointer-events:none;      /* لا تغطي زر "تعديل" */
+}
+.card-item.no-thumb .card-thumb{ display:none }
 
 .table-scroll{ overflow:auto }
 .table{ width:100%; border-collapse:separate; border-spacing:0; }
