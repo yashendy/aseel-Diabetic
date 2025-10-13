@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>هجرة أصناف (v2)</title>
+  <style>
+    body{font-family:sans-serif;max-width:900px;margin:auto;padding:20px}
+    .log{white-space:pre-wrap;background:#f6f8fa;padding:12px;border-radius:8px}
+    button{padding:8px 14px;border-radius:8px}
+  </style>
+</head>
+<body>
+  <h2>هجرة أصناف إلى Schema v2</h2>
+  <p>سيتم تحويل nutrPer100g → per100، و measures/… → units[]، وتجميع الوسوم، ونقل الصورة إلى image.{url|path}، وبناء searchText.</p>
+  <button id="run">تشغيل الهجرة</button>
+  <div class="log" id="log"></div>
+
+  <script type="module" src="../js/firebase-config.js"></script>
+  <script type="module" src="./migrate-foodItems.js"></script>
+</body>
+</html>
