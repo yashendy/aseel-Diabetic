@@ -17,6 +17,8 @@ import {
   collection, doc, getDoc, getDocs, addDoc,
   query, orderBy, limit, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { onSnapshot } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* ============ Tiny utils ============ */
@@ -69,6 +71,7 @@ const childId = (params.get('child')||'').trim();
 let currentUser=null, childRef=null, childData=null;
 let mealsCol=null, measurementsCol=null, presetsCol=null;
 let foodCache=[], items=[];
+let _unsubAdmin=null, _unsubTop=null;
 let manualCarb=false, manualCorr=false, manualTotal=false;
 let presetsCache=[];
 let plannedChanges=[]; // auto-tuner proposed ops
@@ -375,7 +378,7 @@ function normalizeMeasures(d){
 }
 function pickNumber(...candidates){ for(const v of candidates){ if(v!=null && !Number.isNaN(Number(v))) return Number(v); } return 0; }
 function mapFood(s){
-  const d={id:s.id,...s.data()}, nutr=d.nutrPer100g||{};
+  const d={id:s.id,...s.data()}, nutr=d.nutrPer100g||d.per100||{};
   const per100={ cal:pickNumber(nutr.cal,nutr.cal_kcal,nutr.kcal), carbs:pickNumber(nutr.carbs,nutr.carbs_g),
                  fat:pickNumber(nutr.fat,nutr.fat_g), fiber:pickNumber(nutr.fiber,nutr.fiber_g),
                  prot:pickNumber(nutr.prot,nutr.protein,nutr.protein_g), gi:nutr.gi ?? null };
@@ -385,14 +388,42 @@ function mapFood(s){
 }
 function ADMIN_FOOD_COLLECTION(){ return collection(db,'admin','global','foodItems'); }
 async function ensureFoodCache(){
-  if(foodCache.length) return;
+  // Start live subscriptions if not started
+  if(_unsubAdmin || _unsubTop){ return; }
   try{
-    const snap=await getDocs(ADMIN_FOOD_COLLECTION());
-    const arr=[]; snap.forEach(s=>arr.push(mapFood(s)));
-    arr.sort((a,b)=> (a.name||'').localeCompare(b.name||'', 'ar',{numeric:true}));
-    foodCache=arr;
-  }catch(e){ console.error(e); toast('تعذّر تحميل مكتبة الأدمن (صلاحيات؟)','error'); foodCache=[]; }
+    const storage = getStorage();
+    let snap1=null, snap2=null;
+
+    const apply = async () => {
+      const list = [];
+      if(snap1){ snap1.forEach(s => list.push(mapFood(s))); }
+      if(snap2){ snap2.forEach(s => list.push(mapFood(s))); }
+      // de-dup by id
+      const mapById = new Map();
+      list.forEach(f=>{ if(f && f.id) { if(!mapById.has(f.id)) mapById.set(f.id, f); } });
+      let arr = Array.from(mapById.values());
+      // sort
+      arr.sort((a,b)=> (a.name||'').localeCompare(b.name||'','ar',{numeric:true}));
+      // resolve storage paths to HTTPS
+      await Promise.all(arr.map(async f=>{
+        if(f.imageUrl && !/^https?:\/\//.test(f.imageUrl)){
+          try { f.imageUrl = await getDownloadURL(sRef(storage, f.imageUrl)); } catch(e){ /* ignore */ }
+        }
+      }));
+      foodCache = arr;
+      // refresh picker if open
+      try{
+        if(typeof renderPicker==='function' && pickerModal && !pickerModal.classList.contains('hidden')){
+          renderPicker();
+        }
+      }catch(_){}
+    };
+
+    _unsubAdmin = onSnapshot(ADMIN_FOOD_COLLECTION(), s=>{ snap1=s; apply(); }, err=>console.warn('admin/global onSnapshot:', err?.message||err));
+    _unsubTop   = onSnapshot(collection(db,'fooditems'), s=>{ snap2=s; apply(); }, err=>console.warn('fooditems onSnapshot:', err?.message||err));
+  }catch(e){ console.error(e); toast('تعذّر الاشتراك في مكتبة الأصناف','error'); }
 }
+
 
 /* ============ Picker ============ */
 function openPicker(){ pickerModal?.classList.remove('hidden'); document.body.style.overflow='hidden'; renderPicker(); }
@@ -1170,3 +1201,9 @@ onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.replace('index.html'); return; }
   try{ await boot(user); }catch(e){ console.error(e); toast('حدث خطأ غير متوقع','error'); }
 });
+
+function stopFoodSubscriptions(){
+  try{ if(_unsubAdmin){ _unsubAdmin(); _unsubAdmin=null; } }catch(_){}
+  try{ if(_unsubTop){ _unsubTop(); _unsubTop=null; } }catch(_){}
+}
+window.addEventListener('beforeunload', stopFoodSubscriptions);
