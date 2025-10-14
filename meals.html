@@ -2,222 +2,169 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>وجبة الطفل</title>
-  <link rel="stylesheet" href="./css/meals.css" />
+
+  <!-- الأسلوب -->
+  <link rel="stylesheet" href="css/meals.css" />
+
+  <!-- Firebase config يجب أن يكون قبلي -->
+  <script src="js/firebase-config.js"></script>
 </head>
 <body>
 
   <header class="page-header">
-    <div class="left">
-      <button id="btnBack" class="btn ghost">⬅︎ رجوع</button>
-      <a href="./child.html" class="btn ghost">🏠 الرئيسية</a>
+    <div class="crumbs">
+      <a class="btn" href="index.html">الرئيسية 🏠</a>
+      <button id="btnBack" class="btn">رجوع</button>
     </div>
-    <div class="title">
-      <h1>وجبة الطفل <span id="childName" class="chip chip-soft">—</span></h1>
-      <div class="chips">
-        <span id="chipUnit" class="chip">وحدة: —</span>
-        <span id="chipCR" class="chip">CR: —</span>
-        <span id="chipCF" class="chip">CF: —</span>
+
+    <!-- ملخص أعلى الصفحة: اسم الطفل + معاملات عامة -->
+    <div class="child-head">
+      <div id="childName" class="child-name">—</div>
+      <div class="child-metrics">
+        <span>CR: <b id="headCR">—</b></span>
+        <span>CF: <b id="headCF">—</b></span>
+        <span>ارتفاع: <b id="headHyper">—</b></span>
+        <span>ارتفاع شديد: <b id="headCritHigh">—</b></span>
       </div>
     </div>
-    <div class="right"></div>
   </header>
 
-  <section class="toolbar">
-    <div class="field">
-      <label>نوع الوجبة</label>
-      <select id="mealType">
-        <option value="فطار">فطار</option>
-        <option value="غدا">غدا</option>
-        <option value="عشا">عشا</option>
-        <option value="سناك">سناك</option>
-      </select>
-    </div>
+  <main class="container">
 
-    <div class="field">
-      <label>تاريخ</label>
-      <input id="mealDate" type="date" />
-    </div>
+    <!-- إجراءات سريعة -->
+    <section class="actions">
+      <div class="row">
+        <label>نوع الوجبة</label>
+        <select id="mealType">
+          <option value="breakfast">فطار</option>
+          <option value="lunch">غداء</option>
+          <option value="dinner">عشاء</option>
+          <option value="snack">سناك</option>
+        </select>
 
-    <div class="field">
-      <label>إجراءات سريعة</label>
-      <div class="row gap">
-        <button id="btnAddFromLib" class="btn">+ إضافة صنف من المكتبة</button>
-        <button id="btnAddFromPreset" class="btn ghost">📦 من قالب</button>
-        <button id="btnSaveAsPreset" class="btn ghost">⭐ حفظ كوجبة جاهزة</button>
+        <label>تاريخ</label>
+        <input id="mealDate" type="date" />
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="metrics-card card">
-    <div class="metrics-grid">
-      <div class="field">
-        <label>قياس قبل الوجبة</label>
-        <input id="preReading" type="number" step="0.1" inputmode="decimal" placeholder="—" />
-      </div>
-      <div class="field">
-        <label>قياس بعد الوجبة</label>
-        <input id="postReading" type="number" step="0.1" inputmode="decimal" placeholder="—" />
+    <!-- القياسات والجرعات -->
+    <section class="panel">
+      <h3>القياسات والجرعات</h3>
+
+      <div class="grid-3">
+        <div class="field">
+          <label>قياس قبل الوجبة</label>
+          <input id="glucoseBefore" type="number" step="0.1" inputmode="decimal" placeholder="—" />
+        </div>
+
+        <div class="field">
+          <label>قياس بعد الوجبة</label>
+          <input id="glucoseAfter" type="number" step="0.1" inputmode="decimal" placeholder="—" />
+        </div>
+
+        <div class="field">
+          <label>جرعة التصحيح</label>
+          <input id="doseCorrection" type="number" step="0.25" inputmode="decimal" placeholder="0" />
+        </div>
+
+        <div class="field">
+          <label>جرعة الكارب (مقترحة)</label>
+          <input id="doseCarb" type="number" step="0.25" inputmode="decimal" placeholder="0" />
+        </div>
+
+        <div class="field">
+          <label>إجمالي الجرعة</label>
+          <input id="doseTotal" type="number" step="0.25" inputmode="decimal" placeholder="0" />
+        </div>
+
+        <div class="field">
+          <label>ملاحظات (اختياري)</label>
+          <input id="notes" type="text" placeholder="مثال: وجبة خفيفة" />
+        </div>
       </div>
 
-      <div class="field">
-        <label>جرعة التصحيح</label>
-        <input id="doseCorrection" type="number" step="0.1" inputmode="decimal" value="0" />
+      <div class="subnote">
+        <span>⚠️ يتم احتساب التصحيح تلقائيًا إذا كان القياس ≥ <b id="critHighMini">—</b> باستخدام (القياس − <b id="hyperMini">—</b>) ÷ CF، والتقريب على 0.25.</span>
       </div>
-      <div class="field">
-        <label>جرعة الكارب (مقترحة)</label>
-        <input id="doseCarb" type="number" step="0.1" inputmode="decimal" value="0" />
-      </div>
+    </section>
 
-      <div class="field">
-        <label>إجمالي الجرعة</label>
-        <input id="doseTotal" type="number" step="0.1" inputmode="decimal" value="0" />
+    <!-- هدف الكارب للوجبة -->
+    <section class="panel">
+      <div class="title-row">
+        <h3>هدف الكارب للوجبة</h3>
+        <button id="btnSmartFill" class="btn btn-light">توزيع ذكي</button>
       </div>
 
-      <div class="field">
-        <label>ملاحظات (اختياري)</label>
-        <input id="notes" type="text" placeholder="مثال: وجبة خفيفة" />
+      <div id="carbGoal" class="carb-goal">
+        <div class="bar">
+          <div id="carbBar" class="bar__fill" style="width:0%"></div>
+        </div>
+        <div class="legend">
+          <span>الكارب الحالي: <b id="carbNow">0</b> g</span>
+          <span>من: <b id="carbMin">—</b> g</span>
+          <span>إلى: <b id="carbMax">—</b> g</span>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div id="hintLine" class="hint-line">
-      <span id="hintCf" class="muted">⚠️ رجاء ضبط CF (معامل التصحيح) في بيانات الطفل.</span>
-      <span id="hintCr" class="muted">⚠️ رجاء ضبط CR (معامل الكارب) في بيانات الطفل.</span>
-      <span id="hintAuto" class="muted">✅ تم جلب القياس تلقائيًا إذا توفر.</span>
-    </div>
-  </section>
-
-  <section class="targets card">
-    <div class="targets-head">
-      <div>
-        <strong>هدف الكارب للوجبة:</strong>
-        <span id="targetText" class="chip chip-soft">—</span>
+    <!-- الأصناف المضافة -->
+    <section class="panel">
+      <div class="title-row">
+        <h3>الأصناف المضافة</h3>
+        <div class="row-actions">
+          <button id="btnAddFromLib" class="btn">إضافة صنف من المكتبة</button>
+          <button id="btnSavePreset" class="btn btn-light">حفظ كوجبة جاهزة</button>
+          <button id="btnUsePreset" class="btn btn-light">من قالب</button>
+        </div>
       </div>
-      <div class="row gap">
-        <button id="btnAdjustToTarget" class="btn small">🎯 ضبط للهدف</button>
-        <button id="btnSmartDistribute" class="btn small ghost">🔀 توزيع ذكي</button>
+
+      <div class="table-wrap">
+        <table class="table" id="itemsTable">
+          <thead>
+            <tr>
+              <th>الصنف</th>
+              <th>التقدير البيتي</th>
+              <th>الكمية</th>
+              <th>الجرامات (مقفل)</th>
+              <th>كارب (g)</th>
+              <th>بروتين (g)</th>
+              <th>دهون (g)</th>
+              <th>سعرات (kcal)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody">
+            <!-- تُحقن الصفوف هنا -->
+          </tbody>
+          <tfoot>
+            <tr class="total">
+              <td>الإجمالي</td>
+              <td></td>
+              <td></td>
+              <td id="tGrams">0</td>
+              <td id="tCarbs">0</td>
+              <td id="tProt">0</td>
+              <td id="tFat">0</td>
+              <td id="tKcal">0</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
-    </div>
-    <div class="progress">
-      <div id="progressFill"></div>
-    </div>
-    <div class="progress-caption">
-      <span>الكارب الحالي: <b id="netCarb">0</b> g</span>
-      <span>السعرات: <b id="totalCal">0</b> kcal</span>
-      <span>بروتين: <b id="totalProt">0</b> g</span>
-      <span>دهون: <b id="totalFat">0</b> g</span>
-    </div>
-  </section>
+    </section>
 
-  <section class="card">
-    <div class="table-head">
-      <div class="th th-actions">—</div>
-      <div class="th th-name">الصنف</div>
-      <div class="th th-est">التقدير البيتي</div>
-      <div class="th th-qty">الكمية</div>
-      <div class="th th-grams">الجرامات (g)</div>
-      <div class="th">كارب (g)</div>
-      <div class="th">بروتين (g)</div>
-      <div class="th">دهون (g)</div>
-      <div class="th">سعرات (kcal)</div>
-    </div>
-    <div id="itemsBody" class="items-body"></div>
-    <div class="table-foot">
-      <div class="sum">الإجمالي: كارب <b id="sumCarb">0</b> • بروتين <b id="sumProt">0</b> • دهون <b id="sumFat">0</b> • سعرات <b id="sumCal">0</b></div>
-    </div>
-  </section>
-
-  <section class="save-row">
-    <div class="row gap">
+    <!-- أزرار الحفظ -->
+    <section class="panel center">
       <button id="btnSaveMeal" class="btn primary">💾 حفظ الوجبة</button>
-      <button id="btnReset" class="btn ghost">↺ إعادة الضبط</button>
-    </div>
-  </section>
+      <button id="btnReset" class="btn">إعادة الضبط</button>
+      <button id="btnAI" class="btn btn-light">🤖 شات مساعد</button>
+    </section>
 
-  <!-- مكتبة الأصناف -->
-  <dialog id="dlgLibrary" class="modal">
-    <div class="modal-head">
-      <h3>اختيار صنف من المكتبة</h3>
-      <button class="icon" data-close>✕</button>
-    </div>
-    <div class="modal-tools">
-      <input id="libSearch" type="search" placeholder="بحث بالاسم أو #هاشتاج…" />
-      <label class="chk"><input id="fltLiked" type="checkbox" /> ❤️ فقط المفضلة</label>
-      <label class="chk"><input id="fltHideDiet" type="checkbox" checked /> إخفاء المخالف للنظام ⚠️</label>
-      <label class="chk"><input id="fltHideAllergy" type="checkbox" checked /> إخفاء الحساسية 🚫</label>
-    </div>
-    <div id="libGrid" class="grid"></div>
-  </dialog>
+  </main>
 
-  <!-- القوالب -->
-  <dialog id="dlgPresets" class="modal">
-    <div class="modal-head">
-      <h3>قوالب الوجبات</h3>
-      <button class="icon" data-close>✕</button>
-    </div>
-    <div id="presetsList" class="grid"></div>
-  </dialog>
-
-  <!-- المساعد الذكي -->
-  <button id="btnAssistant" class="assistant-fab">💬</button>
-  <div id="assistantPanel" class="assistant hidden">
-    <div class="assistant-head">
-      <strong>المساعد الذكي</strong>
-      <button id="assistantClose" class="icon">✕</button>
-    </div>
-    <div id="assistantBody" class="assistant-body"></div>
-    <div class="assistant-foot">
-      <button class="btn small" data-ask="هل أحتاج جرعة تصحيح؟">هل أحتاج تصحيح؟</button>
-      <button class="btn small" data-ask="كيف أوصل لهدف الوجبة؟">كيف أوصل لهدفي؟</button>
-      <button class="btn small" data-ask="هل في مخالفة أو حساسية؟">المخالف/الحساسية؟</button>
-    </div>
-  </div>
-
-  <div id="toast" class="toast hidden"></div>
-
-  <!-- Firebase (modular CDN) -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged as modOnAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-    import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
-
-    // محرك تهيئة مرن: __FB جاهزة ← نستخدمها، أو firebaseConfig موجود ← نهيّئ،
-    // أو compat موجود ← نستخدمه، وإلا نعرض رسالة لطيفة بدل الكراش.
-    let app, auth, db, storage, onAuthStateChanged;
-
-    const useFromWindow = () => {
-      app = window.__FB?.app; auth = window.__FB?.auth;
-      db = window.__FB?.db; storage = window.__FB?.storage;
-      onAuthStateChanged = window.__FB?.onAuthStateChanged || modOnAuth;
-      return Boolean(app && auth && db && storage);
-    };
-
-    const tryConfig = () => {
-      const cfg = window.firebaseConfig || window.FIREBASE_CONFIG;
-      if(!cfg) return false;
-      app = initializeApp(cfg);
-      auth = getAuth(app); db = getFirestore(app); storage = getStorage(app);
-      onAuthStateChanged = modOnAuth;
-      return true;
-    };
-
-    const tryCompat = () => {
-      const f = window.firebase;
-      if(!f || !f.apps || !f.apps.length) return false;
-      app = f.app(); auth = f.auth(); db = f.firestore(); storage = f.storage();
-      onAuthStateChanged = (a, cb)=> auth.onAuthStateChanged(cb);
-      return true;
-    };
-
-    if(!useFromWindow() && !tryConfig() && !tryCompat()){
-      console.error("Firebase config غير متوفر. رجاء تضمين firebaseConfig أو __FB أو compat.");
-    }
-
-    window.__FB = { app, auth, db, storage, onAuthStateChanged };
-  </script>
-
-  <script type="module" src="./js/meals.js"></script>
+  <!-- سكربت الصفحة -->
+  <script src="js/meals.js"></script>
 </body>
 </html>
