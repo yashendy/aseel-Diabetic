@@ -10,7 +10,7 @@
 <body>
 
   <header class="topbar">
-    <div class="brand">🍽️ وجبة الطفل</div>
+    <div class="brand" id="brand-title">🍽️ وجبة الطفل</div>
     <div class="spacer"></div>
     <div id="child-meta" class="muted"></div>
   </header>
@@ -113,7 +113,7 @@
 
   </main>
 
-  <!-- مودال اختيار صنف من المكتبة -->
+  <!-- مودال اختيار صنف -->
   <dialog id="dlg-picker" class="dialog">
     <div class="dialog-header">
       <div>اختيار صنف من مكتبة الأصناف</div>
@@ -173,11 +173,9 @@
     </form>
   </dialog>
 
-  <!-- Firebase -->
+  <!-- Firebase config -->
   <script type="module" src="./js/firebase-config.js"></script>
-  <!-- مزود المكتبة -->
-  <script type="module" src="./js/foods-provider.js"></script>
-  <!-- سكربت الصفحة -->
+  <!-- سكربت الصفحة (يحتوي مزود المكتبة داخله) -->
   <script type="module" src="./js/meals.js"></script>
 </body>
 </html>
