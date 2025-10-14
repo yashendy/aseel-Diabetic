@@ -1,258 +1,183 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>الوجبات</title>
-  <link rel="stylesheet" href="css/meals.css?v=adminlib-readonly" />
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <title>وجبة الطفل</title>
+  <link rel="stylesheet" href="./css/meals.css" />
+  <link rel="icon" href="./favicon.ico" />
 </head>
 <body>
-  <div class="container">
 
-    <header class="card header">
-      <div class="header__left">
-        <div class="child-line">
-          👶 <strong id="childName">—</strong>
-          <span id="childMeta" class="muted tiny"></span>
+  <header class="topbar">
+    <div class="brand">🍽️ وجبة الطفل</div>
+    <div class="spacer"></div>
+    <div id="child-meta" class="muted"></div>
+  </header>
+
+  <main class="page">
+
+    <!-- شريط التحكم -->
+    <section class="card soft">
+      <div class="row wrap g8">
+        <div class="field">
+          <label for="dateInput">تاريخ</label>
+          <input id="dateInput" type="date" />
         </div>
-
-        <div class="grid grid--head">
-          <label class="field">
-            <span>تاريخ</span>
-            <input type="date" id="mealDate" />
-          </label>
-
-          <label class="field">
-            <span>نوع الوجبة</span>
-            <select id="mealType">
-              <option value="فطار">فطار</option>
-              <option value="غدا">غدا</option>
-              <option value="عشا">عشا</option>
-              <option value="سناك">سناك</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>قياس قبل الوجبة</span>
-            <div class="inline">
-              <select id="preReading" aria-label="قياس قبل الوجبة من السجل"></select>
-              <input id="preReadingManual" class="sm" type="number" step="any" placeholder="إدخال يدوي" />
-            </div>
-          </label>
-
-          <label class="field">
-            <span>قياس بعد الوجبة</span>
-            <select id="postReading"></select>
-          </label>
+        <div class="field">
+          <label for="mealType">نوع الوجبة</label>
+          <select id="mealType">
+            <option value="breakfast">فطار</option>
+            <option value="lunch">غداء</option>
+            <option value="dinner">عشاء</option>
+            <option value="snack">سناك</option>
+          </select>
         </div>
-      </div>
-
-      <div class="header__right">
-        <a href="child.html" class="btn btn--ghost">🏠 الرئيسية</a>
-        <button id="backBtn" class="btn btn--ghost">⬅️ رجوع</button>
-      </div>
-    </header>
-
-    <section class="card goals">
-      <div class="goals__top">
-        <span class="chip">🎯 هدف الكارب (<span id="goalType">فطار</span>): <b id="goalMin">—</b>–<b id="goalMax">—</b> g</span>
-        <span class="chip" id="unitChip">وحدة: —</span>
-      </div>
-      <div class="goals__bar">
-        <div class="progress"><span id="carbProgress" style="width:0%"></span></div>
-        <div class="flex-between">
-          <span id="carbState" class="muted">—</span>
-          <label class="switch">
-            <input type="checkbox" id="useNetCarbs" />
-            <span>⚡ استخدم الكارب الصافي لحساب الجرعة (توعوي)</span>
-          </label>
-        </div>
+        <button id="btn-open-picker" class="btn primary">إضافة صنف من المكتبة</button>
+        <button id="btn-save-template" class="btn">حفظ كوجبة جاهزة</button>
+        <button id="btn-open-templates" class="btn ghost">وجبة جاهزة 🍱</button>
+        <div class="spacer"></div>
+        <div class="muted">اليوم: <span id="today-label"></span></div>
       </div>
     </section>
 
-    <section class="card builder">
-      <div class="builder__actions">
-        <button id="addItemBtn" class="btn">➕ إضافة صنف</button>
-        <button id="repeatLastBtn" class="btn btn--ghost">↩️ تكرار آخر وجبة</button>
-        <button id="aiBtn" class="btn btn--ghost">🤖 من نص</button>
-        <button id="presetBtn" class="btn btn--ghost">📦 وجبة جاهزة</button>
-      </div>
-
-      <!-- جدول الأصناف (Responsive داخل الصفحة) -->
-      <div class="table-wrap">
-        <div class="table">
-          <div class="table__head">
-            <div>الصنف</div>
-            <div>الوحدة</div>
-            <div>الكمية</div>
-            <div>تقدير بيتي</div>
-            <div>الجرامات</div>
-            <div>كارب (g)</div>
-            <div>ألياف (g)</div>
-            <div>سعرات</div>
-            <div>بروتين</div>
-            <div>دهون</div>
-            <div>حذف</div>
-          </div>
-          <div id="itemsBody" class="table__body"></div>
+    <!-- القياسات و الجرعات -->
+    <section class="card">
+      <div class="section-title">القياسات والجرعات</div>
+      <div class="grid3">
+        <div class="field">
+          <label>قياس قبل الوجبة</label>
+          <input id="preMealInput" type="number" step="0.1" placeholder="—" />
+        </div>
+        <div class="field">
+          <label>قياس بعد الوجبة</label>
+          <input id="postMealInput" type="number" step="0.1" placeholder="—" />
+        </div>
+        <div class="field">
+          <label>ملاحظات (اختياري)</label>
+          <input id="notes" type="text" placeholder="مثال: وجبة خفيفة" />
         </div>
       </div>
 
-      <!-- ملخّص القيم -->
-      <div class="summary">
-        <div class="sum-grid">
-          <div class="sum-box"><div class="label">إجمالي الجرامات</div><div class="value"><span id="tGrams">0</span> g</div></div>
-          <div class="sum-box"><div class="label">إجمالي الكارب</div><div class="value"><span id="tCarbs">0</span> g</div></div>
-          <div class="sum-box"><div class="label">إجمالي الألياف</div><div class="value"><span id="tFiber">0</span> g</div></div>
-          <div class="sum-box"><div class="label">الكارب الصافي (توعوي)</div><div class="value"><span id="tNetCarbs">0</span> g</div></div>
-          <div class="sum-box"><div class="label">السعرات</div><div class="value"><span id="tCal">0</span> kcal</div></div>
-          <div class="sum-box"><div class="label">البروتين</div><div class="value"><span id="tProt">0</span> g</div></div>
-          <div class="sum-box"><div class="label">الدهون</div><div class="value"><span id="tFat">0</span> g</div></div>
-          <div class="sum-box"><div class="label">GL الإجمالي (توعوي)</div><div class="value"><span id="tGL">0</span></div></div>
+      <div class="grid3">
+        <div class="field">
+          <label>جرعة التصحيح</label>
+          <input id="corrDoseInput" type="number" step="0.1" placeholder="0" />
+        </div>
+        <div class="field">
+          <label>جرعة الكارب</label>
+          <input id="carbDoseInput" type="number" step="0.1" placeholder="0" />
+        </div>
+        <div class="field">
+          <label>إجمالي الجرعة</label>
+          <input id="totalDoseInput" type="number" step="0.1" placeholder="0" />
         </div>
       </div>
-
-      <!-- بطاقة الجرعات -->
-      <div class="dose card--soft">
-        <div class="dose__row">
-          <span>💉 الجرعة المقترحة:</span>
-          <b id="suggestedDose">0</b> <span class="muted">U</span>
-          <small id="doseExplain" class="muted"></small>
-        </div>
-        <div class="dose__row">
-          <span class="muted">نطاق متوقع (غير طبي):</span>
-          <span id="doseRange" class="badge">—</span>
-        </div>
-
-        <!-- التجميع اليدوي -->
-        <div class="dose-grid">
-          <label class="field">
-            <span>جرعة الكارب (يدويًا)</span>
-            <input id="carbDose" type="number" step="0.5" placeholder="مثال: 4" />
-          </label>
-          <label class="field">
-            <span>جرعة التصحيح</span>
-            <input id="corrDose" type="number" step="0.5" placeholder="مثال: 0.5" />
-          </label>
-          <label class="field">
-            <span>المجموع الكلي</span>
-            <input id="totalDose" type="number" step="0.5" readonly placeholder="0" />
-          </label>
-        </div>
-
-        <label class="field">
-          <span>الجرعة المعطاة فعليًا (اختياري)</span>
-          <input type="number" step="0.5" id="appliedDose" placeholder="مثال: 4.5" />
-        </label>
-
-        <label class="field">
-          <span>ملاحظات</span>
-          <input type="text" id="mealNotes" placeholder="ملاحظات على الوجبة" />
-        </label>
-      </div>
-
-      <div class="actions">
-        <button id="saveMealBtn" class="btn">حفظ الوجبة</button>
-        <button id="resetMealBtn" class="btn btn--ghost">إعادة الضبط</button>
-        <button id="printDayBtn" class="btn btn--ghost">🖨️ طباعة وجبات اليوم</button>
-      </div>
-
-      <p class="muted tiny">⚠️ هذا تقدير إرشادي يعتمد على المدخلات ولا يعتبر نصيحة طبية.</p>
+      <div class="muted sm" id="dose-hints"></div>
     </section>
 
-    <!-- مودال اختيار صنف -->
-    <div id="pickerModal" class="modal hidden" aria-modal="true" role="dialog">
-      <div class="modal__body" role="document">
-        <div class="modal__header">
-          <h3>اختيار صنف من مكتبة الأدمن</h3>
-          <button id="closePicker" class="close" aria-label="إغلاق">✕</button>
+    <!-- أصناف الوجبة -->
+    <section class="card">
+      <div class="section-title">الأصناف المضافة</div>
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width:34%">الصنف</th>
+              <th>التقدير البيتي</th>
+              <th>الكمية</th>
+              <th>الجرامات</th>
+              <th>كارب (g)</th>
+              <th>بروتين (g)</th>
+              <th>دهون (g)</th>
+              <th>سعرات (kcal)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="items-body"></tbody>
+        </table>
+      </div>
+      <div class="totals">
+        <div>الإجمالي: كارب <b id="t-carbs">0</b> • بروتين <b id="t-protein">0</b> • دهون <b id="t-fat">0</b> • سعرات <b id="t-cal">0</b></div>
+      </div>
+    </section>
+
+    <!-- مساعد ذكي -->
+    <section class="card" id="ai-panel">
+      <div class="section-title">المساعد الذكي 🤖</div>
+      <div id="ai-tips" class="tips"></div>
+      <div class="row g8" style="margin-top:8px">
+        <button id="btn-refresh-ai" class="btn">تحديث النصائح</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- مودال اختيار صنف من المكتبة -->
+  <dialog id="dlg-picker" class="dialog">
+    <div class="dialog-header">
+      <div>اختيار صنف من مكتبة الأصناف</div>
+      <button class="icon" id="close-picker">✖</button>
+    </div>
+    <div class="dialog-body">
+      <div class="row g8">
+        <input id="picker-search" type="search" placeholder="بحث بالاسم أو هاشتاج…" />
+      </div>
+      <div id="picker-grid" class="grid"></div>
+      <div id="picker-empty" class="empty" hidden>لا توجد نتائج مطابقة.</div>
+    </div>
+  </dialog>
+
+  <!-- مودال الوجبات الجاهزة -->
+  <dialog id="dlg-templates" class="dialog">
+    <div class="dialog-header">
+      <div>وجبة جاهزة 🍱</div>
+      <button class="icon" id="close-templates">✖</button>
+    </div>
+    <div class="dialog-body">
+      <div class="row g8">
+        <input id="tpl-search" type="search" placeholder="بحث باسم القالب…" />
+      </div>
+      <div id="tpl-list" class="grid"></div>
+      <div id="tpl-empty" class="empty" hidden>لا توجد قوالب محفوظة بعد.</div>
+    </div>
+  </dialog>
+
+  <!-- مودال حفظ كقالب -->
+  <dialog id="dlg-save" class="dialog">
+    <div class="dialog-header">
+      <div>حفظ كوجبة جاهزة</div>
+      <button class="icon" id="close-save">✖</button>
+    </div>
+    <form id="save-form" class="dialog-body">
+      <div class="grid2">
+        <div class="field">
+          <label>اسم الوجبة</label>
+          <input id="tpl-name" type="text" placeholder="مثال: غداء سريع" required />
         </div>
-
-        <div class="grid">
-          <label class="field">
-            <span>بحث بالاسم أو #هاشتاج</span>
-            <input type="text" id="pickSearch" placeholder="مثال: شوفان أو #فطار" />
-          </label>
-
-          <label class="field">
-            <span>التصنيف</span>
-            <select id="pickCategory">
-              <option value="الكل">الكل</option>
-              <option value="حبوب">حبوب</option>
-              <option value="فاكهة">فاكهة</option>
-              <option value="خضار">خضار</option>
-              <option value="ألبان">ألبان</option>
-              <option value="مسليات">مسليات</option>
-              <option value="مشروبات">مشروبات</option>
-            </select>
-          </label>
-
-          <div class="filters">
-            <label class="switch">
-              <input type="checkbox" id="hideAllergy" />
-              <span>إخفاء ما يسبب حساسية 🚫</span>
-            </label>
-            <label class="switch">
-              <input type="checkbox" id="hideDiet" />
-              <span>إخفاء المخالف للحمية ⚠️</span>
-            </label>
-          </div>
-        </div>
-
-        <div id="pickerGrid" class="picker-grid"></div>
-        <div id="pickerEmpty" class="empty hidden">لا توجد نتائج مطابقة.</div>
-
-        <div class="legend tiny muted">
-          <span class="badge danger">🚫 حساسية</span>
-          <span class="badge warn">⚠️ يخالف الحمية</span>
-          <span class="badge like">❤️ يحب</span>
-          <span class="badge dislike">💔 يكره</span>
+        <div class="field">
+          <label>نوع الوجبة</label>
+          <select id="tpl-type">
+            <option value="lunch">غداء</option>
+            <option value="breakfast">إفطار</option>
+            <option value="dinner">عشاء</option>
+            <option value="snack">سناك</option>
+          </select>
         </div>
       </div>
-    </div>
-
-    <!-- مودال من نص -->
-    <div id="aiModal" class="modal hidden" aria-modal="true" role="dialog">
-      <div class="modal__body" role="document">
-        <div class="modal__header">
-          <h3>🤖 مساعد تكوين الوجبة من نص</h3>
-          <button id="aiClose" class="close" aria-label="إغلاق">✕</button>
-        </div>
-        <label class="field" style="margin-top:.5rem">
-          <span>اكتب وصف الوجبة</span>
-          <textarea id="aiText" rows="4" placeholder="مثال: كوب ونصف أرز أبيض + 2 شريحة توست بني + 10 جم جبنة + تفاحة صغيرة"></textarea>
-        </label>
-        <div class="actions" style="justify-content:flex-end">
-          <button id="aiAnalyze" class="btn btn--ghost">تحليل</button>
-          <button id="aiApply" class="btn" disabled>إضافة العناصر المقترحة</button>
-        </div>
-        <div id="aiResults" class="ai-results"></div>
+      <div class="dialog-footer">
+        <button type="button" class="btn ghost" id="cancel-save">إلغاء</button>
+        <div class="spacer"></div>
+        <button type="submit" class="btn primary">حفظ</button>
       </div>
-    </div>
+    </form>
+  </dialog>
 
-    <!-- مودال الوجبات الجاهزة -->
-    <div id="presetModal" class="modal hidden" aria-modal="true" role="dialog">
-      <div class="modal__body" role="document">
-        <div class="modal__header">
-          <h3>📦 وجبة جاهزة</h3>
-          <button id="presetClose" class="close" aria-label="إغلاق">✕</button>
-        </div>
-        <div class="preset-tabs">
-          <button class="tab active" data-type="فطار">🍳 فطار</button>
-          <button class="tab" data-type="غدا">🍲 غدا</button>
-          <button class="tab" data-type="عشا">🍽️ عشا</button>
-        </div>
-        <div id="presetGrid" class="preset-grid"></div>
-        <div id="presetEmpty" class="empty hidden">لا توجد وجبات جاهزة لهذا النوع.</div>
-      </div>
-    </div>
-
-    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  </div>
-
-  <script type="module" src="js/meals.js?v=adminlib-readonly"></script>
-
-
+  <!-- Firebase -->
+  <script type="module" src="./js/firebase-config.js"></script>
+  <!-- مزود المكتبة -->
+  <script type="module" src="./js/foods-provider.js"></script>
+  <!-- سكربت الصفحة -->
+  <script type="module" src="./js/meals.js"></script>
 </body>
 </html>
