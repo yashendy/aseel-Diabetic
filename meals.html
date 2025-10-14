@@ -4,17 +4,22 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>وجبة الطفل</title>
-  <link rel="stylesheet" href="./css/meals.css" />
+  <link rel="stylesheet" href="./meals.css" />
 </head>
 <body>
 
   <header class="page-header">
     <div class="left">
       <button id="btnBack" class="btn ghost">⬅︎ رجوع</button>
-      <a href="./child.html" class="btn ghost">🏠 الرئيسية</a>
+      <a href="./index.html" class="btn ghost">🏠 الرئيسية</a>
     </div>
     <div class="title">
       <h1>وجبة الطفل <span id="childName" class="chip chip-soft">—</span></h1>
+      <div class="chips">
+        <span id="chipUnit" class="chip">وحدة: —</span>
+        <span id="chipCR" class="chip">CR: —</span>
+        <span id="chipCF" class="chip">CF: —</span>
+      </div>
     </div>
     <div class="right"></div>
   </header>
@@ -117,9 +122,7 @@
       <div class="th">دهون (g)</div>
       <div class="th">سعرات (kcal)</div>
     </div>
-    <div id="itemsBody" class="items-body">
-      <!-- rows injected -->
-    </div>
+    <div id="itemsBody" class="items-body"></div>
     <div class="table-foot">
       <div class="sum">الإجمالي: كارب <b id="sumCarb">0</b> • بروتين <b id="sumProt">0</b> • دهون <b id="sumFat">0</b> • سعرات <b id="sumCal">0</b></div>
     </div>
@@ -132,7 +135,7 @@
     </div>
   </section>
 
-  <!-- مكتبة الأصناف (مودال) -->
+  <!-- مكتبة الأصناف -->
   <dialog id="dlgLibrary" class="modal">
     <div class="modal-head">
       <h3>اختيار صنف من المكتبة</h3>
@@ -147,7 +150,7 @@
     <div id="libGrid" class="grid"></div>
   </dialog>
 
-  <!-- القوالب (مودال) -->
+  <!-- القوالب -->
   <dialog id="dlgPresets" class="modal">
     <div class="modal-head">
       <h3>قوالب الوجبات</h3>
@@ -173,32 +176,48 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <!-- Firebase CDN (modular) -->
+  <!-- Firebase (modular CDN) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, onAuthStateChanged as modOnAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-    // ⚠️ إمّا تحطي الكونفيج هنا أو استورديه من ملفك الحالي:
-    // const firebaseConfig = { ... };
-    // const app = initializeApp(firebaseConfig);
+    // محرك تهيئة مرن: __FB جاهزة ← نستخدمها، أو firebaseConfig موجود ← نهيّئ،
+    // أو compat موجود ← نستخدمه، وإلا نعرض رسالة لطيفة بدل الكراش.
+    let app, auth, db, storage, onAuthStateChanged;
 
-    // لو عندك ملف جاهز:
-    // import { app } from "./js/firebase-config.js";
-    // const auth = getAuth(app); const db = getFirestore(app); const storage = getStorage(app);
+    const useFromWindow = () => {
+      app = window.__FB?.app; auth = window.__FB?.auth;
+      db = window.__FB?.db; storage = window.__FB?.storage;
+      onAuthStateChanged = window.__FB?.onAuthStateChanged || modOnAuth;
+      return Boolean(app && auth && db && storage);
+    };
 
-    // بدون ملف خارجي (ضعي الكونفيج هنا لو حبيتي):
-    const firebaseConfig = window.firebaseConfig ?? null;
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const storage = getStorage(app);
+    const tryConfig = () => {
+      const cfg = window.firebaseConfig || window.FIREBASE_CONFIG;
+      if(!cfg) return false;
+      app = initializeApp(cfg);
+      auth = getAuth(app); db = getFirestore(app); storage = getStorage(app);
+      onAuthStateChanged = modOnAuth;
+      return true;
+    };
 
-    // مررنا الـ app/db/auth للملف الرئيسي
+    const tryCompat = () => {
+      const f = window.firebase;
+      if(!f || !f.apps || !f.apps.length) return false;
+      app = f.app(); auth = f.auth(); db = f.firestore(); storage = f.storage();
+      onAuthStateChanged = (a, cb)=> auth.onAuthStateChanged(cb);
+      return true;
+    };
+
+    if(!useFromWindow() && !tryConfig() && !tryCompat()){
+      console.error("Firebase config غير متوفر. رجاء تضمين firebaseConfig أو __FB أو compat.");
+    }
+
     window.__FB = { app, auth, db, storage, onAuthStateChanged };
   </script>
 
-  <script type="module" src="./js/meals.js"></script>
+  <script type="module" src="./meals.js"></script>
 </body>
 </html>
