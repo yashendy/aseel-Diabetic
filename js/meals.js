@@ -1,242 +1,246 @@
-/* js/meals.js — ES Module */
+// js/meals.js
+// يعتمد على window.db من firebase-config.js (compat)
 
-// 1) Firebase app objects (من ملف التهيئة الخاص بك كموديول)
-import { auth, db, storage } from './firebase-config.js';
-
-// 2) Firebase SDK (modular)
-import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
-import {
-  doc, getDoc, collection, query, where, getDocs, serverTimestamp
-} from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
-import { ref as storageRef, getDownloadURL } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js';
-
-/* ------------------------------------------
-    Helpers
------------------------------------------- */
-
-const $ = (sel) => document.querySelector(sel);
-
-function getChildIdFromURL() {
-  const p = new URLSearchParams(location.search);
-  return p.get('child') || '';
-}
-
-function round025(x) {
-  return Math.round(x / 0.25) * 0.25;
-}
-
-function setValIfExists(sel, val) {
-  const el = $(sel);
-  if (el) el.value = (val ?? '').toString();
-}
-
-function setTextIfExists(sel, txt) {
-  const el = $(sel);
-  if (el) el.textContent = (txt ?? '').toString();
-}
-
-function getNum(sel) {
-  const el = $(sel);
-  if (!el) return NaN;
-  const v = (el.value || '').toString().replace(',', '.');
-  const n = Number(v);
-  return Number.isFinite(n) ? n : NaN;
-}
-
-/* ------------------------------------------
-    Pickers من وثيقة الطفل (مرنة مع الحقول القديمة)
------------------------------------------- */
-
-function pickCR(child, mealType) {
-  const key = ({ breakfast:'cr_breakfast', lunch:'cr_lunch', dinner:'cr_dinner', snack:'cr_snack' })[mealType];
-  if (key && child[key]) return Number(child[key]);
-
-  if (child.carbRatio) return Number(child.carbRatio);
-  if (child.cr)        return Number(child.cr);
-  return NaN;
-}
-
-function pickCF(child, mealType) {
-  const key = ({ breakfast:'cf_breakfast', lunch:'cf_lunch', dinner:'cf_dinner', snack:'cf_snack' })[mealType];
-  if (key && child[key]) return Number(child[key]);
-
-  if (child.correctionFactor) return Number(child.correctionFactor);
-  if (child.cf)               return Number(child.cf);
-  return NaN;
-}
-
-// بداية “الارتفاع” المستخدم في المعادلة (الغالب 7)
-function pickHyper(child) {
-  if (child.hyper != null)      return Number(child.hyper);
-  if (child.hyperLevel != null) return Number(child.hyperLevel);
-  return 7;
-}
-
-// حد بدء التصحيح (ارتفاع شديد) — عنده نبدأ نحسب
-function pickCriticalHigh(child) {
-  if (child.criticalHigh != null)      return Number(child.criticalHigh);
-  if (child.criticalHighLevel != null) return Number(child.criticalHighLevel);
-  return 10.9;
-}
-
-// هدف الكارب (min/max) لو موجود
-function pickCarbGoal(child, mealType) {
-  // احتمالات شائعة: child.carbGoals[mealType] أو child.carbTargets[mealType] وفيها {min,max}
-  const paths = [
-    child?.carbGoals?.[mealType],
-    child?.carbTargets?.[mealType],
-  ];
-  const obj = paths.find(Boolean) || {};
-  let min = Number(obj.min);
-  let max = Number(obj.max);
-  if (!Number.isFinite(min)) min = NaN;
-  if (!Number.isFinite(max)) max = NaN;
-  return { min, max };
-}
-
-/* ------------------------------------------
-    الحسابات
------------------------------------------- */
-
-function computeCorrectionDose(before, hyper, crit, CF) {
-  if (!Number.isFinite(before) || !Number.isFinite(hyper) || !Number.isFinite(CF)) return 0;
-  if (before < crit) return 0; // يبدأ التصحيح من 10.9 فأعلى
-  const raw = (before - hyper) / CF;
-  return Math.max(0, round025(raw));
-}
-
-function computeCarbDose(totalCarbs, CR) {
-  if (!Number.isFinite(totalCarbs) || !Number.isFinite(CR) || CR <= 0) return 0;
-  return round025(totalCarbs / CR);
-}
-
-function currentMealType() {
-  const el = $('#mealType');
-  const v = el ? el.value : 'breakfast';
-  return (['breakfast','lunch','dinner','snack'].includes(v) ? v : 'breakfast');
-}
-
-// إجمالي الكارب الحالي — مرن
-function readTotalCarbs() {
-  // لو الفوتر يحسب الإجمالي (كما في صف tCarbs)
-  const t = $('#tCarbs');
-  if (t) {
-    const n = Number((t.textContent || '0').toString().replace(',', '.'));
-    if (Number.isFinite(n)) return n;
-  }
-  // وإلا نحاول من عناصر عليها data-carbs أو خلايا
-  let sum = 0;
-  document.querySelectorAll('[data-carbs], .js-item-carbs').forEach((el) => {
-    const num = Number((el.dataset?.carbs || el.value || el.textContent || '0').toString().replace(',', '.'));
-    if (Number.isFinite(num)) sum += num;
-  });
-  return sum;
-}
-
-/* ------------------------------------------
-   initPage
------------------------------------------- */
-
-async function initPage(user) {
-  const parentId = user.uid;
-  const childId = getChildIdFromURL();
-  if (!childId) {
-    console.warn('No child param in URL.');
+(() => {
+  // تحقق أن الـ db متاح
+  const db = window.db;
+  if (!db) {
+    console.error("Firestore `db` غير متاح. تأكدي من تحميل js/firebase-config.js (compat) قبل هذا الملف.");
     return;
   }
 
-  // جلب بيانات الطفل
-  const childRef = doc(db, `parents/${parentId}/children/${childId}`);
-  const snap = await getDoc(childRef);
-  if (!snap.exists()) {
-    console.warn('Child doc not found');
-    return;
+  // عناصر DOM
+  const btnAddFromLibrary = document.getElementById('btnAddFromLibrary');
+  const itemsBody = document.getElementById('itemsBody');
+  const tGrams = document.getElementById('tGrams');
+  const tCarbs = document.getElementById('tCarbs');
+  const tProt  = document.getElementById('tProt');
+  const tFat   = document.getElementById('tFat');
+  const tKcal  = document.getElementById('tKcal');
+
+  // المكتبة
+  const libModal   = document.getElementById('libModal');
+  const libList    = document.getElementById('libList');
+  const libSearch  = document.getElementById('libSearch');
+  const libCatSel  = document.getElementById('libCategory');
+  const libClose   = document.getElementById('libClose');
+  const libCount   = document.getElementById('libCount');
+
+  // مودال الإضافة
+  const addModal   = document.getElementById('addModal');
+  const addTitle   = document.getElementById('addTitle');
+  const addUnitSel = document.getElementById('addUnit');
+  const addQtyInp  = document.getElementById('addQty');
+  const addConfirm = document.getElementById('addConfirm');
+  const addCancel  = document.getElementById('addCancel');
+  const addClose   = document.getElementById('addClose');
+
+  // بيانات داخلية
+  let libItems = [];          // أصناف المكتبة
+  let filtered = [];          // نتائج البحث/الفلاتر
+  let selectedItem = null;    // الصنف المختار قبل الإضافة
+  const addedRows = [];       // أصناف مضافة للجدول
+
+  // Helpers لفتح/غلق المودالات
+  function open(el)  { el.classList.remove('hidden'); el.setAttribute('aria-hidden','false'); }
+  function close(el) { el.classList.add('hidden');    el.setAttribute('aria-hidden','true'); }
+
+  // تحميل أصناف المكتبة من Firestore: admin/global/foodItems
+  async function loadLibrary() {
+    // قرّينا من: admin/global/foodItems
+    const snap = await db
+      .collection('admin')
+      .doc('global')
+      .collection('foodItems')
+      .where('isActive', 'in', [true, null]) // بعض عندها null
+      .get();
+
+    libItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // توحيد أسماء الحقول المتوقعة
+    libItems.forEach(it => {
+      it.name = it.name || it.name_ar || it.name_en || 'بدون اسم';
+      // قيَم 100 جم
+      it.per100 = it.per100 || it.nutrPer100g || {};
+      // الوحدات
+      it.measures = it.measures || it.units || [];
+    });
+
+    filtered = libItems.slice();
+    renderLibrary();
   }
-  const child = snap.data() || {};
 
-  // عرض أعلى الصفحة
-  setTextIfExists('#childName', child.name || '');
-  setTextIfExists('#headCR',      pickCR(child, currentMealType()) || child.carbRatio || child.cr || '—');
-  setTextIfExists('#headCF',      pickCF(child, currentMealType()) || child.correctionFactor || child.cf || '—');
-  setTextIfExists('#headHyper',   pickHyper(child));
-  setTextIfExists('#headCritHigh',pickCriticalHigh(child));
-  setTextIfExists('#hyperMini',   pickHyper(child));
-  setTextIfExists('#critHighMini',pickCriticalHigh(child));
+  // رسم كروت المكتبة
+  function renderLibrary() {
+    const q = (libSearch.value || '').trim().toLowerCase();
+    const cat = libCatSel.value;
 
-  // هدف الكارب (لو موجود)
-  const goal = pickCarbGoal(child, currentMealType());
-  if (Number.isFinite(goal.min)) setTextIfExists('#carbMin', goal.min);
-  if (Number.isFinite(goal.max)) setTextIfExists('#carbMax', goal.max);
+    const items = filtered.filter(it => {
+      let ok = true;
+      if (q) {
+        const hay = (it.name + ' ' + (it.searchText || '') + ' ' + ((it.hashTagsAuto||[]).join(' '))).toLowerCase();
+        ok = hay.includes(q);
+      }
+      if (ok && cat) ok = (it.category === cat);
+      return ok;
+    });
 
-  // إعادة الحساب
-  const recompute = () => {
-    const mealType = currentMealType();
+    libList.innerHTML = '';
+    items.forEach(it => {
+      const img = (it.image && (it.image.url || it.imageUrl)) || it.imageUrl || 'images/food-placeholder.svg';
+      const kcal = it.per100.cal_kcal ?? 0;
+      const carb = it.per100.carbs_g ?? 0;
 
-    const before  = getNum('#glucoseBefore');
-    const totalC  = readTotalCarbs();
+      const card = document.createElement('button');
+      card.className = 'card item-card';
+      card.innerHTML = `
+        <img class="thumb" src="${img}" alt="">
+        <div class="card-body">
+          <div class="title">${escapeHtml(it.name)}</div>
+          <div class="muted">${it.category || '—'}</div>
+          <div class="muted">kcal/100g: ${kcal} • كارب/100g: ${carb}</div>
+        </div>
+      `;
+      card.addEventListener('click', () => onPickItem(it));
+      libList.appendChild(card);
+    });
 
-    const CR   = pickCR(child, mealType);
-    const CF   = pickCF(child, mealType);
-    const hyper= pickHyper(child);
-    const crit = pickCriticalHigh(child);
+    libCount.textContent = `${items.length} صنف`;
+  }
 
-    const doseCorr = computeCorrectionDose(before, hyper, crit, CF);
-    const doseCarb = computeCarbDose(totalC, CR);
-    const doseAll  = round025(doseCorr + doseCarb);
+  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 
-    setValIfExists('#doseCorrection', doseCorr);
-    setValIfExists('#doseCarb',       doseCarb);
-    setValIfExists('#doseTotal',      doseAll);
+  // عند اختيار صنف من المكتبة
+  function onPickItem(it) {
+    selectedItem = it;
+    addTitle.textContent = `إضافة: ${it.name}`;
 
-    setTextIfExists('#carbNow', totalC);
-
-    // شريط الكارب
-    const min = Number($('#carbMin')?.textContent || NaN);
-    const max = Number($('#carbMax')?.textContent || NaN);
-    const bar = $('#carbBar');
-    if (bar && Number.isFinite(min) && Number.isFinite(max) && max > min) {
-      const pct = Math.max(0, Math.min(100, ((totalC - min) / (max - min)) * 100));
-      bar.style.width = `${pct}%`;
+    // إعداد قائمة الوحدات
+    addUnitSel.innerHTML = '';
+    const units = Array.isArray(it.measures) ? it.measures : [];
+    if (units.length) {
+      units.forEach(u => {
+        // توقع هيكل: { name: "كوب", grams: 160 } أو {label/name_ar/name, grams}
+        const grams = +u.grams || 0;
+        const label = u.name || u.label || u.name_ar || 'وحدة';
+        const opt = document.createElement('option');
+        opt.value = grams;
+        opt.textContent = `${label} (~${grams} جم)`;
+        addUnitSel.appendChild(opt);
+      });
+    } else {
+      // fallback = 100 جم
+      const opt = document.createElement('option');
+      opt.value = 100;
+      opt.textContent = '100 جم';
+      addUnitSel.appendChild(opt);
     }
 
-    setTextIfExists('#calcNote', `CR=${CR || '-'} • CF=${CF || '-'} • hyper=${hyper} • crit=${crit} • carbs=${totalC}`);
-  };
-
-  // ربط الأحداث
-  ['#glucoseBefore', '#glucoseAfter', '#mealType'].forEach((sel) => {
-    const el = $(sel);
-    if (el) el.addEventListener('input',  recompute);
-    if (el) el.addEventListener('change', recompute);
-  });
-
-  // أي تغيّر في الجدول يعيد الحساب
-  const table = $('#itemsTable') || document;
-  table.addEventListener('input',  recompute, { capture:true });
-  table.addEventListener('change', recompute, { capture:true });
-
-  // بداية
-  recompute();
-
-  // أزرار بسيطة
-  $('#btnBack')?.addEventListener('click', () => history.back());
-  $('#btnReset')?.addEventListener('click', () => {
-    ['#glucoseBefore','#glucoseAfter','#doseCorrection','#doseCarb','#doseTotal','#notes'].forEach(s => setValIfExists(s,''));
-    recompute();
-  });
-}
-
-/* ------------------------------------------
-   تشغيل بعد تسجيل الدخول
------------------------------------------- */
-
-onAuthStateChanged(auth, (user) => {
-  if (!user) {
-    console.warn('User not signed in');
-    // window.location.href = 'login.html';
-    return;
+    addQtyInp.value = 1;
+    open(addModal);
   }
-  initPage(user).catch(console.error);
-});
 
-// لتصحيح يدوي من الكونسول
-window._dbg = { auth, db, storage };
+  // إضافة الصف للجدول
+  function addSelectedToTable() {
+    if (!selectedItem) return;
+    const gramsPerUnit = +addUnitSel.value || 100;
+    const qty = Math.max(0.25, +addQtyInp.value || 1);
+    const totalGrams = Math.round(gramsPerUnit * qty);
+
+    // قيم 100 جم
+    const p100 = selectedItem.per100 || {};
+    const scale = (x) => Math.round(((+x || 0) * totalGrams / 100) * 10) / 10;
+
+    const row = {
+      id: selectedItem.id,
+      name: selectedItem.name,
+      grams: totalGrams,
+      carbs: scale(p100.carbs_g),
+      prot:  scale(p100.protein_g),
+      fat:   scale(p100.fat_g),
+      kcal:  scale(p100.cal_kcal)
+    };
+    addedRows.push(row);
+    renderRows();
+    close(addModal);
+  }
+
+  // رسم صفوف الجدول + الحسابات
+  function renderRows() {
+    itemsBody.innerHTML = '';
+    let sGrams=0, sCarb=0, sProt=0, sFat=0, sKcal=0;
+
+    addedRows.forEach((r,idx) => {
+      sGrams += r.grams; sCarb += r.carbs; sProt += r.prot; sFat += r.fat; sKcal += r.kcal;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(r.name)}</td>
+        <td>—</td>
+        <td><input type="number" class="input small qty" step="0.25" min="0.25" value="1" disabled /></td>
+        <td>${r.grams}</td>
+        <td>${r.carbs}</td>
+        <td>${r.prot}</td>
+        <td>${r.fat}</td>
+        <td>${r.kcal}</td>
+        <td><button class="btn icon danger" title="حذف" data-i="${idx}">🗑</button></td>
+      `;
+      tr.querySelector('button').addEventListener('click', e => {
+        const i = +e.currentTarget.dataset.i;
+        addedRows.splice(i,1);
+        renderRows();
+      });
+      itemsBody.appendChild(tr);
+    });
+
+    tGrams.textContent = Math.round(sGrams);
+    tCarbs.textContent = Math.round(sCarb*10)/10;
+    tProt.textContent  = Math.round(sProt*10)/10;
+    tFat.textContent   = Math.round(sFat*10)/10;
+    tKcal.textContent  = Math.round(sKcal);
+    // ممكن هنا تحدثي الكارب الحالي والـProgress لو حابة
+    document.getElementById('carbNow').textContent = Math.round(sCarb*10)/10;
+  }
+
+  // فتح المكتبة
+  async function openLibrary() {
+    // أول مرة فقط نحمّل من Firestore
+    if (!libItems.length) {
+      try {
+        await loadLibrary();
+      } catch (err) {
+        console.error('خطأ في قراءة مكتبة الأصناف:', err);
+        alert('تعذر قراءة مكتبة الأصناف.');
+        return;
+      }
+    }
+    renderLibrary();
+    open(libModal);
+  }
+
+  // أحداث
+  btnAddFromLibrary?.addEventListener('click', openLibrary);
+  libClose?.addEventListener('click', () => close(libModal));
+  libSearch?.addEventListener('input', renderLibrary);
+  libCatSel?.addEventListener('change', renderLibrary);
+
+  addConfirm?.addEventListener('click', addSelectedToTable);
+  addCancel?.addEventListener('click', () => close(addModal));
+  addClose?.addEventListener('click', () => close(addModal));
+
+  // Reset
+  document.getElementById('btnReset')?.addEventListener('click', () => {
+    addedRows.length = 0;
+    renderRows();
+  });
+
+  // حفظ الوجبة (Placeholder ـ احفظي بطريقتك الحالية)
+  document.getElementById('btnSaveMeal')?.addEventListener('click', () => {
+    const payload = {
+      createdAt: new Date().toISOString(),
+      items: addedRows
+    };
+    console.log('حفظ الوجبة:', payload);
+    alert('تم تحضير بيانات الحفظ في الـConsole. وصّليها بمسارك في Firestore.');
+  });
+
+})();
