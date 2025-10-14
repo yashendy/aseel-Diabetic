@@ -2,10 +2,10 @@
 import {
   doc, getDoc, getDocs, setDoc, addDoc, collection,
   query, orderBy, limit, Timestamp
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 import {
   ref as sRef, getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+} from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 
 const fb = window.__FB || {};
 const db = fb.db;
