@@ -5,11 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>وجبة الطفل</title>
 
-  <!-- الأسلوب -->
+  <!-- estilos -->
   <link rel="stylesheet" href="css/meals.css" />
-
-  <!-- Firebase config يجب أن يكون قبلي -->
-  <script src="js/firebase-config.js"></script>
 </head>
 <body>
 
@@ -34,7 +31,7 @@
   <main class="container">
 
     <!-- إجراءات سريعة -->
-    <section class="actions">
+    <section class="actions panel">
       <div class="row">
         <label>نوع الوجبة</label>
         <select id="mealType">
@@ -86,7 +83,13 @@
       </div>
 
       <div class="subnote">
-        <span>⚠️ يتم احتساب التصحيح تلقائيًا إذا كان القياس ≥ <b id="critHighMini">—</b> باستخدام (القياس − <b id="hyperMini">—</b>) ÷ CF، والتقريب على 0.25.</span>
+        <span>
+          ⚠️ يتم احتساب التصحيح تلقائيًا إذا كان القياس ≥
+          <b id="critHighMini">—</b>
+          باستخدام
+          (القياس − <b id="hyperMini">—</b>) ÷ CF، والتقريب على 0.25.
+        </span>
+        <div id="calcNote" class="muted" style="margin-top:.25rem"></div>
       </div>
     </section>
 
@@ -164,7 +167,7 @@
 
   </main>
 
-  <!-- سكربت الصفحة -->
-  <script type="module" src="js/meals.js?v=2"></script>
+  <!-- سكربت واحد فقط كـ Module -->
+  <script type="module" src="js/meals.js?v=3"></script>
 </body>
 </html>
