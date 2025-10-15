@@ -16,9 +16,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 /* --------- Firebase (من firebase-config.js) --------- */
-const db = window._db;
-const st = window._st;
-if (!db || !st) throw new Error("Firebase not initialized. Ensure firebase-config.js sets window._db & window._st.");
+import { app, db, auth, storage } from './firebase-config.js';
 
 /* --------- Utils --------- */
 const $ = (s, r=document) => r.querySelector(s);
