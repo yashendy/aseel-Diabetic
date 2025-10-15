@@ -1,27 +1,18 @@
-// /js/meals.js
+// /js/meals.js  — نسخة موحّدة مع Firebase 12.1.0 وتستعمل app من firebase-config.js
+
+import { app } from "./firebase-config.js";
+
 import {
   doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where, limit, Timestamp,
   collectionGroup, documentId, getFirestore
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {
   ref as sRef, getDownloadURL, getStorage
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
-/* ---------------- Firebase (نسخة واحدة فقط) ---------------- */
-let db, st;
-async function ensureFirebase() {
-  try {
-    // لو firebase-config.js اتشغّل قبل كده، دول هينجحوا على طول
-    db = getFirestore();
-    st = getStorage();
-  } catch {
-    // نحمّل تهيئة التطبيق كـ side-effect وبعدين نجيب instances من نفس النسخة
-    await import("./firebase-config.js");
-    db = getFirestore();
-    st = getStorage();
-  }
-}
-await ensureFirebase();
+/* ---------------- Firebase (نسخة واحدة 12.1.0) ---------------- */
+const db = getFirestore(app);
+const st = getStorage(app);
 
 /* ---------------- Helpers ---------------- */
 const $ = (sel) => document.querySelector(sel);
@@ -167,7 +158,6 @@ async function loadChild() {
   els.chipTargets.textContent = `الهدف ${targets.max} | تصحيح من ${targets.severeHigh}`;
   updateCRChip();
 }
-
 function updateCRChip() {
   const ar = slotMap[slotKey]?.ar || "";
   const cr = crForSlot(slotKey);
