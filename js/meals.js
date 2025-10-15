@@ -20,7 +20,7 @@ let st =
 
 if (!db || !st) {
   // شغّل firebase-config.js كـ side-effect لو لسه متهيأش
-  try { await import("./js/firebase-config.js"); } catch {}
+  try { await import("./firebase-config.js"); } catch {}
   db = db || window._db || window.db || (function () { try { return getFirestore(); } catch { return null; } })();
   st = st || window._st || window.storage || (function () { try { return getStorage(); } catch { return null; } })();
 }
