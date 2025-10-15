@@ -1,95 +1,199 @@
-/* meals.css — UI polish for meals page */
+/* ===========================
+   meals.css  — UI & Modal + Loader
+   =========================== */
 
-/* ===== Base & Variables ===== */
-:root{
-  --primary:#5b6cff;
-  --primary-600:#4a59e6;
-  --accent:#00b894;
-  --danger:#ff5a5f;
-  --warn:#ffb703;
-  --bg:#ffffff;
-  --muted:#6b7280;
-  --chip:#eef0ff;
-  --br:14px;
-  --shadow:0 12px 36px rgba(0,0,0,.16);
+/* Base resets a bit */
+:root {
+  --brand: #6b64f3;
+  --brand-2: #8c86ff;
+  --danger: #ff5c6c;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --ink: #0f172a;
+  --ink-2: #334155;
+  --bg: #fafafb;
+  --muted: #94a3b8;
+  --card: #ffffff;
+  --chip: #f2f3ff;
+  --shadow: 0 10px 30px rgba(15, 23, 42, .08);
+  --radius: 14px;
 }
-*{box-sizing:border-box}
-button{cursor:pointer}
 
-/* ===== Progress bar ===== */
-.progress {
-  width: 100%; background: #f3f4f6; border-radius: 999px; height: 10px; overflow: hidden;
+html, body {
+  background: var(--bg);
+  color: var(--ink);
 }
-.progress .bar{height:100%; width:0; transition:width .25s ease; background: var(--accent);}
-.progress .bar.ok{background:var(--accent)}
-.progress .bar.warn{background:var(--warn)}
-.progress .bar.danger{background:var(--danger)}
-.progress-label{font-size:.95rem; color:#111827; margin-top:6px}
 
-/* ===== Meal table ===== */
-.table-meal{width:100%; border-collapse: collapse}
-.table-meal th,.table-meal td{border-bottom:1px solid #f0f0f0; padding:10px}
-.table-meal td .thumb{width:44px; height:44px; border-radius:10px; object-fit:cover; background:#f5f5f5}
-.table-meal input[type="number"], .table-meal select{
-  width:100%; padding:6px 8px; border:1px solid #e5e7eb; border-radius:10px; background:#fff
+/* --- App loader overlay --- */
+.app-loader {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
 }
-.ic.danger{background:#fee2e2; color:#991b1b; border:0; padding:6px 10px; border-radius:8px}
-.tr-added{animation: rowFlash 1s ease}
-@keyframes rowFlash{0%{background:#ecfeff}100%{background:transparent}}
-
-/* ===== Floating open button ===== */
-#openLibFloating{
-  position:fixed; inset-inline-start:16px; inset-block-end:16px; z-index:9999;
-  padding:10px 14px; border-radius:12px; border:0; background:var(--primary); color:#fff;
-  box-shadow:0 6px 16px rgba(0,0,0,.15)
+.app-loader.show { display:flex; }
+.app-loader .box {
+  background: var(--card);
+  box-shadow: var(--shadow);
+  border-radius: 16px;
+  padding: 18px 24px;
+  display: flex; align-items: center; gap: 12px;
+  font-weight: 600; color: var(--ink-2);
 }
-#openLibFloating:hover{background:var(--primary-600)}
-
-/* ===== Toast ===== */
-.toast{
-  position: fixed; inset-inline-start:50%; transform: translateX(-50%);
-  inset-block-end: 20px; background:#111827; color:#fff; padding:10px 14px;
-  border-radius:999px; z-index:10000; box-shadow:var(--shadow); opacity:0; transition:opacity .2s, transform .2s;
+.app-loader .spinner {
+  width: 18px; height: 18px; border-radius:50%;
+  border: 3px solid var(--chip);
+  border-top-color: var(--brand);
+  animation: spin 1s linear infinite;
 }
-.toast.show{opacity:1; transform:translateX(-50%) translateY(-4px)}
+@keyframes spin { to { transform: rotate(360deg) }}
 
-/* ===== Modal ===== */
-.m-overlay{position:fixed; inset:0; background:rgba(0,0,0,.35);
-  display:flex; align-items:center; justify-content:center; z-index:9998}
-.m-box{width:min(1100px,94vw); max-height:88vh; background:#fff; border-radius:16px;
-  overflow:hidden; display:flex; flex-direction:column; box-shadow:var(--shadow)}
-.m-head{padding:12px 16px; border-bottom:1px solid #eee; display:grid;
-  grid-template-columns: 1fr auto auto auto 160px auto; gap:8px; align-items:center}
-.m-head input[type="search"]{padding:10px 12px; border:1px solid #ddd; border-radius:10px}
-.m-head select{padding:10px; border:1px solid #ddd; border-radius:10px; background:#fff}
-.m-close{background:#eee; color:#111827; border:0; padding:10px 12px; border-radius:10px}
-.m-actions{display:flex; gap:8px; align-items:center; justify-content:flex-end}
-.m-chip{padding:6px 12px; border:1px solid #ddd; border-radius:999px; cursor:pointer; user-select:none; background:#fff; color:#111827}
-.m-chip.on{background:var(--chip); border-color:var(--primary); color:var(--primary)}
-.m-tags{display:flex; flex-wrap:wrap; gap:8px; padding:8px 12px; border-bottom:1px solid #eee}
-.m-tabs{display:flex; gap:8px; padding:8px 12px; border-bottom:1px solid #eee; background:#fafafa}
-.m-tab{padding:8px 12px; border-radius:10px; border:1px solid transparent; cursor:pointer}
-.m-tab.on{background:#eef0ff; border-color:#c7d2fe; color:#1f2dff}
-.m-body{padding:12px; overflow:auto}
-.m-foot{padding:12px; border-top:1px solid #eee; display:flex; justify-content:space-between; align-items:center}
+/* --- Progress bar for carb target --- */
+.target-wrap {
+  position: relative; height: 10px; background: #eef2ff; border-radius: 999px; overflow: hidden;
+}
+.target-wrap .bar {
+  position: absolute; inset-inline-start: 0; top: 0; bottom: 0; width: 0%;
+  transition: width .25s ease;
+}
+.target-wrap .bar.ok { background: var(--ok); }
+.target-wrap .bar.warn { background: var(--warn); }
+.target-wrap .bar.danger { background: var(--danger); }
+.target-wrap .label {
+  margin-top: 8px; font-size: 12px; color: var(--ink-2);
+}
 
-/* ===== Cards Grid ===== */
-.m-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:12px}
-@media (max-width:900px){.m-grid{grid-template-columns:repeat(2, 1fr)}}
-@media (max-width:640px){.m-grid{grid-template-columns:1fr}}
+/* --- Chips (filters/tags) --- */
+.chips { display:flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  background: var(--chip);
+  color: var(--ink-2);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  display:inline-flex; align-items:center; gap:6px;
+  cursor: pointer;
+  user-select: none;
+}
+.chip.on { background: var(--brand); color: #fff; }
 
-.m-card{border:1px solid #eee; border-radius:12px; overflow:hidden; display:flex; flex-direction:column; background:#fff}
-.m-card .img{aspect-ratio:4/3; background:#fafafa; display:block; width:100%; object-fit:cover}
-.m-card .ct{padding:10px 12px; display:flex; flex-direction:column; gap:8px}
-.m-card .row{display:flex; gap:8px; align-items:center}
-.m-card .row .grow{flex:1}
-.m-card .muted{color:var(--muted); font-size:.9rem}
-.m-card select,.m-card input{padding:8px; border:1px solid #ddd; border-radius:8px; background:#fff; width:100%}
-.m-card .btn-add{padding:9px 12px; border:0; border-radius:10px; background:var(--primary); color:#fff; font-weight:600}
-.m-card .btn-add:hover{background:var(--primary-600)}
-.m-card .fav,.m-card .ban{border:1px solid #ddd; border-radius:8px; background:#fff; padding:6px 10px}
-.m-card .fav.on{background:#fff7cc; border-color:#facc15}
-.m-card .ban.on{background:#ffe4e6; border-color:#fb7185}
+/* --- Buttons --- */
+.btn {
+  appearance: none;
+  border: 0; border-radius: 12px;
+  padding: 8px 12px;
+  font-weight: 600;
+  background: var(--brand);
+  color: #fff; cursor: pointer;
+  transition: transform .05s ease, opacity .2s ease;
+}
+.btn:active { transform: translateY(1px); }
+.btn.secondary { background: #eef2ff; color: var(--ink-2); }
+.btn.ghost { background: transparent; color: var(--ink-2); }
+.btn.danger { background: var(--danger); }
 
-/* ===== Minor helpers ===== */
-.hidden{display:none !important}
+/* --- Toast --- */
+.toast {
+  position: fixed; inset-inline-end: 18px; inset-block-end: 18px;
+  background: var(--ink);
+  color:#fff; padding: 10px 14px; border-radius: 12px;
+  box-shadow: var(--shadow);
+  opacity: 0; transform: translateY(8px); transition: .25s ease;
+  z-index: 9999;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* ===========================
+   Modal: Library of Food Items
+   =========================== */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.35);
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s ease; z-index: 9998;
+}
+.modal {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  pointer-events: none; z-index: 9999;
+}
+.modal.open .modal-backdrop { opacity: 1; pointer-events: all; }
+.modal.open .modal-panel { transform: translateY(0); opacity: 1; }
+
+.modal-panel {
+  width: min(1100px, 92vw);
+  max-height: 86vh;
+  background: var(--card);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  display: grid; grid-template-rows: auto 1fr auto;
+  opacity: 0; transform: translateY(10px); transition: .2s ease;
+  pointer-events: all;
+  overflow: hidden;
+}
+.modal-header, .modal-footer {
+  padding: 14px 16px; background: #fff;
+  border-bottom: 1px solid #eef2ff;
+}
+.modal-footer { border-top: 1px solid #eef2ff; border-bottom: 0; }
+.modal-header .row { display:flex; gap: 10px; align-items: center; }
+.modal-search {
+  flex: 1;
+  background: #f8f9ff;
+  border-radius: 999px;
+  padding: 8px 12px;
+  display:flex; align-items:center; gap:8px;
+}
+.modal-search input {
+  border:0; background:transparent; outline:none; width:100%;
+  font-size:14px; color: var(--ink-2);
+}
+
+.modal-body {
+  padding: 14px 16px; overflow: auto;
+  background: #fafaff;
+}
+.grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+.card-item {
+  background: #fff; border-radius: 16px; overflow: hidden;
+  box-shadow: var(--shadow);
+  display: grid; grid-template-rows: 120px auto auto;
+}
+.card-item .thumb {
+  background: #f7f7ff; display:grid; place-items:center;
+}
+.card-item .thumb img {
+  width: 80px; height: 80px; object-fit: cover; border-radius: 12px;
+}
+.card-item .meta { padding: 10px 12px; }
+.card-item .meta .name {
+  font-weight: 700; color: var(--ink); margin-bottom: 2px;
+}
+.card-item .meta .sub {
+  font-size: 12px; color: var(--muted);
+}
+.card-item .actions {
+  padding: 10px 12px; display:flex; justify-content: space-between; align-items:center;
+}
+.card-item .ic {
+  background: #f1f5ff; border:0; border-radius: 10px; padding: 6px 8px; cursor:pointer;
+}
+.card-item .ic.on { background: var(--brand); color:#fff; }
+.card-item .btn-add {
+  padding: 6px 10px; border-radius: 10px; background: var(--brand); color:#fff; border:0; cursor:pointer;
+}
+
+/* table thumbnails */
+.table-thumb {
+  width: 32px; height: 32px; border-radius: 8px; object-fit: cover; background: #f3f4f6;
+}
+
+/* small helpers */
+.hidden { display: none !important; }
+.note { color: var(--muted); font-size: 12px; }
