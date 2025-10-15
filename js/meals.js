@@ -6,7 +6,7 @@
    - نافذة مكتبة الأصناف (بحث/فلاتر/مفضلة/غير مفضلة)
    - "ضبط الوصول للهدف" (Scaling to carb target) — Fixed
    ========================================================= */
-
+import { auth, db } from './firebase-config.js';
 import {
   doc, getDoc, setDoc, updateDoc, collection, getDocs,
   query, where, limit, Timestamp, collectionGroup, documentId
@@ -15,8 +15,6 @@ import {
   ref as sRef, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-/* --------- Firebase (من firebase-config.js) --------- */
-import { app, db, auth, storage } from './firebase-config.js';
 
 /* --------- Utils --------- */
 const $ = (s, r=document) => r.querySelector(s);
