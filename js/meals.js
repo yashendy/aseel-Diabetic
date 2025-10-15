@@ -556,7 +556,7 @@ async function importFromTemplates() {
   const snaps = await getDocs(coll);
   if (snaps.empty) { alert("لا توجد قوالب محفوظة."); return; }
 
-  // Pick latest (يمكن لاحقًا نعرض dialog للاختيار)
+  // Pick latest (لاحقًا ممكن نعرض اختيار)
   let latestDoc = snaps.docs[0];
   snaps.forEach(d => { if ((d.data().createdAt||"") > (latestDoc.data().createdAt||"")) latestDoc = d; });
   const t = latestDoc.data();
@@ -602,7 +602,7 @@ function exportCSV() {
   });
   rows.push([]);
   rows.push(["Carbs(raw)", els.sumCarbsRaw.textContent, "Fiber", els.sumFiber.textContent, "Net", els.sumCarbsNet.textContent, "Calories", els.sumCal.textContent, "GI(avg)", els.sumGI.textContent, "GL", els.sumGL.textContent]);
-  rows.push(["DoseCarbs", els.doseCarbs.value, "DoseCorrection", els.doseCorrection.value, "DoseTotal", els.doseTotal.textContent]);
+  rows.push(["DoseCarbs", els.doseCarbs.value, "DoseCorrection", els.doseCorrection value, "DoseTotal", els.doseTotal.textContent]);
 
   const csv = rows.map(r => r.map(x => `"${String(x??"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
