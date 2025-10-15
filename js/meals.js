@@ -1,18 +1,16 @@
-// /js/meals.js  — نسخة موحّدة مع Firebase 12.1.0 وتستعمل app من firebase-config.js
+// /js/meals.js  (Firebase 12.1.0) — Final
 
-import { app } from "./firebase-config.js";
-
+import { app, auth, db, storage as st } from "./firebase-config.js";
 import {
-  doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where, limit, Timestamp,
-  collectionGroup, documentId, getFirestore
+  doc, getDoc, setDoc, updateDoc, collection, getDocs,
+  query, where, limit, Timestamp, collectionGroup
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {
-  ref as sRef, getDownloadURL, getStorage
+  ref as sRef, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
-
-/* ---------------- Firebase (نسخة واحدة 12.1.0) ---------------- */
-const db = getFirestore(app);
-const st = getStorage(app);
+import {
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 /* ---------------- Helpers ---------------- */
 const $ = (sel) => document.querySelector(sel);
@@ -36,12 +34,12 @@ const slotMap = {
 };
 
 /* ---------------- State ---------------- */
-let parentId, childId, slotKey, dateKey, mealTimeStr;
+let user, parentId, childId, slotKey, dateKey, mealTimeStr;
 let childDoc, cf, targets, carbRanges, netRuleDefault;
 let favorites = [], disliked = [];
 let libraryAll = [], library = [], mealItems = [];
 
-/* ---------------- UI ---------------- */
+/* ---------------- UI refs ---------------- */
 const els = {
   childName: $("#childName"),
   chipCF: $("#chipCF"),
@@ -81,87 +79,113 @@ const els = {
 };
 
 /* ---------------- Init ---------------- */
-init().catch(console.error);
-
-async function init() {
+onAuthStateChanged(auth, async (u) => {
   const q = parseQuery();
-  parentId = q.parentId || null;
-  childId  = q.childId || q.child; // يقبل ?child=
+  childId  = q.childId || q.child;
   slotKey  = (q.slot || "l").toLowerCase();
   dateKey  = q.date || ymd(todayUTC3());
   mealTimeStr = slotMap[slotKey]?.defaultTime || "13:00";
 
   if (!childId) { alert("يلزم تمرير child (معرّف الطفل) في الرابط."); return; }
 
-  // نجيب parentId تلقائيًا عند الحاجة
-  if (!parentId) {
-    const cg = await getDocs(
-      query(collectionGroup(db, "children"), where(documentId(), "==", childId), limit(1))
-    );
-    if (cg.empty) { alert("لم نعثر على الطفل بهذا المعرّف."); return; }
-    const docSnap = cg.docs[0];
-    parentId = docSnap.ref.parent.parent.id; // parents/{parentId}/children/{childId}
-    childDoc = docSnap.data();
+  els.dateInput && (els.dateInput.value = dateKey);
+  els.slotSelect && (els.slotSelect.value = slotKey);
+  els.mealTime && (els.mealTime.value = mealTimeStr);
+  if (els.backToChild) els.backToChild.href = `child.html?child=${childId}`;
+
+  try {
+    user = u;
+    parentId = q.parentId || null;
+
+    if (!parentId) {
+      parentId = await resolveParentId();
+    }
+
+    await loadChild();
+    await loadLibrary();
+    await loadDayTotals();
+    await tryLoadExistingMeal();
+    autoCompute();
+
+    // events
+    els.slotSelect?.addEventListener("change", onSlotChange);
+    els.dateInput?.addEventListener("change", onDateChange);
+    els.mealTime?.addEventListener("change", () => mealTimeStr = els.mealTime.value);
+    els.searchBox?.addEventListener("input", renderLibrary);
+    els.btnFetchPre?.addEventListener("click", fetchPreReading);
+    els.doseCorrection?.addEventListener("input", autoCompute);
+    els.netCarbRule?.addEventListener("change", autoCompute);
+    els.doseCarbs?.addEventListener("input", updateDoseTotal);
+    els.btnScaleToTarget?.addEventListener("click", scaleToTarget);
+    els.btnClearMeal?.addEventListener("click", () => { mealItems = []; renderMeal(); });
+    els.btnSaveMeal?.addEventListener("click", saveMeal);
+    els.btnSaveTemplate?.addEventListener("click", saveTemplate);
+    els.btnLoadTemplates?.addEventListener("click", importFromTemplates);
+    els.btnExportCSV?.addEventListener("click", exportCSV);
+    els.btnPrint?.addEventListener("click", () => window.print());
+    els.btnSaveFavorites?.addEventListener("click", saveFavs);
+  } catch (e) {
+    console.error(e);
+    alert(e.message || "تعذّر تهيئة الصفحة.");
   }
+});
 
-  els.backToChild.href = `child.html?child=${childId}`;
-  els.dateInput.value = dateKey;
-  els.slotSelect.value = slotKey;
-  els.mealTime.value = mealTimeStr;
+/* --------- resolve parentId (Parent/Doctor/Admin) ---------- */
+async function resolveParentId() {
+  // 1) لو user غير مسجّل و مفيش parentId في الرابط
+  if (!user) throw new Error("يجب تسجيل الدخول للوصول إلى بيانات الطفل.");
 
-  await loadChild();
-  await loadLibrary();
-  await loadDayTotals();
-  await tryLoadExistingMeal();
-  autoCompute();
+  // 2) وليّ أمر: جرّب مباشرة parents/{uid}/children/{childId}
+  try {
+    const ref = doc(db, `parents/${user.uid}/children/${childId}`);
+    const snap = await getDoc(ref);
+    if (snap.exists()) return user.uid;
+  } catch { /* ignore */ }
 
-  // events
-  els.slotSelect.addEventListener("change", onSlotChange);
-  els.dateInput.addEventListener("change", onDateChange);
-  els.mealTime.addEventListener("change", () => mealTimeStr = els.mealTime.value);
-  els.searchBox.addEventListener("input", renderLibrary);
-  els.btnFetchPre.addEventListener("click", fetchPreReading);
-  els.doseCorrection.addEventListener("input", autoCompute);
-  els.netCarbRule.addEventListener("change", autoCompute);
-  els.doseCarbs.addEventListener("input", updateDoseTotal);
-  els.btnScaleToTarget.addEventListener("click", scaleToTarget);
-  els.btnClearMeal.addEventListener("click", () => { mealItems = []; renderMeal(); });
-  els.btnSaveMeal.addEventListener("click", saveMeal);
-  els.btnSaveTemplate.addEventListener("click", saveTemplate);
-  els.btnLoadTemplates.addEventListener("click", importFromTemplates);
-  els.btnExportCSV.addEventListener("click", exportCSV);
-  els.btnPrint.addEventListener("click", () => window.print());
-  els.btnSaveFavorites.addEventListener("click", saveFavs);
+  // 3) طبيب: ابحث في collectionGroup('children') حيث assignedDoctor == uid
+  // ثم طابق childId على معرّف الوثيقة واستخرج parentId من مسارها
+  try {
+    const qy = query(collectionGroup(db, "children"), where("assignedDoctor", "==", user.uid));
+    const snaps = await getDocs(qy);
+    for (const s of snaps.docs) {
+      if (s.id === childId) return s.ref.parent.parent.id; // parents/{parentId}/children/{childId}
+    }
+  } catch { /* ignore */ }
+
+  // 4) Admin أو حالة خاصة: اطلب parentId صراحة في الرابط
+  throw new Error("تعذّر تحديد وليّ الأمر تلقائيًا. مرّر ?parentId= في الرابط.");
 }
 
 /* ---------------- Child + chips ---------------- */
 async function loadChild() {
-  if (!childDoc) {
-    const ref = doc(db, `parents/${parentId}/children/${childId}`);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) throw new Error("Child not found");
-    childDoc = snap.data();
-  }
+  const ref = doc(db, `parents/${parentId}/children/${childId}`);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Child not found.");
+  childDoc = snap.data();
 
-  els.childName.textContent = childDoc?.name || "—";
+  els.childName && (els.childName.textContent = childDoc?.name || "—");
 
   cf = Number(childDoc?.correctionFactor ?? 0);
   const targetsRaw = childDoc?.normalRange || {};
-  targets = { max: targetsRaw.max ?? 7, severeHigh: targetsRaw.severeHigh ?? 10.9, severeLow: targetsRaw.severeLow ?? 3.9 };
+  targets = {
+    max: targetsRaw.max ?? 7,
+    severeHigh: targetsRaw.severeHigh ?? 10.9,
+    severeLow: targetsRaw.severeLow ?? 3.9
+  };
   carbRanges = childDoc?.carbTargets || {};
   netRuleDefault = childDoc?.netCarbRule || "fullFiber";
   favorites = Array.isArray(childDoc?.favorites) ? childDoc.favorites : [];
   disliked = Array.isArray(childDoc?.disliked) ? childDoc.disliked : [];
 
-  els.netCarbRule.value = netRuleDefault;
-  els.chipCF.textContent = `CF ${cf || "—"} mmol/L per U`;
-  els.chipTargets.textContent = `الهدف ${targets.max} | تصحيح من ${targets.severeHigh}`;
+  if (els.netCarbRule) els.netCarbRule.value = netRuleDefault;
+  if (els.chipCF) els.chipCF.textContent = `CF ${cf || "—"} mmol/L per U`;
+  if (els.chipTargets) els.chipTargets.textContent = `الهدف ${targets.max} | تصحيح من ${targets.severeHigh}`;
   updateCRChip();
 }
 function updateCRChip() {
   const ar = slotMap[slotKey]?.ar || "";
   const cr = crForSlot(slotKey);
-  els.chipCR.textContent = `CR(${ar}) ${cr ?? "—"} g/U`;
+  if (els.chipCR) els.chipCR.textContent = `CR(${ar}) ${cr ?? "—"} g/U`;
 }
 function crForSlot(s) {
   const fallback = Number(childDoc?.carbRatio ?? 0) || undefined;
@@ -174,7 +198,7 @@ async function loadDayTotals() {
   const snaps = await getDocs(query(mealsRef, where("date", "==", dateKey)));
   let dayCarbs = 0;
   snaps.forEach(s => dayCarbs += Number(s.data()?.totals?.carbs_net || 0));
-  els.dayCarbs.textContent = fmt(dayCarbs, 0);
+  if (els.dayCarbs) els.dayCarbs.textContent = fmt(dayCarbs, 0);
 }
 
 /* ---------------- Existing meal ---------------- */
@@ -196,10 +220,10 @@ async function tryLoadExistingMeal() {
       gl: Number(x.gl ?? 0),
       imageUrl: x.imageUrl || ""
     }));
-    els.preBg.value = m.preBg_mmol ?? "";
-    els.doseCorrection.value = m.doseCorrection ?? "";
-    els.doseCarbs.value = m.doseCarbs ?? "";
-    els.netCarbRule.value = m.netCarbRuleUsed || netRuleDefault;
+    if (els.preBg) els.preBg.value = m.preBg_mmol ?? "";
+    if (els.doseCorrection) els.doseCorrection.value = m.doseCorrection ?? "";
+    if (els.doseCarbs) els.doseCarbs.value = m.doseCarbs ?? "";
+    if (els.netCarbRule) els.netCarbRule.value = m.netCarbRuleUsed || netRuleDefault;
   } else {
     await fetchPreReading();
   }
@@ -230,7 +254,7 @@ async function loadLibrary() {
   renderLibrary();
 }
 function renderLibrary() {
-  const term = (els.searchBox.value || "").trim();
+  const term = (els.searchBox?.value || "").trim();
   const favSet = new Set(favorites);
   const disSet = new Set(disliked);
 
@@ -243,14 +267,16 @@ function renderLibrary() {
       return a.name.localeCompare(b.name, "ar");
     });
 
-  els.itemsGrid.innerHTML = library.map(it => cardHTML(it, favSet.has(it.id), disSet.has(it.id))).join("");
-  els.itemsCount.textContent = `${library.length} صنف`;
-  $$("#itemsGrid .card-item").forEach(card => {
-    const id = card.dataset.id;
-    card.querySelector(".add").addEventListener("click", () => addItemFromLib(id));
-    card.querySelector(".fav").addEventListener("click", () => toggleFav(id));
-    card.querySelector(".ban").addEventListener("click", () => toggleBan(id));
-  });
+  if (els.itemsGrid) {
+    els.itemsGrid.innerHTML = library.map(it => cardHTML(it, favSet.has(it.id), disSet.has(it.id))).join("");
+    els.itemsCount && (els.itemsCount.textContent = `${library.length} صنف`);
+    $$("#itemsGrid .card-item").forEach(card => {
+      const id = card.dataset.id;
+      card.querySelector(".add").addEventListener("click", () => addItemFromLib(id));
+      card.querySelector(".fav").addEventListener("click", () => toggleFav(id));
+      card.querySelector(".ban").addEventListener("click", () => toggleBan(id));
+    });
+  }
 }
 function cardHTML(it, isFav, isBan) {
   return `
@@ -281,6 +307,7 @@ function addItemFromLib(id) {
 
 /* ---------------- Meal table ---------------- */
 function renderMeal() {
+  if (!els.mealBody) return;
   els.mealBody.innerHTML = mealItems.map((x, i) => rowHTML(x, i)).join("");
   mealItems.forEach((x, i) => {
     $("#u_"+i).addEventListener("change", e => onUnitChange(i, e.target.value));
@@ -327,7 +354,7 @@ function autoCompute() {
   const cal      = mealItems.reduce((a,x)=>a+x.cal_kcal,0);
   const glTotal  = mealItems.reduce((a,x)=>a+x.gl,0);
 
-  const rule = els.netCarbRule.value || "fullFiber";
+  const rule = els.netCarbRule?.value || "fullFiber";
   const factor = rule==="none"?0 : (rule==="halfFiber"?0.5:1);
   const carbsNet = Math.max(0, carbsRaw - (factor*fiber));
 
@@ -337,11 +364,11 @@ function autoCompute() {
   const cr = crForSlot(slotKey) || 0;
   const doseCarbs = cr ? (carbsNet / cr) : 0;
 
-  const bg = Number(els.preBg.value || 0);
-  let doseCorr = Number(els.doseCorrection.value || 0);
+  const bg = Number(els.preBg?.value || 0);
+  let doseCorr = Number(els.doseCorrection?.value || 0);
   if (bg && bg > Number(targets.severeHigh ?? 10.9) && cf) doseCorr = (bg - Number(targets.max ?? 7)) / cf;
   doseCorr = roundTo(Math.max(0, doseCorr), 0.5);
-  els.doseCorrection.value = doseCorr ? doseCorr.toFixed(1) : "";
+  if (els.doseCorrection) els.doseCorrection.value = doseCorr ? doseCorr.toFixed(1) : "";
 
   const totalDose = roundTo(doseCarbs + doseCorr, 0.5);
 
@@ -349,31 +376,33 @@ function autoCompute() {
   const r = carbRanges?.[slotName] || {};
   const min = Number(r.min ?? 0), max = Number(r.max ?? 0);
   let pct = 0; if (max > 0) pct = clamp((carbsNet / max) * 100, 0, 100);
-  els.progressBar.style.width = `${pct}%`;
-  els.progressBar.className = "bar " + (carbsNet < min ? "warn" : carbsNet > max ? "danger" : "ok");
-  els.progressLabel.textContent = `${fmt(carbsNet,0)} / ${max || "—"} g`;
+  if (els.progressBar) {
+    els.progressBar.style.width = `${pct}%`;
+    els.progressBar.className = "bar " + (carbsNet < min ? "warn" : carbsNet > max ? "danger" : "ok");
+  }
+  if (els.progressLabel) els.progressLabel.textContent = `${fmt(carbsNet,0)} / ${max || "—"} g`;
 
-  els.sumCarbsRaw.textContent = fmt(carbsRaw,1);
-  els.sumFiber.textContent    = fmt(fiber,1);
-  els.sumCarbsNet.textContent = fmt(carbsNet,1);
-  els.sumCal.textContent      = fmt(cal,0);
-  els.sumGL.textContent       = fmt(glTotal,1);
-  els.sumGI.textContent       = giAvg ? fmt(giAvg,0) : "—";
+  els.sumCarbsRaw && (els.sumCarbsRaw.textContent = fmt(carbsRaw,1));
+  els.sumFiber    && (els.sumFiber.textContent    = fmt(fiber,1));
+  els.sumCarbsNet && (els.sumCarbsNet.textContent = fmt(carbsNet,1));
+  els.sumCal      && (els.sumCal.textContent      = fmt(cal,0));
+  els.sumGL       && (els.sumGL.textContent       = fmt(glTotal,1));
+  els.sumGI       && (els.sumGI.textContent       = giAvg ? fmt(giAvg,0) : "—");
 
-  els.doseCarbs.value = doseCarbs ? doseCarbs.toFixed(1) : "";
-  els.doseTotal.textContent = totalDose ? totalDose.toFixed(1) : "—";
+  if (els.doseCarbs) els.doseCarbs.value = doseCarbs ? doseCarbs.toFixed(1) : "";
+  if (els.doseTotal) els.doseTotal.textContent = totalDose ? totalDose.toFixed(1) : "—";
 }
 function updateDoseTotal() {
-  const doseC = Number(els.doseCarbs.value || 0);
-  const doseCorr = Number(els.doseCorrection.value || 0);
-  els.doseTotal.textContent = roundTo(doseC + doseCorr, 0.5).toFixed(1);
+  const doseC = Number(els.doseCarbs?.value || 0);
+  const doseCorr = Number(els.doseCorrection?.value || 0);
+  if (els.doseTotal) els.doseTotal.textContent = roundTo(doseC + doseCorr, 0.5).toFixed(1);
 }
 function slotKeyToName(k){ return k==="b"?"breakfast":k==="l"?"lunch":k==="d"?"dinner":"snack"; }
 function scaleToTarget(){
   const slotName = slotKeyToName(slotKey);
   const r = carbRanges?.[slotName] || {};
   const tgt = (Number(r.min ?? 0) + Number(r.max ?? 0)) / 2 || 0;
-  const curr = Number(els.sumCarbsNet.textContent || 0);
+  const curr = Number(els.sumCarbsNet?.textContent || 0);
   if (!tgt || !curr) return;
   const factor = tgt / curr;
   mealItems.forEach(x => { x.qty = Number((x.qty * factor).toFixed(2)); recalcRow(x); });
@@ -384,11 +413,10 @@ function scaleToTarget(){
 async function fetchPreReading() {
   const coll = collection(db, `parents/${parentId}/children/${childId}/measurements`);
   const preKey = `PRE_${slotKeyToName(slotKey).toUpperCase()}`; // PRE_LUNCH...
-  // 1) بنفس التاريخ
   const snaps = await getDocs(query(coll, where("slotKey", "==", preKey)));
   let candidates = snaps.docs.map(d => ({ id:d.id, ...d.data() }))
     .filter(x => x.when && ymd(x.when.toDate ? x.when.toDate() : new Date(x.when)) === dateKey);
-  // 2) fallback: 90 دقيقة قبل وقت الوجبة
+
   if (!candidates.length) {
     const mealDate = new Date(dateKey + "T" + (mealTimeStr || "13:00") + ":00");
     const start = new Date(mealDate.getTime() - 90*60000);
@@ -404,13 +432,13 @@ async function fetchPreReading() {
     candidates.sort((a,b)=> (a.when?.seconds||0) - (b.when?.seconds||0));
     const last = candidates[candidates.length-1];
     const bg = Number(last.value_mmol ?? last.value ?? 0);
-    els.preBg.value = bg ? bg.toFixed(1) : "";
+    if (els.preBg) els.preBg.value = bg ? bg.toFixed(1) : "";
   }
   autoCompute();
 }
 
 /* ---------------- Date/slot changes ---------------- */
-function onSlotChange(){ slotKey = els.slotSelect.value; updateCRChip(); mealTimeStr = slotMap[slotKey]?.defaultTime || "13:00"; els.mealTime.value = mealTimeStr; autoCompute(); }
+function onSlotChange(){ slotKey = els.slotSelect.value; updateCRChip(); mealTimeStr = slotMap[slotKey]?.defaultTime || "13:00"; if (els.mealTime) els.mealTime.value = mealTimeStr; autoCompute(); }
 async function onDateChange(){ dateKey = els.dateInput.value; await loadDayTotals(); await tryLoadExistingMeal(); }
 
 /* ---------------- Save/Export ---------------- */
@@ -419,24 +447,24 @@ async function saveMeal() {
     date: dateKey,
     slotKey,
     type: slotMap[slotKey]?.ar || "",
-    preBg_mmol: Number(els.preBg.value || 0) || null,
-    netCarbRuleUsed: els.netCarbRule.value,
-    doseCarbs: Number(els.doseCarbs.value || 0) || 0,
-    doseCorrection: Number(els.doseCorrection.value || 0) || 0,
-    doseTotal: Number(els.doseTotal.textContent || 0) || 0,
+    preBg_mmol: Number(els.preBg?.value || 0) || null,
+    netCarbRuleUsed: els.netCarbRule?.value || "fullFiber",
+    doseCarbs: Number(els.doseCarbs?.value || 0) || 0,
+    doseCorrection: Number(els.doseCorrection?.value || 0) || 0,
+    doseTotal: Number(els.doseTotal?.textContent || 0) || 0,
     totals: {
-      carbs_raw: Number(els.sumCarbsRaw.textContent || 0),
-      fiber_g: Number(els.sumFiber.textContent || 0),
-      carbs_net: Number(els.sumCarbsNet.textContent || 0),
-      cal_kcal: Number(els.sumCal.textContent || 0),
-      gi_avg: (els.sumGI.textContent === "—") ? null : Number(els.sumGI.textContent),
-      gl_total: Number(els.sumGL.textContent || 0)
+      carbs_raw: Number(els.sumCarbsRaw?.textContent || 0),
+      fiber_g: Number(els.sumFiber?.textContent || 0),
+      carbs_net: Number(els.sumCarbsNet?.textContent || 0),
+      cal_kcal: Number(els.sumCal?.textContent || 0),
+      gi_avg: (els.sumGI?.textContent === "—") ? null : Number(els.sumGI?.textContent || 0),
+      gl_total: Number(els.sumGL?.textContent || 0)
     },
     items: mealItems.map(x => ({
       itemId: x.id, name: x.name,
       unitKey: x.unitKey, unitLabel: x.unitLabel,
       gramsPerUnit: x.gramsPerUnit, qty: x.qty, grams: x.grams,
-      carbs_raw: x.carbs_raw, fiber_g: x.fiber_g, carbs_g: x.carbs_raw,
+      carbs_raw: x.carbs_raw, fiber_g: x.fiber_g, carbs_g: x.carbs_raw, // compat
       cal_kcal: x.cal_kcal, gi: x.gi || null, gl: x.gl || null,
       imageUrl: x.imageUrl || null
     })),
@@ -484,11 +512,11 @@ function exportCSV(){
     [],
     ["الصنف","الوحدة","الكمية","جرام","كارب(raw)","ألياف","Net Rule","GI","GL","سعرات"]
   ];
-  const rule = els.netCarbRule.value;
+  const rule = els.netCarbRule?.value || "fullFiber";
   mealItems.forEach(x => rows.push([x.name, x.unitLabel, x.qty, x.grams, x.carbs_raw, x.fiber_g, rule, x.gi||"", x.gl||"", x.cal_kcal]));
   rows.push([]);
-  rows.push(["Carbs(raw)", els.sumCarbsRaw.textContent, "Fiber", els.sumFiber.textContent, "Net", els.sumCarbsNet.textContent, "Calories", els.sumCal.textContent, "GI(avg)", els.sumGI.textContent, "GL", els.sumGL.textContent]);
-  rows.push(["DoseCarbs", els.doseCarbs.value, "DoseCorrection", els.doseCorrection.value, "DoseTotal", els.doseTotal.textContent]);
+  rows.push(["Carbs(raw)", els.sumCarbsRaw?.textContent, "Fiber", els.sumFiber?.textContent, "Net", els.sumCarbsNet?.textContent, "Calories", els.sumCal?.textContent, "GI(avg)", els.sumGI?.textContent, "GL", els.sumGL?.textContent]);
+  rows.push(["DoseCarbs", els.doseCarbs?.value, "DoseCorrection", els.doseCorrection?.value, "DoseTotal", els.doseTotal?.textContent]);
   const csv = rows.map(r => r.map(x => `"${String(x??"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
   const url = URL.createObjectURL(blob); const a = document.createElement("a");
