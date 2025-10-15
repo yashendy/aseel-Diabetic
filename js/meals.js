@@ -1,12 +1,13 @@
 // /js/meals.js
 import {
-  doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where, orderBy, limit, Timestamp
+  doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where, limit, Timestamp,
+  collectionGroup, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   ref as sRef, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-// globals from meals.html
+// globals from meals.html (initialized there)
 const db = window._db;
 const st = window._st;
 
@@ -18,9 +19,8 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const roundTo = (v, step = 0.5) => Math.round(v / step) * step;
 const todayUTC3 = () => {
   const d = new Date();
-  // force UTC+3
   const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
-  return new Date(utc + (3 * 3600 * 1000));
+  return new Date(utc + (3 * 3600 * 1000)); // UTC+3
 };
 const ymd = (d) => d.toISOString().slice(0, 10);
 const parseQuery = () =>
@@ -37,9 +37,9 @@ const slotMap = {
 let parentId, childId, slotKey, dateKey, mealTimeStr;
 let childDoc, cf, crMap, targets, carbRanges, netRuleDefault;
 let favorites = [], disliked = [];
-let library = [];  // food items library (subset after search)
-let libraryAll = []; // full lib
-let mealItems = []; // {id, name, unitKey, unitLabel, gramsPerUnit, qty, grams, carbs_raw, fiber_g, cal_kcal, gi, gl, imageUrl}
+let library = [];      // filtered view
+let libraryAll = [];   // full food library
+let mealItems = [];    // items in current meal
 
 // ---------- UI refs ----------
 const els = {
@@ -85,26 +85,38 @@ init().catch(console.error);
 
 async function init() {
   const q = parseQuery();
-  parentId = q.parentId;
-  childId = q.childId;
-  slotKey = (q.slot || "l").toLowerCase();
-  dateKey = q.date || ymd(todayUTC3());
+  parentId = q.parentId || null;
+  childId  = q.childId || q.child;     // ⬅️ يقبل ?child=
+  slotKey  = (q.slot || "l").toLowerCase();
+  dateKey  = q.date || ymd(todayUTC3());
   mealTimeStr = slotMap[slotKey]?.defaultTime || "13:00";
+
+  if (!childId) {
+    alert("يلزم تمرير child (معرّف الطفل) في الرابط.");
+    return;
+  }
+
+  // استخرج parentId تلقائياً عند الحاجة عبر collectionGroup(children)
+  if (!parentId) {
+    const cg = await getDocs(
+      query(collectionGroup(db, "children"), where(documentId(), "==", childId), limit(1))
+    );
+    if (cg.empty) { alert("لم نعثر على الطفل بهذا المعرّف."); return; }
+    const docSnap = cg.docs[0];
+    parentId = docSnap.ref.parent.parent.id; // parents/{parentId}/children/{childId}
+    childDoc = docSnap.data();               // نوفر مكالمة getDoc
+  }
+
+  els.backToChild.href = `child.html?child=${childId}`;
 
   els.dateInput.value = dateKey;
   els.slotSelect.value = slotKey;
   els.mealTime.value = mealTimeStr;
 
-  if (!parentId || !childId) {
-    alert("يجب تمرير parentId و childId في الرابط.");
-    return;
-  }
-  els.backToChild.href = `child.html?child=${childId}`;
-
   await loadChild();
   await loadLibrary();   // food items
-  await loadDayTotals(); // existing meals of the same date
-  await tryLoadExistingMeal(); // if there is already a meal for that date/slot
+  await loadDayTotals(); // existing meals same date
+  await tryLoadExistingMeal();
   autoCompute();
 
   // events
@@ -127,10 +139,12 @@ async function init() {
 }
 
 async function loadChild() {
-  const ref = doc(db, `parents/${parentId}/children/${childId}`);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error("Child not found");
-  childDoc = snap.data();
+  if (!childDoc) {
+    const ref = doc(db, `parents/${parentId}/children/${childId}`);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error("Child not found");
+    childDoc = snap.data();
+  }
 
   els.childName.textContent = childDoc.name || "—";
 
@@ -158,12 +172,10 @@ function updateCRChip() {
 
 function crForSlot(s) {
   const fallback = Number(childDoc.carbRatio ?? 0) || undefined;
-  const mapKey = s; // b,l,d,s
-  return Number(crMap?.[mapKey]) || fallback;
+  return Number((childDoc.carbRatioByMeal || {})?.[s]) || fallback; // b/l/d/s
 }
 
 async function loadDayTotals() {
-  // Optionally aggregate day carbs from meals of the same day:
   const mealsRef = collection(db, `parents/${parentId}/children/${childId}/meals`);
   const q = query(mealsRef, where("date", "==", dateKey));
   const snaps = await getDocs(q);
@@ -176,13 +188,11 @@ async function loadDayTotals() {
 }
 
 async function tryLoadExistingMeal() {
-  // Look for existing doc with same date & slotKey
   const mealsRef = collection(db, `parents/${parentId}/children/${childId}/meals`);
   const qy = query(mealsRef, where("date", "==", dateKey), where("slotKey", "==", slotKey), limit(1));
   const snaps = await getDocs(qy);
   if (!snaps.empty) {
-    const snap = snaps.docs[0];
-    const m = snap.data();
+    const m = snaps.docs[0].data();
     mealItems = (m.items || []).map(x => ({
       id: x.itemId, name: x.name,
       unitKey: x.unitKey, unitLabel: x.unitLabel,
@@ -196,13 +206,11 @@ async function tryLoadExistingMeal() {
       gl: Number(x.gl ?? 0),
       imageUrl: x.imageUrl || ""
     }));
-    // pre BG & doses
     els.preBg.value = m.preBg_mmol ?? "";
     els.doseCorrection.value = m.doseCorrection ?? "";
     els.doseCarbs.value = m.doseCarbs ?? "";
     els.netCarbRule.value = m.netCarbRuleUsed || netRuleDefault;
   } else {
-    // no meal – try pre-reading auto
     await fetchPreReading();
   }
   renderMeal();
@@ -215,23 +223,20 @@ async function loadLibrary() {
   for (const s of snaps.docs) {
     const d = s.data();
     const id = s.id;
-    // Per-100 fields may come under per100 or flat. Normalize:
     const per100 = d.per100 || {};
     const carbs100 = Number(d.carbs_g ?? per100.carbs ?? 0);
     const fiber100 = Number(d.fiber_g ?? per100.fiber ?? 0);
     const cal100   = Number(d.cal_kcal ?? per100.cal ?? 0);
     const gi       = Number(d.gi ?? per100.gi ?? 0);
-
     const measures = (d.measures || per100.measures || []).map(m => ({
       name: m.name, grams: Number(m.grams)
     }));
-    // default gram unit:
     measures.unshift({ name: "جم", grams: 1 });
 
     let imageUrl = "";
     try {
       imageUrl = await getDownloadURL(sRef(st, `food-items/items/${id}/main.jpg`));
-    } catch { /* ignore */ }
+    } catch { /* ignore if not found */ }
 
     libraryAll.push({
       id, name: d.name || d.title || "بدون اسم",
@@ -244,7 +249,6 @@ async function loadLibrary() {
 
 function renderLibrary() {
   const term = (els.searchBox.value || "").trim();
-  // order: favorites first, then normal, then disliked
   const favSet = new Set(favorites);
   const disSet = new Set(disliked);
 
@@ -259,7 +263,6 @@ function renderLibrary() {
 
   els.itemsGrid.innerHTML = library.map(it => cardHTML(it, favSet.has(it.id), disSet.has(it.id))).join("");
   els.itemsCount.textContent = `${library.length} صنف`;
-  // bind card buttons
   $$("#itemsGrid .card-item").forEach(card => {
     const id = card.dataset.id;
     card.querySelector(".add").addEventListener("click", () => addItemFromLib(id));
@@ -302,13 +305,12 @@ function toggleBan(id) {
 function addItemFromLib(id) {
   const it = libraryAll.find(x => x.id === id);
   if (!it) return;
-  // default measure = first grams (not 1g if there is household)
   const m = it.measures.find(x => x.grams !== 1) || it.measures[0];
   const unitKey = m.name;
   const gramsPerUnit = Number(m.grams);
   const qty = 1;
-
   const grams = qty * gramsPerUnit;
+
   const carbs_raw = (it.carbs100 / 100) * grams;
   const fiber_g   = (it.fiber100 / 100) * grams;
   const cal_kcal  = (it.cal100   / 100) * grams;
@@ -327,7 +329,6 @@ function addItemFromLib(id) {
 
 function renderMeal() {
   els.mealBody.innerHTML = mealItems.map((x, i) => rowHTML(x, i)).join("");
-  // bind row events
   mealItems.forEach((x, i) => {
     $("#u_"+i).addEventListener("change", (e) => onUnitChange(i, e.target.value));
     $("#q_"+i).addEventListener("input", (e) => onQtyChange(i, Number(e.target.value||0)));
@@ -337,7 +338,6 @@ function renderMeal() {
 }
 
 function rowHTML(x, i) {
-  // build options: we don't know original item's measures here; try to reuse gramsPerUnit + common set
   const lib = libraryAll.find(t => t.id === x.id);
   const opts = (lib?.measures || [{name:"جم", grams:1}])
     .map(m => `<option value="${m.grams}" ${Number(x.gramsPerUnit)===Number(m.grams)?"selected":""}>${m.name}</option>`).join("");
@@ -360,18 +360,15 @@ function rowHTML(x, i) {
 function onUnitChange(i, gramsPerUnit) {
   const x = mealItems[i];
   x.gramsPerUnit = Number(gramsPerUnit);
-  recalcRow(x);
-  renderMeal();
+  recalcRow(x); renderMeal();
 }
 function onQtyChange(i, qty) {
   const x = mealItems[i];
   x.qty = qty;
-  recalcRow(x);
-  renderMeal();
+  recalcRow(x); renderMeal();
 }
 function recalcRow(x) {
   x.grams = x.qty * x.gramsPerUnit;
-  // pull per100 from library
   const lib = libraryAll.find(t => t.id === x.id);
   const carbs100 = lib?.carbs100 || 0;
   const fiber100 = lib?.fiber100 || 0;
@@ -386,26 +383,21 @@ function recalcRow(x) {
 }
 
 function autoCompute() {
-  // totals
   const carbsRaw = mealItems.reduce((a,x)=>a+x.carbs_raw,0);
   const fiber    = mealItems.reduce((a,x)=>a+x.fiber_g,0);
   const cal      = mealItems.reduce((a,x)=>a+x.cal_kcal,0);
   const glTotal  = mealItems.reduce((a,x)=>a+x.gl,0);
 
-  // net rule
   const rule = els.netCarbRule.value || "fullFiber";
   const factor = rule==="none"?0 : (rule==="halfFiber"?0.5:1);
   const carbsNet = Math.max(0, carbsRaw - (factor*fiber));
 
-  // avg GI weighted by carbs of item (raw carbs)
   const sumGICarb = mealItems.reduce((a,x)=>a + (x.gi||0)*(x.carbs_raw||0), 0);
   const giAvg = carbsRaw > 0 ? (sumGICarb / carbsRaw) : 0;
 
-  // CR and dose
   const cr = crForSlot(slotKey) || 0;
   const doseCarbs = cr ? (carbsNet / cr) : 0;
 
-  // correction
   const bg = Number(els.preBg.value || 0);
   let doseCorr = Number(els.doseCorrection.value || 0);
   if (bg && bg > Number(targets.severeHigh ?? 10.9) && cf) {
@@ -414,10 +406,8 @@ function autoCompute() {
   doseCorr = roundTo(Math.max(0, doseCorr), 0.5);
   els.doseCorrection.value = doseCorr ? doseCorr.toFixed(1) : "";
 
-  // total dose
   const totalDose = roundTo(doseCarbs + doseCorr, 0.5);
 
-  // progress vs target for slot
   const slotName = slotKeyToName(slotKey);
   const r = carbRanges?.[slotName] || {};
   const min = Number(r.min ?? 0), max = Number(r.max ?? 0);
@@ -427,7 +417,6 @@ function autoCompute() {
   els.progressBar.className = "bar " + (carbsNet < min ? "warn" : carbsNet > max ? "danger" : "ok");
   els.progressLabel.textContent = `${fmt(carbsNet,0)} / ${max || "—"} g`;
 
-  // render totals
   els.sumCarbsRaw.textContent = fmt(carbsRaw,1);
   els.sumFiber.textContent    = fmt(fiber,1);
   els.sumCarbsNet.textContent = fmt(carbsNet,1);
@@ -435,13 +424,11 @@ function autoCompute() {
   els.sumGL.textContent       = fmt(glTotal,1);
   els.sumGI.textContent       = giAvg ? fmt(giAvg,0) : "—";
 
-  // doses
   els.doseCarbs.value = doseCarbs ? doseCarbs.toFixed(1) : "";
   els.doseTotal.textContent = totalDose ? totalDose.toFixed(1) : "—";
 }
 
 function updateDoseTotal() {
-  // when user edits doseCarbs manually
   const doseC = Number(els.doseCarbs.value || 0);
   const doseCorr = Number(els.doseCorrection.value || 0);
   els.doseTotal.textContent = roundTo(doseC + doseCorr, 0.5).toFixed(1);
@@ -466,23 +453,21 @@ function scaleToTarget() {
 }
 
 async function fetchPreReading() {
-  // Strategy: look for PRE_SLOT in same date; else, window -90min before meal time
   const coll = collection(db, `parents/${parentId}/children/${childId}/measurements`);
   const preKey = `PRE_${slotKeyToName(slotKey).toUpperCase()}`; // e.g., PRE_LUNCH
 
-  // 1) by slotKey on same day
+  // 1) by slotKey on same date
   const snaps = await getDocs(query(coll, where("slotKey", "==", preKey)));
   let candidates = snaps.docs.map(d => ({ id:d.id, ...d.data() }))
     .filter(x => x.when && ymd(x.when.toDate ? x.when.toDate() : new Date(x.when)) === dateKey);
 
   // 2) fallback: within 90 minutes before meal time
   if (!candidates.length) {
-    const [H, M] = (mealTimeStr || "13:00").split(":").map(Number);
-    const mealDate = new Date(dateKey + "T" + mealTimeStr + ":00");
+    const mealDate = new Date(dateKey + "T" + (mealTimeStr || "13:00") + ":00");
     const start = new Date(mealDate.getTime() - 90*60000);
     const end = mealDate;
-    const snaps2 = await getDocs(coll);
-    candidates = snaps2.docs.map(d => ({ id:d.id, ...d.data() }))
+    const all = await getDocs(coll);
+    candidates = all.docs.map(d => ({ id:d.id, ...d.data() }))
       .filter(x => {
         const t = x.when?.toDate ? x.when.toDate() : (x.when ? new Date(x.when) : null);
         return t && t >= start && t <= end;
@@ -490,7 +475,6 @@ async function fetchPreReading() {
   }
 
   if (candidates.length) {
-    // choose latest
     candidates.sort((a,b)=> (a.when?.seconds||0) - (b.when?.seconds||0));
     const last = candidates[candidates.length-1];
     const bg = Number(last.value_mmol ?? last.value ?? 0);
@@ -514,7 +498,6 @@ async function onDateChange() {
 }
 
 async function saveMeal() {
-  const slotName = slotKeyToName(slotKey);
   const docData = {
     date: dateKey,
     slotKey: slotKey,
@@ -543,7 +526,7 @@ async function saveMeal() {
     updatedAt: Timestamp.now()
   };
 
-  // Write (upsert): use composite key so we don't need a compound index
+  // upsert by deterministic id (date+slot)
   const id = `${dateKey}_${slotKey}`;
   const ref = doc(db, `parents/${parentId}/children/${childId}/meals/${id}`);
   await setDoc(ref, docData, { merge: true });
@@ -573,7 +556,7 @@ async function importFromTemplates() {
   const snaps = await getDocs(coll);
   if (snaps.empty) { alert("لا توجد قوالب محفوظة."); return; }
 
-  // Pick the latest for simplicity (يمكن لاحقا نضيف dialog للاختيار)
+  // Pick latest (يمكن لاحقًا نعرض dialog للاختيار)
   let latestDoc = snaps.docs[0];
   snaps.forEach(d => { if ((d.data().createdAt||"") > (latestDoc.data().createdAt||"")) latestDoc = d; });
   const t = latestDoc.data();
