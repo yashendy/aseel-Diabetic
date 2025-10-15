@@ -6,7 +6,7 @@
    - نافذة مكتبة الأصناف (بحث/فلاتر/مفضلة/غير مفضلة)
    - "ضبط الوصول للهدف" (Scaling to carb target) — Fixed
    ========================================================= */
-import { auth, db } from './firebase-config.js';
+
 import {
   doc, getDoc, setDoc, updateDoc, collection, getDocs,
   query, where, limit, Timestamp, collectionGroup, documentId
@@ -15,6 +15,10 @@ import {
   ref as sRef, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
+/* --------- Firebase (من firebase-config.js) --------- */
+const db = window._db;
+const st = window._st;
+if (!db || !st) throw new Error("Firebase not initialized. Ensure firebase-config.js sets window._db & window._st.");
 
 /* --------- Utils --------- */
 const $ = (s, r=document) => r.querySelector(s);
