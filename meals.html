@@ -5,8 +5,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>الوجبات</title>
+
   <link rel="stylesheet" href="css/meals.css" />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+
+  <!-- شعارات المنصة -->
+  <link rel="icon" href="favicon.ico">
+  <link rel="icon" type="image/png" href="favicon.png">
 </head>
 <body>
   <header class="app-header">
@@ -24,7 +29,7 @@
   </header>
 
   <main class="container">
-    <!-- القسم 2: لوحة اليوم -->
+    <!-- لوحة اليوم -->
     <section class="card">
       <h2>لوحة اليوم</h2>
       <div class="grid2">
@@ -53,13 +58,13 @@
             <input type="number" id="preBg" step="0.1" placeholder="—" />
             <button class="btn" id="btnFetchPre">جلب تلقائي</button>
           </div>
-          <small id="preBgHint" class="hint">نبحث عن PRE_{SLOT} أولًا ثم أقرب قراءة خلال 90 دقيقة قبل الوقت.</small>
+          <small id="preBgHint" class="hint">نبحث أولاً عن PRE_{SLOT} ثم أقرب قراءة خلال 90 دقيقة قبل وقت الوجبة.</small>
         </div>
 
         <label class="fld">
           <span>جرعة التصحيح (U)</span>
           <input type="number" id="doseCorrection" step="0.1" />
-          <small class="hint">تُحسب إذا كانت القراءة &gt; 10.9: (BG - 7) / CF، مع تقريب لأقرب 0.5U.</small>
+          <small class="hint">إذا BG &gt; 10.9: (BG − 7) ÷ CF، مع التقريب لأقرب 0.5U.</small>
         </label>
 
         <label class="fld">
@@ -88,7 +93,7 @@
       </div>
     </section>
 
-    <!-- القسم 3: مكتبة الأصناف + جدول الوجبة -->
+    <!-- مكتبة الأصناف + جدول الوجبة -->
     <section class="grid-left">
       <div class="card">
         <div class="flex-between">
@@ -100,7 +105,7 @@
         <div class="legend">
           <span>⭐ مفضّل</span>
           <span>🚫 غير مفضّل</span>
-          <span>GI: مؤشر، GL: حمل</span>
+          <span>GI: مؤشر • GL: حمل</span>
         </div>
         <div id="itemsGrid" class="items-grid"></div>
         <div class="flex-between">
@@ -129,16 +134,8 @@
           <table class="table" id="mealTable">
             <thead>
               <tr>
-                <th>الصورة</th>
-                <th>الصنف</th>
-                <th>الوحدة</th>
-                <th>الكمية</th>
-                <th>جم</th>
-                <th>كارب</th>
-                <th>ألياف</th>
-                <th>GI</th>
-                <th>GL</th>
-                <th></th>
+                <th>الصورة</th><th>الصنف</th><th>الوحدة</th><th>الكمية</th>
+                <th>جم</th><th>كارب</th><th>ألياف</th><th>GI</th><th>GL</th><th></th>
               </tr>
             </thead>
             <tbody id="mealBody"></tbody>
@@ -174,17 +171,36 @@
     </section>
   </main>
 
-  <!-- Firebase + Config + App JS -->
+  <!-- تهيئة Firebase مرنة (تعمل مع أي شكل لملف firebase-config.js) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
-    import { firebaseConfig } from "./js/firebase-config.js";
-    // init once and expose for meals.js
-    window._app = initializeApp(firebaseConfig);
-    window._db = getFirestore(window._app);
-    window._st = getStorage(window._app);
+
+    const mod = await import("./js/firebase-config.js");
+
+    // 1) لو الملف صدّر app/db/st مباشرة
+    let app = mod.app || window._app || null;
+    let db  = mod.db  || window._db  || null;
+    let st  = mod.st  || window._st  || null;
+
+    // 2) أو لو صدّر firebaseConfig
+    if (!app && (mod.firebaseConfig || mod.default || window.firebaseConfig)) {
+      const cfg = mod.firebaseConfig || mod.default || window.firebaseConfig;
+      app = initializeApp(cfg);
+    }
+
+    // 3) كمّل الـ db/storage لو ناقصين
+    if (app && !db) db = getFirestore(app);
+    if (app && !st) st = getStorage(app);
+
+    // 4) وفّرهم لـ meals.js
+    window._app = app;
+    window._db  = db;
+    window._st  = st;
   </script>
+
+  <!-- منطق الصفحة -->
   <script type="module" src="js/meals.js"></script>
 </body>
 </html>
