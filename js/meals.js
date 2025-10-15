@@ -1,19 +1,33 @@
 // /js/meals.js
 import {
   doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where, limit, Timestamp,
-  collectionGroup, documentId
+  collectionGroup, documentId, getFirestore
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  ref as sRef, getDownloadURL
+  ref as sRef, getDownloadURL, getStorage
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-// globals from meals.html (initialized there)
-const db = window._db;
-const st = window._st;
+// --------- Firebase fallbacks (مرنة) ----------
+let db =
+  window._db ||
+  window.db ||
+  (function () { try { return getFirestore(); } catch { return null; } })();
+
+let st =
+  window._st ||
+  window.storage ||
+  (function () { try { return getStorage(); } catch { return null; } })();
 
 if (!db || !st) {
-  alert("Firebase لم يتهيأ. تأكدي أن firebase-config.js يجهّز window._db و window._st قبل meals.js");
-  throw new Error("Firebase not initialized");
+  // شغّل firebase-config.js كـ side-effect لو لسه متهيأش
+  try { await import("./js/firebase-config.js"); } catch {}
+  db = db || window._db || window.db || (function () { try { return getFirestore(); } catch { return null; } })();
+  st = st || window._st || window.storage || (function () { try { return getStorage(); } catch { return null; } })();
+}
+
+if (!db || !st) {
+  console.error("Firebase not initialized: db or storage missing.");
+  // نكمّل الصفحة بدون مكتبة صور، لكن هتظهر رسالة في الكونسول بدل ما توقف الصفحة.
 }
 
 // ---------- helpers ----------
@@ -102,7 +116,7 @@ async function init() {
   }
 
   // استخرج parentId تلقائياً عند الحاجة عبر collectionGroup(children)
-  if (!parentId) {
+  if (!parentId && db) {
     const cg = await getDocs(
       query(collectionGroup(db, "children"), where(documentId(), "==", childId), limit(1))
     );
@@ -144,26 +158,27 @@ async function init() {
 }
 
 async function loadChild() {
-  if (!childDoc) {
+  if (!childDoc && db) {
     const ref = doc(db, `parents/${parentId}/children/${childId}`);
     const snap = await getDoc(ref);
     if (!snap.exists()) throw new Error("Child not found");
     childDoc = snap.data();
   }
 
-  els.childName.textContent = childDoc.name || "—";
+  els.childName.textContent = childDoc?.name || "—";
 
-  cf = Number(childDoc.correctionFactor ?? 0);
-  targets = childDoc.normalRange || { max: 7, severeHigh: 10.9, severeLow: 3.9 };
-  carbRanges = childDoc.carbTargets || {};
-  netRuleDefault = childDoc.netCarbRule || "fullFiber";
-  favorites = Array.isArray(childDoc.favorites) ? childDoc.favorites : [];
-  disliked = Array.isArray(childDoc.disliked) ? childDoc.disliked : [];
+  const cfRaw = childDoc?.correctionFactor ?? 0;
+  cf = Number(cfRaw);
+  const targetsRaw = childDoc?.normalRange || {};
+  targets = { max: targetsRaw.max ?? 7, severeHigh: targetsRaw.severeHigh ?? 10.9, severeLow: targetsRaw.severeLow ?? 3.9 };
+  carbRanges = childDoc?.carbTargets || {};
+  netRuleDefault = childDoc?.netCarbRule || "fullFiber";
+  favorites = Array.isArray(childDoc?.favorites) ? childDoc.favorites : [];
+  disliked = Array.isArray(childDoc?.disliked) ? childDoc.disliked : [];
 
   els.netCarbRule.value = netRuleDefault;
-
   els.chipCF.textContent = `CF ${cf || "—"} mmol/L per U`;
-  els.chipTargets.textContent = `الهدف ${targets.max ?? 7} | تصحيح من ${targets.severeHigh ?? 10.9}`;
+  els.chipTargets.textContent = `الهدف ${targets.max} | تصحيح من ${targets.severeHigh}`;
 
   updateCRChip();
 }
@@ -175,11 +190,12 @@ function updateCRChip() {
 }
 
 function crForSlot(s) {
-  const fallback = Number(childDoc.carbRatio ?? 0) || undefined;
-  return Number((childDoc.carbRatioByMeal || {})?.[s]) || fallback; // b/l/d/s
+  const fallback = Number(childDoc?.carbRatio ?? 0) || undefined;
+  return Number((childDoc?.carbRatioByMeal || {})?.[s]) || fallback; // b/l/d/s
 }
 
 async function loadDayTotals() {
+  if (!db) return;
   const mealsRef = collection(db, `parents/${parentId}/children/${childId}/meals`);
   const q = query(mealsRef, where("date", "==", dateKey));
   const snaps = await getDocs(q);
@@ -192,6 +208,7 @@ async function loadDayTotals() {
 }
 
 async function tryLoadExistingMeal() {
+  if (!db) return;
   const mealsRef = collection(db, `parents/${parentId}/children/${childId}/meals`);
   const qy = query(mealsRef, where("date", "==", dateKey), where("slotKey", "==", slotKey), limit(1));
   const snaps = await getDocs(qy);
@@ -222,6 +239,7 @@ async function tryLoadExistingMeal() {
 
 async function loadLibrary() {
   libraryAll = [];
+  if (!db) return renderLibrary();
   const coll = collection(db, "admin/global/foodItems");
   const snaps = await getDocs(coll);
   for (const s of snaps.docs) {
@@ -238,9 +256,11 @@ async function loadLibrary() {
     measures.unshift({ name: "جم", grams: 1 });
 
     let imageUrl = "";
-    try {
-      imageUrl = await getDownloadURL(sRef(st, `food-items/items/${id}/main.jpg`));
-    } catch { /* ignore if not found */ }
+    if (st) {
+      try {
+        imageUrl = await getDownloadURL(sRef(st, `food-items/items/${id}/main.jpg`));
+      } catch { /* ignore if not found */ }
+    }
 
     libraryAll.push({
       id, name: d.name || d.title || "بدون اسم",
@@ -457,6 +477,7 @@ function scaleToTarget() {
 }
 
 async function fetchPreReading() {
+  if (!db) return;
   const coll = collection(db, `parents/${parentId}/children/${childId}/measurements`);
   const preKey = `PRE_${slotKeyToName(slotKey).toUpperCase()}`; // e.g., PRE_LUNCH
 
@@ -502,6 +523,7 @@ async function onDateChange() {
 }
 
 async function saveMeal() {
+  if (!db) return alert("لم يتم حفظ الوجبة: Firebase لم يتهيأ.");
   const docData = {
     date: dateKey,
     slotKey: slotKey,
@@ -539,6 +561,7 @@ async function saveMeal() {
 }
 
 async function saveTemplate() {
+  if (!db) return alert("Firebase غير مهيأ.");
   const out = {
     createdAt: new Date().toISOString(),
     items: mealItems.map(x => ({
@@ -556,11 +579,11 @@ async function saveTemplate() {
 }
 
 async function importFromTemplates() {
+  if (!db) return;
   const coll = collection(db, `parents/${parentId}/children/${childId}/presetMeals`);
   const snaps = await getDocs(coll);
   if (snaps.empty) { alert("لا توجد قوالب محفوظة."); return; }
 
-  // Pick latest (لاحقًا يمكن إظهار اختيار)
   let latestDoc = snaps.docs[0];
   snaps.forEach(d => { if ((d.data().createdAt||"") > (latestDoc.data().createdAt||"")) latestDoc = d; });
   const t = latestDoc.data();
@@ -588,6 +611,7 @@ async function importFromTemplates() {
 }
 
 async function saveFavs() {
+  if (!db) return alert("Firebase غير مهيأ.");
   const ref = doc(db, `parents/${parentId}/children/${childId}`);
   await updateDoc(ref, { favorites, disliked });
   alert("تم حفظ المفضلة/غير المفضلة ✅");
@@ -606,7 +630,6 @@ function exportCSV() {
   });
   rows.push([]);
   rows.push(["Carbs(raw)", els.sumCarbsRaw.textContent, "Fiber", els.sumFiber.textContent, "Net", els.sumCarbsNet.textContent, "Calories", els.sumCal.textContent, "GI(avg)", els.sumGI.textContent, "GL", els.sumGL.textContent]);
-  // ✅ الإصلاح هنا: .value كانت ناقصة نقطة
   rows.push(["DoseCarbs", els.doseCarbs.value, "DoseCorrection", els.doseCorrection.value, "DoseTotal", els.doseTotal.textContent]);
 
   const csv = rows.map(r => r.map(x => `"${String(x??"").replace(/"/g,'""')}"`).join(",")).join("\n");
