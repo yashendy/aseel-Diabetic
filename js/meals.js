@@ -7,30 +7,23 @@ import {
   ref as sRef, getDownloadURL, getStorage
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-// --------- Firebase fallbacks (مرنة) ----------
-let db =
-  window._db ||
-  window.db ||
-  (function () { try { return getFirestore(); } catch { return null; } })();
-
-let st =
-  window._st ||
-  window.storage ||
-  (function () { try { return getStorage(); } catch { return null; } })();
-
-if (!db || !st) {
-  // شغّل firebase-config.js كـ side-effect لو لسه متهيأش
-  try { await import("./firebase-config.js"); } catch {}
-  db = db || window._db || window.db || (function () { try { return getFirestore(); } catch { return null; } })();
-  st = st || window._st || window.storage || (function () { try { return getStorage(); } catch { return null; } })();
+/* ---------------- Firebase (نسخة واحدة فقط) ---------------- */
+let db, st;
+async function ensureFirebase() {
+  try {
+    // لو firebase-config.js اتشغّل قبل كده، دول هينجحوا على طول
+    db = getFirestore();
+    st = getStorage();
+  } catch {
+    // نحمّل تهيئة التطبيق كـ side-effect وبعدين نجيب instances من نفس النسخة
+    await import("./firebase-config.js");
+    db = getFirestore();
+    st = getStorage();
+  }
 }
+await ensureFirebase();
 
-if (!db || !st) {
-  console.error("Firebase not initialized: db or storage missing.");
-  // نكمّل الصفحة بدون مكتبة صور، لكن هتظهر رسالة في الكونسول بدل ما توقف الصفحة.
-}
-
-// ---------- helpers ----------
+/* ---------------- Helpers ---------------- */
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 const fmt = (n, d = 1) => (n ?? 0).toFixed(d);
@@ -42,8 +35,7 @@ const todayUTC3 = () => {
   return new Date(utc + (3 * 3600 * 1000)); // UTC+3
 };
 const ymd = (d) => d.toISOString().slice(0, 10);
-const parseQuery = () =>
-  Object.fromEntries(new URLSearchParams(location.search).entries());
+const parseQuery = () => Object.fromEntries(new URLSearchParams(location.search).entries());
 
 const slotMap = {
   b: { ar: "فطار", defaultTime: "08:00" },
@@ -52,15 +44,13 @@ const slotMap = {
   s: { ar: "سناك", defaultTime: "16:30" }
 };
 
-// ---------- state ----------
+/* ---------------- State ---------------- */
 let parentId, childId, slotKey, dateKey, mealTimeStr;
 let childDoc, cf, targets, carbRanges, netRuleDefault;
 let favorites = [], disliked = [];
-let library = [];      // filtered view
-let libraryAll = [];   // full food library
-let mealItems = [];    // items in current meal
+let libraryAll = [], library = [], mealItems = [];
 
-// ---------- UI refs ----------
+/* ---------------- UI ---------------- */
 const els = {
   childName: $("#childName"),
   chipCF: $("#chipCF"),
@@ -99,42 +89,38 @@ const els = {
   backToChild: $("#backToChild"),
 };
 
-// ---------- init ----------
+/* ---------------- Init ---------------- */
 init().catch(console.error);
 
 async function init() {
   const q = parseQuery();
   parentId = q.parentId || null;
-  childId  = q.childId || q.child;     // ⬅️ يقبل ?child=
+  childId  = q.childId || q.child; // يقبل ?child=
   slotKey  = (q.slot || "l").toLowerCase();
   dateKey  = q.date || ymd(todayUTC3());
   mealTimeStr = slotMap[slotKey]?.defaultTime || "13:00";
 
-  if (!childId) {
-    alert("يلزم تمرير child (معرّف الطفل) في الرابط.");
-    return;
-  }
+  if (!childId) { alert("يلزم تمرير child (معرّف الطفل) في الرابط."); return; }
 
-  // استخرج parentId تلقائياً عند الحاجة عبر collectionGroup(children)
-  if (!parentId && db) {
+  // نجيب parentId تلقائيًا عند الحاجة
+  if (!parentId) {
     const cg = await getDocs(
       query(collectionGroup(db, "children"), where(documentId(), "==", childId), limit(1))
     );
     if (cg.empty) { alert("لم نعثر على الطفل بهذا المعرّف."); return; }
     const docSnap = cg.docs[0];
     parentId = docSnap.ref.parent.parent.id; // parents/{parentId}/children/{childId}
-    childDoc = docSnap.data();               // نوفر مكالمة getDoc
+    childDoc = docSnap.data();
   }
 
   els.backToChild.href = `child.html?child=${childId}`;
-
   els.dateInput.value = dateKey;
   els.slotSelect.value = slotKey;
   els.mealTime.value = mealTimeStr;
 
   await loadChild();
-  await loadLibrary();   // food items
-  await loadDayTotals(); // existing meals same date
+  await loadLibrary();
+  await loadDayTotals();
   await tryLoadExistingMeal();
   autoCompute();
 
@@ -157,8 +143,9 @@ async function init() {
   els.btnSaveFavorites.addEventListener("click", saveFavs);
 }
 
+/* ---------------- Child + chips ---------------- */
 async function loadChild() {
-  if (!childDoc && db) {
+  if (!childDoc) {
     const ref = doc(db, `parents/${parentId}/children/${childId}`);
     const snap = await getDoc(ref);
     if (!snap.exists()) throw new Error("Child not found");
@@ -167,8 +154,7 @@ async function loadChild() {
 
   els.childName.textContent = childDoc?.name || "—";
 
-  const cfRaw = childDoc?.correctionFactor ?? 0;
-  cf = Number(cfRaw);
+  cf = Number(childDoc?.correctionFactor ?? 0);
   const targetsRaw = childDoc?.normalRange || {};
   targets = { max: targetsRaw.max ?? 7, severeHigh: targetsRaw.severeHigh ?? 10.9, severeLow: targetsRaw.severeLow ?? 3.9 };
   carbRanges = childDoc?.carbTargets || {};
@@ -179,7 +165,6 @@ async function loadChild() {
   els.netCarbRule.value = netRuleDefault;
   els.chipCF.textContent = `CF ${cf || "—"} mmol/L per U`;
   els.chipTargets.textContent = `الهدف ${targets.max} | تصحيح من ${targets.severeHigh}`;
-
   updateCRChip();
 }
 
@@ -188,30 +173,24 @@ function updateCRChip() {
   const cr = crForSlot(slotKey);
   els.chipCR.textContent = `CR(${ar}) ${cr ?? "—"} g/U`;
 }
-
 function crForSlot(s) {
   const fallback = Number(childDoc?.carbRatio ?? 0) || undefined;
   return Number((childDoc?.carbRatioByMeal || {})?.[s]) || fallback; // b/l/d/s
 }
 
+/* ---------------- Day totals ---------------- */
 async function loadDayTotals() {
-  if (!db) return;
   const mealsRef = collection(db, `parents/${parentId}/children/${childId}/meals`);
-  const q = query(mealsRef, where("date", "==", dateKey));
-  const snaps = await getDocs(q);
+  const snaps = await getDocs(query(mealsRef, where("date", "==", dateKey)));
   let dayCarbs = 0;
-  snaps.forEach(s => {
-    const m = s.data();
-    dayCarbs += Number(m?.totals?.carbs_net || 0);
-  });
+  snaps.forEach(s => dayCarbs += Number(s.data()?.totals?.carbs_net || 0));
   els.dayCarbs.textContent = fmt(dayCarbs, 0);
 }
 
+/* ---------------- Existing meal ---------------- */
 async function tryLoadExistingMeal() {
-  if (!db) return;
   const mealsRef = collection(db, `parents/${parentId}/children/${childId}/meals`);
-  const qy = query(mealsRef, where("date", "==", dateKey), where("slotKey", "==", slotKey), limit(1));
-  const snaps = await getDocs(qy);
+  const snaps = await getDocs(query(mealsRef, where("date", "==", dateKey), where("slotKey", "==", slotKey), limit(1)));
   if (!snaps.empty) {
     const m = snaps.docs[0].data();
     mealItems = (m.items || []).map(x => ({
@@ -237,9 +216,9 @@ async function tryLoadExistingMeal() {
   renderMeal();
 }
 
+/* ---------------- Library ---------------- */
 async function loadLibrary() {
   libraryAll = [];
-  if (!db) return renderLibrary();
   const coll = collection(db, "admin/global/foodItems");
   const snaps = await getDocs(coll);
   for (const s of snaps.docs) {
@@ -250,27 +229,16 @@ async function loadLibrary() {
     const fiber100 = Number(d.fiber_g ?? per100.fiber ?? 0);
     const cal100   = Number(d.cal_kcal ?? per100.cal ?? 0);
     const gi       = Number(d.gi ?? per100.gi ?? 0);
-    const measures = (d.measures || per100.measures || []).map(m => ({
-      name: m.name, grams: Number(m.grams)
-    }));
+    const measures = (d.measures || per100.measures || []).map(m => ({ name: m.name, grams: Number(m.grams) }));
     measures.unshift({ name: "جم", grams: 1 });
 
     let imageUrl = "";
-    if (st) {
-      try {
-        imageUrl = await getDownloadURL(sRef(st, `food-items/items/${id}/main.jpg`));
-      } catch { /* ignore if not found */ }
-    }
+    try { imageUrl = await getDownloadURL(sRef(st, `food-items/items/${id}/main.jpg`)); } catch {}
 
-    libraryAll.push({
-      id, name: d.name || d.title || "بدون اسم",
-      carbs100, fiber100, cal100, gi,
-      measures, imageUrl
-    });
+    libraryAll.push({ id, name: d.name || d.title || "بدون اسم", carbs100, fiber100, cal100, gi, measures, imageUrl });
   }
   renderLibrary();
 }
-
 function renderLibrary() {
   const term = (els.searchBox.value || "").trim();
   const favSet = new Set(favorites);
@@ -294,10 +262,7 @@ function renderLibrary() {
     card.querySelector(".ban").addEventListener("click", () => toggleBan(id));
   });
 }
-
 function cardHTML(it, isFav, isBan) {
-  const favCls = isFav ? "on" : "";
-  const banCls = isBan ? "on" : "";
   return `
   <div class="card-item" data-id="${it.id}">
     <img src="${it.imageUrl || "images/placeholder.png"}" alt="">
@@ -306,66 +271,38 @@ function cardHTML(it, isFav, isBan) {
       <div class="sub">GI: ${it.gi || "—"} • لكل 100جم: كارب ${fmt(it.carbs100,0)}g | ألياف ${fmt(it.fiber100,0)}g | ${fmt(it.cal100,0)} kcal</div>
     </div>
     <div class="actions">
-      <button class="ic fav ${favCls}" title="مفضّل">⭐</button>
-      <button class="ic ban ${banCls}" title="غير مفضّل">🚫</button>
+      <button class="ic fav ${isFav ? "on" : ""}" title="مفضّل">⭐</button>
+      <button class="ic ban ${isBan ? "on" : ""}" title="غير مفضّل">🚫</button>
       <button class="btn add">إضافة</button>
     </div>
   </div>`;
 }
-
-function toggleFav(id) {
-  const s = new Set(favorites);
-  s.has(id) ? s.delete(id) : s.add(id);
-  favorites = Array.from(s);
-  renderLibrary();
-}
-function toggleBan(id) {
-  const s = new Set(disliked);
-  s.has(id) ? s.delete(id) : s.add(id);
-  disliked = Array.from(s);
-  renderLibrary();
-}
-
+function toggleFav(id) { const s = new Set(favorites); s.has(id) ? s.delete(id) : s.add(id); favorites = [...s]; renderLibrary(); }
+function toggleBan(id) { const s = new Set(disliked); s.has(id) ? s.delete(id) : s.add(id); disliked = [...s]; renderLibrary(); }
 function addItemFromLib(id) {
-  const it = libraryAll.find(x => x.id === id);
-  if (!it) return;
+  const it = libraryAll.find(x => x.id === id); if (!it) return;
   const m = it.measures.find(x => x.grams !== 1) || it.measures[0];
-  const unitKey = m.name;
-  const gramsPerUnit = Number(m.grams);
-  const qty = 1;
-  const grams = qty * gramsPerUnit;
-
-  const carbs_raw = (it.carbs100 / 100) * grams;
-  const fiber_g   = (it.fiber100 / 100) * grams;
-  const cal_kcal  = (it.cal100   / 100) * grams;
-  const gi = it.gi || 0;
-  const gl = gi ? (gi * (carbs_raw / 100)) : 0;
-
-  mealItems.push({
-    id: it.id, name: it.name,
-    unitKey, unitLabel: unitKey,
-    gramsPerUnit, qty, grams,
-    carbs_raw, fiber_g, cal_kcal, gi, gl,
-    imageUrl: it.imageUrl
-  });
+  const gramsPerUnit = Number(m.grams), qty = 1, grams = qty * gramsPerUnit;
+  const carbs_raw = (it.carbs100/100) * grams, fiber_g = (it.fiber100/100) * grams, cal_kcal = (it.cal100/100) * grams;
+  const gi = it.gi || 0, gl = gi ? (gi * (carbs_raw / 100)) : 0;
+  mealItems.push({ id: it.id, name: it.name, unitKey: m.name, unitLabel: m.name, gramsPerUnit, qty, grams, carbs_raw, fiber_g, cal_kcal, gi, gl, imageUrl: it.imageUrl });
   renderMeal();
 }
 
+/* ---------------- Meal table ---------------- */
 function renderMeal() {
   els.mealBody.innerHTML = mealItems.map((x, i) => rowHTML(x, i)).join("");
   mealItems.forEach((x, i) => {
-    $("#u_"+i).addEventListener("change", (e) => onUnitChange(i, e.target.value));
-    $("#q_"+i).addEventListener("input", (e) => onQtyChange(i, Number(e.target.value||0)));
+    $("#u_"+i).addEventListener("change", e => onUnitChange(i, e.target.value));
+    $("#q_"+i).addEventListener("input", e => onQtyChange(i, Number(e.target.value||0)));
     $("#rm_"+i).addEventListener("click", () => { mealItems.splice(i,1); renderMeal(); });
   });
   autoCompute();
 }
-
 function rowHTML(x, i) {
   const lib = libraryAll.find(t => t.id === x.id);
   const opts = (lib?.measures || [{name:"جم", grams:1}])
     .map(m => `<option value="${m.grams}" ${Number(x.gramsPerUnit)===Number(m.grams)?"selected":""}>${m.name}</option>`).join("");
-
   return `
   <tr>
     <td><img class="thumb" src="${x.imageUrl || "images/placeholder.png"}" /></td>
@@ -380,25 +317,12 @@ function rowHTML(x, i) {
     <td><button id="rm_${i}" class="ic danger">✖</button></td>
   </tr>`;
 }
-
-function onUnitChange(i, gramsPerUnit) {
-  const x = mealItems[i];
-  x.gramsPerUnit = Number(gramsPerUnit);
-  recalcRow(x); renderMeal();
-}
-function onQtyChange(i, qty) {
-  const x = mealItems[i];
-  x.qty = qty;
-  recalcRow(x); renderMeal();
-}
+function onUnitChange(i, gramsPerUnit) { const x = mealItems[i]; x.gramsPerUnit = Number(gramsPerUnit); recalcRow(x); renderMeal(); }
+function onQtyChange(i, qty) { const x = mealItems[i]; x.qty = qty; recalcRow(x); renderMeal(); }
 function recalcRow(x) {
   x.grams = x.qty * x.gramsPerUnit;
-  const lib = libraryAll.find(t => t.id === x.id);
-  const carbs100 = lib?.carbs100 || 0;
-  const fiber100 = lib?.fiber100 || 0;
-  const cal100   = lib?.cal100 || 0;
-  const gi       = lib?.gi || 0;
-
+  const lib = libraryAll.find(t => t.id === x.id) || {};
+  const carbs100 = lib.carbs100 || 0, fiber100 = lib.fiber100 || 0, cal100 = lib.cal100 || 0, gi = lib.gi || 0;
   x.carbs_raw = (carbs100/100) * x.grams;
   x.fiber_g   = (fiber100/100) * x.grams;
   x.cal_kcal  = (cal100  /100) * x.grams;
@@ -406,6 +330,7 @@ function recalcRow(x) {
   x.gl        = gi ? (gi * (x.carbs_raw / 100)) : 0;
 }
 
+/* ---------------- Calculations ---------------- */
 function autoCompute() {
   const carbsRaw = mealItems.reduce((a,x)=>a+x.carbs_raw,0);
   const fiber    = mealItems.reduce((a,x)=>a+x.fiber_g,0);
@@ -424,9 +349,7 @@ function autoCompute() {
 
   const bg = Number(els.preBg.value || 0);
   let doseCorr = Number(els.doseCorrection.value || 0);
-  if (bg && bg > Number(targets.severeHigh ?? 10.9) && cf) {
-    doseCorr = (bg - Number(targets.max ?? 7)) / cf;
-  }
+  if (bg && bg > Number(targets.severeHigh ?? 10.9) && cf) doseCorr = (bg - Number(targets.max ?? 7)) / cf;
   doseCorr = roundTo(Math.max(0, doseCorr), 0.5);
   els.doseCorrection.value = doseCorr ? doseCorr.toFixed(1) : "";
 
@@ -435,8 +358,7 @@ function autoCompute() {
   const slotName = slotKeyToName(slotKey);
   const r = carbRanges?.[slotName] || {};
   const min = Number(r.min ?? 0), max = Number(r.max ?? 0);
-  let pct = 0;
-  if (max > 0) pct = clamp((carbsNet / max) * 100, 0, 100);
+  let pct = 0; if (max > 0) pct = clamp((carbsNet / max) * 100, 0, 100);
   els.progressBar.style.width = `${pct}%`;
   els.progressBar.className = "bar " + (carbsNet < min ? "warn" : carbsNet > max ? "danger" : "ok");
   els.progressLabel.textContent = `${fmt(carbsNet,0)} / ${max || "—"} g`;
@@ -451,42 +373,32 @@ function autoCompute() {
   els.doseCarbs.value = doseCarbs ? doseCarbs.toFixed(1) : "";
   els.doseTotal.textContent = totalDose ? totalDose.toFixed(1) : "—";
 }
-
 function updateDoseTotal() {
   const doseC = Number(els.doseCarbs.value || 0);
   const doseCorr = Number(els.doseCorrection.value || 0);
   els.doseTotal.textContent = roundTo(doseC + doseCorr, 0.5).toFixed(1);
 }
-
-function slotKeyToName(k) {
-  return k==="b"?"breakfast":k==="l"?"lunch":k==="d"?"dinner":"snack";
-}
-
-function scaleToTarget() {
+function slotKeyToName(k){ return k==="b"?"breakfast":k==="l"?"lunch":k==="d"?"dinner":"snack"; }
+function scaleToTarget(){
   const slotName = slotKeyToName(slotKey);
   const r = carbRanges?.[slotName] || {};
   const tgt = (Number(r.min ?? 0) + Number(r.max ?? 0)) / 2 || 0;
   const curr = Number(els.sumCarbsNet.textContent || 0);
   if (!tgt || !curr) return;
   const factor = tgt / curr;
-  mealItems.forEach(x => {
-    x.qty = Number((x.qty * factor).toFixed(2));
-    recalcRow(x);
-  });
+  mealItems.forEach(x => { x.qty = Number((x.qty * factor).toFixed(2)); recalcRow(x); });
   renderMeal();
 }
 
+/* ---------------- Measurements ---------------- */
 async function fetchPreReading() {
-  if (!db) return;
   const coll = collection(db, `parents/${parentId}/children/${childId}/measurements`);
-  const preKey = `PRE_${slotKeyToName(slotKey).toUpperCase()}`; // e.g., PRE_LUNCH
-
-  // 1) by slotKey on same date
+  const preKey = `PRE_${slotKeyToName(slotKey).toUpperCase()}`; // PRE_LUNCH...
+  // 1) بنفس التاريخ
   const snaps = await getDocs(query(coll, where("slotKey", "==", preKey)));
   let candidates = snaps.docs.map(d => ({ id:d.id, ...d.data() }))
     .filter(x => x.when && ymd(x.when.toDate ? x.when.toDate() : new Date(x.when)) === dateKey);
-
-  // 2) fallback: within 90 minutes before meal time
+  // 2) fallback: 90 دقيقة قبل وقت الوجبة
   if (!candidates.length) {
     const mealDate = new Date(dateKey + "T" + (mealTimeStr || "13:00") + ":00");
     const start = new Date(mealDate.getTime() - 90*60000);
@@ -498,7 +410,6 @@ async function fetchPreReading() {
         return t && t >= start && t <= end;
       });
   }
-
   if (candidates.length) {
     candidates.sort((a,b)=> (a.when?.seconds||0) - (b.when?.seconds||0));
     const last = candidates[candidates.length-1];
@@ -508,25 +419,15 @@ async function fetchPreReading() {
   autoCompute();
 }
 
-function onSlotChange() {
-  slotKey = els.slotSelect.value;
-  updateCRChip();
-  mealTimeStr = slotMap[slotKey]?.defaultTime || "13:00";
-  els.mealTime.value = mealTimeStr;
-  autoCompute();
-}
+/* ---------------- Date/slot changes ---------------- */
+function onSlotChange(){ slotKey = els.slotSelect.value; updateCRChip(); mealTimeStr = slotMap[slotKey]?.defaultTime || "13:00"; els.mealTime.value = mealTimeStr; autoCompute(); }
+async function onDateChange(){ dateKey = els.dateInput.value; await loadDayTotals(); await tryLoadExistingMeal(); }
 
-async function onDateChange() {
-  dateKey = els.dateInput.value;
-  await loadDayTotals();
-  await tryLoadExistingMeal();
-}
-
+/* ---------------- Save/Export ---------------- */
 async function saveMeal() {
-  if (!db) return alert("لم يتم حفظ الوجبة: Firebase لم يتهيأ.");
   const docData = {
     date: dateKey,
-    slotKey: slotKey,
+    slotKey,
     type: slotMap[slotKey]?.ar || "",
     preBg_mmol: Number(els.preBg.value || 0) || null,
     netCarbRuleUsed: els.netCarbRule.value,
@@ -545,97 +446,61 @@ async function saveMeal() {
       itemId: x.id, name: x.name,
       unitKey: x.unitKey, unitLabel: x.unitLabel,
       gramsPerUnit: x.gramsPerUnit, qty: x.qty, grams: x.grams,
-      carbs_raw: x.carbs_raw, fiber_g: x.fiber_g, carbs_g: x.carbs_raw, // compat
+      carbs_raw: x.carbs_raw, fiber_g: x.fiber_g, carbs_g: x.carbs_raw,
       cal_kcal: x.cal_kcal, gi: x.gi || null, gl: x.gl || null,
       imageUrl: x.imageUrl || null
     })),
     updatedAt: Timestamp.now()
   };
-
-  // upsert by deterministic id (date+slot)
   const id = `${dateKey}_${slotKey}`;
-  const ref = doc(db, `parents/${parentId}/children/${childId}/meals/${id}`);
-  await setDoc(ref, docData, { merge: true });
+  await setDoc(doc(db, `parents/${parentId}/children/${childId}/meals/${id}`), docData, { merge: true });
   alert("تم حفظ الوجبة ✅");
   await loadDayTotals();
 }
-
-async function saveTemplate() {
-  if (!db) return alert("Firebase غير مهيأ.");
+async function saveTemplate(){
   const out = {
     createdAt: new Date().toISOString(),
     items: mealItems.map(x => ({
-      itemId: x.id,
-      grams: x.grams,
-      measure: x.unitLabel,
-      calc: {
-        carbs: x.carbs_raw, fiber: x.fiber_g, gi: x.gi || 0, gl: x.gl || 0, cal: x.cal_kcal
-      }
+      itemId: x.id, grams: x.grams, measure: x.unitLabel,
+      calc: { carbs: x.carbs_raw, fiber: x.fiber_g, gi: x.gi || 0, gl: x.gl || 0, cal: x.cal_kcal }
     }))
   };
   const id = `tmpl_${Date.now()}`;
   await setDoc(doc(db, `parents/${parentId}/children/${childId}/presetMeals/${id}`), out);
   alert("تم حفظ القالب ✅");
 }
-
-async function importFromTemplates() {
-  if (!db) return;
+async function importFromTemplates(){
   const coll = collection(db, `parents/${parentId}/children/${childId}/presetMeals`);
   const snaps = await getDocs(coll);
   if (snaps.empty) { alert("لا توجد قوالب محفوظة."); return; }
-
   let latestDoc = snaps.docs[0];
   snaps.forEach(d => { if ((d.data().createdAt||"") > (latestDoc.data().createdAt||"")) latestDoc = d; });
   const t = latestDoc.data();
-
   (t.items || []).forEach(it => {
-    const lib = libraryAll.find(x => x.id === (it.itemId || it.id));
-    if (!lib) return;
+    const lib = libraryAll.find(x => x.id === (it.itemId || it.id)); if (!lib) return;
     const grams = Number(it.grams || 0);
     const qty = grams && lib.measures[0] ? (grams / (lib.measures[0].grams || 1)) : 1;
-    const carbs_raw = (lib.carbs100/100) * grams;
-    const fiber_g   = (lib.fiber100/100) * grams;
-    const cal_kcal  = (lib.cal100  /100) * grams;
-    const gi        = lib.gi || 0;
-    const gl        = gi ? gi * (carbs_raw/100) : 0;
-
-    mealItems.push({
-      id: lib.id, name: lib.name,
-      unitKey: lib.measures[0].name, unitLabel: lib.measures[0].name,
-      gramsPerUnit: lib.measures[0].grams, qty, grams,
-      carbs_raw, fiber_g, cal_kcal, gi, gl,
-      imageUrl: lib.imageUrl
-    });
+    const carbs_raw = (lib.carbs100/100) * grams, fiber_g = (lib.fiber100/100) * grams, cal_kcal = (lib.cal100/100) * grams;
+    const gi = lib.gi || 0, gl = gi ? gi * (carbs_raw/100) : 0;
+    mealItems.push({ id: lib.id, name: lib.name, unitKey: lib.measures[0].name, unitLabel: lib.measures[0].name,
+      gramsPerUnit: lib.measures[0].grams, qty, grams, carbs_raw, fiber_g, cal_kcal, gi, gl, imageUrl: lib.imageUrl });
   });
   renderMeal();
 }
-
-async function saveFavs() {
-  if (!db) return alert("Firebase غير مهيأ.");
-  const ref = doc(db, `parents/${parentId}/children/${childId}`);
-  await updateDoc(ref, { favorites, disliked });
-  alert("تم حفظ المفضلة/غير المفضلة ✅");
-}
-
-function exportCSV() {
+async function saveFavs(){ await updateDoc(doc(db, `parents/${parentId}/children/${childId}`), { favorites, disliked }); alert("تم حفظ المفضلة/غير المفضلة ✅"); }
+function exportCSV(){
   const rows = [
     ["التاريخ", dateKey, "الوجبة", slotMap[slotKey]?.ar || slotKey],
     [],
     ["الصنف","الوحدة","الكمية","جرام","كارب(raw)","ألياف","Net Rule","GI","GL","سعرات"]
   ];
   const rule = els.netCarbRule.value;
-
-  mealItems.forEach(x => {
-    rows.push([x.name, x.unitLabel, x.qty, x.grams, x.carbs_raw, x.fiber_g, rule, x.gi||"", x.gl||"", x.cal_kcal]);
-  });
+  mealItems.forEach(x => rows.push([x.name, x.unitLabel, x.qty, x.grams, x.carbs_raw, x.fiber_g, rule, x.gi||"", x.gl||"", x.cal_kcal]));
   rows.push([]);
   rows.push(["Carbs(raw)", els.sumCarbsRaw.textContent, "Fiber", els.sumFiber.textContent, "Net", els.sumCarbsNet.textContent, "Calories", els.sumCal.textContent, "GI(avg)", els.sumGI.textContent, "GL", els.sumGL.textContent]);
   rows.push(["DoseCarbs", els.doseCarbs.value, "DoseCorrection", els.doseCorrection.value, "DoseTotal", els.doseTotal.textContent]);
-
   const csv = rows.map(r => r.map(x => `"${String(x??"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = `meal_${dateKey}_${slotKey}.csv`; a.click();
-  URL.revokeObjectURL(url);
+  const url = URL.createObjectURL(blob); const a = document.createElement("a");
+  a.href = url; a.download = `meal_${dateKey}_${slotKey}.csv`; a.click(); URL.revokeObjectURL(url);
 }
