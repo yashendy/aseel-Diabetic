@@ -11,6 +11,11 @@ import {
 const db = window._db;
 const st = window._st;
 
+if (!db || !st) {
+  alert("Firebase لم يتهيأ. تأكدي أن firebase-config.js يجهّز window._db و window._st قبل meals.js");
+  throw new Error("Firebase not initialized");
+}
+
 // ---------- helpers ----------
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -35,7 +40,7 @@ const slotMap = {
 
 // ---------- state ----------
 let parentId, childId, slotKey, dateKey, mealTimeStr;
-let childDoc, cf, crMap, targets, carbRanges, netRuleDefault;
+let childDoc, cf, targets, carbRanges, netRuleDefault;
 let favorites = [], disliked = [];
 let library = [];      // filtered view
 let libraryAll = [];   // full food library
@@ -149,7 +154,6 @@ async function loadChild() {
   els.childName.textContent = childDoc.name || "—";
 
   cf = Number(childDoc.correctionFactor ?? 0);
-  crMap = childDoc.carbRatioByMeal || {};
   targets = childDoc.normalRange || { max: 7, severeHigh: 10.9, severeLow: 3.9 };
   carbRanges = childDoc.carbTargets || {};
   netRuleDefault = childDoc.netCarbRule || "fullFiber";
@@ -556,7 +560,7 @@ async function importFromTemplates() {
   const snaps = await getDocs(coll);
   if (snaps.empty) { alert("لا توجد قوالب محفوظة."); return; }
 
-  // Pick latest (لاحقًا ممكن نعرض اختيار)
+  // Pick latest (لاحقًا يمكن إظهار اختيار)
   let latestDoc = snaps.docs[0];
   snaps.forEach(d => { if ((d.data().createdAt||"") > (latestDoc.data().createdAt||"")) latestDoc = d; });
   const t = latestDoc.data();
@@ -602,7 +606,8 @@ function exportCSV() {
   });
   rows.push([]);
   rows.push(["Carbs(raw)", els.sumCarbsRaw.textContent, "Fiber", els.sumFiber.textContent, "Net", els.sumCarbsNet.textContent, "Calories", els.sumCal.textContent, "GI(avg)", els.sumGI.textContent, "GL", els.sumGL.textContent]);
-  rows.push(["DoseCarbs", els.doseCarbs.value, "DoseCorrection", els.doseCorrection value, "DoseTotal", els.doseTotal.textContent]);
+  // ✅ الإصلاح هنا: .value كانت ناقصة نقطة
+  rows.push(["DoseCarbs", els.doseCarbs.value, "DoseCorrection", els.doseCorrection.value, "DoseTotal", els.doseTotal.textContent]);
 
   const csv = rows.map(r => r.map(x => `"${String(x??"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
