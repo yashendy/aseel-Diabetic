@@ -1,4 +1,3 @@
-<!-- /meals.html -->
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -6,198 +5,216 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>الوجبات</title>
 
-  <link rel="stylesheet" href="css/meals.css" />
-  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <!-- أيقونة المنصة (اختياري) -->
+  <link rel="icon" href="favicon.png" />
 
-  <!-- شعارات المنصة -->
-  <link rel="icon" href="favicon.ico">
-  <link rel="icon" type="image/png" href="favicon.png">
+  <!-- ستايلات الصفحة -->
+  <link rel="stylesheet" href="css/meals.css" />
+  <style>
+    /* يمكن إبقاء هذا القسم أو حذفه لو عندك ملف CSS منفصل فقط */
+  </style>
 </head>
 <body>
-  <header class="app-header">
-    <div class="child-meta">
-      <div class="child-name" id="childName">—</div>
-      <div class="chips">
-        <span class="chip" id="chipCF">CF —</span>
-        <span class="chip" id="chipCR">CR —</span>
-        <span class="chip ghost" id="chipTargets">هدف 7 (3.9–10.9)</span>
+
+  <!-- لودر عام -->
+  <div id="appLoader" class="app-loader">
+    <div class="box">
+      <span class="spinner"></span>
+      <span>يجري التحميل…</span>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- رأس صغير: اسم الطفل والشيبس -->
+    <div class="card">
+      <div class="flex-between">
+        <div>
+          <div style="font-weight:800;font-size:18px" id="childName">—</div>
+          <div class="chips" style="margin-top:8px;">
+            <div class="chip" id="chipCF">CF —</div>
+            <div class="chip" id="chipCR">CR —</div>
+            <div class="chip" id="chipTargets">هدف —</div>
+          </div>
+        </div>
+        <a id="backToChild" class="btn ghost" href="child.html">رجوع لصفحة الطفل</a>
       </div>
     </div>
-    <nav class="app-actions">
-      <a class="btn ghost" id="backToChild">رجوع لصفحة الطفل</a>
-    </nav>
-  </header>
 
-  <main class="container">
     <!-- لوحة اليوم -->
-    <section class="card">
-      <h2>لوحة اليوم</h2>
-      <div class="grid2">
-        <label class="fld">
-          <span>تاريخ الوجبة</span>
-          <input type="date" id="dateInput" />
-        </label>
-        <label class="fld">
-          <span>الوجبة</span>
-          <select id="slotSelect">
-            <option value="b">فطار</option>
-            <option value="l">غداء</option>
-            <option value="d">عشاء</option>
-            <option value="s">سناك</option>
-          </select>
-        </label>
+    <div class="card">
+      <div class="grid-left">
+        <!-- إعدادات اليوم -->
+        <div>
+          <h3 style="margin:0 0 10px;">لوحة اليوم</h3>
 
-        <label class="fld">
-          <span>وقت الوجبة (لربط القياس)</span>
-          <input type="time" id="mealTime" />
-        </label>
+          <div class="chips" style="gap:12px;margin-bottom:10px;">
+            <label>الوجبة
+              <select id="slotSelect">
+                <option value="b">فطار</option>
+                <option value="l">غداء</option>
+                <option value="d">عشاء</option>
+                <option value="s">سناك</option>
+              </select>
+            </label>
 
-        <div class="fld">
-          <span>قراءة قبل الوجبة (mmol/L)</span>
-          <div class="inline">
-            <input type="number" id="preBg" step="0.1" placeholder="—" />
-            <button class="btn" id="btnFetchPre">جلب تلقائي</button>
+            <label>تاريخ الوجبة
+              <input id="dateInput" type="date" />
+            </label>
+
+            <label>وقت الوجبة (لربط القياس)
+              <input id="mealTime" type="time" value="13:00" />
+            </label>
           </div>
-          <small id="preBgHint" class="hint">نبحث أولاً عن PRE_{SLOT} ثم أقرب قراءة خلال 90 دقيقة قبل وقت الوجبة.</small>
-        </div>
 
-        <label class="fld">
-          <span>جرعة التصحيح (U)</span>
-          <input type="number" id="doseCorrection" step="0.1" />
-          <small class="hint">إذا BG &gt; 10.9: (BG − 7) ÷ CF، مع التقريب لأقرب 0.5U.</small>
-        </label>
-
-        <label class="fld">
-          <span>قاعدة صافي الكارب</span>
-          <select id="netCarbRule">
-            <option value="none">بدون خصم ألياف</option>
-            <option value="halfFiber">خصم نصف الألياف</option>
-            <option value="fullFiber">خصم كامل الألياف</option>
-          </select>
-        </label>
-
-        <label class="fld">
-          <span>جرعة الكارب (U)</span>
-          <input type="number" id="doseCarbs" step="0.1" />
-        </label>
-
-        <div class="fld">
-          <span>الجرعة النهائية (U)</span>
-          <div class="total dose"><span id="doseTotal">—</span></div>
-        </div>
-
-        <div class="fld">
-          <span>إجمالي كارب اليوم</span>
-          <div class="total"><span id="dayCarbs">—</span> g</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- مكتبة الأصناف + جدول الوجبة -->
-    <section class="grid-left">
-      <div class="card">
-        <div class="flex-between">
-          <h2>مكتبة الأصناف</h2>
-          <div class="toolbar">
-            <input id="searchBox" placeholder="ابحث باسم الصنف…" />
+          <div class="chips" style="gap:12px;margin-bottom:10px;">
+            <label>قراءة قبل الوجبة (mmol/L)
+              <input id="preBg" type="number" step="0.1" style="width:110px" />
+            </label>
+            <button id="btnFetchPre" class="btn ghost">جلب تلقائي</button>
           </div>
-        </div>
-        <div class="legend">
-          <span>⭐ مفضّل</span>
-          <span>🚫 غير مفضّل</span>
-          <span>GI: مؤشر • GL: حمل</span>
-        </div>
-        <div id="itemsGrid" class="items-grid"></div>
-        <div class="flex-between">
-          <div>
-            <button class="btn ghost" id="btnLoadTemplates">استيراد من القوالب</button>
-          </div>
-          <div class="muted" id="itemsCount"></div>
-        </div>
-      </div>
 
-      <div class="card">
-        <div class="flex-between">
-          <h2>وجبة اليوم</h2>
-          <div class="toolbar">
-            <button class="btn" id="btnScaleToTarget">اضبط للوصول للهدف</button>
-            <button class="btn danger ghost" id="btnClearMeal">مسح</button>
+          <div class="chips" style="gap:12px;margin-bottom:10px;">
+            <label>قاعدة صافي الكارب
+              <select id="netCarbRule">
+                <option value="fullFiber">بدون خصم الألياف</option>
+                <option value="halfFiber">نصف خصم الألياف</option>
+                <option value="none">خصم كامل الألياف</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="chips" style="gap:12px;margin-bottom:6px;">
+            <label>جرعة التصحيح (U)
+              <input id="doseCorrection" type="number" step="0.1" style="width:110px" />
+            </label>
+            <label>جرعة الكارب (U)
+              <input id="doseCarbs" type="number" step="0.1" style="width:110px" />
+            </label>
+            <div class="chip">إجمالي كارب اليوم: <b id="dayCarbs">0</b> g</div>
+          </div>
+
+          <div class="progress">
+            <div id="progressBar" class="bar" style="width:0%"></div>
+          </div>
+          <div id="progressLabel" class="progress-label">0 / — g</div>
+
+          <div class="toolbar" style="margin-top:8px;">
+            <button id="btnScaleToTarget" class="btn">اضبط للوصول للهدف</button>
+            <button id="btnClearMeal" class="btn danger">مسح</button>
+            <button id="btnOpenLibrary" class="btn ghost">افتح مكتبة الأصناف</button>
           </div>
         </div>
 
-        <div class="progress">
-          <div class="bar" id="progressBar" style="width:0%"></div>
-          <div class="progress-label" id="progressLabel">0 / — g</div>
-        </div>
-
-        <div class="table-wrap">
-          <table class="table" id="mealTable">
-            <thead>
-              <tr>
-                <th>الصورة</th><th>الصنف</th><th>الوحدة</th><th>الكمية</th>
-                <th>جم</th><th>كارب</th><th>ألياف</th><th>GI</th><th>GL</th><th></th>
-              </tr>
-            </thead>
-            <tbody id="mealBody"></tbody>
-            <tfoot>
-              <tr>
-                <td colspan="10">
-                  <div class="totals">
-                    <div>Carbs (raw): <b id="sumCarbsRaw">0</b> g</div>
-                    <div>Fiber: <b id="sumFiber">0</b> g</div>
-                    <div>Net Carbs: <b id="sumCarbsNet">0</b> g</div>
-                    <div>Calories: <b id="sumCal">0</b> kcal</div>
-                    <div>GI (avg): <b id="sumGI">—</b></div>
-                    <div>GL (total): <b id="sumGL">0</b></div>
-                  </div>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <div class="flex-between">
-          <div class="left">
-            <button class="btn ghost" id="btnSaveFavorites">حفظ المفضلة/غير المفضلة</button>
-            <button class="btn ghost" id="btnSaveTemplate">حفظ كقالب</button>
+        <!-- جدول الوجبة -->
+        <div>
+          <h3 style="margin:0 0 10px;">وجبة اليوم</h3>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>الصورة</th>
+                  <th>الصنف</th>
+                  <th>الوحدة</th>
+                  <th>الكمية</th>
+                  <th>جرام</th>
+                  <th>كارب (raw)</th>
+                  <th>ألياف</th>
+                  <th>GI</th>
+                  <th>GL</th>
+                  <th>حذف</th>
+                </tr>
+              </thead>
+              <tbody id="mealBody"></tbody>
+            </table>
           </div>
-          <div class="right">
-            <button class="btn ghost" id="btnExportCSV">تصدير Excel (CSV)</button>
-            <button class="btn ghost" id="btnPrint">تصدير PDF</button>
-            <button class="btn primary" id="btnSaveMeal">حفظ الوجبة</button>
+
+          <div class="totals">
+            <div class="total">GL (total): <b id="sumGL">0</b></div>
+            <div class="total">—GI (avg): <b id="sumGI">—</b></div>
+            <div class="total">Calories: <b id="sumCal">0</b> kcal</div>
+            <div class="total">Net Carbs: <b id="sumCarbsNet">0</b> g</div>
+            <div class="total">Fiber: <b id="sumFiber">0</b> g</div>
+            <div class="total">Carbs (raw): <b id="sumCarbsRaw">0</b> g</div>
+            <div class="total dose">الجرعة النهائية: <span id="doseTotal">—</span> U</div>
+          </div>
+
+          <div class="toolbar" style="margin-top:10px;">
+            <button id="btnSaveMeal" class="btn">حفظ الوجبة</button>
+            <button id="btnSaveTemplate" class="btn ghost">حفظ كقالب</button>
+            <button id="btnLoadTemplates" class="btn ghost">استيراد من القوالب</button>
+            <button id="btnExportCSV" class="btn ghost">تصدير (CSV)</button>
+            <button id="btnPrint" class="btn ghost">PDF تصدير</button>
+            <button id="btnSaveFavorites" class="btn ghost">حفظ المفضلة/غير المفضلة</button>
           </div>
         </div>
       </div>
-    </section>
-  </main>
+    </div>
+  </div>
 
-  <!-- تهيئة Firebase مرنة (تعمل مع أي شكل لملف firebase-config.js) -->
+  <!-- نافذة مكتبة الأصناف (Modal) -->
+  <div id="libModal" class="modal hidden" aria-hidden="true">
+    <div class="modal__overlay" data-close-modal></div>
+    <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="libTitle">
+      <div class="modal__header">
+        <div>
+          <div id="libTitle" class="modal__title">مكتبة الأصناف</div>
+          <div class="muted">ابحث بالاسم • رشّح بالمفضلة • كل صنف فيه GI/GL وبيانات 100جم</div>
+        </div>
+        <button class="modal__close" data-close-modal>✖</button>
+      </div>
+
+      <div class="modal__toolbar">
+        <input id="searchBox" type="search" placeholder="… ابحث باسم الصنف" />
+        <div class="chips">
+          <div class="chip">مفضّل: ⭐</div>
+          <div class="chip">غير مفضّل: 🚫</div>
+          <div class="chip">العدد: <b id="itemsCount">0</b></div>
+        </div>
+      </div>
+
+      <div id="itemsGrid" class="items-grid"></div>
+    </div>
+  </div>
+
+  <!-- تهيئة Firebase قبل meals.js -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getApps, initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-    const mod = await import("./js/firebase-config.js");
-
-    // 1) لو الملف صدّر app/db/st مباشرة
-    let app = mod.app || window._app || null;
-    let db  = mod.db  || window._db  || null;
-    let st  = mod.st  || window._st  || null;
-
-    // 2) أو لو صدّر firebaseConfig
-    if (!app && (mod.firebaseConfig || mod.default || window.firebaseConfig)) {
-      const cfg = mod.firebaseConfig || mod.default || window.firebaseConfig;
-      app = initializeApp(cfg);
+    async function ensureFirebase(){
+      if (window._db && window._st) return;
+      try {
+        const confMod = await import('./js/firebase-config.js');
+        if (confMod.app && confMod.db && confMod.storage) {
+          // حالتك القديمة كانت بتصدّر { app, auth, db, storage }
+          window._app = confMod.app;
+          window._db  = confMod.db;
+          window._st  = confMod.storage;
+        } else if (confMod.firebaseConfig) {
+          const apps = getApps();
+          const app = apps.length ? apps[0] : initializeApp(confMod.firebaseConfig);
+          window._app = app;
+          window._db  = getFirestore(app);
+          window._st  = getStorage(app);
+        }
+      } catch (e) {
+        // fallback إلى window.firebaseConfig لو موجود
+        if (window.firebaseConfig) {
+          const apps = getApps();
+          const app = apps.length ? apps[0] : initializeApp(window.firebaseConfig);
+          window._app = app;
+          window._db  = getFirestore(app);
+          window._st  = getStorage(app);
+        }
+      }
+      if (!window._db || !window._st) {
+        alert("Firebase not initialized. تأكدي من سكربت التهيئة قبل meals.js");
+        throw new Error("Firebase not initialized");
+      }
     }
-
-    // 3) كمّل الـ db/storage لو ناقصين
-    if (app && !db) db = getFirestore(app);
-    if (app && !st) st = getStorage(app);
-
-    // 4) وفّرهم لـ meals.js
-    window._app = app;
-    window._db  = db;
-    window._st  = st;
+    await ensureFirebase();
   </script>
 
   <!-- منطق الصفحة -->
