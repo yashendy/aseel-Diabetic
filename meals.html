@@ -2,63 +2,60 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>الوجبات</title>
-  <link rel="stylesheet" href="css/meals.css" />
+  <link rel="stylesheet" href="css/meals.css">
 </head>
 <body>
+
   <!-- Loader -->
-  <div id="appLoader" class="app-loader">
-    <div class="spinner"></div>
-    <div>يجري التحميل…</div>
+  <div id="appLoader" class="loader">
+    <span class="spinner"></span>
+    <span>يجري التحميل...</span>
   </div>
 
-  <main class="page">
-    <header class="page__header">
-      <a class="btn btn--link" id="btnBack" href="child.html">رجوع لصفحة الطفل</a>
+  <main class="container">
+    <div class="topbar">
+      <a id="btnBack" class="btn-link" href="#">رجوع لصفحة الطفل</a>
       <div class="chips">
-        <span class="chip">CF: <b id="chipCF">—</b></span>
-        <span class="chip">CR: <b id="chipCR">—</b></span>
-        <span class="chip">الهدف: <b id="chipTargets">—</b></span>
+        <span id="chipCF" class="chip">— CF</span>
+        <span id="chipCR" class="chip">— CR</span>
+        <span id="chipTargets" class="chip">— الهدف</span>
       </div>
-      <h1 id="childName" class="title">—</h1>
-    </header>
+    </div>
 
-    <section class="layout">
+    <section class="grid-2">
       <!-- لوحة اليوم -->
-      <aside class="panel">
-        <h2 class="panel__title">لوحة اليوم</h2>
-
-        <div class="field">
-          <label for="slotSelect">الوجبة</label>
+      <div class="panel">
+        <h3>لوحة اليوم</h3>
+        <div class="row">
+          <label>الوجبة</label>
           <select id="slotSelect">
-            <option value="breakfast">فطار</option>
-            <option value="lunch">غدا</option>
-            <option value="dinner">عشا</option>
-            <option value="snack">سناك</option>
+            <option value="b">فطار</option>
+            <option value="l">غدا</option>
+            <option value="d">عشا</option>
+            <option value="s">سناك</option>
           </select>
         </div>
 
-        <div class="field">
-          <label for="dateInput">تاريخ الوجبة</label>
+        <div class="row">
+          <label>تاريخ الوجبة</label>
           <input id="dateInput" type="date" />
         </div>
 
-        <div class="field">
-          <label for="mealTime">وقت الوجبة (ربط القياس)</label>
+        <div class="row">
+          <label>وقت الوجبة (ربط القياس)</label>
           <input id="mealTime" type="time" step="60" />
         </div>
 
-        <div class="field">
-          <label for="preBg">قراءة قبل الوجبة (mmol/L)</label>
-          <div class="input-row">
-            <input id="preBg" type="number" step="0.1" inputmode="decimal" />
-            <button id="btnFetchPre" class="btn">جلب تلقائي</button>
-          </div>
+        <div class="row">
+          <label>(mmol/L) قراءة قبل الوجبة</label>
+          <input id="preBg" type="number" step="0.1" inputmode="decimal" />
+          <button id="btnFetchPre" class="btn sm">جلب تلقائي</button>
         </div>
 
-        <div class="field">
-          <label for="netCarbRule">قاعدة صافي الكارب</label>
+        <div class="row">
+          <label>قاعدة صافي الكارب</label>
           <select id="netCarbRule">
             <option value="none">بدون خصم الألياف</option>
             <option value="halfFiber">خصم نصف الألياف</option>
@@ -66,105 +63,95 @@
           </select>
         </div>
 
-        <div class="field">
-          <label for="doseCorrection">جرعة التصحيح (U)</label>
-          <input id="doseCorrection" type="number" step="0.1" inputmode="decimal" />
-        </div>
+        <div class="row"><label>جرعة التصحيح (U)</label><input id="doseCorrection" type="number" step="0.1" /></div>
+        <div class="row"><label>جرعة الكارب (U)</label><input id="doseCarbs" type="number" step="0.1" /></div>
 
-        <div class="field">
-          <label for="doseCarbs">جرعة الكارب (U)</label>
-          <input id="doseCarbs" type="number" step="0.1" inputmode="decimal" />
-        </div>
-
-        <div class="field">
-          <label for="dayCarbs">إجمالي كارب اليوم: g</label>
+        <div class="row">
+          <label>إجمالي كارب اليوم: g</label>
           <input id="dayCarbs" type="number" step="1" />
         </div>
 
-        <div class="progress">
-          <div id="progressBar" class="progress__bar" style="width:0%"></div>
+        <div class="row">
+          <div class="progress">
+            <div id="progressBar" class="bar" style="width:0%"></div>
+          </div>
         </div>
 
-        <div class="actions">
-          <button id="btnScaleToTarget" class="btn btn--primary">اضبط للوصول للهدف</button>
-          <button id="btnClearMeal" class="btn">مسح</button>
-          <button id="btnOpenLibrary" class="btn btn--ghost">افتح مكتبة الأصناف</button>
+        <div class="row right">
+          <button id="btnScaleToTarget" class="btn">اضبط للوصول للهدف</button>
+          <button id="btnClearMeal" class="btn gray">مسح</button>
+          <button id="btnOpenLibrary" class="btn alt">افتح مكتبة الأصناف</button>
         </div>
-      </aside>
+      </div>
 
       <!-- وجبة اليوم -->
-      <section class="panel panel--main">
-        <h2 class="panel__title">وجبة اليوم</h2>
+      <div class="panel">
+        <h3>وجبة اليوم</h3>
 
-        <div class="table-wrap">
-          <table id="mealTable" class="table">
-            <thead>
-              <tr>
-                <th>حذف</th>
-                <th>GL</th>
-                <th>GI</th>
-                <th>ألياف</th>
-                <th>Net Carbs</th>
-                <th>Calories</th>
-                <th>كارب (raw)</th>
-                <th>جرام</th>
-                <th>الوحدة</th>
-                <th>الصنف</th>
-                <th>الصورة</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-            <tfoot>
-              <tr class="totals">
-                <td>—</td>
-                <td id="sumGL">0</td>
-                <td id="sumGI">—</td>
-                <td id="sumFiber">0 g</td>
-                <td id="sumCarbsNet">0 g</td>
-                <td id="sumCalories">0 kcal</td>
-                <td id="sumCarbsRaw">0 g</td>
-                <td colspan="4">
-                  الجرعة النهائية:
-                  <b><span id="doseFinal">—</span> U</b>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <table class="meal-table" id="mealTable">
+          <thead>
+            <tr>
+              <th>حذف</th>
+              <th>GL</th>
+              <th>GI</th>
+              <th>ألياف</th>
+              <th>Net Carbs</th>
+              <th>(raw) كارب</th>
+              <th>Calories</th>
+              <th>جرام</th>
+              <th>الوحدة</th>
+              <th>الصنف</th>
+              <th>الصورة</th>
+            </tr>
+          </thead>
+          <tbody id="mealBody">
+            <tr class="empty"><td colspan="11" style="text-align:center;color:#888">—</td></tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td></td>
+              <td id="sumGL">0</td>
+              <td id="sumGI">—</td>
+              <td id="sumFiber">0 g</td>
+              <td id="sumCarbsNet">0 g</td>
+              <td id="sumCarbsRaw">0 g</td>
+              <td id="sumCalories">0 kcal</td>
+              <td colspan="4">
+                <span>U — الجرعة النهائية:</span>
+                <strong id="doseFinal">0</strong>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
 
-        <div class="actions actions--right">
-          <button id="btnSaveMeal" class="btn btn--primary">حفظ الوجبة</button>
+        <div class="row wrap">
+          <button id="btnSaveMeal" class="btn primary">حفظ الوجبة</button>
           <button id="btnSaveTemplate" class="btn">حفظ كقالب</button>
           <button id="btnLoadTemplates" class="btn">استيراد من القوالب</button>
           <button id="btnExportCSV" class="btn">تصدير (CSV)</button>
           <button id="btnPrint" class="btn">تصدير PDF</button>
+          <button id="btnSaveFavorites" class="btn gray">حفظ/استبعاد غير المفضلة</button>
         </div>
-      </section>
+      </div>
     </section>
   </main>
 
-  <!-- مكتبة الأصناف -->
-  <div id="libModal" class="lib-modal" aria-hidden="true">
-    <div id="libOverlay" class="lib-overlay" data-close="true"></div>
-    <div class="lib-panel" role="dialog" aria-modal="true" aria-labelledby="libTitle">
-      <header class="lib-header">
-        <h3 id="libTitle">كل صنف مع ربح تفصيلي - كل صنف فيه GI/GL وقيمته لكل 100جم</h3>
-        <button id="libClose" class="lib-close" aria-label="إغلاق" data-close="true">×</button>
-      </header>
-
-      <div class="lib-toolbar">
-        <input id="searchBox" type="search" placeholder="ابحث بالاسم/الفئة…" />
-        <div class="legend">
-          <span class="fav">⭐ مفضل</span>
-          <span class="unfav">🚫 غير مفضّل</span>
-          <span class="count"><span id="libCount">0</span> :العدد</span>
-        </div>
+  <!-- نافذة مكتبة الأصناف -->
+  <div id="libModal" class="lib-modal">
+    <div id="libOverlay" class="lib-overlay" data-close></div>
+    <div class="lib-panel">
+      <div class="lib-header">
+        <h4>مكتبة الأصناف</h4>
+        <button id="libClose" class="lib-close" data-close>×</button>
       </div>
-
+      <div class="lib-actions">
+        <input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف..." />
+      </div>
       <div id="itemsGrid" class="grid"></div>
     </div>
   </div>
 
-  <script type="module" src="js/meals.js" defer></script>
+  <!-- سكربت واحد فقط -->
+  <script type="module" src="js/meals.js"></script>
 </body>
 </html>
