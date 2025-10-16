@@ -5,18 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>الوجبات</title>
 
-  <!-- أيقونة المنصة (اختياري) -->
   <link rel="icon" href="favicon.png" />
-
-  <!-- ستايلات الصفحة -->
   <link rel="stylesheet" href="css/meals.css" />
-  <style>
-    /* يمكن إبقاء هذا القسم أو حذفه لو عندك ملف CSS منفصل فقط */
-  </style>
 </head>
 <body>
 
-  <!-- لودر عام -->
+  <!-- Loader -->
   <div id="appLoader" class="app-loader">
     <div class="box">
       <span class="spinner"></span>
@@ -25,8 +19,6 @@
   </div>
 
   <div class="container">
-
-    <!-- رأس صغير: اسم الطفل والشيبس -->
     <div class="card">
       <div class="flex-between">
         <div>
@@ -41,10 +33,8 @@
       </div>
     </div>
 
-    <!-- لوحة اليوم -->
     <div class="card">
       <div class="grid-left">
-        <!-- إعدادات اليوم -->
         <div>
           <h3 style="margin:0 0 10px;">لوحة اليوم</h3>
 
@@ -106,7 +96,6 @@
           </div>
         </div>
 
-        <!-- جدول الوجبة -->
         <div>
           <h3 style="margin:0 0 10px;">وجبة اليوم</h3>
           <div class="table-wrap">
@@ -152,7 +141,7 @@
     </div>
   </div>
 
-  <!-- نافذة مكتبة الأصناف (Modal) -->
+  <!-- نافذة مكتبة الأصناف -->
   <div id="libModal" class="modal hidden" aria-hidden="true">
     <div class="modal__overlay" data-close-modal></div>
     <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="libTitle">
@@ -163,7 +152,6 @@
         </div>
         <button class="modal__close" data-close-modal>✖</button>
       </div>
-
       <div class="modal__toolbar">
         <input id="searchBox" type="search" placeholder="… ابحث باسم الصنف" />
         <div class="chips">
@@ -172,38 +160,33 @@
           <div class="chip">العدد: <b id="itemsCount">0</b></div>
         </div>
       </div>
-
       <div id="itemsGrid" class="items-grid"></div>
     </div>
   </div>
 
-  <!-- تهيئة Firebase قبل meals.js -->
+  <!-- تهيئة Firebase (نسخة 12.1.0) قبل meals.js -->
   <script type="module">
-    import { getApps, initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-    import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+    import { getApps, getApp, initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getFirestore } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+    import { getStorage } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
     async function ensureFirebase(){
       if (window._db && window._st) return;
       try {
-        const confMod = await import('./js/firebase-config.js');
-        if (confMod.app && confMod.db && confMod.storage) {
-          // حالتك القديمة كانت بتصدّر { app, auth, db, storage }
-          window._app = confMod.app;
-          window._db  = confMod.db;
-          window._st  = confMod.storage;
-        } else if (confMod.firebaseConfig) {
-          const apps = getApps();
-          const app = apps.length ? apps[0] : initializeApp(confMod.firebaseConfig);
+        const conf = await import('./js/firebase-config.js');
+        if (conf.app && conf.db && conf.storage) {
+          window._app = conf.app;
+          window._db  = conf.db;
+          window._st  = conf.storage;
+        } else if (conf.firebaseConfig) {
+          const app = getApps().length ? getApp() : initializeApp(conf.firebaseConfig);
           window._app = app;
           window._db  = getFirestore(app);
           window._st  = getStorage(app);
         }
       } catch (e) {
-        // fallback إلى window.firebaseConfig لو موجود
         if (window.firebaseConfig) {
-          const apps = getApps();
-          const app = apps.length ? apps[0] : initializeApp(window.firebaseConfig);
+          const app = getApps().length ? getApp() : initializeApp(window.firebaseConfig);
           window._app = app;
           window._db  = getFirestore(app);
           window._st  = getStorage(app);
@@ -217,7 +200,6 @@
     await ensureFirebase();
   </script>
 
-  <!-- منطق الصفحة -->
   <script type="module" src="js/meals.js"></script>
 </body>
 </html>
