@@ -1,11 +1,11 @@
-// /js/meals.js
+// /js/meals.js  — Firebase 12.1.0
 import {
   doc, getDoc, setDoc, updateDoc, collection, getDocs,
   query, where, limit, Timestamp
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {
   ref as sRef, getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
 /* ====== Firebase guards ====== */
 const db = window._db;
@@ -35,38 +35,28 @@ let libraryAll=[], mealItems=[];
 
 /* ====== Elements ====== */
 const els = {
-  // header chips
   childName: $("#childName"), chipCF: $("#chipCF"), chipCR: $("#chipCR"), chipTargets: $("#chipTargets"),
   backToChild: $("#backToChild"),
-
-  // day controls
   dateInput: $("#dateInput"), slotSelect: $("#slotSelect"), mealTime: $("#mealTime"),
   preBg: $("#preBg"), btnFetchPre: $("#btnFetchPre"),
   netCarbRule: $("#netCarbRule"), doseCorrection: $("#doseCorrection"),
   doseCarbs: $("#doseCarbs"), doseTotal: $("#doseTotal"), dayCarbs: $("#dayCarbs"),
-
   progressBar: $("#progressBar"), progressLabel: $("#progressLabel"),
   btnScaleToTarget: $("#btnScaleToTarget"), btnClearMeal: $("#btnClearMeal"),
   btnSaveMeal: $("#btnSaveMeal"), btnSaveTemplate: $("#btnSaveTemplate"),
   btnLoadTemplates: $("#btnLoadTemplates"), btnExportCSV: $("#btnExportCSV"),
   btnPrint: $("#btnPrint"), btnSaveFavorites: $("#btnSaveFavorites"),
-
-  // meal table
   mealBody: $("#mealBody"),
   sumCarbsRaw: $("#sumCarbsRaw"), sumFiber: $("#sumFiber"), sumCarbsNet: $("#sumCarbsNet"),
   sumCal: $("#sumCal"), sumGI: $("#sumGI"), sumGL: $("#sumGL"),
-
-  // modal library
   btnOpenLibrary: $("#btnOpenLibrary"),
   libModal: $("#libModal"),
   itemsGrid: $("#itemsGrid"), itemsCount: $("#itemsCount"), searchBox: $("#searchBox"),
-
-  // loader
   loader: $("#appLoader")
 };
 
 /* ====== Boot ====== */
-init().catch(console.error);
+init().catch(e=>{ console.error(e); showLoader(false); });
 
 async function init(){
   showLoader(true);
@@ -76,8 +66,8 @@ async function init(){
   parentId = q.parentId || q.parent;
   slotKey  = (q.slot || "l").toLowerCase();
   dateKey  = q.date || ymd(new Date());
+  if (!childId) { alert("يلزم childId في الرابط"); showLoader(false); return; }
 
-  if (!childId) { alert("يلزم childId في الرابط"); return; }
   els.backToChild.href = `child.html?child=${childId}`;
   els.slotSelect.value = slotKey; els.dateInput.value = dateKey; els.mealTime.value = mealTimeStr;
 
@@ -91,22 +81,18 @@ async function init(){
   els.slotSelect.addEventListener("change", onSlotChange);
   els.dateInput.addEventListener("change", onDateChange);
   els.mealTime.addEventListener("change", () => mealTimeStr = els.mealTime.value);
-
   els.btnFetchPre.addEventListener("click", fetchPreReading);
   els.netCarbRule.addEventListener("change", computeAndRenderTotals);
   els.doseCarbs.addEventListener("input", updateDoseTotal);
   els.doseCorrection.addEventListener("input", updateDoseTotal);
   els.btnScaleToTarget.addEventListener("click", scaleToTarget);
   els.btnClearMeal.addEventListener("click", () => { mealItems = []; renderMeal(); });
-
   els.btnSaveMeal.addEventListener("click", saveMeal);
   els.btnSaveTemplate.addEventListener("click", saveTemplate);
   els.btnLoadTemplates.addEventListener("click", importFromTemplates);
   els.btnExportCSV.addEventListener("click", exportCSV);
   els.btnPrint.addEventListener("click", () => window.print());
   els.btnSaveFavorites.addEventListener("click", saveFavs);
-
-  // modal open/close
   els.btnOpenLibrary.addEventListener("click", openLibrary);
   $$("#libModal [data-close-modal]").forEach(el => el.addEventListener("click", closeLibrary));
   els.searchBox.addEventListener("input", renderLibrary);
@@ -117,16 +103,14 @@ async function init(){
 /* ====== Child ====== */
 async function loadChild(){
   if (!parentId) {
-    // محاولة لتحديد parentId (اختياري)
+    // fallback لتحديد parentId
     const parentsSnap = await getDocs(collection(db, "parents"));
     for (const p of parentsSnap.docs) {
-      const cRef = doc(db, `parents/${p.id}/children/${childId}`);
-      const s = await getDoc(cRef);
+      const s = await getDoc(doc(db, `parents/${p.id}/children/${childId}`));
       if (s.exists()) { parentId = p.id; childDoc = s.data(); break; }
     }
   } else {
-    const cRef = doc(db, `parents/${parentId}/children/${childId}`);
-    const s = await getDoc(cRef);
+    const s = await getDoc(doc(db, `parents/${parentId}/children/${childId}`));
     if (!s.exists()) { alert("Child غير موجود"); return; }
     childDoc = s.data();
   }
@@ -146,23 +130,19 @@ async function loadChild(){
   els.chipTargets.textContent = `هدف ${targets.max ?? 7} ( ${targets.severeLow ?? 3.9} – ${targets.severeHigh ?? 10.9} )`;
 }
 function crForSlot(k){ const fb = Number(childDoc.carbRatio ?? 0) || undefined; const v = Number((childDoc.carbRatioByMeal||{})[k] ?? fb); return isFinite(v)?v:0; }
-function updateCRChip(){ const ar = slotMap[slotKey]?.ar || ""; const cr = crForSlot(slotKey); els.chipCR.textContent = `CR(${ar}) ${cr || "—"} g/U`; }
-function updateTargetUI(){ const r = carbTargets[slotName(slotKey)] || {}; const min=Number(r.min??0), max=Number(r.max??0); els.progressLabel.textContent=`0 / ${max||"—"} g`; els.progressBar.className="bar"; els.progressBar.style.width="0%"; }
+function updateCRChip(){ const ar = slotMap[slotKey]?.ar || ""; els.chipCR.textContent = `CR(${ar}) ${crForSlot(slotKey) || "—"} g/U`; }
+function updateTargetUI(){ const r = carbTargets[slotName(slotKey)] || {}; const max=Number(r.max??0); els.progressLabel.textContent=`0 / ${max||"—"} g`; els.progressBar.className="bar"; els.progressBar.style.width="0%"; }
 
 /* ====== Day totals ====== */
 async function loadDayTotals(){
-  const mRef = collection(db, `parents/${parentId}/children/${childId}/meals`);
-  const qy = query(mRef, where("date","==",dateKey));
-  const snaps = await getDocs(qy);
-  let total = 0;
-  snaps.forEach(s => total += Number(s.data()?.totals?.carbs_net || 0));
+  const snaps = await getDocs(query(collection(db, `parents/${parentId}/children/${childId}/meals`), where("date","==",dateKey)));
+  let total = 0; snaps.forEach(s => total += Number(s.data()?.totals?.carbs_net || 0));
   els.dayCarbs.textContent = fmt(total,0);
 }
 
 /* ====== Existing meal ====== */
 async function tryLoadExistingMeal(){
-  const mRef = collection(db, `parents/${parentId}/children/${childId}/meals`);
-  const snaps = await getDocs(query(mRef, where("date","==",dateKey), where("slotKey","==",slotKey), limit(1)));
+  const snaps = await getDocs(query(collection(db, `parents/${parentId}/children/${childId}/meals`), where("date","==",dateKey), where("slotKey","==",slotKey), limit(1)));
   if (snaps.empty) { await fetchPreReading(); return; }
   const m = snaps.docs[0].data();
   mealItems = (m.items||[]).map(x => ({
@@ -182,8 +162,7 @@ async function tryLoadExistingMeal(){
 /* ====== Library (Modal) ====== */
 async function loadLibrary(){
   libraryAll = [];
-  const coll = collection(db, "admin/global/foodItems");
-  const snaps = await getDocs(coll);
+  const snaps = await getDocs(collection(db, "admin/global/foodItems"));
   for (const s of snaps.docs) {
     const d = s.data(); const id = s.id;
     const per100 = d.per100 || {};
@@ -316,7 +295,6 @@ function computeAndRenderTotals(){
 
   const totalDose = roundTo(doseCarbs + doseCorr, 0.5);
 
-  // target progress
   const r = carbTargets[slotName(slotKey)] || {};
   const min=Number(r.min??0), max=Number(r.max??0);
   let pct=0, cls="ok"; if (max>0) pct = clamp((carbsNet/max)*100, 0, 100);
@@ -325,7 +303,6 @@ function computeAndRenderTotals(){
   els.progressBar.style.width=`${pct}%`;
   els.progressLabel.textContent=`${fmt(carbsNet,0)} / ${max||"—"} g`;
 
-  // totals ui
   els.sumCarbsRaw.textContent = fmt(carbsRaw,1);
   els.sumFiber.textContent    = fmt(fiber,1);
   els.sumCarbsNet.textContent = fmt(carbsNet,1);
@@ -416,8 +393,7 @@ async function saveMeal(){
     })),
     updatedAt: Timestamp.now()
   };
-  const id = `${dateKey}_${slotKey}`;
-  await setDoc(doc(db, `parents/${parentId}/children/${childId}/meals/${id}`), docData, {merge:true});
+  await setDoc(doc(db, `parents/${parentId}/children/${childId}/meals/${dateKey}_${slotKey}`), docData, {merge:true});
   alert("تم حفظ الوجبة ✅");
   await loadDayTotals();
 }
@@ -427,8 +403,7 @@ async function saveTemplate(){
     items: mealItems.map(x=>({ itemId:x.id, grams:x.grams, measure:x.unitLabel,
       calc:{carbs:x.carbs_raw,fiber:x.fiber_g,gi:x.gi||0,gl:x.gl||0,cal:x.cal_kcal} }))
   };
-  const id = `tmpl_${Date.now()}`;
-  await setDoc(doc(db, `parents/${parentId}/children/${childId}/presetMeals/${id}`), out);
+  await setDoc(doc(db, `parents/${parentId}/children/${childId}/presetMeals/tmpl_${Date.now()}`), out);
   alert("تم حفظ القالب ✅");
 }
 async function importFromTemplates(){
