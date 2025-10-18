@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>الوجبات</title>
   <link rel="icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/meals.css" />
+  <link rel="stylesheet" href="css/meals.css?v=2025.10.18.2" />
+  <script>window.__MEALS_BUILD="2025-10-18_2";</script>
 </head>
 <body>
 
+  <!-- Loader -->
   <div id="appLoader" class="loader">
     <span class="spinner"></span>
     <span>يجري التحميل...</span>
@@ -31,38 +33,19 @@
 
         <table class="meal-table" id="mealTable">
           <thead>
-            <tr>
-              <th>حذف</th>
-              <th>GL</th>
-              <th>GI</th>
-              <th>ألياف</th>
-              <th>Net Carbs</th>
-              <th>(raw) كارب</th>
-              <th>Calories</th>
-              <th>جرام مكافئ</th>
-              <th>الكمية</th>
-              <th>الوحدة</th>
-              <th>الصنف</th>
-              <th>الصورة</th>
-            </tr>
+          <tr>
+            <th>حذف</th><th>GL</th><th>GI</th><th>ألياف</th><th>Net Carbs</th><th>(raw) كارب</th>
+            <th>Calories</th><th>جرام مكافئ</th><th>الكمية</th><th>الوحدة</th><th>الصنف</th><th>الصورة</th>
+          </tr>
           </thead>
-          <tbody id="mealBody">
-            <tr class="empty"><td colspan="12" style="text-align:center;color:#888">—</td></tr>
-          </tbody>
+          <tbody id="mealBody"><tr class="empty"><td colspan="12" style="text-align:center;color:#888">—</td></tr></tbody>
           <tfoot>
-            <tr>
-              <td></td>
-              <td id="sumGL">0</td>
-              <td id="sumGI">—</td>
-              <td id="sumFiber">0 g</td>
-              <td id="sumCarbsNet">0 g</td>
-              <td id="sumCarbsRaw">0 g</td>
-              <td id="sumCalories">0 kcal</td>
-              <td colspan="5">
-                <span>U — الجرعة النهائية:</span>
-                <strong id="doseFinal">0</strong>
-              </td>
-            </tr>
+          <tr>
+            <td></td>
+            <td id="sumGL">0</td><td id="sumGI">—</td><td id="sumFiber">0 g</td>
+            <td id="sumCarbsNet">0 g</td><td id="sumCarbsRaw">0 g</td><td id="sumCalories">0 kcal</td>
+            <td colspan="5"><span>U — الجرعة النهائية:</span> <strong id="doseFinal">0</strong></td>
+          </tr>
           </tfoot>
         </table>
 
@@ -84,17 +67,12 @@
         <div class="row">
           <label>الوجبة</label>
           <select id="slotSelect">
-            <option value="b">فطار</option>
-            <option value="l">غدا</option>
-            <option value="d">عشا</option>
-            <option value="s">سناك</option>
+            <option value="b">فطار</option><option value="l">غدا</option>
+            <option value="d">عشا</option><option value="s">سناك</option>
           </select>
         </div>
 
-        <div class="row">
-          <label>تاريخ الوجبة</label>
-          <input id="dateInput" type="date" />
-        </div>
+        <div class="row"><label>تاريخ الوجبة</label><input id="dateInput" type="date" /></div>
 
         <div class="row">
           <label>(mmol/L) قراءة قبل الوجبة</label>
@@ -107,21 +85,16 @@
           <select id="netCarbRule">
             <option value="none">بدون خصم الألياف</option>
             <option value="halfFiber">خصم نصف الألياف</option>
-            <option value="fullFiber">خصم كامل الألياف</option>
+            <option value="fullFiber" selected>خصم كامل الألياف</option>
           </select>
         </div>
 
         <div class="row"><label>جرعة التصحيح (U)</label><input id="doseCorrection" type="number" step="0.1" /></div>
         <div class="row"><label>جرعة الكارب (U)</label><input id="doseCarbs" type="number" step="0.1" /></div>
 
-        <div class="row">
-          <label>إجمالي كارب اليوم: g</label>
-          <input id="dayCarbs" type="number" step="1" />
-        </div>
+        <div class="row"><label>إجمالي كارب اليوم: g</label><input id="dayCarbs" type="number" step="1" /></div>
 
-        <div class="row">
-          <div class="progress"><div id="progressBar" class="bar" style="width:0%"></div></div>
-        </div>
+        <div class="row"><div class="progress"><div id="progressBar" class="bar"></div></div></div>
 
         <div class="row right">
           <button id="btnScaleToTarget" class="btn">اضبط للوصول للهدف</button>
@@ -132,7 +105,7 @@
     </section>
   </main>
 
-  <!-- مكتبة الأصناف (مودال بسكرول داخلي) -->
+  <!-- مكتبة الأصناف -->
   <div id="libModal" class="lib-modal">
     <div id="libOverlay" class="lib-overlay" data-close></div>
     <div class="lib-panel">
@@ -141,41 +114,45 @@
         <button id="libClose" class="lib-close" data-close>×</button>
       </div>
       <div class="lib-content">
-        <div class="lib-actions">
-          <input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف..." />
-        </div>
+        <div class="lib-actions"><input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف..." /></div>
         <div id="itemsGrid" class="grid"></div>
       </div>
     </div>
   </div>
 
-  <!-- قوالب -->
+  <!-- القوالب -->
   <div id="tplModal" class="lib-modal">
     <div class="lib-overlay" data-close></div>
     <div class="lib-panel">
-      <div class="lib-header">
-        <h4>القوالب</h4>
-        <button class="lib-close" data-close>×</button>
-      </div>
-      <div class="lib-content">
-        <div id="tplList" class="tpl-list"></div>
-      </div>
+      <div class="lib-header"><h4>القوالب</h4><button class="lib-close" data-close>×</button></div>
+      <div class="lib-content"><div id="tplList" class="tpl-list"></div></div>
     </div>
   </div>
 
-  <!-- الشات (لوحة جانبية) -->
+  <!-- الشات -->
   <aside id="chatDrawer" class="chat">
-    <div class="chat-head">
-      <strong>محادثة الوجبة</strong>
-      <button id="btnChatClose" class="lib-close">×</button>
-    </div>
+    <div class="chat-head"><strong>محادثة الوجبة</strong><button id="btnChatClose" class="lib-close">×</button></div>
     <div id="chatLog" class="chat-log"></div>
-    <div class="chat-input">
-      <input id="chatMsg" type="text" placeholder="اسأل عن الجرعات أو الكارب..." />
-      <button id="btnChatSend" class="btn primary">إرسال</button>
-    </div>
+    <div class="chat-input"><input id="chatMsg" type="text" placeholder="اسأل عن الجرعات أو الكارب..." /><button id="btnChatSend" class="btn primary">إرسال</button></div>
   </aside>
 
-  <script type="module" src="js/meals.js"></script>
+  <!-- Watchdog يطفي اللودر لو ملف الوجبات لم يتهيأ -->
+  <script>
+    (function(){
+      let wd = setTimeout(()=>{
+        const el=document.getElementById('appLoader');
+        if(el) el.style.display='none';
+        console.error('Meals script did not initialize within 8s.');
+        alert('تعذّر تحميل سكربت الصفحة (تحقّقي من الكاش/الإضافات).');
+      }, 8000);
+      window.addEventListener('meals:ready', ()=> clearTimeout(wd));
+    })();
+  </script>
+
+  <!-- ملف الوجبات مع onerror لضمان عدم التجمّد -->
+  <script type="module"
+          src="js/meals.js?v=2025.10.18.2"
+          onerror="(function(){var el=document.getElementById('appLoader');if(el) el.style.display='none';alert('تعذّر تحميل js/meals.js');})();">
+  </script>
 </body>
 </html>
