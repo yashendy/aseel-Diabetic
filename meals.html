@@ -4,12 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>الوجبات</title>
-  <link rel="icon" href="favicon.ico">
-  <link rel="stylesheet" href="css/meals.css">
+  <link rel="icon" href="favicon.ico" />
+  <link rel="stylesheet" href="css/meals.css" />
 </head>
 <body>
 
-  <!-- Loader -->
   <div id="appLoader" class="loader">
     <span class="spinner"></span>
     <span>يجري التحميل...</span>
@@ -19,13 +18,65 @@
     <div class="topbar">
       <a id="btnBack" class="btn-link" href="#">رجوع لصفحة الطفل</a>
       <div class="chips">
-        <span id="chipCF" class="chip">— CF</span>
-        <span id="chipCR" class="chip">— CR</span>
-        <span id="chipTargets" class="chip">— الهدف</span>
+        <span id="chipTargets" class="chip">الهدف: —</span>
+        <span id="chipCR" class="chip">CR: —</span>
+        <span id="chipCF" class="chip">CF: —</span>
       </div>
     </div>
 
     <section class="grid-2">
+      <!-- وجبة اليوم -->
+      <div class="panel">
+        <h3>وجبة اليوم</h3>
+
+        <table class="meal-table" id="mealTable">
+          <thead>
+            <tr>
+              <th>حذف</th>
+              <th>GL</th>
+              <th>GI</th>
+              <th>ألياف</th>
+              <th>Net Carbs</th>
+              <th>(raw) كارب</th>
+              <th>Calories</th>
+              <th>جرام مكافئ</th>
+              <th>الكمية</th>
+              <th>الوحدة</th>
+              <th>الصنف</th>
+              <th>الصورة</th>
+            </tr>
+          </thead>
+          <tbody id="mealBody">
+            <tr class="empty"><td colspan="12" style="text-align:center;color:#888">—</td></tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td></td>
+              <td id="sumGL">0</td>
+              <td id="sumGI">—</td>
+              <td id="sumFiber">0 g</td>
+              <td id="sumCarbsNet">0 g</td>
+              <td id="sumCarbsRaw">0 g</td>
+              <td id="sumCalories">0 kcal</td>
+              <td colspan="5">
+                <span>U — الجرعة النهائية:</span>
+                <strong id="doseFinal">0</strong>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="row wrap">
+          <button id="btnSaveMeal" class="btn primary">حفظ الوجبة</button>
+          <button id="btnSaveTemplate" class="btn">حفظ كقالب</button>
+          <button id="btnLoadTemplates" class="btn">استيراد من القوالب</button>
+          <button id="btnExportCSV" class="btn">تصدير (CSV)</button>
+          <button id="btnPrint" class="btn">تصدير PDF</button>
+          <button id="btnSaveFavorites" class="btn gray">حفظ/استبعاد غير المفضلة</button>
+          <button id="btnChat" class="btn alt">💬 محادثة</button>
+        </div>
+      </div>
+
       <!-- لوحة اليوم -->
       <div class="panel">
         <h3>لوحة اليوم</h3>
@@ -43,11 +94,6 @@
         <div class="row">
           <label>تاريخ الوجبة</label>
           <input id="dateInput" type="date" />
-        </div>
-
-        <div class="row">
-          <label>وقت الوجبة (ربط القياس)</label>
-          <input id="mealTime" type="time" step="60" />
         </div>
 
         <div class="row">
@@ -83,60 +129,10 @@
           <button id="btnOpenLibrary" class="btn alt">افتح مكتبة الأصناف</button>
         </div>
       </div>
-
-      <!-- وجبة اليوم -->
-      <div class="panel">
-        <h3>وجبة اليوم</h3>
-
-        <table class="meal-table" id="mealTable">
-          <thead>
-            <tr>
-              <th>حذف</th>
-              <th>GL</th>
-              <th>GI</th>
-              <th>ألياف</th>
-              <th>Net Carbs</th>
-              <th>(raw) كارب</th>
-              <th>Calories</th>
-              <th>جرام</th>
-              <th>الوحدة</th>
-              <th>الصنف</th>
-              <th>الصورة</th>
-            </tr>
-          </thead>
-          <tbody id="mealBody">
-            <tr class="empty"><td colspan="11" style="text-align:center;color:#888">—</td></tr>
-          </tbody>
-          <tfoot>
-            <tr>
-              <td></td>
-              <td id="sumGL">0</td>
-              <td id="sumGI">—</td>
-              <td id="sumFiber">0 g</td>
-              <td id="sumCarbsNet">0 g</td>
-              <td id="sumCarbsRaw">0 g</td>
-              <td id="sumCalories">0 kcal</td>
-              <td colspan="4">
-                <span>U — الجرعة النهائية:</span>
-                <strong id="doseFinal">0</strong>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-
-        <div class="row wrap">
-          <button id="btnSaveMeal" class="btn primary">حفظ الوجبة</button>
-          <button id="btnSaveTemplate" class="btn">حفظ كقالب</button>
-          <button id="btnLoadTemplates" class="btn">استيراد من القوالب</button>
-          <button id="btnExportCSV" class="btn">تصدير (CSV)</button>
-          <button id="btnPrint" class="btn">تصدير PDF</button>
-          <button id="btnSaveFavorites" class="btn gray">حفظ/استبعاد غير المفضلة</button>
-        </div>
-      </div>
     </section>
   </main>
 
-  <!-- نافذة مكتبة الأصناف -->
+  <!-- مكتبة الأصناف (مودال بسكرول داخلي) -->
   <div id="libModal" class="lib-modal">
     <div id="libOverlay" class="lib-overlay" data-close></div>
     <div class="lib-panel">
@@ -144,14 +140,42 @@
         <h4>مكتبة الأصناف</h4>
         <button id="libClose" class="lib-close" data-close>×</button>
       </div>
-      <div class="lib-actions">
-        <input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف..." />
+      <div class="lib-content">
+        <div class="lib-actions">
+          <input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف..." />
+        </div>
+        <div id="itemsGrid" class="grid"></div>
       </div>
-      <div id="itemsGrid" class="grid"></div>
     </div>
   </div>
 
-  <!-- سكربت واحد فقط -->
+  <!-- قوالب -->
+  <div id="tplModal" class="lib-modal">
+    <div class="lib-overlay" data-close></div>
+    <div class="lib-panel">
+      <div class="lib-header">
+        <h4>القوالب</h4>
+        <button class="lib-close" data-close>×</button>
+      </div>
+      <div class="lib-content">
+        <div id="tplList" class="tpl-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- الشات (لوحة جانبية) -->
+  <aside id="chatDrawer" class="chat">
+    <div class="chat-head">
+      <strong>محادثة الوجبة</strong>
+      <button id="btnChatClose" class="lib-close">×</button>
+    </div>
+    <div id="chatLog" class="chat-log"></div>
+    <div class="chat-input">
+      <input id="chatMsg" type="text" placeholder="اسأل عن الجرعات أو الكارب..." />
+      <button id="btnChatSend" class="btn primary">إرسال</button>
+    </div>
+  </aside>
+
   <script type="module" src="js/meals.js"></script>
 </body>
 </html>
