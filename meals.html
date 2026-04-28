@@ -5,20 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>الوجبات الذكية</title>
   <link rel="icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/meals.css?v=2025.10.18.2" />
+  <link rel="stylesheet" href="css/meals.css?v=2025.10.18.4" />
   <style>
-    .smart-alert { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 12px 16px; margin-top: 16px; color: #92400e; font-size: 14px; display: none; }
+    .smart-alert { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 12px 16px; margin-top: 16px; color: #92400e; display: none; }
     .smart-alert.danger { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
     .smart-alert strong { display: block; margin-bottom: 6px; font-size: 15px; }
   </style>
-  <script>window.__MEALS_BUILD="2025-10-18_3";</script>
 </head>
 <body>
-
-  <div id="appLoader" class="loader">
-    <span class="spinner"></span>
-    <span>يجري التحميل...</span>
-  </div>
+  <div id="appLoader" class="loader"><span class="spinner"></span><span>يجري التحميل...</span></div>
 
   <main class="container">
     <div class="topbar">
@@ -33,23 +28,16 @@
     <section class="grid-2">
       <div class="panel" style="overflow-x: auto;">
         <h3>مكونات الوجبة</h3>
-
         <table class="meal-table" id="mealTable">
           <thead>
-          <tr>
-            <th>حذف</th><th>GL</th><th>GI</th><th>ألياف</th><th>بروتين</th><th>دهون</th><th>Net Carbs</th><th>(raw) كارب</th>
-            <th>Calories</th><th>الكمية</th><th>الوحدة</th><th>الصنف</th>
-          </tr>
+            <tr><th>حذف</th><th>GL</th><th>GI</th><th>ألياف</th><th>بروتين</th><th>دهون</th><th>Net Carbs</th><th>(raw) كارب</th><th>Calories</th><th>الكمية</th><th>الوحدة</th><th>الصنف</th></tr>
           </thead>
-          <tbody id="mealBody"><tr class="empty"><td colspan="12" style="text-align:center;color:#888">—</td></tr></tbody>
+          <tbody id="mealBody"></tbody>
           <tfoot>
-          <tr>
-            <td></td>
-            <td id="sumGL">0</td><td id="sumGI">—</td><td id="sumFiber">0 g</td>
-            <td id="sumProtein">0 g</td><td id="sumFat">0 g</td>
-            <td id="sumCarbsNet" style="font-weight:bold;color:#7c3aed;">0 g</td><td id="sumCarbsRaw">0 g</td><td id="sumCalories">0 kcal</td>
-            <td colspan="3"><span>الجرعة النهائية المقترحة (U):</span> <strong id="doseFinal" style="font-size:18px;color:#ef4444;">0</strong></td>
-          </tr>
+            <tr>
+              <td></td><td id="sumGL">0</td><td id="sumGI">—</td><td id="sumFiber">0 g</td><td id="sumProtein">0 g</td><td id="sumFat">0 g</td><td id="sumCarbsNet" style="font-weight:bold;color:#7c3aed;">0 g</td><td id="sumCarbsRaw">0 g</td><td id="sumCalories">0 kcal</td>
+              <td colspan="3"><span>الجرعة النهائية المقترحة (U):</span> <strong id="doseFinal" style="font-size:18px;color:#ef4444;">0</strong></td>
+            </tr>
           </tfoot>
         </table>
 
@@ -59,51 +47,27 @@
           <button id="btnSaveMeal" class="btn primary">💾 حفظ الوجبة</button>
           <button id="btnSaveTemplate" class="btn">⭐ حفظ كقالب</button>
           <button id="btnLoadTemplates" class="btn">📂 قوالبي</button>
+          <button id="btnOpenLibrary" class="btn alt">➕ أضف صنف</button>
           <button id="btnChat" class="btn alt">💬 المساعد الذكي</button>
         </div>
       </div>
 
       <div class="panel">
         <h3>لوحة الحسابات الذكية</h3>
-
-        <div class="row">
-          <label>الوجبة</label>
-          <select id="slotSelect">
-            <option value="b">فطار</option><option value="l">غدا</option>
-            <option value="d">عشا</option><option value="s">سناك</option>
-          </select>
-        </div>
-
+        <div class="row"><label>الوجبة</label><select id="slotSelect"><option value="b">فطار</option><option value="l">غدا</option><option value="d">عشا</option><option value="s">سناك</option></select></div>
         <div class="row"><label>تاريخ الوجبة</label><input id="dateInput" type="date" /></div>
-
-        <div class="row">
-          <label>(mmol/L) قراءة السكر قبل الوجبة</label>
-          <input id="preBg" type="number" step="0.1" inputmode="decimal" />
-        </div>
-
-        <div class="row">
-          <label>قاعدة صافي الكارب</label>
-          <select id="netCarbRule">
-            <option value="none">بدون خصم الألياف</option>
-            <option value="halfFiber">خصم نصف الألياف</option>
-            <option value="fullFiber" selected>خصم كامل الألياف</option>
-          </select>
-        </div>
-
+        <div class="row"><label>(mmol/L) قراءة السكر قبل الوجبة</label><input id="preBg" type="number" step="0.1" /></div>
+        <div class="row"><label>قاعدة صافي الكارب</label><select id="netCarbRule"><option value="none">بدون خصم الألياف</option><option value="halfFiber">خصم نصف الألياف</option><option value="fullFiber" selected>خصم كامل الألياف</option></select></div>
         <hr style="border:0;border-top:1px solid #eee;margin:12px 0;" />
-
         <div class="row"><label>أنسولين نشط في الجسم (IOB)</label><div id="iobValue" style="color:#f59e0b;font-weight:bold;">0 U</div></div>
         <div class="row"><label>جرعة التصحيح (U)</label><input id="doseCorrection" type="number" step="0.1" disabled /></div>
         <div class="row"><label>جرعة الكارب (U)</label><input id="doseCarbs" type="number" step="0.1" disabled /></div>
-
+        <div class="row"><label>الحد الأقصى للكارب لهذه الوجبة (g)</label><input id="dayCarbs" type="number" step="1" disabled /></div>
         <hr style="border:0;border-top:1px solid #eee;margin:12px 0;" />
-
         <div class="row"><div class="progress"><div id="progressBar" class="bar"></div></div></div>
-
         <div class="row right">
           <button id="btnScaleToTarget" class="btn">🎯 اضبط للوصول للهدف</button>
           <button id="btnClearMeal" class="btn gray">مسح الوجبة</button>
-          <button id="btnOpenLibrary" class="btn alt">➕ أضف صنف</button>
         </div>
       </div>
     </section>
@@ -113,6 +77,12 @@
   <div id="tplModal" class="lib-modal"><div class="lib-overlay" data-close></div><div class="lib-panel"><div class="lib-header"><h4>القوالب</h4><button class="lib-close" data-close>×</button></div><div class="lib-content"><div id="tplList" class="tpl-list"></div></div></div></div>
   <aside id="chatDrawer" class="chat"><div class="chat-head"><strong>محادثة الوجبة</strong><button id="btnChatClose" class="lib-close">×</button></div><div id="chatLog" class="chat-log"></div><div class="chat-input"><input id="chatMsg" type="text" placeholder="اسأل عن الجرعات أو الكارب..." /><button id="btnChatSend" class="btn primary">إرسال</button></div></aside>
 
-  <script type="module" src="js/meals.js?v=2025.10.18.3"></script>
+  <script>
+    setTimeout(() => {
+      const l = document.getElementById('appLoader');
+      if(l && l.style.display !== 'none') { l.style.display = 'none'; console.warn("تم إيقاف اللودر احتياطياً."); }
+    }, 4000);
+  </script>
+  <script type="module" src="js/meals.js?v=2025.10.18.4"></script>
 </body>
 </html>
