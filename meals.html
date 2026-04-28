@@ -1,118 +1,382 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>الوجبات الذكية</title>
-  <link rel="icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/meals.css?v=2025.10.18.2" />
-  <style>
-    .smart-alert { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 12px 16px; margin-top: 16px; color: #92400e; font-size: 14px; display: none; }
-    .smart-alert.danger { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
-    .smart-alert strong { display: block; margin-bottom: 6px; font-size: 15px; }
-  </style>
-  <script>window.__MEALS_BUILD="2025-10-18_3";</script>
-</head>
-<body>
+// js/meals.js  (build: 2025-10-18_3) - Smart Edition
+console.log("✅ [meals] module file loaded");
+window.dispatchEvent(new CustomEvent('meals:loaded'));
 
-  <div id="appLoader" class="loader">
-    <span class="spinner"></span>
-    <span>يجري التحميل...</span>
-  </div>
+import { db, storage } from "./firebase-config.js";
+import {
+  doc, getDoc, setDoc, addDoc, serverTimestamp,
+  collection, collectionGroup, getDocs,
+  query, where, orderBy, limit
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-  <main class="container">
-    <div class="topbar">
-      <a id="btnBack" class="btn-link" href="#">⬅ رجوع لصفحة الطفل</a>
-      <div class="chips">
-        <span id="chipTargets" class="chip">الهدف: —</span>
-        <span id="chipCR" class="chip">CR: —</span>
-        <span id="chipCF" class="chip">CF: —</span>
-      </div>
-    </div>
+const $  = (s,p=document)=>p.querySelector(s);
+const fmt = (n,d=1)=>Number.isFinite(n)?(+n).toFixed(d):"—";
+const todayStr = ()=> new Date().toISOString().slice(0,10);
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 
-    <section class="grid-2">
-      <div class="panel" style="overflow-x: auto;">
-        <h3>مكونات الوجبة</h3>
+const els = {
+  loader: $("#appLoader"), btnBack: $("#btnBack"),
+  chipCF: $("#chipCF"), chipCR: $("#chipCR"), chipTargets: $("#chipTargets"),
+  slotSelect: $("#slotSelect"), dateInput: $("#dateInput"), preBg: $("#preBg"),
+  netCarbRule: $("#netCarbRule"), doseCorrection: $("#doseCorrection"),
+  doseCarbs: $("#doseCarbs"), progressBar: $("#progressBar"), iobValue: $("#iobValue"),
+  smartAlerts: $("#smartAlerts"), btnScaleToTarget: $("#btnScaleToTarget"), btnClearMeal: $("#btnClearMeal"),
+  btnOpenLibrary: $("#btnOpenLibrary"), mealBody: $("#mealBody"), doseFinal: $("#doseFinal"),
+  sumGL: $("#sumGL"), sumGI: $("#sumGI"), sumFiber: $("#sumFiber"), sumProtein: $("#sumProtein"), sumFat: $("#sumFat"),
+  sumCarbsNet: $("#sumCarbsNet"), sumCarbsRaw: $("#sumCarbsRaw"), sumCalories: $("#sumCalories"),
+  libModal: $("#libModal"), libOverlay: $("#libOverlay"), libClose: $("#libClose"),
+  searchBox: $("#searchBox"), itemsGrid: $("#itemsGrid"), tplModal: $("#tplModal"), tplList: $("#tplList"),
+  chat: $("#chatDrawer"), btnChat: $("#btnChat"), btnChatClose: $("#btnChatClose"), chatLog: $("#chatLog"), chatMsg: $("#chatMsg"), btnChatSend: $("#btnChatSend")
+};
 
-        <table class="meal-table" id="mealTable">
-          <thead>
-          <tr>
-            <th>حذف</th><th>GL</th><th>GI</th><th>ألياف</th><th>بروتين</th><th>دهون</th><th>Net Carbs</th><th>(raw) كارب</th>
-            <th>Calories</th><th>الكمية</th><th>الوحدة</th><th>الصنف</th>
-          </tr>
-          </thead>
-          <tbody id="mealBody"><tr class="empty"><td colspan="12" style="text-align:center;color:#888">—</td></tr></tbody>
-          <tfoot>
-          <tr>
-            <td></td>
-            <td id="sumGL">0</td><td id="sumGI">—</td><td id="sumFiber">0 g</td>
-            <td id="sumProtein">0 g</td><td id="sumFat">0 g</td>
-            <td id="sumCarbsNet" style="font-weight:bold;color:#7c3aed;">0 g</td><td id="sumCarbsRaw">0 g</td><td id="sumCalories">0 kcal</td>
-            <td colspan="3"><span>الجرعة النهائية المقترحة (U):</span> <strong id="doseFinal" style="font-size:18px;color:#ef4444;">0</strong></td>
-          </tr>
-          </tfoot>
-        </table>
+const SLOT_MAP = { b:"BREAKFAST", l:"LUNCH", d:"DINNER", s:"SNACK" };
+const state = {
+  childId:null, parentId:null, child:null,
+  slot:"b", date:todayStr(), rule:"fullFiber",
+  CF:null, CRs:{b:null,l:null,d:null,s:null},
+  targets:{ b:{min:0,max:0}, l:{min:0,max:0}, d:{min:0,max:0}, s:{min:0,max:0} },
+  itemsLib:[], items:[], templates:[], IOB: 0, finalDoseVal: 0
+};
 
-        <div id="smartAlerts" class="smart-alert"></div>
+function showLoader(v){ if(els.loader) els.loader.style.display = v?"flex":"none"; }
+function ready(){ window.dispatchEvent(new CustomEvent('meals:ready')); }
+function setBackHref(){ els.btnBack.href = `child.html?child=${state.childId}&parentId=${state.parentId}`; }
+function setChips(){
+  const CR = state.CRs[state.slot] ?? state.child?.carbRatio ?? "—";
+  const t = state.targets[state.slot] || {min:"—",max:"—"};
+  els.chipCF.textContent = `CF: ${state.CF ?? "—"}`;
+  els.chipCR.textContent = `CR: ${CR}`;
+  els.chipTargets.textContent = `الهدف: ${t.min}–${t.max} g`;
+}
 
-        <div class="row wrap" style="margin-top:16px;">
-          <button id="btnSaveMeal" class="btn primary">💾 حفظ الوجبة</button>
-          <button id="btnSaveTemplate" class="btn">⭐ حفظ كقالب</button>
-          <button id="btnLoadTemplates" class="btn">📂 قوالبي</button>
-          <button id="btnChat" class="btn alt">💬 المساعد الذكي</button>
-        </div>
-      </div>
+const auth = getAuth();
+function ensureAuth(){ return new Promise(res=>onAuthStateChanged(auth,u=>res(u),()=>res(null))); }
 
-      <div class="panel">
-        <h3>لوحة الحسابات الذكية</h3>
+async function resolveParentIdIfNeeded(user){
+  if (state.parentId && state.parentId === user.uid) return;
+  const d1 = doc(db, "parents", user.uid, "children", state.childId);
+  const s1 = await getDoc(d1);
+  if (s1.exists()){ state.parentId = user.uid; return; }
+  const cg = query(collectionGroup(db,"children"), where("parentId","==", user.uid), limit(200));
+  const snap = await getDocs(cg);
+  const hit = snap.docs.find(d=> d.id===state.childId );
+  if (!hit) throw new Error("لا أملك صلاحية لهذا الطفل");
+  state.parentId = hit.ref.parent.parent.id;
+}
 
-        <div class="row">
-          <label>الوجبة</label>
-          <select id="slotSelect">
-            <option value="b">فطار</option><option value="l">غدا</option>
-            <option value="d">عشا</option><option value="s">سناك</option>
-          </select>
-        </div>
+async function loadChild(){
+  const dref = doc(db,"parents",state.parentId,"children",state.childId);
+  const snap = await getDoc(dref);
+  if (!snap.exists()) throw new Error("لم يتم العثور على بيانات الطفل.");
+  state.child = { id:snap.id, ...snap.data() };
+  state.CF = state.child.correctionFactor ?? null;
+  const byMeal = state.child.carbRatioByMeal || {};
+  state.CRs.b = byMeal.breakfast ?? state.child.carbRatio ?? null;
+  state.CRs.l = byMeal.lunch ?? state.child.carbRatio ?? null;
+  state.CRs.d = byMeal.dinner ?? state.child.carbRatio ?? null;
+  state.CRs.s = byMeal.snack ?? state.child.carbRatio ?? null;
+  const tg = state.child.carbTargets || {};
+  state.targets.b = tg.breakfast || {min:0,max:0};
+  state.targets.l = tg.lunch    || {min:0,max:0};
+  state.targets.d = tg.dinner   || {min:0,max:0};
+  state.targets.s = tg.snack    || {min:0,max:0};
+  state.rule = state.child.netCarbRule || state.rule;
+  setChips();
+}
 
-        <div class="row"><label>تاريخ الوجبة</label><input id="dateInput" type="date" /></div>
+/* 🔄 1. جلب تلقائي للقياسات (الربط المباشر) */
+async function fetchPreMeasurement(){
+  try{
+    els.preBg.value = ""; // مسح القديم
+    const preKey = `PRE_${SLOT_MAP[state.slot]}`;
+    const coll = collection(db,"parents",state.parentId,"children",state.childId,"measurements");
+    const qy = query(coll, where("date","==", state.date), where("slotKey","==", preKey), orderBy("when","desc"), limit(1));
+    const snap = await getDocs(qy);
+    if (!snap.empty) {
+      const m = snap.docs[0].data();
+      els.preBg.value = m.value_mmol ?? m.value ?? "";
+    }
+    updateTotals();
+  }catch(e){ console.error("fetchPreMeasurement() error:", e); }
+}
 
-        <div class="row">
-          <label>(mmol/L) قراءة السكر قبل الوجبة</label>
-          <input id="preBg" type="number" step="0.1" inputmode="decimal" />
-        </div>
+/* ⏳ 2. حساب الأنسولين النشط (IOB) */
+async function calculateIOB() {
+  state.IOB = 0;
+  const now = new Date();
+  try {
+    const measColl = collection(db,"parents",state.parentId,"children",state.childId,"measurements");
+    const measSnap = await getDocs(query(measColl, where("date","==", todayStr())));
+    measSnap.forEach(d => {
+      const data = d.data();
+      const time = data.when?.toDate() || data.createdAt?.toDate();
+      if(time) {
+        const hrs = (now - time) / 3600000;
+        if(hrs >= 0 && hrs < 4) state.IOB += (data.correctionDose||0) * (1 - (hrs/4));
+      }
+    });
 
-        <div class="row">
-          <label>قاعدة صافي الكارب</label>
-          <select id="netCarbRule">
-            <option value="none">بدون خصم الألياف</option>
-            <option value="halfFiber">خصم نصف الألياف</option>
-            <option value="fullFiber" selected>خصم كامل الألياف</option>
-          </select>
-        </div>
+    const mealsColl = collection(db,"parents",state.parentId,"children",state.childId,"meals");
+    const mealsSnap = await getDocs(query(mealsColl, where("date","==", todayStr())));
+    mealsSnap.forEach(d => {
+      const data = d.data();
+      const time = data.createdAt?.toDate();
+      if(time) {
+        const hrs = (now - time) / 3600000;
+        if(hrs >= 0 && hrs < 4) state.IOB += (data.doses?.final||0) * (1 - (hrs/4));
+      }
+    });
+  } catch(e) { console.error("IOB error", e); }
+  
+  els.iobValue.textContent = fmt(state.IOB, 1) + ' U';
+  updateTotals();
+}
 
-        <hr style="border:0;border-top:1px solid #eee;margin:12px 0;" />
+async function loadFoodLibrary(){
+  const coll = collection(db,"admin","global","foodItems");
+  const snap = await getDocs(coll);
+  state.itemsLib = snap.docs.map(d=>{
+    const x = { id:d.id, ...d.data() };
+    x.per100 = {
+      carbs_g:+x.carbs_g||0, fiber_g:+x.fiber_g||0, fat_g:+x.fat_g||0, protein_g:+x.protein_g||0,
+      cal_kcal:+x.cal_kcal||0, gi: Number.isFinite(+x.gi) ? +x.gi : null
+    };
+    x.measures = Array.isArray(x.measures) ? x.measures : [];
+    return x;
+  });
+  renderLibrary();
+}
 
-        <div class="row"><label>أنسولين نشط في الجسم (IOB)</label><div id="iobValue" style="color:#f59e0b;font-weight:bold;">0 U</div></div>
-        <div class="row"><label>جرعة التصحيح (U)</label><input id="doseCorrection" type="number" step="0.1" disabled /></div>
-        <div class="row"><label>جرعة الكارب (U)</label><input id="doseCarbs" type="number" step="0.1" disabled /></div>
+function renderLibrary(){
+  const term = els.searchBox.value?.trim().toLowerCase() || "";
+  const list = term ? state.itemsLib.filter(x => (x.name||"").toLowerCase().includes(term)) : state.itemsLib;
+  els.itemsGrid.innerHTML = "";
+  for (const it of list){
+    const card = document.createElement("div"); card.className="card-item";
+    const body=document.createElement("div"); body.className="card-body";
+    body.innerHTML = `<div style="font-weight:600">${it.name||"صنف"}</div>
+      <div class="badges">
+        <span class="badge">Carbs: ${fmt(it.per100.carbs_g,1)}g</span>
+        <span class="badge">Fat: ${fmt(it.per100.fat_g,1)}g</span>
+        <span class="badge">Pro: ${fmt(it.per100.protein_g,1)}g</span>
+      </div>`;
+    const rowMini=document.createElement("div"); rowMini.className="row-mini";
+    const selUnit=document.createElement("select");
+    selUnit.innerHTML = `<option value="__g__">جرام</option>` + (it.measures||[]).map(m=>`<option value="${m.label}">${m.label} (${m.grams} جم)</option>`).join("");
+    const inpQty=document.createElement("input"); inpQty.type="number"; inpQty.step="0.1"; inpQty.value = 1;
+    const btnAdd=document.createElement("button"); btnAdd.className="btn primary"; btnAdd.textContent="إضافة";
+    btnAdd.onclick=()=>{
+      const unitLabel = selUnit.value==="__g__" ? "جرام" : selUnit.value;
+      addItemToMealFromLib(it, unitLabel, +inpQty.value||0);
+    };
+    rowMini.append(selUnit, inpQty, btnAdd);
+    body.appendChild(rowMini); card.appendChild(body); els.itemsGrid.appendChild(card);
+  }
+}
 
-        <hr style="border:0;border-top:1px solid #eee;margin:12px 0;" />
+function findMeasureGrams(it, unitLabel){
+  if (unitLabel==="جرام") return 1;
+  const m=(it.measures||[]).find(x=>x.label===unitLabel); return m ? m.grams : null;
+}
+function computeGrams(unitLabel, qty, it){
+  if (unitLabel==="جرام") return +qty||0;
+  const g=findMeasureGrams(it, unitLabel); return g ? (+qty||0)*g : 0;
+}
+function computeRow(it){
+  const grams=+it.grams||0, ratio=grams/100;
+  const carbsRaw=(it.per100.carbs_g||0)*ratio;
+  const fiber=(it.per100.fiber_g||0)*ratio;
+  const fat=(it.per100.fat_g||0)*ratio;
+  const protein=(it.per100.protein_g||0)*ratio;
+  const f= state.rule==="fullFiber"?1 : state.rule==="halfFiber"?0.5 : 0;
+  const net=Math.max(0, carbsRaw - (fiber*f));
+  const cal=(it.per100.cal_kcal||0)*ratio;
+  const GI=Number.isFinite(it.per100.gi)?it.per100.gi:null;
+  const GL=GI ? (GI*net/100) : 0;
+  return { carbsRaw, fiber, fat, protein, net, cal, GI, GL };
+}
 
-        <div class="row"><div class="progress"><div id="progressBar" class="bar"></div></div></div>
+function renderMeal(){
+  els.mealBody.innerHTML = "";
+  if (!state.items.length){
+    els.mealBody.innerHTML = `<tr class="empty"><td colspan="12" style="text-align:center;color:#999">لا توجد أصناف مضافة.</td></tr>`;
+  } else {
+    for(const it of state.items){
+      const c=computeRow(it);
+      const tr=document.createElement("tr");
+      tr.innerHTML=`
+        <td><button class="btn sm gray" data-del>×</button></td>
+        <td>${fmt(c.GL,1)}</td><td>${Number.isFinite(c.GI)?c.GI:"—"}</td>
+        <td>${fmt(c.fiber,1)}</td><td>${fmt(c.protein,1)}</td><td>${fmt(c.fat,1)}</td>
+        <td style="font-weight:bold;color:#7c3aed;">${fmt(c.net,1)}</td><td>${fmt(c.carbsRaw,1)}</td>
+        <td>${fmt(c.cal,0)}</td>
+        <td><input type="number" step="0.1" value="${it.qty||0}" data-qty style="width:60px" /></td>
+        <td><select data-unit>${[`جرام`, ...(it.measures||[]).map(m=>m.label)].map(l=>`<option value="${l}" ${l===it.unitLabel?'selected':''}>${l}</option>`).join("")}</select></td>
+        <td>${it.name||"صنف"}</td>
+      `;
+      tr.querySelector("[data-qty]").addEventListener("input",(e)=>{ it.qty=+e.target.value||0; it.grams=computeGrams(it.unitLabel,it.qty,it); renderMeal(); });
+      tr.querySelector("[data-unit]").addEventListener("change",(e)=>{ it.unitLabel=e.target.value; it.grams=computeGrams(it.unitLabel,it.qty,it); renderMeal(); });
+      tr.querySelector("[data-del]").addEventListener("click",()=>{ state.items=state.items.filter(x=>x!==it); renderMeal(); });
+      els.mealBody.appendChild(tr);
+    }
+  }
+  updateTotals();
+}
 
-        <div class="row right">
-          <button id="btnScaleToTarget" class="btn">🎯 اضبط للوصول للهدف</button>
-          <button id="btnClearMeal" class="btn gray">مسح الوجبة</button>
-          <button id="btnOpenLibrary" class="btn alt">➕ أضف صنف</button>
-        </div>
-      </div>
-    </section>
-  </main>
+function updateTotals(){
+  let sumRaw=0,sumNet=0,sumFiber=0,sumFat=0,sumPro=0,sumCal=0,sumGL=0, giVals=[];
+  for(const it of state.items){
+    const c=computeRow(it);
+    sumRaw+=c.carbsRaw; sumNet+=c.net; sumFiber+=c.fiber; sumFat+=c.fat; sumPro+=c.protein; sumCal+=c.cal; sumGL+=c.GL;
+    if(Number.isFinite(c.GI)) giVals.push(c.GI);
+  }
+  els.sumCarbsRaw.textContent=`${fmt(sumRaw,1)} g`; els.sumCarbsNet.textContent=`${fmt(sumNet,1)} g`;
+  els.sumFiber.textContent=`${fmt(sumFiber,1)} g`; els.sumProtein.textContent=`${fmt(sumPro,1)} g`; els.sumFat.textContent=`${fmt(sumFat,1)} g`;
+  els.sumCalories.textContent=`${fmt(sumCal,0)} kcal`; els.sumGL.textContent=fmt(sumGL,1);
+  els.sumGI.textContent = giVals.length ? Math.round(giVals.reduce((a,b)=>a+b,0)/giVals.length) : "—";
 
-  <div id="libModal" class="lib-modal"><div id="libOverlay" class="lib-overlay" data-close></div><div class="lib-panel"><div class="lib-header"><h4>مكتبة الأصناف</h4><button id="libClose" class="lib-close" data-close>×</button></div><div class="lib-content"><div class="lib-actions"><input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف..." /></div><div id="itemsGrid" class="grid"></div></div></div></div>
-  <div id="tplModal" class="lib-modal"><div class="lib-overlay" data-close></div><div class="lib-panel"><div class="lib-header"><h4>القوالب</h4><button class="lib-close" data-close>×</button></div><div class="lib-content"><div id="tplList" class="tpl-list"></div></div></div></div>
-  <aside id="chatDrawer" class="chat"><div class="chat-head"><strong>محادثة الوجبة</strong><button id="btnChatClose" class="lib-close">×</button></div><div id="chatLog" class="chat-log"></div><div class="chat-input"><input id="chatMsg" type="text" placeholder="اسأل عن الجرعات أو الكارب..." /><button id="btnChatSend" class="btn primary">إرسال</button></div></aside>
+  /* 🧠 حسابات الجرعة والأنسولين النشط */
+  const CR = state.CRs[state.slot] ?? state.child?.carbRatio ?? null;
+  const bg = parseFloat(els.preBg.value);
+  let rawCorr = 0;
+  if (Number.isFinite(bg) && Number.isFinite(state.CF) && bg>10.9) { rawCorr = (bg-7)/state.CF; }
+  let doseCarb = Number.isFinite(CR) ? (sumNet/CR) : 0;
+  
+  // الخصم من الجرعة الكلية
+  let totalProposed = rawCorr + doseCarb;
+  let finalDose = Math.max(0, totalProposed - state.IOB);
+  
+  // التقريب لأقرب نصف وحدة
+  const step=0.5;
+  els.doseCorrection.value = fmt(Math.round(rawCorr/step)*step, 1);
+  els.doseCarbs.value = fmt(Math.round(doseCarb/step)*step, 1);
+  state.finalDoseVal = Math.round(finalDose/step)*step;
+  els.doseFinal.textContent = fmt(state.finalDoseVal, 1);
 
-  <script type="module" src="js/meals.js?v=2025.10.18.3"></script>
-</body>
-</html>
+  /* 🍕 3. التنبيهات الذكية (Fat/Protein Pizza Effect) */
+  els.smartAlerts.style.display = 'none';
+  els.smartAlerts.innerHTML = '';
+  let alertsHtml = '';
+  
+  if (state.IOB > 0) {
+    alertsHtml += `<strong>⏳ يوجد أنسولين نشط (${fmt(state.IOB,1)} U)</strong> تم خصمه من إجمالي الجرعة المقترحة لتجنب الهبوط.<br>`;
+  }
+
+  if (sumFat > 30 || sumPro > 40) {
+    els.smartAlerts.classList.add('danger');
+    alertsHtml += `<strong style="margin-top:10px;">🍕 تنبيه الوجبة الدسمة (Pizza Effect):</strong> هذه الوجبة غنية جداً بالدهون/البروتين (${fmt(sumFat,1)}g دهون, ${fmt(sumPro,1)}g بروتين). هذا سيبطئ امتصاص الكاربوهيدرات ويسبب ارتفاعاً متأخراً في السكر.<br>
+    💡 <b>نصيحة:</b> يُفضل استشارة الطبيب لتقسيم الجرعة (Extended Bolus)، مثلاً أخذ 60% (${fmt(state.finalDoseVal * 0.6, 1)} U) الآن، و 40% (${fmt(state.finalDoseVal * 0.4, 1)} U) بعد ساعتين.`;
+  } else {
+    els.smartAlerts.classList.remove('danger');
+  }
+
+  if (alertsHtml) {
+    els.smartAlerts.innerHTML = alertsHtml;
+    els.smartAlerts.style.display = 'block';
+  }
+
+  // Progress Bar
+  const t=state.targets[state.slot] || {min:0,max:0};
+  const max=t.max||0;
+  const pct=max ? clamp((sumNet/max)*100,0,100) : 0;
+  els.progressBar.style.width=`${pct}%`;
+  els.progressBar.style.background = pct<=100 && sumNet>=t.min ? "var(--ok)" : (pct<=120 ? "var(--warn)" : "var(--danger)");
+}
+
+function addItemToMealFromLib(fi, unitLabel, qty){
+  const it={ id:fi.id, name:fi.name||"صنف", measures:fi.measures||[], per100:fi.per100, unitLabel:unitLabel||"جرام", qty:+qty||0, grams:0 };
+  it.grams = computeGrams(it.unitLabel,it.qty,it);
+  state.items.push(it); renderMeal(); els.libModal.classList.remove("open");
+}
+
+/* 🔄 4. حفظ الوجبة وتوليد قراءة قياس (الربط الثنائي) */
+async function saveMeal(){
+  if(!state.child) return;
+  const id=`${state.date}_${state.slot}`;
+  const mref=doc(db,"parents",state.parentId,"children",state.childId,"meals",id);
+  
+  let sumRaw=0,sumNet=0,sumFiber=0,sumFat=0,sumPro=0,sumCal=0;
+  const items=state.items.map(it=>{
+    const c=computeRow(it);
+    sumRaw+=c.carbsRaw; sumNet+=c.net; sumFiber+=c.fiber; sumFat+=c.fat; sumPro+=c.protein; sumCal+=c.cal;
+    return { itemId:it.id, name:it.name, unitLabel:it.unitLabel, qty:it.qty, gramsComputed:+it.grams.toFixed(0), per100:it.per100 };
+  });
+
+  const payload={
+    createdAt:serverTimestamp(), date:state.date, slot:state.slot, slotKey:SLOT_MAP[state.slot], rule:state.rule,
+    items, totals:{ carbsRaw:+sumRaw.toFixed(1), carbsNet:+sumNet.toFixed(1), fiber:+sumFiber.toFixed(1), fat:+sumFat.toFixed(1), protein:+sumPro.toFixed(1), calories:Math.round(sumCal) },
+    doses:{ final: state.finalDoseVal, IOB: state.IOB, CF:state.CF, CR:state.CRs[state.slot] }
+  };
+
+  try {
+    await setDoc(mref,payload);
+
+    // 🔄 الربط: إنشاء قراءة في الـ Measurements لو تم إدخال رقم ولم يتم جلبه مسبقاً
+    const bg = parseFloat(els.preBg.value);
+    if (Number.isFinite(bg)) {
+      const preKey = `PRE_${SLOT_MAP[state.slot]}`;
+      const measColl = collection(db,"parents",state.parentId,"children",state.childId,"measurements");
+      const qy = query(measColl, where("date","==", state.date), where("slotKey","==", preKey));
+      const snap = await getDocs(qy);
+      
+      // إذا لم يكن القياس مسجلاً اليوم، نقوم بإنشائه تلقائياً!
+      if (snap.empty) {
+        const [y,m,d] = state.date.split('-');
+        const when = new Date(y, m-1, d, new Date().getHours(), new Date().getMinutes());
+        await addDoc(measColl, {
+          value: bg, unit: state.child.glucoseUnit || "mmol/L",
+          when: when, date: state.date, slotKey: preKey, slotOrder: 20, // Pre-meals are usually order 20-40
+          notes: "تم التسجيل التلقائي عبر صفحة الوجبات 🍽️", createdAt: serverTimestamp()
+        });
+      }
+    }
+
+    alert("تم حفظ الوجبة وتحديث القياسات بنجاح ✅");
+  } catch(e) { console.error("Error saving meal:", e); alert("حدث خطأ أثناء الحفظ."); }
+}
+
+// Templates (Basic)
+async function loadTemplates() { els.tplModal.classList.add("open"); }
+els.btnOpenLibrary.addEventListener("click", ()=> els.libModal.classList.add("open"));
+els.libOverlay.addEventListener("click", e=>{ if(e.target.dataset.close!==undefined) els.libModal.classList.remove("open"); });
+els.libClose.addEventListener("click", ()=> els.libModal.classList.remove("open"));
+els.searchBox.addEventListener("input", renderLibrary);
+els.tplModal.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>els.tplModal.classList.remove("open")));
+
+async function init(){
+  showLoader(true);
+  const qp=new URLSearchParams(location.search);
+  state.childId=qp.get("child")||null; state.parentId=qp.get("parentId")||null;
+  state.slot=qp.get("slot")||"b"; state.date=qp.get("date")||todayStr();
+
+  els.slotSelect.value=state.slot; els.dateInput.value=state.date;
+  if(!state.childId) return alert("لا يوجد طفل في الرابط.");
+
+  const user=await ensureAuth();
+  if(!user) return alert("يجب تسجيل الدخول.");
+  
+  await resolveParentIdIfNeeded(user);
+  setBackHref();
+  await loadChild();
+  
+  els.netCarbRule.value=state.rule;
+  await loadFoodLibrary();
+  await calculateIOB(); // ⏳ حساب الأنسولين النشط
+  await fetchPreMeasurement(); // 🔄 الجلب التلقائي للقياس
+
+  els.slotSelect.addEventListener("change", ()=>{ state.slot=els.slotSelect.value; setChips(); fetchPreMeasurement(); });
+  els.dateInput.addEventListener("change", ()=>{ state.date=els.dateInput.value; fetchPreMeasurement(); calculateIOB(); });
+  els.preBg.addEventListener("input", updateTotals);
+  els.netCarbRule.addEventListener("change", ()=>{ state.rule=els.netCarbRule.value; renderMeal(); });
+  els.btnClearMeal.addEventListener("click", ()=>{ state.items=[]; renderMeal(); });
+  $("#btnSaveMeal").addEventListener("click", saveMeal);
+  $("#btnLoadTemplates").addEventListener("click", loadTemplates);
+
+  renderMeal();
+  showLoader(false);
+  ready();
+}
+
+init();
