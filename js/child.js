@@ -2,7 +2,7 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, getDocs, query, where, orderBy, limit, doc, getDoc
+  collection, getDocs, query, where, orderBy, limit, doc, getDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 /* ---- childId ---- */
@@ -330,33 +330,38 @@ onAuthStateChanged(auth, async (user)=>{
     localStorage.setItem('selectedChildId',childId);
     setHref(goChildEdit,`child-edit.html?parentId=${encodeURIComponent(user.uid)}&id=${encodeURIComponent(childId)}`);
 
-    /* ---- إحصائيات اليوم ---- */
-    const today = todayStr();
+    /* ---- إحصائيات اليوم (مظبوطة مع الـ Timestamps والتحديث اللحظي) ---- */
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const todayStrFormat = todayStr();
+
     const measRef  = collection(db,`parents/${user.uid}/children/${childId}/measurements`);
     const mealsRef = collection(db,`parents/${user.uid}/children/${childId}/meals`);
     const visRef   = collection(db,`parents/${user.uid}/children/${childId}/visits`);
 
-    const [snapMeas, snapMeals, snapVisit] = await Promise.all([
-      getDocs(query(measRef, where('date','==',today))),
-      getDocs(query(mealsRef, where('date','==',today))),
-      getDocs(query(visRef, where('date','>=',today), orderBy('date','asc'), limit(1)))
-    ]);
+    // 1. عداد القياسات (باستخدام حقل when والتحديث اللحظي)
+    onSnapshot(query(measRef, where('when', '>=', startOfDay), where('when', '<', endOfDay)), (snap) => {
+      setText(todayMeasuresEl, snap.size);
+      setText(miniMeasuresEl,  snap.size);
+    });
 
-    const measCount  = snapMeas.size;
-    const mealsCount = snapMeals.size;
+    // 2. عداد الوجبات (بافتراض إنها محفوظة بحقل date كنص)
+    onSnapshot(query(mealsRef, where('date', '==', todayStrFormat)), (snap) => {
+      setText(todayMealsEl, snap.size);
+      setText(miniMealsEl,  snap.size);
+    });
+
+    // 3. أقرب متابعة طبية (Get عادية لأنها مش بتتغير كتير)
+    const snapVisit = await getDocs(query(visRef, where('date','>=',todayStrFormat), orderBy('date','asc'), limit(1)));
     let displayFollow = '—';
     if(!snapVisit.empty){
       const nf  = snapVisit.docs[0].data().date||'—';
       const due = new Date(nf);
-      displayFollow = `${nf} — ${formatCountdown(new Date(today),due)}`;
+      displayFollow = `${nf} — ${formatCountdown(new Date(), due)}`;
     }
-
-    setText(todayMeasuresEl, measCount);
-    setText(miniMeasuresEl,  measCount);
-    setText(todayMealsEl,    mealsCount);
-    setText(miniMealsEl,     mealsCount);
-    setText(nextVisitEl,     displayFollow);
-    setText(miniFollowUpEl,  displayFollow);
+    setText(nextVisitEl, displayFollow);
+    setText(miniFollowUpEl, displayFollow);
 
     /* ---- Sparkline الجلوكوز ---- */
     await renderGlucoseSparkline(user.uid, c);
