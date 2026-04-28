@@ -1,4 +1,4 @@
-// js/header.js — الهيدر الموحد لمنصة أصيل
+// js/header.js — الهيدر الموحد لمنصة أسيل
 // الاستخدام: أضف في أي صفحة:
 //   <link rel="stylesheet" href="css/header.css">
 //   <script type="module" src="js/header.js"></script>
@@ -95,7 +95,7 @@ function buildHeader({ user, child, childId, lastGlucose, unit }) {
     <div class="header-inner">
       <a class="header-logo" href="parent.html">
         <div class="header-logo-icon">أ</div>
-        <span class="header-logo-text">أصيل</span>
+        <span class="header-logo-text">متابعة</span>
       </a>
 
       <div class="header-sep"></div>
