@@ -1,5 +1,5 @@
 // js/meals.js
-console.log("✅ [meals] module file loaded v4");
+console.log("✅ [meals] module loaded v5 (Dual Units & Manual Doses)");
 
 import { db, storage } from "./firebase-config.js";
 import {
@@ -7,7 +7,6 @@ import {
   collection, collectionGroup, getDocs,
   query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 const $  = (s)=>document.querySelector(s);
@@ -15,19 +14,25 @@ const fmt = (n,d=1)=>Number.isFinite(n)?(+n).toFixed(d):"—";
 const todayStr = ()=> new Date().toISOString().slice(0,10);
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 
+// دوال التحويل من صفحة القياسات
+const mgdl2mmol = mg => mg/18;
+const mmol2mgdl = mmol => mmol*18;
+const round1 = n => Math.round((Number(n)||0)*10)/10;
+const FIXED_MMOL_UPPER = 7.1; // حد الارتفاع الثابت بالـ mmol لصفحة القياسات
+
 const els = {
   loader: $("#appLoader"), btnBack: $("#btnBack"),
   chipCF: $("#chipCF"), chipCR: $("#chipCR"), chipTargets: $("#chipTargets"),
-  slotSelect: $("#slotSelect"), dateInput: $("#dateInput"), preBg: $("#preBg"),
+  slotSelect: $("#slotSelect"), dateInput: $("#dateInput"), 
+  preBg: $("#preBg"), preBgUnit: $("#preBgUnit"), btnFetchPre: $("#btnFetchPre"),
   netCarbRule: $("#netCarbRule"), doseCorrection: $("#doseCorrection"),
-  doseCarbs: $("#doseCarbs"), dayCarbs: $("#dayCarbs"), progressBar: $("#progressBar"), iobValue: $("#iobValue"),
+  doseCarbs: $("#doseCarbs"), progressBar: $("#progressBar"), iobValue: $("#iobValue"),
   smartAlerts: $("#smartAlerts"), btnScaleToTarget: $("#btnScaleToTarget"), btnClearMeal: $("#btnClearMeal"),
   btnOpenLibrary: $("#btnOpenLibrary"), mealBody: $("#mealBody"), doseFinal: $("#doseFinal"),
   sumGL: $("#sumGL"), sumGI: $("#sumGI"), sumFiber: $("#sumFiber"), sumProtein: $("#sumProtein"), sumFat: $("#sumFat"),
   sumCarbsNet: $("#sumCarbsNet"), sumCarbsRaw: $("#sumCarbsRaw"), sumCalories: $("#sumCalories"),
   libModal: $("#libModal"), libOverlay: $("#libOverlay"), libClose: $("#libClose"),
   searchBox: $("#searchBox"), itemsGrid: $("#itemsGrid"), tplModal: $("#tplModal"), tplList: $("#tplList"),
-  chat: $("#chatDrawer"), btnChat: $("#btnChat"), btnChatClose: $("#btnChatClose"), chatLog: $("#chatLog"), chatMsg: $("#chatMsg"), btnChatSend: $("#btnChatSend"),
   btnSaveMeal: $("#btnSaveMeal"), btnSaveTemplate: $("#btnSaveTemplate"), btnLoadTemplates: $("#btnLoadTemplates")
 };
 
@@ -37,7 +42,9 @@ const state = {
   slot:"b", date:todayStr(), rule:"fullFiber",
   CF:null, CRs:{b:null,l:null,d:null,s:null},
   targets:{ b:{min:0,max:0}, l:{min:0,max:0}, d:{min:0,max:0}, s:{min:0,max:0} },
-  itemsLib:[], items:[], templates:[], IOB: 0, finalDoseVal: 0
+  itemsLib:[], items:[], templates:[], IOB: 0, finalDoseVal: 0,
+  // علامات لمعرفة هل قام المستخدم بتعديل الجرعة يدوياً أم لا
+  corrDirty: false, carbDirty: false 
 };
 
 function showLoader(v){ if(els.loader) els.loader.style.display = v?"flex":"none"; }
@@ -49,10 +56,9 @@ function setBackHref(){
 function setChips(){
   const CR = state.CRs[state.slot] ?? state.child?.carbRatio ?? "—";
   const t = state.targets[state.slot] || {min:"—",max:"—"};
-  if(els.chipCF) els.chipCF.textContent = `CF: ${state.CF ?? "—"}`;
+  if(els.chipCF) els.chipCF.textContent = `CF: ${state.CF ?? "—"} ${state.child?.glucoseUnit||'mg/dL'}/U`;
   if(els.chipCR) els.chipCR.textContent = `CR: ${CR}`;
   if(els.chipTargets) els.chipTargets.textContent = `الهدف: ${t.min}–${t.max} g`;
-  if(els.dayCarbs) els.dayCarbs.value = Number.isFinite(t.max) ? t.max : 0;
 }
 
 const auth = getAuth();
@@ -87,19 +93,30 @@ async function loadChild(){
   state.targets.s = tg.snack    || {min:0,max:0};
   state.rule = state.child.netCarbRule || state.rule;
   if(els.netCarbRule) els.netCarbRule.value = state.rule;
+  if(els.preBgUnit) els.preBgUnit.value = state.child.glucoseUnit || 'mg/dL';
   setChips();
 }
 
 async function fetchPreMeasurement(){
   try{
     if(els.preBg) els.preBg.value = "";
+    state.corrDirty = false; // إعادة ضبط التعديل اليدوي
+    
     const preKey = `PRE_${SLOT_MAP[state.slot]}`;
     const coll = collection(db,"parents",state.parentId,"children",state.childId,"measurements");
-    const qy = query(coll, where("date","==", state.date), where("slotKey","==", preKey), orderBy("when","desc"), limit(1));
+    
+    // إزالة orderBy('when') لمنع مشكلة Index المطلوبة في فايربيز
+    const qy = query(coll, where("date","==", state.date), where("slotKey","==", preKey));
     const snap = await getDocs(qy);
+    
     if (!snap.empty && els.preBg) {
-      const m = snap.docs[0].data();
-      els.preBg.value = m.value_mmol ?? m.value ?? "";
+      // إذا كان هناك أكثر من قياس، نرتبها هنا برمجياً لنجلب الأحدث
+      const docs = snap.docs.map(d=>d.data()).sort((a,b)=> (b.when?.seconds || 0) - (a.when?.seconds || 0));
+      const m = docs[0];
+      
+      els.preBgUnit.value = m.unit || state.child?.glucoseUnit || "mmol/L";
+      // عرض القيمة حسب الوحدة المسجلة
+      els.preBg.value = m.unit === 'mg/dL' ? (m.value_mgdl ?? m.value) : (m.value_mmol ?? m.value);
     }
     updateTotals();
   }catch(e){ console.error("fetchPre error:", e); }
@@ -145,7 +162,8 @@ async function loadFoodLibrary(){
         carbs_g:+x.carbs_g||0, fiber_g:+x.fiber_g||0, fat_g:+x.fat_g||0, protein_g:+x.protein_g||0,
         cal_kcal:+x.cal_kcal||0, gi: Number.isFinite(+x.gi) ? +x.gi : null
       };
-      x.measures = Array.isArray(x.measures) ? x.measures : [];
+      // ⚠️ التعديل المهم: استخدام units بدلاً من measures ليتوافق مع تحديث food-items.js
+      x.units = Array.isArray(x.units) ? x.units : (Array.isArray(x.measures) ? x.measures : []);
       return x;
     });
     renderLibrary();
@@ -168,7 +186,10 @@ function renderLibrary(){
       </div>`;
     const rowMini=document.createElement("div"); rowMini.className="row-mini";
     const selUnit=document.createElement("select");
-    selUnit.innerHTML = `<option value="__g__">جرام</option>` + (it.measures||[]).map(m=>`<option value="${m.label}">${m.label} (${m.grams} جم)</option>`).join("");
+    
+    // ⚠️ قراءة it.units لتعرض المقادير (ملعقة، كوب، حبة)
+    selUnit.innerHTML = `<option value="__g__">جرام</option>` + (it.units||[]).map(m=>`<option value="${m.label}">${m.label} (${m.grams} جم)</option>`).join("");
+    
     const inpQty=document.createElement("input"); inpQty.type="number"; inpQty.step="0.1"; inpQty.value = 1;
     const btnAdd=document.createElement("button"); btnAdd.className="btn primary"; btnAdd.textContent="إضافة";
     btnAdd.onclick=()=>{
@@ -182,7 +203,8 @@ function renderLibrary(){
 
 function findMeasureGrams(it, unitLabel){
   if (unitLabel==="جرام") return 1;
-  const m=(it.measures||[]).find(x=>x.label===unitLabel); return m ? m.grams : null;
+  const m=(it.units||[]).find(x=>x.label===unitLabel); 
+  return m ? m.grams : null;
 }
 function computeGrams(unitLabel, qty, it){
   if (unitLabel==="جرام") return +qty||0;
@@ -218,12 +240,12 @@ function renderMeal(){
         <td style="font-weight:bold;color:#7c3aed;">${fmt(c.net,1)}</td><td>${fmt(c.carbsRaw,1)}</td>
         <td>${fmt(c.cal,0)}</td>
         <td><input type="number" step="0.1" value="${it.qty||0}" data-qty style="width:60px" /></td>
-        <td><select data-unit>${[`جرام`, ...(it.measures||[]).map(m=>m.label)].map(l=>`<option value="${l}" ${l===it.unitLabel?'selected':''}>${l}</option>`).join("")}</select></td>
+        <td><select data-unit>${[`جرام`, ...(it.units||[]).map(m=>m.label)].map(l=>`<option value="${l}" ${l===it.unitLabel?'selected':''}>${l}</option>`).join("")}</select></td>
         <td>${it.name||"صنف"}</td>
       `;
-      tr.querySelector("[data-qty]").addEventListener("input",(e)=>{ it.qty=+e.target.value||0; it.grams=computeGrams(it.unitLabel,it.qty,it); renderMeal(); });
-      tr.querySelector("[data-unit]").addEventListener("change",(e)=>{ it.unitLabel=e.target.value; it.grams=computeGrams(it.unitLabel,it.qty,it); renderMeal(); });
-      tr.querySelector("[data-del]").addEventListener("click",()=>{ state.items=state.items.filter(x=>x!==it); renderMeal(); });
+      tr.querySelector("[data-qty]").addEventListener("input",(e)=>{ it.qty=+e.target.value||0; it.grams=computeGrams(it.unitLabel,it.qty,it); state.carbDirty = false; renderMeal(); });
+      tr.querySelector("[data-unit]").addEventListener("change",(e)=>{ it.unitLabel=e.target.value; it.grams=computeGrams(it.unitLabel,it.qty,it); state.carbDirty = false; renderMeal(); });
+      tr.querySelector("[data-del]").addEventListener("click",()=>{ state.items=state.items.filter(x=>x!==it); state.carbDirty = false; renderMeal(); });
       els.mealBody.appendChild(tr);
     }
   }
@@ -246,26 +268,48 @@ function updateTotals(){
   if(els.sumGL) els.sumGL.textContent=fmt(sumGL,1);
   if(els.sumGI) els.sumGI.textContent = giVals.length ? Math.round(giVals.reduce((a,b)=>a+b,0)/giVals.length) : "—";
 
+  // 1. حساب جرعة الكارب
   const CR = state.CRs[state.slot] ?? state.child?.carbRatio ?? null;
-  const bg = els.preBg ? parseFloat(els.preBg.value) : NaN;
-  let rawCorr = 0;
-  if (Number.isFinite(bg) && Number.isFinite(state.CF) && bg>10.9) { rawCorr = (bg-7)/state.CF; }
   let doseCarb = Number.isFinite(CR) ? (sumNet/CR) : 0;
   
-  let totalProposed = rawCorr + doseCarb;
+  // 2. حساب جرعة التصحيح (مع مراعاة الوحدات)
+  const bgInput = els.preBg ? parseFloat(els.preBg.value) : NaN;
+  const inputUnit = els.preBgUnit ? els.preBgUnit.value : "mg/dL";
+  const childUnit = state.child?.glucoseUnit || "mg/dL";
+  
+  // تحويل القراءة المدخلة إلى وحدة الطفل المعتمدة في الـ CF
+  const bgInChildUnit = Number.isFinite(bgInput) ? 
+      (childUnit === inputUnit ? bgInput : (childUnit.includes('mmol') ? mgdl2mmol(bgInput) : mmol2mgdl(bgInput))) 
+      : NaN;
+
+  let rawCorr = 0;
+  // حد الارتفاع العادي (L.upper) بناءً على وحدة الطفل
+  const upperLimit = childUnit.includes('mmol') ? FIXED_MMOL_UPPER : mmol2mgdl(FIXED_MMOL_UPPER);
+  if (Number.isFinite(bgInChildUnit) && Number.isFinite(state.CF) && bgInChildUnit > upperLimit) { 
+    rawCorr = (bgInChildUnit - upperLimit) / state.CF; 
+  }
+  
+  // تحديث الحقول إذا لم يقم المستخدم بتعديلها يدوياً
+  const step=0.5;
+  if(els.doseCorrection && !state.corrDirty) els.doseCorrection.value = fmt(Math.round(rawCorr/step)*step, 1);
+  if(els.doseCarbs && !state.carbDirty) els.doseCarbs.value = fmt(Math.round(doseCarb/step)*step, 1);
+  
+  // قراءة القيم الحالية من الخانات (سواء كانت محسوبة أو يدوية)
+  const finalCorr = parseFloat(els.doseCorrection.value) || 0;
+  const finalCarb = parseFloat(els.doseCarbs.value) || 0;
+  
+  let totalProposed = finalCorr + finalCarb;
   let finalDose = Math.max(0, totalProposed - state.IOB);
   
-  const step=0.5;
-  if(els.doseCorrection) els.doseCorrection.value = fmt(Math.round(rawCorr/step)*step, 1);
-  if(els.doseCarbs) els.doseCarbs.value = fmt(Math.round(doseCarb/step)*step, 1);
   state.finalDoseVal = Math.round(finalDose/step)*step;
   if(els.doseFinal) els.doseFinal.textContent = fmt(state.finalDoseVal, 1);
 
+  // التنبيهات الذكية
   if(els.smartAlerts) {
     els.smartAlerts.style.display = 'none';
     els.smartAlerts.innerHTML = '';
     let alertsHtml = '';
-    if (state.IOB > 0) alertsHtml += `<strong>⏳ يوجد أنسولين نشط (${fmt(state.IOB,1)} U)</strong> تم خصمه من إجمالي الجرعة المقترحة.<br>`;
+    if (state.IOB > 0) alertsHtml += `<strong>⏳ يوجد أنسولين نشط (${fmt(state.IOB,1)} U)</strong> تم خصمه من إجمالي الجرعة لتجنب الهبوط.<br>`;
     if (sumFat > 30 || sumPro > 40) {
       els.smartAlerts.classList.add('danger');
       alertsHtml += `<strong style="margin-top:10px;">🍕 تنبيه الوجبة الدسمة:</strong> دهون وبروتين عالي. السكر سيرتفع متأخراً. يُنصح بتقسيم الجرعة (60% الآن و 40% بعد ساعتين).`;
@@ -275,6 +319,7 @@ function updateTotals(){
     if (alertsHtml) { els.smartAlerts.innerHTML = alertsHtml; els.smartAlerts.style.display = 'block'; }
   }
 
+  // Progress Bar
   const t=state.targets[state.slot] || {min:0,max:0};
   const max=t.max||0;
   const pct=max ? clamp((sumNet/max)*100,0,100) : 0;
@@ -285,9 +330,11 @@ function updateTotals(){
 }
 
 function addItemToMealFromLib(fi, unitLabel, qty){
-  const it={ id:fi.id, name:fi.name||"صنف", measures:fi.measures||[], per100:fi.per100, unitLabel:unitLabel||"جرام", qty:+qty||0, grams:0 };
+  const it={ id:fi.id, name:fi.name||"صنف", units:fi.units||[], per100:fi.per100, unitLabel:unitLabel||"جرام", qty:+qty||0, grams:0 };
   it.grams = computeGrams(it.unitLabel,it.qty,it);
-  state.items.push(it); renderMeal(); 
+  state.items.push(it); 
+  state.carbDirty = false;
+  renderMeal(); 
   if(els.libModal) els.libModal.classList.remove("open");
 }
 
@@ -306,28 +353,51 @@ async function saveMeal(){
   const payload={
     createdAt:serverTimestamp(), date:state.date, slot:state.slot, slotKey:SLOT_MAP[state.slot], rule:state.rule,
     items, totals:{ carbsRaw:+sumRaw.toFixed(1), carbsNet:+sumNet.toFixed(1), fiber:+sumFiber.toFixed(1), fat:+sumFat.toFixed(1), protein:+sumPro.toFixed(1), calories:Math.round(sumCal) },
-    doses:{ final: state.finalDoseVal, IOB: state.IOB, CF:state.CF, CR:state.CRs[state.slot] }
+    doses:{ final: state.finalDoseVal, IOB: state.IOB, CF:state.CF, CR:state.CRs[state.slot], 
+            correctionDose: parseFloat(els.doseCorrection.value)||0, carbDose: parseFloat(els.doseCarbs.value)||0 }
   };
 
   try {
     await setDoc(mref,payload);
-    const bg = els.preBg ? parseFloat(els.preBg.value) : NaN;
-    if (Number.isFinite(bg)) {
+    
+    // إنشاء قراءة القياس بشكل تلقائي وصحيح إذا تم إدخالها
+    const bgInput = els.preBg ? parseFloat(els.preBg.value) : NaN;
+    if (Number.isFinite(bgInput)) {
+      const inputUnit = els.preBgUnit.value;
+      const value_mmol = inputUnit === 'mmol/L' ? bgInput : mgdl2mmol(bgInput);
+      const value_mgdl = inputUnit === 'mg/dL' ? bgInput : mmol2mgdl(bgInput);
+      
+      const childUnit = state.child.glucoseUnit || "mmol/L";
+      const valInChild = childUnit === inputUnit ? bgInput : (childUnit.includes('mmol') ? value_mmol : value_mgdl);
+      
+      // منطق تحديد حالة السكر (هبوط، ارتفاع) لصفحة القياسات
+      let stateLabel = 'داخل النطاق';
+      const upperLimit = childUnit.includes('mmol') ? FIXED_MMOL_UPPER : mmol2mgdl(FIXED_MMOL_UPPER);
+      const lowLimit = childUnit.includes('mmol') ? 3.9 : mmol2mgdl(3.9);
+      if(valInChild > (childUnit.includes('mmol')? 14.1 : mmol2mgdl(14.1))) stateLabel = 'ارتفاع حرج';
+      else if(valInChild > (childUnit.includes('mmol')? 10.9 : mmol2mgdl(10.9))) stateLabel = 'ارتفاع شديد';
+      else if(valInChild > upperLimit) stateLabel = 'ارتفاع';
+      else if(valInChild < lowLimit) stateLabel = 'هبوط';
+
       const preKey = `PRE_${SLOT_MAP[state.slot]}`;
       const measColl = collection(db,"parents",state.parentId,"children",state.childId,"measurements");
       const qy = query(measColl, where("date","==", state.date), where("slotKey","==", preKey));
       const snap = await getDocs(qy);
+      
       if (snap.empty) {
         const [y,m,d] = state.date.split('-');
         const when = new Date(y, m-1, d, new Date().getHours(), new Date().getMinutes());
         await addDoc(measColl, {
-          value: bg, unit: state.child.glucoseUnit || "mmol/L",
+          value: bgInput, unit: inputUnit,
+          value_mmol: round1(value_mmol), value_mgdl: round1(value_mgdl),
           when: when, date: state.date, slotKey: preKey, slotOrder: 20,
-          notes: "تم التسجيل التلقائي عبر الوجبات 🍽️", createdAt: serverTimestamp()
+          state: stateLabel,
+          correctionDose: parseFloat(els.doseCorrection.value)||0,
+          notes: "تم التسجيل تلقائياً مع الوجبة 🍽️", createdAt: serverTimestamp()
         });
       }
     }
-    alert("تم حفظ الوجبة بنجاح ✅");
+    alert("تم حفظ الوجبة والقياس بنجاح ✅");
   } catch(e) { console.error(e); alert("حدث خطأ أثناء الحفظ."); }
 }
 
@@ -356,9 +426,16 @@ async function init(){
     // Events
     if(els.slotSelect) els.slotSelect.addEventListener("change", ()=>{ state.slot=els.slotSelect.value; setChips(); fetchPreMeasurement(); });
     if(els.dateInput) els.dateInput.addEventListener("change", ()=>{ state.date=els.dateInput.value; fetchPreMeasurement(); calculateIOB(); });
-    if(els.preBg) els.preBg.addEventListener("input", updateTotals);
+    if(els.btnFetchPre) els.btnFetchPre.addEventListener("click", fetchPreMeasurement);
+    
+    // عند الكتابة اليدوية تتفعل علامة الـ Dirty ليمنع الكود من إعادة حسابها تلقائياً
+    if(els.preBg) els.preBg.addEventListener("input", ()=>{ state.corrDirty=false; updateTotals(); });
+    if(els.preBgUnit) els.preBgUnit.addEventListener("change", ()=>{ state.corrDirty=false; updateTotals(); });
+    if(els.doseCorrection) els.doseCorrection.addEventListener("input", ()=>{ state.corrDirty=true; updateTotals(); });
+    if(els.doseCarbs) els.doseCarbs.addEventListener("input", ()=>{ state.carbDirty=true; updateTotals(); });
+
     if(els.netCarbRule) els.netCarbRule.addEventListener("change", ()=>{ state.rule=els.netCarbRule.value; renderMeal(); });
-    if(els.btnClearMeal) els.btnClearMeal.addEventListener("click", ()=>{ state.items=[]; renderMeal(); });
+    if(els.btnClearMeal) els.btnClearMeal.addEventListener("click", ()=>{ state.items=[]; state.carbDirty=false; renderMeal(); });
     if(els.btnSaveMeal) els.btnSaveMeal.addEventListener("click", saveMeal);
     if(els.btnOpenLibrary) els.btnOpenLibrary.addEventListener("click", ()=> { if(els.libModal) els.libModal.classList.add("open"); });
     if(els.libClose) els.libClose.addEventListener("click", ()=> { if(els.libModal) els.libModal.classList.remove("open"); });
