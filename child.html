@@ -118,6 +118,7 @@
 
       <!-- التحاليل الطبية -->
       <article class="card labs" id="labCard" aria-label="التحاليل الطبية">
+
         <div class="row space">
           <div class="row gap">
             <div class="icon">🔬</div>
@@ -145,29 +146,23 @@
           </div>
         </div>
 
-        <div class="sparkline">
-          <canvas id="hbaSpark" height="40"></canvas>
-          <div class="tiny muted">ترند HbA1c (آخر 4 تقارير)</div>
-        </div>
-
-        <div class="progress">
-          <div class="row space">
-            <div class="tiny muted">حتى موعد HbA1c القادم (4 شهور)</div>
-            <div id="progressLabel" class="tiny muted">—</div>
-          </div>
-          <div class="progress-bar">
-            <div id="progressFill"></div>
-          </div>
-        </div>
-
         <div class="row space actions">
-          <div class="row gap no-pointer">
-            <button id="addLabBtn" class="btn ghost" type="button">➕ إضافة تحليل</button>
-            <button id="openLabsBtn" class="btn ghost" type="button">فتح صفحة التحاليل</button>
+          <div class="row gap">
+            <button id="addLabBtn"   class="btn ghost" type="button">➕ إضافة</button>
+            <button id="openLabsBtn" class="btn ghost" type="button">فتح التحاليل</button>
           </div>
-          <button id="openLastPdfBtn" class="btn" type="button">فتح آخر تقرير (PDF)</button>
+          <button id="openLastPdfBtn" class="btn" type="button">📄 آخر تقرير</button>
         </div>
+
+        <!-- مخفية — مطلوبة للـ JS فقط -->
+        <div class="sparkline" style="display:none"><canvas id="hbaSpark" height="40"></canvas></div>
+        <div class="progress"  style="display:none">
+          <div class="progress-bar"><div id="progressFill"></div></div>
+          <div id="progressLabel"></div>
+        </div>
+
       </article>
+
 
     </section>
   </div>
