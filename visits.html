@@ -3,173 +3,129 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>الزيارات الطبية</title>
-  <link rel="stylesheet" href="css/visits.css?v=5">
-  <link rel="icon" href="data:,">
+  <title>الزيارات والمتابعات الطبية</title>
+  <link rel="stylesheet" href="css/visits.css?v=6">
+  <link rel="icon" href="favicon.ico">
 </head>
 <body>
+  <div id="appLoader" class="loader"><span class="spinner"></span><span>جاري جلب البيانات...</span></div>
+
   <div class="container">
+    
+    <section class="stats-bar no-print">
+      <div class="stat-box"><span class="icon">📅</span> أقرب متابعة: <strong id="nextFollowUp" class="text-primary">—</strong></div>
+      <div class="stat-box"><span class="icon">⚠️</span> توصيات بانتظار التطبيق: <strong id="pendingCount" class="text-danger">0</strong></div>
+      <div class="stat-box"><span class="icon">🩺</span> آخر زيارة: <strong id="lastVisit">—</strong></div>
+    </section>
 
-    <!-- رأس الصفحة -->
-    <header class="top">
-      <button class="back" onclick="history.back()">⬅ رجوع</button>
-      <div class="child-card">
-        <h1>🩺 زيارات طبية — <span id="childName">...</span></h1>
-        <p id="childMeta">—</p>
-        <div class="stats">
-          <span class="badge">أقرب متابعة: <strong id="nextFollowUp">—</strong></span>
-          <span class="badge">تعليمات قيد التنفيذ: <strong id="pendingCount">0</strong></span>
-          <span class="badge">آخر زيارة: <strong id="lastVisit">—</strong></span>
-        </div>
-      </div>
-    </header>
-
-    <!-- شريط الأزرار / الفلاتر -->
-    <section class="actions card">
+    <section class="actions-card no-print">
       <div class="filters">
-        <select id="filterType" title="نوع الزيارة">
-          <option value="">كل الأنواع</option>
+        <select id="filterType" class="input">
+          <option value="">كل أنواع الزيارات</option>
           <option>متابعة دورية</option>
           <option>طارئة</option>
           <option>فحص معملي</option>
           <option>استشارة أونلاين</option>
         </select>
 
-        <select id="filterApplied" title="حالة التطبيق">
-          <option value="">كل الحالات</option>
+        <select id="filterApplied" class="input">
+          <option value="">حالة التطبيق (الكل)</option>
           <option value="false">بانتظار التطبيق</option>
           <option value="true">تم التطبيق</option>
         </select>
 
-        <label class="range">
-          من
-          <input type="date" id="fromDate">
-          إلى
-          <input type="date" id="toDate">
-        </label>
+        <div class="date-range">
+          <span>من</span><input type="date" id="fromDate" class="input">
+          <span>إلى</span><input type="date" id="toDate" class="input">
+        </div>
 
-        <input type="search" id="searchBox" placeholder="بحث: الطبيب / السبب …" />
+        <input type="search" id="searchBox" class="input search-input" placeholder="ابحث باسم الطبيب أو السبب..." />
 
-        <button id="newVisitBtn">➕ إضافة زيارة</button>
-        <button id="exportCSV">⬇️ تصدير CSV</button>
-        <button id="printList">🖨️ طباعة</button>
-      </div>
-    </section>
-
-    <!-- ذكاء مساعد -->
-    <section class="ai card">
-      <div class="ai-head">
-        <h3>💡 اقتراحات ذكية (آخر 7 أيام)</h3>
-        <button id="copyAgenda" class="ghost">📋 نسخ الأجندة</button>
-      </div>
-      <ul id="aiList">
-        <li>سيتم تحليل آخر 7 أيام من القياسات واقتراح نقاط للطبيب…</li>
-      </ul>
-    </section>
-
-    <!-- جدول الزيارات -->
-    <section class="card">
-      <div class="table-head">
-        <h3>سجل الزيارات</h3>
-        <div class="legend">
-          <span class="tag upcoming">موعد قادم</span>
-          <span class="tag due">بحاجة لمتابعة</span>
-          <span class="tag labdone">فحص مكتمل</span>
+        <div class="btn-group">
+          <button id="newVisitBtn" class="btn primary">➕ إضافة زيارة</button>
+          <button id="exportCSV" class="btn ghost">⬇️ CSV</button>
+          <button id="printList" class="btn ghost">🖨️ طباعة</button>
         </div>
       </div>
-      <div id="visitsList" class="list"></div>
     </section>
+
+    <div class="main-layout">
+      <section class="visits-section">
+        <div id="visitsList" class="visits-grid"></div>
+      </section>
+
+      <aside class="ai-sidebar no-print">
+        <div class="ai-card">
+          <div class="ai-header">
+            <h3>💡 أجندة الطبيب (AI)</h3>
+            <span class="tiny-text">تحليل آخر 7 أيام</span>
+          </div>
+          <ul id="aiList" class="ai-list">
+            <li>جاري تحليل القياسات...</li>
+          </ul>
+          <button id="copyAgenda" class="btn secondary full-width">📋 نسخ الأجندة</button>
+        </div>
+      </aside>
+    </div>
 
   </div>
 
-  <!-- نافذة منبثقة: إضافة/تعديل زيارة -->
   <div id="visitModal" class="modal hidden">
     <div class="modal-body">
       <div class="modal-header">
-        <h3 id="modalTitle">إضافة زيارة</h3>
-        <button id="closeModal" class="close">✕</button>
+        <h3 id="modalTitle">إضافة زيارة طبية</h3>
+        <button id="closeModal" class="close-btn">✕</button>
       </div>
 
-      <form id="visitForm" class="grid" novalidate>
-        <div class="field">
-          <label>تاريخ الزيارة</label>
-          <input type="date" id="date" required>
+      <form id="visitForm" class="modal-form" novalidate>
+        <div class="grid2">
+          <div class="field"><label>تاريخ الزيارة</label><input type="date" id="date" required></div>
+          <div class="field"><label>نوع الزيارة</label>
+            <select id="type" required>
+              <option value="">اختر النوع</option>
+              <option>متابعة دورية</option><option>طارئة</option><option>فحص معملي</option><option>استشارة أونلاين</option>
+            </select>
+          </div>
+          <div class="field"><label>الطبيب / المركز</label><input type="text" id="doctorName" placeholder="مثال: د/ محمد علي" required></div>
+          <div class="field"><label>وقت الزيارة</label><input type="time" id="time"></div>
         </div>
-        <div class="field">
-          <label>وقت الزيارة (اختياري)</label>
-          <input type="time" id="time">
-        </div>
-        <div class="field">
-          <label>نوع الزيارة</label>
-          <select id="type" required>
-            <option value="">اختر النوع</option>
-            <option>متابعة دورية</option>
-            <option>طارئة</option>
-            <option>فحص معملي</option>
-            <option>استشارة أونلاين</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>اسم الطبيب/المركز</label>
-          <input type="text" id="doctorName" placeholder="مثال: د/ محمد علي" required>
-        </div>
-        <div class="field wide">
-          <label>سبب الزيارة</label>
-          <input type="text" id="reason" placeholder="مثال: متابعة جرعات / هبوط متكرر">
-        </div>
-        <div class="field wide">
-          <label>خلاصة/تشخيص الطبيب</label>
-          <textarea id="summary" rows="3" placeholder="ملخص الزيارة"></textarea>
-        </div>
-        <div class="field wide">
-          <label>توصيات الطبيب</label>
-          <textarea id="recommendations" rows="3" placeholder="تعليمات/توصيات"></textarea>
-        </div>
-        <div class="field">
-          <label>تعديل طويل المفعول (اختياري)</label>
-          <input type="text" id="longActingChange" placeholder="مثال: Lantus +1U ليلاً">
-        </div>
-        <div class="field">
-          <label>تعديلات جرعات الوجبات (اختياري)</label>
-          <input type="text" id="mealDosesChange" placeholder="مثال: فطور +0.5U">
-        </div>
-        <div class="field wide">
-          <label>فحوصات مطلوبة (افصلها بفواصل)</label>
-          <input type="text" id="labsRequested" placeholder="HbA1c, Lipid Profile, TSH">
-        </div>
-        <div class="field">
-          <label>تاريخ متابعة مقترح (اختياري)</label>
-          <input type="date" id="followUpDate">
-        </div>
-        <div class="field">
-          <label>تم تطبيق التوصيات؟</label>
-          <select id="applied">
-            <option value="false">بانتظار التطبيق</option>
-            <option value="true">تم التطبيق</option>
-          </select>
+        
+        <div class="field"><label>سبب الزيارة</label><input type="text" id="reason" placeholder="متابعة جرعات / هبوط متكرر..."></div>
+        
+        <div class="field"><label>خلاصة وتشخيص الطبيب</label><textarea id="summary" rows="2" placeholder="ماذا قال الطبيب؟"></textarea></div>
+        
+        <div class="field"><label>التوصيات والتعليمات</label><textarea id="recommendations" rows="3" placeholder="اكتب التعليمات لتتذكرها..."></textarea></div>
+        
+        <div class="grid2 bg-light pad-10">
+          <div class="field"><label>تعديل القاعدي (طويل المفعول)</label><input type="text" id="longActingChange" placeholder="مثال: +1 وحدة ليلاً"></div>
+          <div class="field"><label>تعديل جرعات الوجبات</label><input type="text" id="mealDosesChange" placeholder="مثال: تقليل معامل الفطار"></div>
         </div>
 
-        <!-- المرفقات -->
-        <div class="field wide">
-          <label>مرفقات (صور/PDF) — يمكن اختيار عدة ملفات</label>
-          <input type="file" id="attachments" multiple accept=".png,.jpg,.jpeg,.pdf,.webp">
-          <div id="selectedFiles" class="files"></div>
+        <div class="field"><label>فحوصات مطلوبة (افصلها بفواصل)</label><input type="text" id="labsRequested" placeholder="HbA1c, Lipid Profile, TSH"></div>
+        
+        <div class="grid2">
+          <div class="field"><label>موعد المتابعة القادمة</label><input type="date" id="followUpDate"></div>
+          <div class="field"><label>حالة تطبيق التعليمات</label>
+            <select id="applied"><option value="false">⏳ بانتظار التطبيق</option><option value="true">✅ تم التطبيق</option></select>
+          </div>
         </div>
 
-        <!-- المرفقات الحالية عند التعديل -->
-        <div class="field wide hidden" id="existingWrap">
-          <label>المرفقات الحالية</label>
-          <div id="existingFiles" class="files"></div>
+        <div class="field">
+          <label>إرفاق ملفات (روشتة / تحاليل)</label>
+          <input type="file" id="attachments" multiple accept=".png,.jpg,.jpeg,.pdf">
+          <div id="selectedFiles" class="files-wrap"></div>
         </div>
+        <div class="field hidden" id="existingWrap"><label>المرفقات الحالية</label><div id="existingFiles" class="files-wrap"></div></div>
 
         <div class="form-actions">
-          <button type="submit" id="saveVisitBtn">حفظ</button>
-          <button type="button" id="cancelVisitBtn" class="secondary">إلغاء</button>
+          <button type="submit" id="saveVisitBtn" class="btn primary">💾 حفظ الزيارة</button>
+          <button type="button" id="cancelVisitBtn" class="btn ghost">إلغاء</button>
         </div>
       </form>
     </div>
   </div>
 
-  <script type="module" src="js/visits.js?v=5"></script>
+  <script type="module" src="js/visits.js?v=6"></script>
+  <script type="module" src="js/header.js"></script>
 </body>
 </html>
