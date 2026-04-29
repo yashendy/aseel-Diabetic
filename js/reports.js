@@ -46,7 +46,11 @@ function wire(){
   unitSel=$('unitSel'); fromDate=$('fromDate'); toDate=$('toDate');
   reportGrid=$('reportGrid'); emptyGrid=$('emptyGrid'); aiTable=$('aiTable');
   cmpElems={AFrom:$('cmpAFrom'), ATo:$('cmpATo'), BFrom:$('cmpBFrom'), BTo:$('cmpBTo')};
+  
+  // تفعيل أزرار الطباعة
   $('openPrint').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&from=${fromDate.value}&to=${toDate.value}`,'_blank');
+  $('openPrintBlank').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&from=${fromDate.value}&to=${toDate.value}&blank=1`,'_blank');
+  
   $('exportPdf').onclick=exportPdf; $('exportCsv').onclick=exportCSV; $('exportXlsx').onclick=exportXLSX;
 }
 async function loadChild(uid){
