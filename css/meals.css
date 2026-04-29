@@ -10,7 +10,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .chips{display:flex;gap:8px; flex-wrap:wrap;}
 .chip{background:#eef;border-radius:999px;padding:6px 10px;font-size:12px;color:#444}
 
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-2{display:grid;grid-template-columns:1fr;gap:16px}
 .panel{background:var(--panel);border-radius:var(--br);padding:16px;box-shadow:0 6px 16px rgba(0,0,0,.06)}
 .panel h3{margin:0 0 12px}
 
