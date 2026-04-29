@@ -1,5 +1,5 @@
 // js/meals.js
-console.log("✅ [meals] module loaded v6.2 (Prevent Dupes & Daily Logs)");
+console.log("✅ [meals] module loaded v6.3 (Fetch Full Meal & Doses)");
 
 import { db, storage } from "./firebase-config.js";
 import {
@@ -93,12 +93,15 @@ async function loadChild(){
   setChips();
 }
 
-// 🌟 جلب السكر وجرعاته المسجلة مسبقاً لمنع التكرار
+// 🌟 جلب السكر وجرعاته وأصنافه المسجلة مسبقاً لمنع التكرار وللتعديل
 async function fetchPreMeasurement(showAlert = false){
   try{
     if(showAlert === true && els.btnFetchPre) els.btnFetchPre.textContent = "⏳ جاري الجلب...";
     
+    // 1. تصفير الخانات قبل الجلب لضمان نظافة البيانات
     if(els.preBg) els.preBg.value = "";
+    if(els.doseCorrection) els.doseCorrection.value = "";
+    if(els.doseCarbs) els.doseCarbs.value = "";
     state.corrDirty = false; 
     state.carbDirty = false;
     
@@ -108,6 +111,7 @@ async function fetchPreMeasurement(showAlert = false){
     else if (state.slot === 'd') preKeys = ['PRE_DINNER'];
     else if (state.slot === 's') preKeys = ['SNACK']; 
     
+    // --- جلب القياس (السكر) ---
     const coll = collection(db,"parents",state.parentId,"children",state.childId,"measurements");
     const qy = query(coll, where("date", "==", state.date));
     const snap = await getDocs(qy);
@@ -118,6 +122,7 @@ async function fetchPreMeasurement(showAlert = false){
       if (preKeys.includes(data.slotKey)) docs.push({ id: document.id, ...data });
     });
     
+    let fetchedMsg = "";
     if (docs.length > 0) {
       docs.sort((a,b)=> (b.when?.seconds || 0) - (a.when?.seconds || 0));
       const m = docs[0];
@@ -129,18 +134,51 @@ async function fetchPreMeasurement(showAlert = false){
       
       if (m.correctionDose !== undefined && els.doseCorrection) {
         els.doseCorrection.value = m.correctionDose;
-        state.corrDirty = true; // تم الجلب فنعلمها كيدوي كي لا تُمسح
+        state.corrDirty = true; 
       }
       if (m.carbDose !== undefined && els.doseCarbs) {
         els.doseCarbs.value = m.carbDose;
         state.carbDirty = true;
       }
-      
-      if(showAlert === true) alert(`✅ تم جلب البيانات المسجلة بنجاح!`);
-    } else {
-      if(showAlert === true) alert("🤷‍♂️ لم يتم العثور على قياس أو جرعة مسجلة قبل هذه الوجبة.");
+      fetchedMsg += "قياس السكر ";
     }
-    updateTotals();
+
+    // --- جلب بيانات الوجبة (الجرعات والأصناف) ---
+    const mealRef = doc(db, "parents", state.parentId, "children", state.childId, "meals", `${state.date}_${state.slot}`);
+    const mealSnap = await getDoc(mealRef);
+    
+    if (mealSnap.exists()) {
+      const md = mealSnap.data();
+      
+      // جلب جرعات الوجبة المحفوظة وتثبيتها
+      if (md.doses) {
+        if (md.doses.correctionDose !== undefined && els.doseCorrection) {
+          els.doseCorrection.value = md.doses.correctionDose;
+          state.corrDirty = true;
+        }
+        if (md.doses.carbDose !== undefined && els.doseCarbs) {
+          els.doseCarbs.value = md.doses.carbDose;
+          state.carbDirty = true;
+        }
+      }
+      
+      // جلب أصناف الطعام المحفوظة لهذه الوجبة
+      if (md.items && Array.isArray(md.items)) {
+          state.items = md.items;
+      }
+      fetchedMsg += (fetchedMsg ? "و " : "") + "بيانات الوجبة ";
+    } else {
+      // تفريغ الجدول إذا لم يتم حفظ وجبة مسبقاً في هذا الوقت
+      state.items = [];
+    }
+
+    // بناء الجدول وحساب الإجماليات
+    renderMeal(); 
+
+    if (showAlert === true) {
+      if (fetchedMsg) alert(`✅ تم جلب ${fetchedMsg}المسجلة بنجاح!`);
+      else alert("🤷‍♂️ لم يتم العثور على بيانات مسجلة لهذه الوجبة.");
+    }
   }catch(e){ 
     console.error("fetchPre error:", e); 
     if(showAlert === true) alert("حدث خطأ أثناء الاتصال بقاعدة البيانات.");
@@ -162,7 +200,7 @@ async function loadDailyMeals() {
     meals.sort((a,b) => (order[a.slot]||99) - (order[b.slot]||99));
 
     if (meals.length === 0) {
-       els.dailyMealsBody.innerHTML = `<tr><td colspan="6" class="muted" style="text-align:center">لا توجد وجبات مسجلة اليوم</td></tr>`;
+       els.dailyMealsBody.innerHTML = `<tr><td colspan=\"6\" class=\"muted\" style=\"text-align:center\">لا توجد وجبات مسجلة اليوم</td></tr>`;
        return;
     }
 
@@ -182,7 +220,6 @@ async function loadDailyMeals() {
   } catch(e) { console.error("Error loading daily meals:", e); }
 }
 
-// وظيفة حذف الوجبة لجدول اليوم
 window.deleteDailyMeal = async (id) => {
    if(!confirm("⚠️ هل أنت متأكد من حذف هذه الوجبة؟ لن يتم مسح قياس السكر المرتبط بها إذا وُجد.")) return;
    try {
@@ -334,7 +371,6 @@ function getSaveSlotKey(slot){
   return 'OTHER';
 }
 
-// 🌟 الحفظ الشامل (وجبة + قياس للتقارير مع منع التكرار)
 async function saveMeal(){
   if(!state.child) return;
   const id=`${state.date}_${state.slot}`;
@@ -354,9 +390,8 @@ async function saveMeal(){
 
   try {
     await setDoc(mref,payload);
-    loadDailyMeals(); // تحديث جدول اليوم فوراً
+    loadDailyMeals(); 
     
-    // 🌟 إنشاء قراءة للتقارير سواء فيه سكر أو بس فيه جرعة أنسولين
     const bgInput = els.preBg ? parseFloat(els.preBg.value) : NaN;
     if (Number.isFinite(bgInput) || state.finalDoseVal > 0 || sumNet > 0) {
       
@@ -396,13 +431,12 @@ async function saveMeal(){
         measPayload.state = stateLabel;
       }
 
-      // هل يوجد قياس سابق مسجل؟ (سؤال ولي الأمر)
       const qy = query(measColl, where("date","==", state.date), where("slotKey","==", savePreKey));
       const snap = await getDocs(qy);
       
       if (!snap.empty) {
         const existingId = snap.docs[0].id;
-        if (confirm("⚠️ يوجد قياس أو جرعة مسجلة بالفعل لهذه الوجبة. هل تريد تحديثها بالبيانات الجديدة لتظهر في التقارير؟")) {
+        if (confirm("⚠️ يوجد قياس أو جرعة مسجلة بالفعل لهذه الوجبة. هل تريد تحديثها بالبيانات الجديدة؟")) {
           await setDoc(doc(measColl, existingId), measPayload, { merge: true });
         }
       } else {
@@ -433,7 +467,7 @@ async function init(){
     await loadChild(); await loadFoodLibrary(); await calculateIOB();
     
     await loadDailyMeals();
-    await fetchPreMeasurement(false);
+    await fetchPreMeasurement(false); // جلب تلقائي لبيانات الوجبة عند الفتح
 
     // Events
     if(els.slotSelect) els.slotSelect.addEventListener("change", ()=>{ state.slot=els.slotSelect.value; setChips(); fetchPreMeasurement(false); });
@@ -443,6 +477,8 @@ async function init(){
     
     if(els.preBg) els.preBg.addEventListener("input", ()=>{ state.corrDirty=false; updateTotals(); });
     if(els.preBgUnit) els.preBgUnit.addEventListener("change", ()=>{ state.corrDirty=false; updateTotals(); });
+    
+    // عند التعديل اليدوي نمنع مسح الجرعة
     if(els.doseCorrection) els.doseCorrection.addEventListener("input", ()=>{ state.corrDirty=true; updateTotals(); });
     if(els.doseCarbs) els.doseCarbs.addEventListener("input", ()=>{ state.carbDirty=true; updateTotals(); });
 
