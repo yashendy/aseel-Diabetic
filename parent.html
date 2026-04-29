@@ -3,136 +3,102 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>أطفالك</title>
-
-  <!-- فافيكون محلي -->
-  <link rel="icon" href="./favicon.ico">
-  <link rel="icon" type="image/png" href="./favicon.png">
-
-  <!-- تنسيقات بسيطة (اختياري) -->
-  <style>
-    :root{--p:#4b4ded;--g:#09a27d;--muted:#777}
-    body{font-family:system-ui,Segoe UI,Tahoma,Arial; background:#f6f9ff; margin:0}
-    .container{max-width:1100px;margin:24px auto;padding:0 12px}
-    .card{background:#fff;border-radius:14px;box-shadow:0 6px 18px rgba(20,20,60,.06);padding:18px;margin-bottom:16px}
-    .top .head h1{margin:0 0 4px}
-    .muted{color:var(--muted)}
-    .tools{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
-    .field{display:flex;flex-direction:column;gap:6px}
-    input[type=text], textarea, select{border:1px solid #e5e7ef;border-radius:10px;padding:10px 12px;font:inherit;background:#fff}
-    .add-btn,.btn{border:0;border-radius:10px;padding:10px 14px;background:var(--p);color:#fff;cursor:pointer}
-    .btn.secondary{background:#e9ecff;color:#2b2f7a}
-    .btn.danger{background:#e53935}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-    .kid.card{display:flex;flex-direction:column;gap:10px}
-    .kid-head{display:flex;gap:12px;align-items:center}
-    .avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
-    .name{font-weight:700}
-    .meta{font-size:.9rem;color:var(--muted)}
-    .badge{display:inline-block;background:#eef3ff;color:#3843b6;border-radius:20px;padding:4px 10px;margin-top:6px;font-size:.78rem}
-    .badge.ok{background:#e9fbf6;color:#0f7a61}
-    .badge.warn{background:#fff4e5;color:#b26b00}
-    .chips{display:flex;gap:8px;flex-wrap:wrap}
-    .chip{background:#f2f4fb;border:1px solid #e9ebf5;border-radius:12px;padding:4px 8px;font-size:.82rem}
-    .kid-actions{display:flex;gap:8px;margin-top:6px}
-    dialog::backdrop{background:rgba(0,0,0,.25)}
-    dialog{border:0;border-radius:16px;padding:0}
-    dialog form{padding:18px}
-    .ai-fab{position:fixed;right:20px;bottom:20px;background:var(--p);border-radius:50%;width:58px;height:58px;color:#fff;border:0;font-size:26px;cursor:pointer;box-shadow:0 10px 22px rgba(60,60,150,.25)}
-    .ai-widget{position:fixed;right:20px;bottom:90px;width:min(420px,90vw);background:#fff;border-radius:14px;box-shadow:0 18px 40px rgba(20,20,60,.18);display:flex;flex-direction:column;overflow:hidden}
-    .ai-widget.hidden{display:none}
-    .ai-header{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #eee}
-    .ai-messages{padding:12px;height:300px;overflow:auto;display:flex;flex-direction:column;gap:8px;background:#fafbff}
-    .msg{padding:10px 12px;border-radius:12px;max-width:85%}
-    .msg.user{align-self:flex-end;background:#e9ecff}
-    .msg.assistant{align-self:flex-start;background:#eafaf5}
-    .ai-input{padding:10px;border-top:1px solid #eee}
-    .ai-row{display:flex;gap:8px}
-    .ai-quick{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
-    .ai-quick .chip{cursor:pointer}
-    .loader{position:fixed;bottom:20px;left:20px;background:#1f234f;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 18px rgba(10,10,30,.25)}
-    .hidden{display:none}
-  </style>
+  <title>منصة أسيل - لوحة تحكم الأهل</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="css/parent.css?v=2">
 </head>
 <body>
-  <div class="container">
-    <header class="top card">
-      <div class="head">
-        <h1>👨‍👩‍👧‍👦 أطفالك</h1>
-        <p class="muted">اختَر طفلًا لعرض بياناته أو استخدام المساعد الذكي.</p>
-      </div>
-      <div class="tools">
-        <div class="field">
-          <label for="search">بحث بالاسم</label>
-          <input type="text" id="search" placeholder="مثال: سارة" />
-        </div>
-        <a class="add-btn" href="add-child.html">➕ إضافة طفل</a>
-        <button id="openLinkDlg" class="add-btn" type="button">🔗 ربط دكتور</button>
-      </div>
-    </header>
+  
+  <header class="parent-header no-print">
+    <div class="header-brand">
+      <div class="logo-icon">أ</div>
+      <span>منصة <b>أسيل</b></span>
+    </div>
+    <div class="header-actions">
+      <span class="parent-greeting">مرحباً بك 👨‍👩‍👧‍👦</span>
+      <button id="logoutBtn" class="btn-logout">تسجيل الخروج ↩</button>
+    </div>
+  </header>
 
-    <section id="kidsGrid" class="grid"></section>
-    <div id="empty" class="card muted hidden">لا يوجد أطفال بعد… ابدئي بإضافة طفل جديد.</div>
+  <div class="container">
+    <section class="welcome-card card">
+      <div class="welcome-text">
+        <h1>أطفالك المسجلين</h1>
+        <p class="muted">تابعي قراءات أطفالك لحظة بلحظة، أو استخدمي المساعد الذكي للاستشارات السريعة.</p>
+      </div>
+      <div class="tools-bar">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search" placeholder="ابحثي باسم الطفل..." />
+        </div>
+        <div class="action-btns">
+          <a class="btn primary" href="add-child.html">➕ إضافة طفل جديد</a>
+          <button id="openLinkDlg" class="btn secondary">🔗 ربط حساب الطبيب</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="kidsGrid" class="kids-grid"></section>
+    
+    <div id="empty" class="empty-state hidden">
+      <div class="empty-icon">👶</div>
+      <h3>لا يوجد أطفال مسجلين بعد</h3>
+      <p class="muted">ابدئي الآن بإضافة طفلك الأول لمتابعة قراءاته وجرعاته بذكاء.</p>
+      <a class="btn primary" href="add-child.html" style="margin-top:10px; display:inline-block;">إضافة طفل الآن</a>
+    </div>
   </div>
 
-  <!-- حوار إدخال كود الربط -->
-  <dialog id="linkDlg">
-    <form method="dialog" style="min-width:min(92vw,480px)">
-      <h3>ربط دكتور</h3>
-      <p class="muted">أدخلي الكود الذي أرسله لكِ الطبيب.</p>
+  <div id="linkDlg" class="modal hidden">
+    <div class="modal-content">
+      <h3>🔗 ربط حساب الطبيب</h3>
+      <p class="muted">أدخلي الكود المكون من حروف وأرقام الذي أعطاه لك الطبيب.</p>
       <div class="field">
-        <label for="linkCodeInput">الكود</label>
-        <input id="linkCodeInput" type="text" placeholder="ABC1234" />
+        <input id="linkCodeInput" type="text" placeholder="مثال: DOC-1234" />
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
-        <button id="linkCancel" type="button">إلغاء</button>
-        <button id="linkSubmit" class="btn" type="button">ربط</button>
+      <div id="linkMsg" class="alert-msg hidden"></div>
+      <div class="modal-actions">
+        <button id="linkSubmit" class="btn primary">تأكيد الربط</button>
+        <button id="linkCancel" class="btn ghost">إلغاء</button>
       </div>
-      <div id="linkMsg" class="muted" style="margin-top:8px"></div>
-    </form>
-  </dialog>
+    </div>
+  </div>
 
-  <!-- زر المساعد + الويدجت -->
-  <button class="ai-fab" id="aiFab" title="مساعد">🤖</button>
+  <button class="ai-fab" id="aiFab" title="مساعد أسيل الذكي">🤖</button>
   <div class="ai-widget hidden" id="aiWidget">
     <div class="ai-header">
-      <div><strong>مساعدك الغذائي</strong> · <small id="aiContext" class="muted">بدون سياق طفل</small></div>
-      <div>
-        <button class="btn secondary" id="aiMin" type="button">تصغير</button>
-        <button class="btn danger" id="aiClose" type="button">إغلاق</button>
+      <div class="ai-title">
+        <strong>🤖 مساعد أسيل الطبي</strong>
+        <small id="aiContext" class="muted">بدون سياق طفل</small>
+      </div>
+      <div class="ai-controls">
+        <button class="icon-btn" id="aiMin" title="تصغير">➖</button>
+        <button class="icon-btn danger-text" id="aiClose" title="إغلاق">✖</button>
       </div>
     </div>
     <div class="ai-messages" id="aiMessages"></div>
-    <div class="ai-input">
+    <div class="ai-input-area">
       <div class="ai-quick">
-        <span class="chip ai-quick-btn" data-q="كيف أحسب جرعة الوجبة؟">حساب جرعة الوجبة؟</span>
-        <span class="chip ai-quick-btn" data-q="ما هو CR و CF؟">ما هو CR و CF؟</span>
-        <span class="chip ai-quick-btn" data-q="لخص يوم الطفل.">ملخص اليوم</span>
+        <span class="ai-chip" data-q="كيف أحسب جرعة الوجبة؟">حساب جرعة؟</span>
+        <span class="ai-chip" data-q="ما هو CR و CF؟">ما هو CR/CF؟</span>
+        <span class="ai-chip" data-q="لخص اليوم.">ملخص اليوم</span>
       </div>
       <div class="ai-row">
-        <textarea id="aiInput" placeholder="اكتبي سؤالك هنا…" rows="2" style="flex:1"></textarea>
-        <button class="btn" id="aiSend" type="button">إرسال</button>
+        <textarea id="aiInput" placeholder="اكتبي سؤالك هنا..." rows="1"></textarea>
+        <button id="aiSend" class="btn primary">إرسال</button>
       </div>
-      <div id="aiKeyWarn" class="muted" style="display:none;margin-top:6px">
-        المفتاح غير مضبوط. افتحي صفحة اختبار المفتاح ثم خزّنيه في المتصفح.
-      </div>
+      <div id="aiKeyWarn" class="tiny-warn hidden">⚠️ تأكدي من إعداد مفتاح الذكاء الاصطناعي الخاص بك.</div>
     </div>
   </div>
 
-  <div id="loader" class="loader hidden">جارٍ تحميل البيانات…</div>
+  <div id="loader" class="screen-loader hidden"><div class="spinner"></div></div>
 
-  <!-- Firebase -->
   <script type="module" src="js/firebase-config.js"></script>
-
-  <!-- Google Generative AI SDK (للعمل عبر المتصفح لو استخدمتي المفتاح محليًا) -->
   <script type="module">
     import { GoogleGenerativeAI } from "https://cdn.jsdelivr.net/npm/@google/generative-ai/dist/index.min.mjs";
     window.GoogleGenerativeAI = GoogleGenerativeAI;
-    // قراءة مفتاح محليًا إن وجد (للاستخدام الشخصي فقط)
     window.GEMINI_API_KEY = localStorage.getItem('GEMINI_API_KEY') || window.GEMINI_API_KEY || "YOUR_GEMINI_API_KEY";
   </script>
 
-  <!-- منطق الصفحة -->
-  <script type="module" src="js/parent.js?v=7"></script>
+  <script type="module" src="js/parent.js?v=8"></script>
 </body>
 </html>
