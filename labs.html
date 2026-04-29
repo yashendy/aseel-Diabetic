@@ -3,164 +3,124 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>التحاليل والفحوصات الطبية</title>
+  <title>السجل الطبي والتحاليل الشاملة</title>
   <link rel="icon" href="favicon.ico">
-  <link rel="stylesheet" href="css/labs.css?v=2">
+  <link rel="stylesheet" href="css/labs.css?v=3">
 
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/arabic-persian-reshaper@2.2.1/dist/arabic-persian-reshaper.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bidi-js@1.0.3/dist/bidi.min.js"></script>
 </head>
 <body>
-  <div id="appLoader" class="loader"><span class="spinner"></span><span>يجري التحميل...</span></div>
+  <div id="appLoader" class="loader"><span class="spinner"></span><span>جاري معالجة البيانات الطبية...</span></div>
 
   <div class="container">
     
-    <div class="card no-print row space" style="border:1px solid #2563eb; background:#eff6ff;">
+    <div class="card no-print row space top-bar">
       <div class="row">
-        <button id="saveBtn" class="btn primary">💾 حفظ التقرير</button>
+        <button id="saveBtn" class="btn primary">💾 حفظ السجل</button>
         <button id="savePdfBtn" class="btn ghost">💾 حفظ + ⬇️ PDF</button>
         <button id="printBtn" class="btn secondary">🖨️ طباعة</button>
       </div>
-      <span id="dueBadge" class="pill tiny bold"></span>
+      <div id="dueBadge" class="pill bold"></div>
     </div>
 
-    <div class="card">
-      <div class="grid2">
-        <div>
-          <label class="tiny">تاريخ التحليل</label>
-          <input id="labDate" type="date">
-        </div>
-        <div>
-          <label class="tiny">نوع التقرير</label>
-          <select id="labType">
-            <option value="full">شامل (سنوي / نصف سنوي)</option>
-            <option value="hba1c_only">دوري (HbA1c فقط)</option>
-          </select>
-        </div>
+    <div class="grid-main">
+      <div class="card">
+        <h3>📅 بيانات التقرير</h3>
+        <label class="tiny">تاريخ التحليل</label>
+        <input id="labDate" type="date">
+        <label class="tiny" style="margin-top:10px">نوع الفحص</label>
+        <select id="labType">
+          <option value="hba1c_only">دوري (HbA1c فقط)</option>
+          <option value="full">شامل (سنوي / فحص كامل)</option>
+        </select>
       </div>
-      <div class="tiny" id="fileLinkBox"></div>
-    </div>
-
-    <div class="card no-print">
-      <h3 style="margin-top:0; color:#2563eb;">مسار السكر التراكمي (HbA1c) 📈</h3>
-      <div class="chart-container" style="height:250px; width:100%">
-        <canvas id="hba1cChart"></canvas>
+      <div class="card">
+        <h3>📈 تطور السكر التراكمي (HbA1c)</h3>
+        <div style="height:140px"><canvas id="hba1cChart"></canvas></div>
       </div>
     </div>
 
-    <div class="card">
-      <h3>السكر التراكمي (HbA1c)</h3>
+    <div class="card section-card">
+      <div class="section-head"><h3>🩸 السكر التراكمي</h3> <span class="ref-range">الهدف: &lt; 7.0%</span></div>
       <table>
-        <tr><th>القيمة</th><th>الوحدة</th><th>ملاحظات الطبيب</th></tr>
+        <tr><th>النتيجة (%)</th><th>الحالة</th><th>ملاحظات الطبيب</th></tr>
         <tr>
-          <td><input id="hba1cVal" type="number" step="0.1" placeholder="مثال: 6.5"></td>
-          <td style="text-align:center">%</td>
-          <td><input id="hba1cNote" placeholder="الهدف المطلوب أو تعليق"></td>
+          <td><input id="hba1cVal" type="number" step="0.1" class="main-input"></td>
+          <td id="hba1cStatus">—</td>
+          <td><input id="hba1cNote" placeholder="مثال: استمر على الخطة"></td>
         </tr>
       </table>
     </div>
 
-    <div class="card">
-      <h3>فيتامين د (Vitamin D)</h3>
-      <table>
-        <tr><th>القيمة</th><th>الوحدة</th><th>ملاحظات</th></tr>
-        <tr>
-          <td><input id="vit_d" type="number" step="0.1"></td>
-          <td style="text-align:center">nmol/L</td>
-          <td><input id="vit_note" placeholder="يحتاج جرعة علاجية / وقائية؟"></td>
-        </tr>
-      </table>
+    <div class="card section-card">
+      <div class="section-head"><h3>📋 صورة الدم (CBC)</h3> <span class="ref-range">الفحص العام</span></div>
+      <div class="grid3">
+        <div><label class="tiny">Hgb (الهيموجلوبين)</label><input id="cbc_hgb" type="number" step="0.1" placeholder="120-155"></div>
+        <div><label class="tiny">WBCs (ك. الدم البيضاء)</label><input id="cbc_wbc" type="number" step="0.1" placeholder="4.0-10.4"></div>
+        <div><label class="tiny">Platelets (الصفائح)</label><input id="cbc_plt" type="number" step="1" placeholder="150-450"></div>
+      </div>
     </div>
 
-    <div class="card">
-      <h3>حساسية القمح (Celiac Disease)</h3>
-      <table>
-        <tr><th>الاختبار</th><th>القيمة</th><th>الوحدة</th><th>ملاحظات</th></tr>
-        <tr><td>TTG IgA</td><td><input id="celiac_iga" type="number" step="0.1"></td><td style="text-align:center">AU/ml</td><td><input id="celiac_note"></td></tr>
-        <tr><td>TTG IgG</td><td><input id="celiac_igg" type="number" step="0.1"></td><td style="text-align:center">AU/ml</td><td></td></tr>
-      </table>
+    <div class="grid2">
+      <div class="card section-card">
+        <div class="section-head"><h3>☀️ فيتامين د</h3> <span class="ref-range">الطبيعي: &gt; 75 nmol/L</span></div>
+        <table class="mini-table">
+          <tr><td>النتيجة</td><td><input id="vit_d" type="number" step="0.1"></td><td>nmol/L</td></tr>
+          <tr><td colspan="3"><input id="vit_note" placeholder="ملاحظات"></td></tr>
+        </table>
+      </div>
+      <div class="card section-card">
+        <div class="section-head"><h3>🌾 حساسية القمح (Celiac)</h3> <span class="ref-range">Negative: &lt; 20</span></div>
+        <table class="mini-table">
+          <tr><td>TTG IgA</td><td><input id="celiac_iga" type="number" step="0.1"></td></tr>
+          <tr><td>TTG IgG</td><td><input id="celiac_igg" type="number" step="0.1"></td></tr>
+        </table>
+      </div>
     </div>
 
-    <div class="card">
-      <h3>دهون الدم (Lipid Profile)</h3>
-      <table>
-        <tr><th>البند</th><th>القيمة</th><th>الوحدة</th><th>ملاحظات</th></tr>
-        <tr><td>الكوليسترول (TC)</td><td><input id="lip_tc" type="number" step="0.1"></td><td style="text-align:center">mmol/L</td><td><input id="lip_note"></td></tr>
-        <tr><td>الدهون الثلاثية (TG)</td><td><input id="lip_tg" type="number" step="0.1"></td><td style="text-align:center">mmol/L</td><td></td></tr>
-        <tr><td>الدهون الضارة (LDL)</td><td><input id="lip_ldl" type="number" step="0.1"></td><td style="text-align:center">mmol/L</td><td></td></tr>
-        <tr><td>الدهون النافعة (HDL)</td><td><input id="lip_hdl" type="number" step="0.1"></td><td style="text-align:center">mmol/L</td><td></td></tr>
-      </table>
+    <div class="card section-card">
+      <h3>🔬 الكلى، الكبد، والغدة</h3>
+      <div class="grid3">
+        <div><label class="tiny">TSH (الغدة)</label><input id="thy_tsh" type="number" step="0.01"></div>
+        <div><label class="tiny">Alb/Creat (الكلى)</label><input id="ren_mac" type="number" step="0.01"></div>
+        <div><label class="tiny">ALT (الكبد)</label><input id="liv_alt" type="number" step="0.1"></div>
+      </div>
     </div>
 
-    <div class="card">
-      <h3>وظائف الغدة، الكلى، والكبد</h3>
-      <table>
-        <tr><th>الاختبار</th><th>القيمة</th><th>الوحدة</th><th>ملاحظات</th></tr>
-        <tr><td>TSH (الغدة)</td><td><input id="thy_tsh" type="number" step="0.01"></td><td style="text-align:center">mIU/L</td><td><input id="thy_note"></td></tr>
-        <tr><td>FT4 (الغدة)</td><td><input id="thy_ft4" type="number" step="0.01"></td><td style="text-align:center">pmol/L</td><td></td></tr>
-        <tr><td>زلال البول (Alb/Creat)</td><td><input id="ren_mac" type="number" step="0.01"></td><td style="text-align:center">mg/g</td><td><input id="ren_note"></td></tr>
-        <tr><td>ALT (إنزيمات الكبد)</td><td><input id="liv_alt" type="number" step="0.1"></td><td style="text-align:center">U/L</td><td><input id="liv_note"></td></tr>
-        <tr><td>AST (إنزيمات الكبد)</td><td><input id="liv_ast" type="number" step="0.1"></td><td style="text-align:center">U/L</td><td></td></tr>
-      </table>
-    </div>
-
-    <div class="card">
-      <h3>الفحوصات السريرية الروتينية</h3>
+    <div class="card section-card">
+      <h3>👁️ الفحوصات السريرية الروتينية</h3>
       <div class="grid2">
         <div>
           <label class="tiny">فحص قاع العين (Fundus)</label>
           <select id="fundus_exam">
-            <option value="">-- لم يتم الفحص --</option>
-            <option value="normal">✅ سليم (Normal)</option>
-            <option value="followup">⚠️ يحتاج متابعة</option>
-            <option value="retinopathy">🚨 اعتلال شبكية (Retinopathy)</option>
+            <option value="not_done">-- لم يتم --</option>
+            <option value="normal">سليم (Normal)</option>
+            <option value="followup">يحتاج متابعة</option>
           </select>
         </div>
         <div>
-          <label class="tiny">ملاحظات الفحص (عين، قدم، أسنان)</label>
-          <input id="clinic_note" type="text" placeholder="مثال: فحص القدم سليم">
+          <label class="tiny">فحص القدم والأسنان</label>
+          <input id="clinic_note" type="text" placeholder="ملاحظات الفحص">
         </div>
       </div>
     </div>
 
-    <div class="card">
-      <h3>ملاحظات وتوصيات عامة</h3>
-      <textarea id="generalNote" rows="3" placeholder="اكتب أي تعليمات إضافية من الطبيب هنا..."></textarea>
-    </div>
-
     <div class="card no-print">
-      <div class="row space">
-        <h3 style="margin:0;">السجلات السابقة</h3>
-        <small class="muted">آخر 15 تقرير</small>
+      <h3>📜 سجل التحاليل السابقة</h3>
+      <div class="table-scroll">
+        <table id="historyTable">
+          <thead><tr><th>التاريخ</th><th>النوع</th><th>التراكمي</th><th>إجراءات</th></tr></thead>
+          <tbody id="historyBody"></tbody>
+        </table>
       </div>
-      <table id="historyTable" style="margin-top:12px;">
-        <thead>
-          <tr>
-            <th>التاريخ</th>
-            <th>النوع</th>
-            <th>HbA1c</th>
-            <th>عمليات</th>
-          </tr>
-        </thead>
-        <tbody id="historyBody">
-          <tr><td colspan="4" class="muted" style="text-align:center">لا توجد سجلات</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="hidden">
-      <svg id="barcode"></svg>
-      <div id="qr"></div>
     </div>
   </div>
 
-  <script type="module" src="js/labs.js?v=2"></script>
+  <script type="module" src="js/labs.js?v=3"></script>
   <script type="module" src="js/header.js"></script>
 </body>
 </html>
