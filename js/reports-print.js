@@ -7,15 +7,27 @@ const params = new URLSearchParams(location.search);
 const childId = params.get('child');
 const fromDate = params.get('from');
 const toDate = params.get('to');
-const isBlank = params.get('blank') === '1'; // خيار السجل الفارغ
+const isBlank = params.get('blank') === '1';
+// 👈 الحصول على الوحدة من الرابط لتوحيد العرض مع الشاشة
+const urlUnit = params.get('unit'); 
 
 const SLOT_KEYS = ['FASTING','PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK','BEDTIME','DURING_SLEEP'];
 const SLOT_LABELS = ['صائم','ق.الفطار','ب.الفطار','ق.الغداء','ب.الغداء','ق.العشاء','ب.العشاء','سناك','ق.النوم','أثناء النوم'];
 
-// أداة التحويل للذكاء الاصطناعي
+// دوال التحويل وتحديد الحدود
 const mgdl2mmol=v=>v/18, mmol2mgdl=v=>v*18, round1=n=>Math.round((+n||0)*10)/10;
 const FIXED_MMOL={low:3.9,upper:7.1,severe:10.9,critHigh:14.1};
 function limitsInUnit(u){return u.includes('mmol')?{...FIXED_MMOL}:{low:round1(mmol2mgdl(3.9)),upper:round1(mmol2mgdl(7.1)),severe:round1(mmol2mgdl(10.9)),critHigh:round1(mmol2mgdl(14.1))}}
+
+function classFor(v, u){ 
+  if(v == null) return '';
+  const L=limitsInUnit(u); 
+  if(v>L.critHigh) return 'crit'; 
+  if(v>L.severe) return 'sev'; 
+  if(v>L.upper) return 'mild'; 
+  if(v<L.low) return 'sev'; 
+  return 'ok'; 
+}
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) return;
@@ -25,13 +37,25 @@ onAuthStateChanged(auth, async (user) => {
     const childRef = doc(db, `parents/${user.uid}/children/${childId}`);
     const childSnap = await getDoc(childRef);
     const childData = childSnap.data();
+    
+    // 👈 تحديد الوحدة النهائية (من الرابط أولاً، وإلا فمن بيانات الطفل)
+    const displayUnit = urlUnit || childData.glucoseUnit || 'mg/dL';
 
     // 1. جلب البيانات
     let data = [];
     if (!isBlank) {
       const q = query(collection(childRef, 'measurements'), where('date', '>=', fromDate), where('date', '<=', toDate), orderBy('date', 'asc'));
       const snap = await getDocs(q);
-      snap.forEach(d => data.push(d.data()));
+      snap.forEach(d => {
+         const x = d.data();
+         // 👈 تحويل القيمة للوحدة المطلوبة
+         let v = displayUnit.includes('mmol') 
+            ? (x.value_mmol ?? (x.unit==='mg/dL'? mgdl2mmol(x.value): x.value))
+            : (x.value_mgdl ?? (x.unit==='mmol/L'? mmol2mgdl(x.value): x.value));
+         
+         x.displayValue = Number.isFinite(+v) ? round1(+v) : null;
+         data.push(x);
+      });
     }
 
     // 2. تقسيم البيانات إلى أسابيع
@@ -39,12 +63,12 @@ onAuthStateChanged(auth, async (user) => {
     
     // 3. توليد صفحات الأسابيع
     weeks.forEach((weekDays, index) => {
-      const page = createPageStructure(childData, weekDays[0], weekDays[weekDays.length-1], index + 1, weeks.length);
+      const page = createPageStructure(childData, weekDays[0], weekDays[weekDays.length-1], index + 1, weeks.length, displayUnit);
       const grid = page.querySelector('.grid-body');
       
       weekDays.forEach(date => {
         const dayData = data.filter(d => d.date === date);
-        grid.appendChild(createDayRow(date, dayData, childData));
+        grid.appendChild(createDayRow(date, dayData, childData, displayUnit));
       });
       
       container.appendChild(page);
@@ -52,7 +76,7 @@ onAuthStateChanged(auth, async (user) => {
 
     // 4. إضافة صفحة الملخص (إذا لم تكن نسخة فارغة)
     if (!isBlank && data.length > 0) {
-      container.appendChild(createSummaryPage(childData, data));
+      container.appendChild(createSummaryPage(childData, data, displayUnit));
     }
 
     document.getElementById('appLoader').style.display = 'none';
@@ -76,7 +100,7 @@ function chunkIntoWeeks(start, end) {
   return chunks;
 }
 
-function createPageStructure(child, start, end, pageNum, totalPages) {
+function createPageStructure(child, start, end, pageNum, totalPages, displayUnit) {
   const div = document.createElement('div');
   div.className = 'print-page';
   div.innerHTML = `
@@ -86,8 +110,8 @@ function createPageStructure(child, start, end, pageNum, totalPages) {
         <div class="muted">الفترة: من ${start} إلى ${end}</div>
       </div>
       <div class="header-left">
-        <b>اسم الطفل:</b> ${child.name}<br>
-        <b>العمر:</b> ${calcAge(child.birthDate)} سنة | <b>الوحدة:</b> ${child.glucoseUnit || 'mg/dL'}<br>
+        <b>اسم الطفل:</b> ${child.name || '—'}<br>
+        <b>العمر:</b> ${calcAge(child.birthDate)} سنة | <b>الوحدة المستخدمة:</b> ${displayUnit}<br>
         <b>المعاملات:</b> CF: ${child.correctionFactor || '—'} | CR: ${child.carbRatio || '—'}
       </div>
     </header>
@@ -98,12 +122,12 @@ function createPageStructure(child, start, end, pageNum, totalPages) {
       </div>
       <div class="grid-body"></div>
     </div>
-    <div class="footer">صفحة ${pageNum} من ${totalPages} — تم الإنشاء بواسطة تطبيق أسيل لمتابعة السكري</div>
+    <div class="footer">صفحة ${pageNum} من ${totalPages} — تم الإنشاء بواسطة منصة أسيل لمتابعة السكري</div>
   `;
   return div;
 }
 
-function createDayRow(date, dayData, child) {
+function createDayRow(date, dayData, child, displayUnit) {
   const row = document.createElement('div');
   row.className = 'grid-row';
   const d = new Date(date);
@@ -123,7 +147,7 @@ function createDayRow(date, dayData, child) {
     const m = dayData.find(d => d.slotKey === key);
     html += `<div class="cell v-cell">
       ${m && !isBlank ? `
-        <div class="val">${m.value || '—'}</div>
+        ${m.displayValue !== null ? `<div class="val ${classFor(m.displayValue, displayUnit)}">${m.displayValue}</div>` : ''}
         ${m.carbs > 0 ? `<span class="c-badge">🍔${m.carbs}g</span>` : ''}
         ${m.totalInsulin > 0 ? `<span class="i-badge">💉${m.totalInsulin}U</span>` : ''}
       ` : ''}
@@ -134,7 +158,7 @@ function createDayRow(date, dayData, child) {
   return row;
 }
 
-function createSummaryPage(child, allData) {
+function createSummaryPage(child, allData, displayUnit) {
   const div = document.createElement('div');
   div.className = 'print-page';
   div.innerHTML = `
@@ -150,20 +174,19 @@ function createSummaryPage(child, allData) {
   `;
   
   setTimeout(() => {
-    renderPrintCharts(allData, child);
-    renderAI(allData, child);
+    renderPrintCharts(allData, displayUnit);
+    renderAI(allData, displayUnit);
   }, 100);
   
   return div;
 }
 
-function renderPrintCharts(list, child) {
-  const unit = child.glucoseUnit || 'mg/dL';
-  const L = limitsInUnit(unit);
-  const valid = list.filter(x => x.value != null);
+function renderPrintCharts(list, displayUnit) {
+  const L = limitsInUnit(displayUnit);
+  const valid = list.filter(x => x.displayValue != null);
   if(valid.length === 0) return;
 
-  const TIR = valid.filter(x => x.value >= L.low && x.value <= L.severe).length;
+  const TIR = valid.filter(x => x.displayValue >= L.low && x.displayValue <= L.severe).length;
   const ctx = document.getElementById('printPieTIR').getContext('2d');
   new Chart(ctx, {
     type: 'doughnut',
@@ -175,16 +198,15 @@ function renderPrintCharts(list, child) {
   });
 }
 
-function renderAI(list, child) {
-  const unit = child.glucoseUnit || 'mg/dL';
-  const L = limitsInUnit(unit);
+function renderAI(list, displayUnit) {
+  const L = limitsInUnit(displayUnit);
   const patt=[];
-  const valid = list.filter(x => x.value !== null && x.value !== undefined);
+  const valid = list.filter(x => x.displayValue !== null && x.displayValue !== undefined);
   
-  const fast = valid.filter(x=>x.slotKey==='FASTING' || x.slotKey==='WAKE').map(x=>x.value);
-  const sleep = valid.filter(x=>x.slotKey==='DURING_SLEEP' || x.slotKey==='BEDTIME').map(x=>x.value);
-  const pBreakfast = valid.filter(x=>x.slotKey==='POST_BREAKFAST').map(x=>x.value);
-  const pDinner = valid.filter(x=>x.slotKey==='POST_DINNER').map(x=>x.value);
+  const fast = valid.filter(x=>x.slotKey==='FASTING' || x.slotKey==='WAKE').map(x=>x.displayValue);
+  const sleep = valid.filter(x=>x.slotKey==='DURING_SLEEP' || x.slotKey==='BEDTIME').map(x=>x.displayValue);
+  const pBreakfast = valid.filter(x=>x.slotKey==='POST_BREAKFAST').map(x=>x.displayValue);
+  const pDinner = valid.filter(x=>x.slotKey==='POST_DINNER').map(x=>x.displayValue);
 
   if(fast.length >= 3 && sleep.length >= 2) {
     const highFasting = fast.filter(v => v > L.upper).length;
