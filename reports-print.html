@@ -3,41 +3,18 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>طباعة التقرير</title>
-  <link rel="stylesheet" href="css/reports-print.css"/>
+  <title>تقرير متابعة السكري - منصة أسيل</title>
+  <link rel="stylesheet" href="css/reports-print.css?v=3"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <div class="page">
-    <header class="print-head">
-      <div>
-        <h2>تقرير القياسات</h2>
-        <div class="muted" id="rangeTxt">—</div>
-      </div>
-      <div class="meta">
-        <div><b id="childName">—</b></div>
-        <div class="muted" id="childMeta">—</div>
-      </div>
-    </header>
+  <div id="printContainer"></div>
 
-    <!-- شبكة بنفس شكل الجدول المرئي -->
-    <section class="grid-wrap">
-      <div class="grid-head">
-        <div class="r">التاريخ</div>
-        <div>الاستيقاظ/صائم</div>
-        <div>ق.الفطار</div><div>ب.الفطار</div>
-        <div>ق.الغداء</div><div>ب.الغداء</div>
-        <div>ق.العشاء</div><div>ب.العشاء</div>
-        <div>سناك</div><div>قبل النوم</div><div>أثناء النوم</div>
-      </div>
-      <div id="grid" class="grid-body"></div>
-    </section>
-
-    <!-- في حال عدم وجود بيانات: شبكة فارغة -->
-    <section id="empty" class="muted" style="display:none; padding:8px 0">لا توجد قياسات في الفترة المحددة.</section>
-
-    <footer class="print-foot muted">تم الإنشاء آليًا — التاريخ: <span id="now"></span></footer>
+  <div id="appLoader" class="print-loader">
+    <div class="spinner"></div>
+    <p>جاري تجهيز التقرير الطبّي...</p>
   </div>
 
-  <script type="module" src="js/reports-print.js"></script>
+  <script type="module" src="js/reports-print.js?v=3"></script>
 </body>
 </html>
