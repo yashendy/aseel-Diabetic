@@ -1,70 +1,164 @@
+// js/reports-print.js
 import { auth, db } from './firebase-config.js';
-import {
-  collection, doc, getDoc, getDocs, query, where, orderBy
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-const mgdl2mmol=v=>v/18, mmol2mgdl=v=>v*18, round1=n=>Math.round((+n||0)*10)/10;
-const FIXED_MMOL={low:3.9,upper:7.1,severe:10.9,critHigh:14.1};
-function limitsInUnit(u){return u.includes('mmol')?{...FIXED_MMOL}:{low:round1(mmol2mgdl(3.9)),upper:round1(mmol2mgdl(7.1)),severe:round1(mmol2mgdl(10.9)),critHigh:round1(mmol2mgdl(14.1))}}
-const SLOT_LABEL={ FASTING:'صائم/استيقاظ', PRE_BREAKFAST:'ق.الفطار', POST_BREAKFAST:'ب.الفطار', PRE_LUNCH:'ق.الغداء', POST_LUNCH:'ب.الغداء', PRE_DINNER:'ق.العشاء', POST_DINNER:'ب.العشاء', SNACK:'سناك', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم' };
-const $=id=>document.getElementById(id);
-const params=new URLSearchParams(location.search); const childId=params.get('child'); const from=params.get('from'); const to=params.get('to');
-let childRef, child;
+const params = new URLSearchParams(location.search);
+const childId = params.get('child');
+const fromDate = params.get('from');
+const toDate = params.get('to');
+const isBlank = params.get('blank') === '1'; // خيار السجل الفارغ
 
-onAuthStateChanged(auth, async (u)=>{
-  if(!u){return;}
-  childRef=doc(db,'parents',u.uid,'children',childId);
-  const s=await getDoc(childRef); child=s.data(); $('childName').textContent=child?.displayName||child?.name||'—';
-  $('childMeta').textContent=`وحدة: ${child.glucoseUnit||'mg/dL'} • CF: ${child.correctionFactor||'—'} • CR: ${child.carbRatio||'—'}`;
-  $('rangeTxt').textContent = `من ${from} إلى ${to}`; $('now').textContent = new Date().toLocaleString('ar-EG');
-  await render();
-  setTimeout(()=>window.print(), 300);
+const SLOT_KEYS = ['FASTING','PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK','BEDTIME','DURING_SLEEP'];
+const SLOT_LABELS = ['صائم','ق.الفطار','ب.الفطار','ق.الغداء','ب.الغداء','ق.العشاء','ب.العشاء','سناك','ق.النوم','أثناء النوم'];
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) return;
+  const container = document.getElementById('printContainer');
+  
+  try {
+    const childRef = doc(db, `parents/${user.uid}/children/${childId}`);
+    const childSnap = await getDoc(childRef);
+    const childData = childSnap.data();
+
+    // 1. جلب البيانات
+    let data = [];
+    if (!isBlank) {
+      const q = query(collection(childRef, 'measurements'), where('date', '>=', fromDate), where('date', '<=', toDate), orderBy('date', 'asc'));
+      const snap = await getDocs(q);
+      snap.forEach(d => data.push(d.data()));
+    }
+
+    // 2. تقسيم البيانات إلى أسابيع
+    const weeks = chunkIntoWeeks(fromDate, toDate);
+    
+    // 3. توليد صفحات الأسابيع
+    weeks.forEach((weekDays, index) => {
+      const page = createPageStructure(childData, weekDays[0], weekDays[weekDays.length-1], index + 1, weeks.length);
+      const grid = page.querySelector('.grid-body');
+      
+      weekDays.forEach(date => {
+        const dayData = data.filter(d => d.date === date);
+        grid.appendChild(createDayRow(date, dayData, childData));
+      });
+      
+      container.appendChild(page);
+    });
+
+    // 4. إضافة صفحة الملخص (إذا لم تكن نسخة فارغة)
+    if (!isBlank && data.length > 0) {
+      container.appendChild(createSummaryPage(childData, data));
+    }
+
+    document.getElementById('appLoader').style.display = 'none';
+    setTimeout(() => window.print(), 1000);
+
+  } catch (e) { console.error(e); }
 });
 
-function classFor(v,u){ const L=limitsInUnit(u); if(v>L.critHigh) return 'crit'; if(v>L.severe) return 'sev'; if(v>L.upper) return 'mild'; if(v<L.low) return 'sev'; return 'ok'; }
-function formatDate(d){return d.toLocaleDateString('ar-EG',{weekday:'long', day:'2-digit', month:'numeric'})}
+function chunkIntoWeeks(start, end) {
+  let days = [];
+  let curr = new Date(start);
+  const last = new Date(end);
+  while (curr <= last) {
+    days.push(curr.toISOString().slice(0, 10));
+    curr.setDate(curr.getDate() + 1);
+  }
+  let chunks = [];
+  for (let i = 0; i < days.length; i += 7) chunks.push(days.slice(i, i + 7));
+  return chunks;
+}
 
-async function fetchRange(fromISO,toISO){
-  const col=collection(childRef,'measurements');
-  const qy=query(col, where('when','>=',new Date(fromISO+'T00:00:00')), where('when','<=',new Date(toISO+'T23:59:59')), orderBy('when','asc'));
-  const snap=await getDocs(qy); const unit=(child?.glucoseUnit)||'mg/dL';
-  const arr=[]; snap.forEach(s=>{
-    const x=s.data();
-    let v = unit.includes('mmol') ? (x.value_mmol ?? (x.unit==='mg/dL'? mgdl2mmol(x.value): x.value))
-                                  : (x.value_mgdl ?? (x.unit==='mmol/L'? mmol2mgdl(x.value): x.value));
-    if(!Number.isFinite(+v)) return;
-    arr.push({when:x.when.toDate(), slot:x.slotKey||'OTHER', val:round1(+v), corr:+(x.correctionDose||0)});
-  }); return arr;
+function createPageStructure(child, start, end, pageNum, totalPages) {
+  const div = document.createElement('div');
+  div.className = 'print-page';
+  div.innerHTML = `
+    <header class="header">
+      <div class="header-right">
+        <h2>منصة أسيل - سجل المتابعة اليومي ${isBlank ? '(نسخة يدوية)' : ''}</h2>
+        <div class="muted">الفترة: من ${start} إلى ${end}</div>
+      </div>
+      <div class="header-left">
+        <b>اسم الطفل:</b> ${child.name}<br>
+        <b>العمر:</b> ${calcAge(child.birthDate)} سنة | <b>الوحدة:</b> ${child.glucoseUnit || 'mg/dL'}<br>
+        <b>المعاملات:</b> CF: ${child.correctionFactor || '—'} | CR: ${child.carbRatio || '—'}
+      </div>
+    </header>
+    <div class="grid-wrap">
+      <div class="grid-head">
+        <div class="r">التاريخ</div><div class="r">الإجمالي</div>
+        ${SLOT_LABELS.map(l => `<div>${l}</div>`).join('')}
+      </div>
+      <div class="grid-body"></div>
+    </div>
+    <div class="footer">صفحة ${pageNum} من ${totalPages} — تم الإنشاء بواسطة تطبيق أسيل لمتابعة السكري</div>
+  `;
+  return div;
 }
-function groupByDaySlot(list){
-  const days={};
-  for(const r of list){
-    const key=r.when.toISOString().slice(0,10);
-    days[key] = days[key] || {date:new Date(key), slots:{}};
-    days[key].slots[r.slot]=days[key].slots[r.slot]||[];
-    days[key].slots[r.slot].push(r);
-  }
-  return Object.values(days).sort((a,b)=>a.date-b.date);
+
+function createDayRow(date, dayData, child) {
+  const row = document.createElement('div');
+  row.className = 'grid-row';
+  const d = new Date(date);
+  const dayName = d.toLocaleDateString('ar-EG', { weekday: 'short' });
+  
+  let dailyCarbs = 0, dailyIns = 0;
+  dayData.forEach(m => { dailyCarbs += (m.carbs || 0); dailyIns += (m.totalInsulin || 0); });
+
+  let html = `<div class="cell"><b>${date}</b><br><small>${dayName}</small></div>`;
+  html += `<div class="cell" style="background:#f8fafc"><b>${dailyCarbs}g</b><br><b>${dailyIns}U</b></div>`;
+
+  SLOT_KEYS.forEach(key => {
+    const m = dayData.find(d => d.slotKey === key);
+    html += `<div class="cell v-cell">
+      ${m ? `
+        <div class="val">${m.value || '—'}</div>
+        ${m.carbs > 0 ? `<span class="c-badge">🍔${m.carbs}g</span>` : ''}
+        ${m.totalInsulin > 0 ? `<span class="i-badge">💉${m.totalInsulin}U</span>` : ''}
+      ` : ''}
+    </div>`;
+  });
+
+  row.innerHTML = html;
+  return row;
 }
-function cellHTML(vals,u){
-  if(!vals || !vals.length) return '';
-  const v=vals[vals.length-1];
-  const cls=classFor(v.val,u);
-  return `<span class="v ${cls}">${v.val}</span>${v.corr?`<span class="u">U ${round1(v.corr)}</span>`:''}`;
+
+function createSummaryPage(child, allData) {
+  const div = document.createElement('div');
+  div.className = 'print-page';
+  div.innerHTML = `
+    <header class="header"><h2>الملخص الطبي والتحليلات الذكية</h2></header>
+    <div class="summary-page">
+      <div class="chart-box"><canvas id="printPieTIR"></canvas></div>
+      <div class="ai-box">
+        <h3>توصيات الذكاء الاصطناعي 🧠</h3>
+        <div id="aiContent">جاري تحليل الأنماط...</div>
+      </div>
+    </div>
+    <div class="footer">نهاية التقرير الطبي</div>
+  `;
+  
+  // سنقوم بتشغيل رسم الشارت في Turn القادم لضمان وجود العنصر
+  setTimeout(() => {
+    renderPrintCharts(allData, child);
+    // يمكنك هنا استدعاء دالة بناء الـ AI من ملف reports.js ووضعها في aiContent
+  }, 100);
+  
+  return div;
 }
-async function render(){
-  const unit=child?.glucoseUnit||'mg/dL', body=$('grid');
-  const list=await fetchRange(from,to); const days=groupByDaySlot(list);
-  body.innerHTML='';
-  if(!days.length){ $('empty').style.display='block'; for(let i=0;i<7;i++){ const r=document.createElement('div'); r.className='grid-row';
-    r.innerHTML=`<div class="cell">${from}</div>`+new Array(10).fill(0).map(()=>`<div class="cell">&nbsp;</div>`).join(''); body.appendChild(r);} return;}
-  $('empty').style.display='none';
-  for(const d of days){
-    const row=document.createElement('div'); row.className='grid-row';
-    row.innerHTML=`<div class="cell">${formatDate(d.date)}</div>`+[
-      'FASTING','PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK','BEDTIME','DURING_SLEEP'
-    ].map(k=>`<div class="cell">${cellHTML(d.slots[k],unit)}</div>`).join('');
-    body.appendChild(row);
-  }
+
+function renderPrintCharts(list, child) {
+  const valid = list.filter(x => x.value != null);
+  const TIR = valid.filter(x => x.value >= 70 && x.value <= 180).length; // مثال mg/dL
+  const ctx = document.getElementById('printPieTIR').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['داخل النطاق', 'خارج النطاق'],
+      datasets: [{ data: [TIR, valid.length - TIR], backgroundColor: ['#16a34a', '#ef4444'] }]
+    },
+    options: { plugins: { legend: { position: 'bottom' } } }
+  });
 }
+
+function calcAge(bd) { if(!bd) return '—'; const b=new Date(bd), t=new Date(); let a=t.getFullYear()-b.getFullYear(); if(t.getMonth()<b.getMonth() || (t.getMonth()===b.getMonth()&&t.getDate()<b.getDate())) a--; return a; }
