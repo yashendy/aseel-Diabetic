@@ -47,18 +47,20 @@ function wire(){
   reportGrid=$('reportGrid'); emptyGrid=$('emptyGrid'); aiTable=$('aiTable');
   cmpElems={AFrom:$('cmpAFrom'), ATo:$('cmpATo'), BFrom:$('cmpBFrom'), BTo:$('cmpBTo')};
   
-  // تفعيل أزرار الطباعة
-  $('openPrint').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&from=${fromDate.value}&to=${toDate.value}`,'_blank');
-  $('openPrintBlank').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&from=${fromDate.value}&to=${toDate.value}&blank=1`,'_blank');
+  // 🌟 تمرير الوحدة في رابط الطباعة هنا
+  $('openPrint').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&from=${fromDate.value}&to=${toDate.value}&unit=${encodeURIComponent(unitSel.value)}`,'_blank');
+  $('openPrintBlank').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&from=${fromDate.value}&to=${toDate.value}&unit=${encodeURIComponent(unitSel.value)}&blank=1`,'_blank');
   
   $('exportPdf').onclick=exportPdf; $('exportCsv').onclick=exportCSV; $('exportXlsx').onclick=exportXLSX;
 }
+
 async function loadChild(uid){
   childRef=doc(db,'parents',uid,'children',childId);
   const snap=await getDoc(childRef);
   if(!snap.exists()) { throw new Error('child-not-found'); }
   child=snap.data();
 }
+
 function limitsInUnit(unit){
   if((unit||'').includes('mmol')) return {...FIXED_MMOL};
   return {
@@ -68,6 +70,7 @@ function limitsInUnit(unit){
     critHigh: round1(mmol2mgdl(FIXED_MMOL.critHigh))
   };
 }
+
 function fillThresholdChips(){
   const u = unitSel.value;
   const L = limitsInUnit(u);
@@ -78,6 +81,7 @@ function fillThresholdChips(){
     <span class="chip">ارتفاع حرج: <b>${L.critHigh} ${u}</b></span>
   `;
 }
+
 function initDefaultRange(){
   const now=new Date();
   const to=now.toISOString().slice(0,10);
@@ -144,7 +148,6 @@ function groupByDaySlot(list){
 // 🌟 بناء الخلية الثلاثية الأنيقة 🌟
 function cellHTML(vals,u){
   if(!vals || !vals.length) return '';
-  // نأخذ آخر تسجيلة في هذه الخلية الزمنية
   const v = vals[vals.length-1];
   
   let html = `<div class="cell-data">`;
@@ -161,7 +164,7 @@ function cellHTML(vals,u){
   }
   
   // 3. الأنسولين
-  if (v.ins > 0) {
+  if (v.ins > 0 || (v.carbs > 0 && v.ins === 0)) {
     html += `<div class="badge-ins">💉 ${v.ins}U</div>`;
   }
   
@@ -293,15 +296,12 @@ function buildAI(list,unit){
   const patt=[];
   const valid = list.filter(x=>x.val!==null);
   
-  // تجميع القراءات حسب الوقت لاكتشاف الأنماط
   const fast = valid.filter(x=>x.slot==='FASTING' || x.slot==='WAKE').map(x=>x.val);
   const sleep = valid.filter(x=>x.slot==='DURING_SLEEP' || x.slot==='BEDTIME').map(x=>x.val);
   const pBreakfast = valid.filter(x=>x.slot==='POST_BREAKFAST').map(x=>x.val);
   const pLunch = valid.filter(x=>x.slot==='POST_LUNCH').map(x=>x.val);
   const pDinner = valid.filter(x=>x.slot==='POST_DINNER').map(x=>x.val);
 
-  // 1. ظاهرة الفجر (Dawn Phenomenon)
-  // سكر قبل النوم طبيعي + سكر الاستيقاظ مرتفع
   if(fast.length >= 3 && sleep.length >= 2) {
     const highFasting = fast.filter(v => v > L.upper).length;
     const normalSleep = sleep.filter(v => v >= L.low && v <= L.severe).length;
@@ -315,8 +315,6 @@ function buildAI(list,unit){
     }
   }
 
-  // 2. تأثير السوموجي / هبوط الليل (Somogyi Effect)
-  // هبوط أثناء النوم + ارتداد بارتفاع في الصباح
   if(fast.length >= 3 && sleep.length >= 2) {
     const highFasting = fast.filter(v => v > L.upper).length;
     const lowSleep = sleep.filter(v => v < L.low).length;
@@ -330,7 +328,6 @@ function buildAI(list,unit){
     }
   }
 
-  // 3. خلل معامل الإفطار (Breakfast Ratio)
   if(pBreakfast.length >= 3 && pBreakfast.filter(v=>v>L.severe).length >= 2) {
     patt.push({
       name: 'ارتفاع حاد بعد الإفطار',
@@ -340,7 +337,6 @@ function buildAI(list,unit){
     });
   }
 
-  // 4. خلل معامل العشاء
   if(pDinner.length >= 3 && pDinner.filter(v=>v<L.low).length >= 2) {
     patt.push({
       name: 'هبوط متكرر بعد العشاء',
