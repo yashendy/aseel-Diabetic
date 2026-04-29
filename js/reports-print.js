@@ -12,6 +12,11 @@ const isBlank = params.get('blank') === '1'; // خيار السجل الفارغ
 const SLOT_KEYS = ['FASTING','PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK','BEDTIME','DURING_SLEEP'];
 const SLOT_LABELS = ['صائم','ق.الفطار','ب.الفطار','ق.الغداء','ب.الغداء','ق.العشاء','ب.العشاء','سناك','ق.النوم','أثناء النوم'];
 
+// أداة التحويل للذكاء الاصطناعي
+const mgdl2mmol=v=>v/18, mmol2mgdl=v=>v*18, round1=n=>Math.round((+n||0)*10)/10;
+const FIXED_MMOL={low:3.9,upper:7.1,severe:10.9,critHigh:14.1};
+function limitsInUnit(u){return u.includes('mmol')?{...FIXED_MMOL}:{low:round1(mmol2mgdl(3.9)),upper:round1(mmol2mgdl(7.1)),severe:round1(mmol2mgdl(10.9)),critHigh:round1(mmol2mgdl(14.1))}}
+
 onAuthStateChanged(auth, async (user) => {
   if (!user) return;
   const container = document.getElementById('printContainer');
@@ -51,6 +56,8 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     document.getElementById('appLoader').style.display = 'none';
+    
+    // الانتظار ثانية ليتم رسم الشارت ثم فتح نافذة الطباعة تلقائياً
     setTimeout(() => window.print(), 1000);
 
   } catch (e) { console.error(e); }
@@ -106,12 +113,16 @@ function createDayRow(date, dayData, child) {
   dayData.forEach(m => { dailyCarbs += (m.carbs || 0); dailyIns += (m.totalInsulin || 0); });
 
   let html = `<div class="cell"><b>${date}</b><br><small>${dayName}</small></div>`;
-  html += `<div class="cell" style="background:#f8fafc"><b>${dailyCarbs}g</b><br><b>${dailyIns}U</b></div>`;
+  if(!isBlank && (dailyCarbs > 0 || dailyIns > 0)){
+    html += `<div class="cell" style="background:#f8fafc"><b>${dailyCarbs}g</b><br><b>${dailyIns}U</b></div>`;
+  } else {
+    html += `<div class="cell" style="background:#f8fafc"></div>`;
+  }
 
   SLOT_KEYS.forEach(key => {
     const m = dayData.find(d => d.slotKey === key);
     html += `<div class="cell v-cell">
-      ${m ? `
+      ${m && !isBlank ? `
         <div class="val">${m.value || '—'}</div>
         ${m.carbs > 0 ? `<span class="c-badge">🍔${m.carbs}g</span>` : ''}
         ${m.totalInsulin > 0 ? `<span class="i-badge">💉${m.totalInsulin}U</span>` : ''}
@@ -131,25 +142,28 @@ function createSummaryPage(child, allData) {
     <div class="summary-page">
       <div class="chart-box"><canvas id="printPieTIR"></canvas></div>
       <div class="ai-box">
-        <h3>توصيات الذكاء الاصطناعي 🧠</h3>
-        <div id="aiContent">جاري تحليل الأنماط...</div>
+        <h3 style="margin-top:0; color:#2563eb;">توصيات الذكاء الاصطناعي 🧠</h3>
+        <div id="aiContent"></div>
       </div>
     </div>
     <div class="footer">نهاية التقرير الطبي</div>
   `;
   
-  // سنقوم بتشغيل رسم الشارت في Turn القادم لضمان وجود العنصر
   setTimeout(() => {
     renderPrintCharts(allData, child);
-    // يمكنك هنا استدعاء دالة بناء الـ AI من ملف reports.js ووضعها في aiContent
+    renderAI(allData, child);
   }, 100);
   
   return div;
 }
 
 function renderPrintCharts(list, child) {
+  const unit = child.glucoseUnit || 'mg/dL';
+  const L = limitsInUnit(unit);
   const valid = list.filter(x => x.value != null);
-  const TIR = valid.filter(x => x.value >= 70 && x.value <= 180).length; // مثال mg/dL
+  if(valid.length === 0) return;
+
+  const TIR = valid.filter(x => x.value >= L.low && x.value <= L.severe).length;
   const ctx = document.getElementById('printPieTIR').getContext('2d');
   new Chart(ctx, {
     type: 'doughnut',
@@ -159,6 +173,45 @@ function renderPrintCharts(list, child) {
     },
     options: { plugins: { legend: { position: 'bottom' } } }
   });
+}
+
+function renderAI(list, child) {
+  const unit = child.glucoseUnit || 'mg/dL';
+  const L = limitsInUnit(unit);
+  const patt=[];
+  const valid = list.filter(x => x.value !== null && x.value !== undefined);
+  
+  const fast = valid.filter(x=>x.slotKey==='FASTING' || x.slotKey==='WAKE').map(x=>x.value);
+  const sleep = valid.filter(x=>x.slotKey==='DURING_SLEEP' || x.slotKey==='BEDTIME').map(x=>x.value);
+  const pBreakfast = valid.filter(x=>x.slotKey==='POST_BREAKFAST').map(x=>x.value);
+  const pDinner = valid.filter(x=>x.slotKey==='POST_DINNER').map(x=>x.value);
+
+  if(fast.length >= 3 && sleep.length >= 2) {
+    const highFasting = fast.filter(v => v > L.upper).length;
+    const normalSleep = sleep.filter(v => v >= L.low && v <= L.severe).length;
+    if (highFasting >= 2 && normalSleep >= 2) {
+      patt.push({ name: 'ظاهرة الفجر', desc: 'السكر طبيعي ليلاً ويرتفع صباحاً.', rec: 'تعديل المنظم.', conf: 'عالي 🔴' });
+    }
+  }
+
+  if(fast.length >= 3 && sleep.length >= 2) {
+    const highFasting = fast.filter(v => v > L.upper).length;
+    const lowSleep = sleep.filter(v => v < L.low).length;
+    if (highFasting >= 2 && lowSleep >= 1) {
+      patt.push({ name: 'هبوط ليلي (Somogyi)', desc: 'هبوط أثناء الليل يتبعه ارتفاع ارتدادي.', rec: 'تقليل المنظم.', conf: 'حرج 🚨' });
+    }
+  }
+
+  if(pBreakfast.length >= 3 && pBreakfast.filter(v=>v>L.severe).length >= 2) {
+    patt.push({ name: 'ارتفاع بعد الإفطار', desc: 'السكر يرتفع بشدة بعد الإفطار.', rec: 'تعديل معامل الكارب (CR).', conf: 'متوسط 🟡' });
+  }
+
+  if(!patt.length) patt.push({name:'✅ استقرار عام', desc:'الأنماط الحيوية للطفل ضمن الحدود الآمنة غالباً.', rec:'استمر على نفس الخطة!', conf:'—'});
+
+  const aiContainer = document.getElementById('aiContent');
+  if(aiContainer){
+      aiContainer.innerHTML = patt.map(p=>`<div class="ai-item"><b>${p.name}</b>${p.desc} <br> <span style="color:#2563eb">${p.rec}</span></div>`).join('');
+  }
 }
 
 function calcAge(bd) { if(!bd) return '—'; const b=new Date(bd), t=new Date(); let a=t.getFullYear()-b.getFullYear(); if(t.getMonth()<b.getMonth() || (t.getMonth()===b.getMonth()&&t.getDate()<b.getDate())) a--; return a; }
