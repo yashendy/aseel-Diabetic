@@ -3,42 +3,25 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>التقرير</title>
-  <link rel="stylesheet" href="css/reports.css"/>
+  <title>التقرير وسجل المتابعة</title>
+  <link rel="icon" href="favicon.ico" />
+  <link rel="stylesheet" href="css/reports.css?v=2"/>
 </head>
 <body>
-  <div class="container">
-    <header class="head">
-      <div class="left">
-        <a href="child.html" class="btn btn--ghost">🏠 الرئيسية</a>
-        <a id="openPrint" class="btn btn--ghost">🖨️ طباعة</a>
-      </div>
-      <div class="right">
-        <strong id="childName">—</strong>
-        <span id="childMeta" class="muted"></span>
-      </div>
-    </header>
+  <div id="appLoader" class="loader"><span class="spinner"></span><span>يجري التحميل...</span></div>
 
-    <!-- فلاتر الفترة -->
+  <div class="container">
     <section class="filters">
       <div class="row">
-        <label class="field">
-          <span>من</span>
-          <input type="date" id="fromDate">
-        </label>
-        <label class="field">
-          <span>إلى</span>
-          <input type="date" id="toDate">
-        </label>
+        <label class="field"><span>من</span><input type="date" id="fromDate"></label>
+        <label class="field"><span>إلى</span><input type="date" id="toDate"></label>
         <label class="field">
           <span>الوحدة</span>
-          <select id="unitSel">
-            <option value="mmol/L">mmol/L</option>
-            <option value="mg/dL">mg/dL</option>
-          </select>
+          <select id="unitSel"><option value="mmol/L">mmol/L</option><option value="mg/dL">mg/dL</option></select>
         </label>
         <button id="applyBtn" class="btn">تطبيق</button>
         <div class="grow"></div>
+        <button id="openPrint" class="btn btn--ghost">🖨️ طباعة</button>
         <button id="exportCsv" class="btn btn--ghost">⬇️ CSV</button>
         <button id="exportXlsx" class="btn btn--ghost">⬇️ Excel</button>
         <button id="exportPdf" class="btn btn--ghost">⬇️ PDF</button>
@@ -46,7 +29,6 @@
       <div class="chips" id="thresholdChips"></div>
     </section>
 
-    <!-- ملخص سريع -->
     <section class="summary">
       <div class="cards">
         <div class="card"><span class="k">داخل النطاق (TIR)</span><b id="statTIR">—</b></div>
@@ -56,46 +38,36 @@
         <div class="card"><span class="k">SD</span><b id="statSD">—</b></div>
         <div class="card crit"><span class="k">حرِج</span><b id="statCrit">—</b></div>
       </div>
-      <div class="pie-box">
-  <canvas id="pieTIR"></canvas>
-</div>
+      <div class="pie-box"><canvas id="pieTIR"></canvas></div>
     </section>
 
-    <!-- الجدول الشبكي (يماثل شكلك الحالي: أعمدة فترات × صفوف أيام) -->
     <section class="grid-wrap">
       <div class="grid-head">
         <div class="r">التاريخ</div>
-        <div>الاستيقاظ/صائم</div>
+        <div class="col-total">إجمالي اليوم</div>
+        <div>صائم/استيقاظ</div>
         <div>ق.الفطار</div><div>ب.الفطار</div>
         <div>ق.الغداء</div><div>ب.الغداء</div>
         <div>ق.العشاء</div><div>ب.العشاء</div>
         <div>سناك</div><div>قبل النوم</div><div>أثناء النوم</div>
       </div>
       <div id="reportGrid" class="grid-body"></div>
-      <div id="emptyGrid" class="empty hidden">
-        <!-- شبكة فارغة بنفس التصميم عند عدم توفر بيانات -->
-      </div>
+      <div id="emptyGrid" class="empty hidden">لا توجد بيانات مسجلة في هذه الفترة</div>
     </section>
 
-    <!-- مقارنة فترتين -->
     <section class="compare">
       <h3>مقارنة فترة حالية مقابل سابقة</h3>
       <div class="row">
-        <label class="field"><span>الفترة الحالية</span><input type="date" id="cmpAFrom"><input type="date" id="cmpATo"></label>
-        <label class="field"><span>الفترة السابقة</span><input type="date" id="cmpBFrom"><input type="date" id="cmpBTo"></label>
+        <label class="field"><span>الفترة الحالية</span><div style="display:flex;gap:4px"><input type="date" id="cmpAFrom"><input type="date" id="cmpATo"></div></label>
+        <label class="field"><span>الفترة السابقة</span><div style="display:flex;gap:4px"><input type="date" id="cmpBFrom"><input type="date" id="cmpBTo"></div></label>
         <button id="cmpRun" class="btn">تحديث المقارنة</button>
       </div>
-      <div id="cmpTable" class="cmp-table">
-        <!-- يبنى أفقياً: المؤشر | الحالية | السابقة | الفرق -->
-      </div>
+      <div id="cmpTable" class="cmp-table"></div>
     </section>
 
-    <!-- تحليلات ذكية (أفقي) -->
     <section class="ai">
-      <h3>التحليلات الذكية</h3>
-      <div id="aiTable" class="ai-table">
-        <!-- صفوف: النمط | الوصف | التوصية | الثقة | إدراج -->
-      </div>
+      <h3>التحليلات الذكية والأنماط (AI) 🧠</h3>
+      <div id="aiTable" class="ai-table"></div>
     </section>
   </div>
 
@@ -104,6 +76,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
-  <script type="module" src="js/reports.js"></script>
+  
+  <script type="module" src="js/reports.js?v=2"></script>
+  <script type="module" src="js/header.js"></script>
 </body>
 </html>
