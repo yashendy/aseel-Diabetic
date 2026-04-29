@@ -16,15 +16,6 @@
   <div id="appLoader" class="loader"><span class="spinner"></span><span>يجري التحميل...</span></div>
 
   <main class="container">
-    <div class="topbar">
-      <a id="btnBack" class="btn-link" href="#">⬅ رجوع لصفحة الطفل</a>
-      <div class="chips">
-        <span id="chipTargets" class="chip">الهدف: —</span>
-        <span id="chipCR" class="chip">CR: —</span>
-        <span id="chipCF" class="chip">CF: —</span>
-      </div>
-    </div>
-
     <section class="grid-2">
       <div class="panel" style="overflow-x: auto;">
         <h3>مكونات الوجبة</h3>
@@ -53,7 +44,15 @@
       </div>
 
       <div class="panel">
-        <h3>لوحة الحسابات</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <h3 style="margin: 0;">لوحة الحسابات</h3>
+          <div class="chips">
+            <span id="chipTargets" class="chip">الهدف: —</span>
+            <span id="chipCR" class="chip">CR: —</span>
+            <span id="chipCF" class="chip">CF: —</span>
+          </div>
+        </div>
+
         <div class="row"><label>الوجبة</label><select id="slotSelect"><option value="b">فطار</option><option value="l">غدا</option><option value="d">عشا</option><option value="s">سناك</option></select></div>
         <div class="row"><label>تاريخ الوجبة</label><input id="dateInput" type="date" /></div>
         
@@ -97,6 +96,9 @@
       if(l && l.style.display !== 'none') { l.style.display = 'none'; }
     }, 4000);
   </script>
+  
   <script type="module" src="js/meals.js?v=2025.10.18.5"></script>
+  
+  <script type="module" src="js/header.js"></script>
 </body>
 </html>
