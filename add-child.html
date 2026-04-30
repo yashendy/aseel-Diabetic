@@ -3,70 +3,145 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>إضافة طفل جديد</title>
-  <link rel="stylesheet" href="css/add-child.css">
-  <link rel="icon" href="data:,">
+  <title>إضافة طفل جديد - منصة أسيل</title>
+  <link rel="stylesheet" href="css/add-child.css?v=2">
+  <link rel="icon" href="favicon.ico">
 </head>
 <body>
+  <header class="page-header">
+    <div class="header-content">
+      <h2>👶 تسجيل طفل جديد</h2>
+      <button type="button" id="btnBack" class="btn btn-ghost">⬅ إلغاء ورجوع</button>
+    </div>
+  </header>
+
   <div class="container">
-    <h1>➕ إضافة طفل جديد</h1>
-    <form id="childForm">
+    <form id="childForm" class="form-layout">
+      
+      <!-- الكارت الأول: الهوية والنمو -->
+      <section class="card">
+        <h3 class="card-title">📝 البيانات الأساسية</h3>
+        <div class="input-grid">
+          <div class="field">
+            <label>الاسم الكامل</label>
+            <input type="text" id="f_name" placeholder="اسم الطفل" required>
+          </div>
+          <div class="field">
+            <label>النوع</label>
+            <select id="f_gender" required>
+              <option value="male">ذكر</option>
+              <option value="female">أنثى</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>تاريخ الميلاد</label>
+            <input type="date" id="f_dob" required>
+          </div>
+          <div class="field">
+            <label>تاريخ التشخيص بالسكري (اختياري)</label>
+            <input type="date" id="f_diagnosis">
+          </div>
+          <div class="field">
+            <label>الوزن الحالي (كجم)</label>
+            <input type="number" id="f_weight" step="0.1" placeholder="مثال: 25" required>
+          </div>
+          <div class="field">
+            <label>الطول (سم)</label>
+            <input type="number" id="f_height" step="1" placeholder="مثال: 120" required>
+          </div>
+        </div>
+      </section>
 
-      <!-- 👶 بيانات الطفل -->
-      <fieldset>
-        <legend>👶 بيانات الطفل</legend>
-        <input type="text" id="name" placeholder="الاسم الكامل" required>
-        <select id="gender" required>
-          <option value="">اختر النوع</option>
-          <option value="ذكر">ذكر</option>
-          <option value="أنثى">أنثى</option>
-        </select>
-        <input type="date" id="birthDate" required>
-        <input type="number" id="weight" placeholder="الوزن (كجم)" required>
-        <input type="number" id="height" placeholder="الطول (سم)" required>
-      </fieldset>
+      <!-- الكارت الثاني: الأنسولين والمعاملات -->
+      <section class="card">
+        <h3 class="card-title">💉 الأنسولين والمعاملات</h3>
+        <div class="input-grid">
+          <div class="field">
+            <label>الأنسولين القاعدي (Basal)</label>
+            <input type="text" id="f_basal" placeholder="مثال: لانتوس، تريسيبا...">
+          </div>
+          <div class="field">
+            <label>أنسولين الوجبات (Bolus)</label>
+            <input type="text" id="f_bolus" placeholder="مثال: نوفورابيد، أبيدرا...">
+          </div>
+          <div class="field">
+            <label>معامل التصحيح (CF)</label>
+            <input type="number" id="f_cf" step="any" placeholder="مثال: 50" required>
+          </div>
+        </div>
+        
+        <label class="section-subtitle mt-15">🍔 معامل الكارب (CR) حسب الوجبة</label>
+        <div class="input-grid">
+          <div class="field">
+            <label>الفطار</label>
+            <input type="number" id="cr_b" step="any" placeholder="مثال: 10" required>
+          </div>
+          <div class="field">
+            <label>الغداء</label>
+            <input type="number" id="cr_l" step="any" placeholder="مثال: 12" required>
+          </div>
+          <div class="field">
+            <label>العشاء</label>
+            <input type="number" id="cr_d" step="any" placeholder="مثال: 15" required>
+          </div>
+          <div class="field">
+            <label>سناك</label>
+            <input type="number" id="cr_s" step="any" placeholder="مثال: 20" required>
+          </div>
+        </div>
+      </section>
 
-      <!-- 💉 جرعة طويلة المفعول -->
-      <fieldset>
-        <legend>💉 الإنسولين طويل المفعول</legend>
-        <input type="text" id="longInsulin" placeholder="اسم الإنسولين" required>
-        <input type="number" id="longDose" placeholder="الجرعة (وحدة)" required>
-        <input type="time" id="longTime" required>
-      </fieldset>
+      <!-- الكارت الثالث: وحدة القياس والنطاقات -->
+      <section class="card">
+        <div class="card-header-flex">
+          <h3 class="card-title">🎯 مستويات السكر المستهدفة</h3>
+          <div class="field" style="width: 150px; margin-top: -10px;">
+            <select id="f_unit" class="highlight-select" required>
+              <option value="mg/dL">mg/dL</option>
+              <option value="mmol/L">mmol/L</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="input-grid">
+          <div class="field">
+            <label>الهدف المثالي للتصحيح (Target)</label>
+            <input type="number" id="gl_target" step="any" required>
+          </div>
+        </div>
+        
+        <div class="input-grid mt-15">
+          <div class="field alert-field">
+            <label>هبوط حرج 🚨</label>
+            <input type="number" id="gl_crit_low" step="any" required>
+          </div>
+          <div class="field warn-field">
+            <label>هبوط ↓</label>
+            <input type="number" id="gl_low" step="any" required>
+          </div>
+          <div class="field warn-field">
+            <label>ارتفاع ↑</label>
+            <input type="number" id="gl_high" step="any" required>
+          </div>
+          <div class="field alert-field">
+            <label>ارتفاع حرج 🚨</label>
+            <input type="number" id="gl_crit_high" step="any" required>
+          </div>
+        </div>
+      </section>
 
-      <!-- 🍽️ جرعات الأكل -->
-      <fieldset>
-        <legend>🍽️ جرعات الأكل</legend>
-        <div id="mealsContainer"></div>
-        <button type="button" onclick="addMeal()">➕ أضف وجبة</button>
-      </fieldset>
-
-      <!-- 🔢 معاملات الحساب -->
-      <fieldset>
-        <legend>🔢 المعاملات</legend>
-        <input type="number" id="correctionFactor" placeholder="معامل التصحيح" step="any" required>
-        <input type="number" id="carbRatio" placeholder="معامل الكربوهيدرات" step="any" required>
-        <input type="number" id="hypoLevel" placeholder="مستوى الهبوط" step="any" required>
-        <input type="number" id="hyperLevel" placeholder="مستوى الارتفاع" step="any" required>
-        <input type="number" id="normalMin" placeholder="الحد الأدنى الطبيعي" step="any" required>
-        <input type="number" id="normalMax" placeholder="الحد الأعلى الطبيعي" step="any" required>
-      </fieldset>
-
-      <!-- ⚙️ إعدادات -->
-      <fieldset>
-        <legend>⚙️ الإعدادات</legend>
-        <select id="unitType" required>
-          <option value="">اختر وحدة القياس</option>
-          <option value="mg/dL">mg/dL</option>
-          <option value="mmol/L">mmol/L</option>
-        </select>
-      </fieldset>
-
-      <!-- إرسال -->
-      <button type="submit">حفظ الطفل</button>
+      <!-- الأزرار -->
+      <div class="form-actions">
+        <button type="submit" id="btnSubmit" class="btn btn-primary btn-large">💾 حفظ وإنشاء ملف الطفل</button>
+      </div>
     </form>
   </div>
 
-  <script type="module" src="js/add-child.js"></script>
+  <div id="loader" class="screen-loader hidden">
+    <div class="spinner"></div>
+    <p style="margin-top:15px; font-weight:bold; color:#2563eb;">جاري إنشاء الملف الطبي...</p>
+  </div>
+
+  <script type="module" src="js/add-child.js?v=2"></script>
 </body>
 </html>
