@@ -21,6 +21,7 @@ onAuthStateChanged(auth, async (user) => {
   initChipInputs();
   initInjectionMap();
   initBMICalculator();
+  initUnitSmartSwitch(); // <-- تم إضافة ذكاء الوحدات هنا
   await loadChildData();
   
   $('#btnSave').addEventListener('click', saveChildData);
@@ -89,7 +90,56 @@ function setChips(wrapId, valuesArray) {
   (valuesArray || []).forEach(v => addChip(list, v));
 }
 
-// === 4. تحميل البيانات ===
+// === 4. ذكاء وحدات القياس (تغيير الأمثلة والتحويل التلقائي) ===
+function initUnitSmartSwitch() {
+  const unitSelect = $('#f_unit');
+  if (!unitSelect) return;
+  
+  // الحقول التي تتأثر بتغيير الوحدة
+  const glucoseFields = ['gl_target', 'gl_low', 'gl_high', 'gl_crit_low', 'gl_crit_high', 'f_cf'];
+  
+  // الأمثلة الافتراضية لكل وحدة
+  const placeholders = {
+    'mg/dL': { gl_target: '100', gl_low: '70', gl_high: '180', gl_crit_low: '54', gl_crit_high: '250', f_cf: '50' },
+    'mmol/L': { gl_target: '5.5', gl_low: '3.9', gl_high: '10.0', gl_crit_low: '3.0', gl_crit_high: '13.9', f_cf: '3' }
+  };
+
+  // الاحتفاظ بالوحدة السابقة لمعرفة هل نضرب أم نقسم
+  let previousUnit = unitSelect.value || 'mg/dL';
+
+  unitSelect.addEventListener('change', (e) => {
+    const newUnit = e.target.value;
+    
+    // 1. تحديث الأمثلة الباهتة (Placeholders)
+    glucoseFields.forEach(id => {
+      const input = $(`#${id}`);
+      if(input) input.placeholder = `مثال: ${placeholders[newUnit]?.[id] || ''}`;
+    });
+
+    // 2. التحويل التلقائي للأرقام المكتوبة بالفعل
+    if (previousUnit !== newUnit) {
+      glucoseFields.forEach(id => {
+        const input = $(`#${id}`);
+        if (input && input.value) {
+          let val = parseFloat(input.value);
+          if (!isNaN(val)) {
+            if (newUnit === 'mmol/L' && previousUnit === 'mg/dL') {
+              input.value = (val / 18.0182).toFixed(1); // من mg إلى mmol
+            } else if (newUnit === 'mg/dL' && previousUnit === 'mmol/L') {
+              input.value = Math.round(val * 18.0182); // من mmol إلى mg
+            }
+          }
+        }
+      });
+      previousUnit = newUnit;
+    }
+  });
+
+  // تشغيل الدالة مرة واحدة عند الفتح لضبط الأمثلة الأولية
+  unitSelect.dispatchEvent(new Event('change'));
+}
+
+// === 5. تحميل البيانات ===
 async function loadChildData() {
   $('#loader').classList.remove('hidden');
   try {
@@ -116,6 +166,8 @@ async function loadChildData() {
 
     // الأنسولين والمعاملات
     $('#f_unit').value = d.glucoseUnit || 'mg/dL';
+    $('#f_unit').dispatchEvent(new Event('change')); // لتحديث الأمثلة بناءً على الوحدة المحفوظة
+    
     $('#f_basal').value = d.insulin?.basal || d.basalType || '';
     $('#f_bolus').value = d.insulin?.bolus || d.bolusType || '';
     $('#f_cf').value = d.cf || d.correctionFactor || '';
@@ -154,7 +206,7 @@ async function loadChildData() {
   finally { $('#loader').classList.add('hidden'); }
 }
 
-// === 5. الحفظ بالهيكل الجديد المُحسّن ===
+// === 6. الحفظ بالهيكل الجديد المُحسّن ===
 async function saveChildData() {
   $('#loader').classList.remove('hidden');
   try {
