@@ -1,128 +1,218 @@
-:root{
-  --bg:#F0F8FF; --card:#fff; --border:#e6eef7; --text:#222; --muted:#666;
-  --primary:#4CAF50; --accent:#2196F3; --warn:#FB8C00; --danger:#E53935; --ok:#2E7D32;
-  --labs:#8E24AA;
+:root {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --primary: #2563eb;
+  --shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
 }
 
-body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Tahoma,Arial,sans-serif}
-.container{max-width:1200px;margin:auto;padding:16px}
-
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 6px 16px rgba(0,0,0,.06)}
-.muted{color:var(--muted)}
-
-.child-header{position:relative}
-
-.head-grid{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.chip{background:#f7fbff;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;color:#444}
-
-.stats{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.stat{background:#f7fbff;border:1px solid var(--border);border-radius:12px;min-width:120px;text-align:center;padding:10px}
-.stat-num{font-size:22px;font-weight:800}
-.stat-label{font-size:12px;color:#555}
-
-/* ===== Grid البطاقات — كل البطاقات بنفس الارتفاع ===== */
-.cards{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
-  gap:14px;
-  margin-top:16px;
-  align-items:stretch;      /* كل البطاقات بنفس ارتفاع الصف */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
 }
 
-/* البطاقة الكاملة تمتد عامودياً */
-.cards > *{
-  display:flex;
-  flex-direction:column;
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 16px;
 }
 
-/* بطاقة الجلوكوز — عرض كامل */
-.cards > article:first-child,
-.cards > .glucose-full {
-  grid-column: 1 / -1;
+/* الهيدر العلوي لبيانات الطفل */
+.vitals-header {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
 }
 
-a.card.link{cursor:pointer;text-decoration:none;color:inherit}
-a.card.link:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(0,0,0,.09)}
-
-/* البطاقات الملوّنة */
-.card.measurements{border-left:6px solid #42A5F5}
-.card.meals       {border-left:6px solid #66BB6A}
-.card.food        {border-left:6px solid #FFA726}
-.card.reports     {border-left:6px solid #7E57C2}
-.card.visits      {border-left:6px solid #26C6DA}
-.card.child-edit  {border-left:6px solid #EF5350}
-
-/* يدفع .mini للأسفل في البطاقات الرابط عشان تتساوى */
-a.card.link p   { flex:1; }
-a.card.link .mini{ margin-top:auto; padding-top:8px; font-size:12px; color:var(--muted); }
-
-/* ===== بطاقة التحاليل — مُدمجة ومُقلّصة ===== */
-.card.labs{border-left:6px solid var(--labs)}
-.card.labs button{cursor:pointer}
-
-/* إخفاء الـ sparkline وشريط التقدم عشان يتساوى الحجم */
-.card.labs .sparkline{ display:none }
-.card.labs .progress { display:none }
-
-/* تنظيم محتوى بطاقة التحاليل عامودياً */
-.card.labs{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
-.card.labs .row.space.actions{
-  margin-top:auto;
-  padding-top:10px;
-  border-top:1px solid var(--border);
-  flex-wrap:wrap;
-  gap:8px;
+.vitals-info h1 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  color: #1e293b;
 }
 
-/* ===== عناصر مساعدة ===== */
-.pill{display:inline-block;padding:3px 8px;border:1px solid var(--border);border-radius:999px;background:#fff;font-size:12px}
-.pill.ok  {color:var(--ok); border-color:#bbf7d0;background:#ecfdf5}
-.pill.warn{color:#b45309;   border-color:#fde68a;background:#fff7ed}
-.pill.bad {color:#991b1b;   border-color:#fecaca;background:#fef2f2}
-
-.lab-stats{display:flex;gap:12px;flex-wrap:wrap}
-.lab-stat{min-width:100px;flex:1}
-.label{font-size:12px}
-.value{font-size:18px;font-weight:800}
-.value.tone{padding:2px 8px;border-radius:8px;display:inline-block}
-.value.tone.good{background:#ecfdf5;color:#065f46}
-.value.tone.mid {background:#fff7ed;color:#92400e}
-.value.tone.bad {background:#fef2f2;color:#991b1b}
-
-/* ===== mini-list في بطاقة الإعدادات ===== */
-.mini-list{
-  margin-top:6px;flex:1;
-  background:#f9fcff;border:1px solid var(--border);
-  border-radius:10px;padding:8px 10px;
-  display:grid;gap:4px;font-size:12px;
+.vitals-chips {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
 }
-.mini-list .lbl{color:#555}
-.mini-list strong{font-weight:700;color:#111}
 
-/* ===== Loader & Hidden ===== */
-.loader{position:fixed;inset:0;background:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;font-weight:700;z-index:1000}
-.hidden{display:none}
-
-/* ===== أزرار ===== */
-.btn{padding:7px 11px;border-radius:10px;border:1px solid var(--border);background:#f7fbff;font-size:13px;cursor:pointer}
-.btn.ghost{background:#fff}
-.btn:hover{filter:brightness(.97)}
-
-/* ===== Layout helpers ===== */
-.row{display:flex;align-items:center}
-.row.gap{gap:8px}
-.row.space{justify-content:space-between}
-
-/* ===== موبايل ===== */
-@media(max-width:600px){
-  .cards{grid-template-columns:1fr}
-  .stats{gap:8px}
-  .stat{min-width:90px;padding:8px}
-  .stat-num{font-size:18px}
-  .head-grid{flex-direction:column}
+.v-chip {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #334155;
 }
+
+.vitals-stats {
+  display: flex;
+  gap: 15px;
+}
+
+.stat-box {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  text-align: center;
+  min-width: 120px;
+}
+
+.stat-box strong {
+  display: block;
+  font-size: 24px;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+
+.stat-box span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* شبكة الكروت الأساسية */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.dash-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+  transition: transform 0.2s, box-shadow 0.2s;
+  border-right: 6px solid #cbd5e1; /* لون افتراضي للحد الجانبي */
+}
+
+.dash-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+}
+
+.dash-card .icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.dash-card h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+}
+
+.dash-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  flex-grow: 1;
+}
+
+/* ألوان الكروت الجانبية */
+.link-blue { border-right-color: #3b82f6; }
+.link-green { border-right-color: #10b981; }
+.link-purple { border-right-color: #8b5cf6; }
+.link-teal { border-right-color: #14b8a6; }
+.link-red { border-right-color: #ef4444; }
+.link-indigo { border-right-color: #6366f1; }
+
+/* كارت التحاليل المميز */
+.lab-card {
+  grid-row: span 2; /* يأخذ مساحة عمودية أكبر */
+}
+
+.lab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+
+.lab-header .row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lab-header h3 { margin: 0; }
+
+.lab-metric {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+}
+
+.lab-metric strong {
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.tone { color: #1e293b; }
+
+.lab-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  flex: 1;
+}
+
+.btn.primary { background: var(--primary); color: #fff; }
+.btn.ghost { background: #f1f5f9; color: #334155; border: 1px solid var(--border); }
+
+.pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: #f1f5f9;
+}
+
+.loader {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.spinner {
+  width: 40px; height: 40px;
+  border: 4px solid #e2e8f0; border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.hidden { display: none !important; }
