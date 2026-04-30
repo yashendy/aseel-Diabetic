@@ -3,115 +3,112 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>القياسات</title>
-  <link rel="stylesheet" href="css/measurements.css" />
+  <title>سجل القياسات الذكي</title>
+  <link rel="stylesheet" href="css/measurements.css?v=3" />
+  <link rel="icon" href="favicon.png" />
 </head>
 <body>
   <div class="container">
-    <header class="page-head">
-      <div class="left">
-        <a id="backToChild" class="btn btn--ghost">⚙️ إعداد الطفل</a>
-      </div>
+    <!-- الهيدر العلوي -->
+    <header class="page-head no-print">
       <div class="right">
-        <strong id="childName">الطفل</strong>
+        <strong id="childName">جاري التحميل...</strong>
         <span id="childMeta" class="muted"></span>
+      </div>
+      <div class="left">
+        <button id="backToChild" class="btn btn-ghost">⬅ لوحة الطفل</button>
       </div>
     </header>
 
-    <!-- CR / CF / Bolus -->
-    <div id="therapyChips" class="chips"></div>
+    <!-- شريط المعاملات الحالي (يُقرأ من الإعدادات الجديدة) -->
+    <div id="therapyChips" class="chips-bar mb-15">
+      <!-- سيتم تعبئته من JS (CF, Target, CR) -->
+    </div>
 
-    <!-- شريط الإدخال -->
-    <section class="toolbar">
-      <label class="field">
-        <span>التاريخ</span>
-        <input type="date" id="dayPicker" />
-      </label>
+    <!-- كارت إدخال القياس الجديد -->
+    <section class="input-card">
+      <h3 class="card-title">🩸 تسجيل قراءة جديدة</h3>
+      
+      <div class="input-grid">
+        <div class="field">
+          <label>التاريخ</label>
+          <input type="date" id="dayPicker" />
+        </div>
+        
+        <div class="field">
+          <label>الوقت</label>
+          <input type="time" id="timePicker" />
+        </div>
 
-      <label class="field">
-        <span>(Slot) نوع القياس</span>
-        <select id="slotKey">
-          <option value="FASTING">صائم</option>
-          <option value="PRE_BREAKFAST">قبل الفطار</option>
-          <option value="POST_BREAKFAST">بعد الفطار</option>
-          <option value="PRE_LUNCH">قبل الغداء</option>
-          <option value="POST_LUNCH">بعد الغداء</option>
-          <option value="PRE_DINNER">قبل العشاء</option>
-          <option value="POST_DINNER">بعد العشاء</option>
-          <option value="SNACK">سناك</option>
-          <option value="BEDTIME">قبل النوم</option>
-          <option value="DURING_SLEEP">أثناء النوم</option>
-          <option value="EXERCISE">رياضة</option>
-          <option value="OTHER">أخرى</option>
-        </select>
-      </label>
-
-      <label class="field">
-        <span>القراءة</span>
-        <input type="number" id="reading" step="any" placeholder="مثال: 6.8 أو 122" />
-      </label>
-
-      <label class="field">
-        <span>الوحدة</span>
-        <select id="unitSel">
-          <option value="mmol/L">mmol/L</option>
-          <option value="mg/dL">mg/dL</option>
-        </select>
-      </label>
-
-      <div class="field readonly">
-        <span>تحويل</span>
-        <div id="converted" class="muted">—</div>
-      </div>
-
-      <div class="field readonly">
-        <span>الحالة</span>
-        <div id="stateBadge" class="badge">—</div>
-      </div>
-
-      <div class="field readonly">
-        <span>جرعة التصحيح (حسابي/قابلة للتعديل)</span>
-        <div id="corrDoseView" class="badge info">0</div>
-      </div>
-
-      <div class="grow"></div>
-
-      <div class="switch">
-        <input type="checkbox" id="liveToggle" checked />
-        <label for="liveToggle">Live</label>
-      </div>
-
-      <button id="toMeals" class="btn">🍽️ إلى صفحة الوجبات</button>
-      <button id="saveBtn" class="btn">حفظ القياس</button>
-    </section>
-
-    <!-- حدود النطاقات (ثابتة) -->
-    <section class="chips" id="targetsChips"></section>
-
-    <!-- (JS يحقن هنا: filtersBar + statsBar + actionsPanel) -->
-
-    <!-- جدول اليوم -->
-    <section class="table-wrap">
-      <div class="table-head">
-        <div class="left"><span class="muted">قياسات اليوم</span></div>
-        <div class="right">
-          <select id="sortSel" class="sel">
-            <option value="time-asc">ترتيب: حسب الوقت</option>
-            <option value="value-desc">ترتيب: القيمة (تنازلي)</option>
-            <option value="value-asc">ترتيب: القيمة (تصاعدي)</option>
+        <div class="field">
+          <label>الفترة (Slot)</label>
+          <select id="slotKey">
+            <option value="FASTING">صائم / على الريق</option>
+            <option value="PRE_BREAKFAST">قبل الفطار</option>
+            <option value="POST_BREAKFAST">بعد الفطار</option>
+            <option value="PRE_LUNCH">قبل الغدا</option>
+            <option value="POST_LUNCH">بعد الغدا</option>
+            <option value="PRE_DINNER">قبل العشا</option>
+            <option value="POST_DINNER">بعد العشا</option>
+            <option value="SNACK">سناك</option>
+            <option value="BEDTIME">قبل النوم</option>
+            <option value="EXERCISE">رياضة / مجهود</option>
+            <option value="OTHER">وقت آخر</option>
           </select>
-          <button id="exportCsvBtn" class="btn btn--ghost">⬇️ CSV</button>
-          <button id="exportXlsxBtn" class="btn btn--ghost">⬇️ Excel</button>
+        </div>
+
+        <div class="field bg-input-group">
+          <label>مستوى السكر</label>
+          <div class="input-with-suffix">
+            <input type="number" id="reading" step="0.1" placeholder="مثال: 120" />
+            <span class="suffix" id="unitLabel">mg/dL</span>
+          </div>
         </div>
       </div>
 
-      <div class="table" id="grid"></div>
-      <div id="empty" class="empty hidden">لا توجد قياسات لهذا اليوم.</div>
+      <!-- منطقة التنبيهات الذكية (التصحيح أو الهبوط) -->
+      <div id="smartAlert" class="smart-alert hidden">
+        <div class="alert-icon" id="alertIcon">💡</div>
+        <div class="alert-content">
+          <h4 id="alertTitle">جاري الحساب...</h4>
+          <p id="alertMsg">...</p>
+        </div>
+      </div>
+
+      <div class="field mb-15">
+        <label>ملاحظات (اختياري)</label>
+        <input type="text" id="mNotes" placeholder="مثال: كان بيلعب، أو أكل حلويات..." />
+      </div>
+
+      <div class="actions-row">
+        <button id="saveBtn" class="btn primary btn-lg">💾 حفظ القياس فقط</button>
+        <button id="toMealsBtn" class="btn secondary btn-lg">🍽️ إرسال لحاسبة الوجبات</button>
+      </div>
     </section>
+
+    <!-- فلاتر العرض -->
+    <div class="filters-bar">
+      <h3 style="margin:0; font-size:16px;">سجل اليوم</h3>
+      <div class="search-box">
+        <input type="text" id="searchBox" placeholder="بحث في السجل..." />
+      </div>
+    </div>
+
+    <!-- الخط الزمني (Timeline) بديل الجدول -->
+    <div class="timeline-container" id="timelineGrid">
+      <!-- الكروت ستُحقن هنا بواسطة الـ JS -->
+    </div>
+    
+    <div id="empty" class="empty-state hidden">
+      <div class="empty-icon">📭</div>
+      <p>لا توجد قراءات مسجلة في هذا اليوم.</p>
+    </div>
+
   </div>
 
-  <div id="toast" class="toast" style="display:none"></div>
+  <div id="toast" class="toast hidden"></div>
+  <div id="loader" class="screen-loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="js/measurements.js"></script>
+  <script type="module" src="js/measurements.js?v=3"></script>
 </body>
 </html>
