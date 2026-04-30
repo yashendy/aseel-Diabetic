@@ -23,7 +23,7 @@ function showLoader(v){ const l=$('appLoader'); if(l) l.style.display = v ? 'fle
 let currentUser, childId=new URLSearchParams(location.search).get('child')||localStorage.getItem('selectedChildId'), childRef, child;
 let unitSel, fromDate, toDate, reportGrid, emptyGrid, pie, cmpElems, aiTable;
 
-// النطاقات الديناميكية من الإعدادات
+// النطاقات الديناميكية من الإعدادات (أسماء موحدة)
 let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
 let sysUnit = 'mg/dL';
 
@@ -61,6 +61,7 @@ async function loadChild(uid){
   child=snap.data();
   sysUnit = child.glucoseUnit || 'mg/dL';
 
+  // تحديث القيم بدقة حسب إعدادات الطفل
   if(child.glucose_limits) {
     sysLimits.low = Number(child.glucose_limits.low) || (sysUnit==='mmol/L'? 3.9 : 70);
     sysLimits.high = Number(child.glucose_limits.high) || (sysUnit==='mmol/L'? 10.0 : 180);
@@ -69,13 +70,24 @@ async function loadChild(uid){
   }
 }
 
+// دالة التحويل مع الأسماء الصحيحة للحدود
 function limitsInUnit(targetUnit){
   if (targetUnit === sysUnit) return { ...sysLimits };
   if (targetUnit === 'mmol/L' && sysUnit === 'mg/dL') {
-    return { low: round1(mgdl2mmol(sysLimits.low)), upper: round1(mgdl2mmol(sysLimits.high)), severe: round1(mgdl2mmol(sysLimits.critHigh)), critHigh: round1(mgdl2mmol(sysLimits.critHigh) + 2) }; // تقريبي
+    return { 
+      critLow: round1(mgdl2mmol(sysLimits.critLow)), 
+      low: round1(mgdl2mmol(sysLimits.low)), 
+      high: round1(mgdl2mmol(sysLimits.high)), 
+      critHigh: round1(mgdl2mmol(sysLimits.critHigh)) 
+    }; 
   }
   if (targetUnit === 'mg/dL' && sysUnit === 'mmol/L') {
-    return { low: round1(mmol2mgdl(sysLimits.low)), upper: round1(mmol2mgdl(sysLimits.high)), severe: round1(mmol2mgdl(sysLimits.critHigh)), critHigh: round1(mmol2mgdl(sysLimits.critHigh) + 36) };
+    return { 
+      critLow: round1(mmol2mgdl(sysLimits.critLow)), 
+      low: round1(mmol2mgdl(sysLimits.low)), 
+      high: round1(mmol2mgdl(sysLimits.high)), 
+      critHigh: round1(mmol2mgdl(sysLimits.critHigh)) 
+    };
   }
   return { ...sysLimits };
 }
@@ -85,8 +97,8 @@ function fillThresholdChips(){
   const L = limitsInUnit(u);
   $('thresholdChips').innerHTML = `
     <span class="chip">هبوط: <b>${L.low} ${u}</b></span>
-    <span class="chip">ارتفاع: <b>${L.upper} ${u}</b></span>
-    <span class="chip">ارتفاع حرج: <b>${L.severe} ${u}</b></span>
+    <span class="chip">ارتفاع: <b>${L.high} ${u}</b></span>
+    <span class="chip">ارتفاع حرج: <b>${L.critHigh} ${u}</b></span>
   `;
 }
 
@@ -102,13 +114,15 @@ function initDefaultRange(){
   cmpElems.BTo.value=prevTo.toISOString().slice(0,10);
 }
 
+// دالة التلوين المحدثة (مهمة جداً)
 function classFor(val,u){
   if(val == null) return '';
   const L=limitsInUnit(u);
-  if(val>=L.severe) return 'crit';
-  if(val>L.upper) return 'mild';
-  if(val<L.low) return 'sev';
-  return 'ok';
+  if(val >= L.critHigh) return 'crit';   // أحمر غامق (حرج)
+  if(val > L.high) return 'mild';        // برتقالي (ارتفاع)
+  if(val <= L.critLow) return 'crit';    // هبوط حرج
+  if(val < L.low) return 'sev';          // أحمر (هبوط)
+  return 'ok';                           // أخضر (في النطاق)
 }
 
 async function fetchRange(fromISO,toISO){
@@ -203,15 +217,24 @@ async function renderReport(){
   showLoader(false);
 }
 
+// دالة الإحصائيات (وتلوين كارت المتوسط الذكي)
 function updateStats(list){
   const validList = list.filter(x => x.val !== null);
   const unit=unitSel.value, L=limitsInUnit(unit);
-  if(!validList.length){ $('statTIR').textContent='0%'; $('statLow').textContent='0%'; $('statHigh').textContent='0%'; $('statAvg').textContent='—'; $('statSD').textContent='—'; $('statCrit').textContent='0'; return; }
+  const avgCard = $('statAvg').parentElement; // الحصول على الكارت الخاص بالمتوسط
+
+  if(!validList.length){ 
+    $('statTIR').textContent='0%'; $('statLow').textContent='0%'; $('statHigh').textContent='0%'; $('statAvg').textContent='—'; $('statSD').textContent='—'; $('statCrit').textContent='0'; 
+    avgCard.className = 'card';
+    avgCard.style.backgroundColor = '';
+    return; 
+  }
+  
   const n=validList.length;
   const lows=validList.filter(x=>x.val<L.low).length;
-  const highs=validList.filter(x=>x.val>L.upper).length;
-  const crit=validList.filter(x=>x.val>=L.severe).length;
-  const TIR = validList.filter(x=>x.val>=L.low && x.val<=L.upper).length;
+  const highs=validList.filter(x=>x.val>L.high).length;
+  const crit=validList.filter(x=>x.val>=L.critHigh || x.val<=L.critLow).length;
+  const TIR = validList.filter(x=>x.val>=L.low && x.val<=L.high).length;
   const mean=validList.reduce((a,x)=>a+x.val,0)/n;
   const sd=Math.sqrt(validList.reduce((a,x)=>a+Math.pow(x.val-mean,2),0)/n);
   
@@ -221,14 +244,27 @@ function updateStats(list){
   $('statCrit').textContent=String(crit);
   $('statAvg').textContent=`${round1(mean)} ${unit}`;
   $('statSD').textContent=round1(sd);
+
+  // 🌟 تلوين كارت المتوسط بذكاء بناءً على طلبك
+  avgCard.className = 'card';
+  if (mean < L.low) {
+    avgCard.classList.add('low');           // أحمر
+    avgCard.style.backgroundColor = '';
+  } else if (mean > L.high) {
+    avgCard.classList.add('high');          // برتقالي/أصفر
+    avgCard.style.backgroundColor = '';
+  } else {
+    avgCard.style.backgroundColor = '#dcfce7'; // أخضر (طبيعي)
+  }
 }
 
+// دالة الشارت الدائرية
 function calcParts(list,unit){
   const validList = list.filter(x => x.val !== null);
   const L=limitsInUnit(unit), n=validList.length||1;
   const tbr=validList.filter(x=>x.val<L.low).length/n*100;
-  const tir=validList.filter(x=>x.val>=L.low && x.val<=L.upper).length/n*100;
-  const tar=100 - tir - tbr;
+  const tir=validList.filter(x=>x.val>=L.low && x.val<=L.high).length/n*100;
+  const tar=validList.filter(x=>x.val>L.high).length/n*100;
   return {TIR:Math.round(tir), TBR:Math.round(tbr), TAR:Math.round(tar)};
 }
 
@@ -287,22 +323,22 @@ function buildAI(list,unit){
   const pDinner = valid.filter(x=>x.slot==='POST_DINNER').map(x=>x.val);
 
   if(fast.length >= 3 && sleep.length >= 2) {
-    const highFasting = fast.filter(v => v > L.upper).length;
-    const normalSleep = sleep.filter(v => v >= L.low && v <= L.severe).length;
+    const highFasting = fast.filter(v => v > L.high).length;
+    const normalSleep = sleep.filter(v => v >= L.low && v <= L.high).length;
     if (highFasting >= 2 && normalSleep >= 2) {
       patt.push({ name: 'ظاهرة الفجر (Dawn Phenomenon)', desc: 'السكر يكون طبيعياً أثناء النوم، ولكنه يرتفع بشكل ملحوظ عند الاستيقاظ.', rec: 'قد يقترح الطبيب زيادة طفيفة في جرعة المنظم (Basal) أو تغيير توقيتها.', conf: 'عالي 🔴' });
     }
   }
 
   if(fast.length >= 3 && sleep.length >= 2) {
-    const highFasting = fast.filter(v => v > L.upper).length;
+    const highFasting = fast.filter(v => v > L.high).length;
     const lowSleep = sleep.filter(v => v < L.low).length;
     if (highFasting >= 2 && lowSleep >= 1) {
       patt.push({ name: 'هبوط ليلي وارتداد (Somogyi Effect)', desc: 'اكتشف النظام هبوطاً في السكر أثناء الليل، يتبعه ارتفاع ارتدادي في الصباح.', rec: 'يُرجى مناقشة الطبيب في تقليل جرعة المنظم المسائية أو إضافة سناك قبل النوم.', conf: 'حرج 🚨' });
     }
   }
 
-  if(pBreakfast.length >= 3 && pBreakfast.filter(v=>v>=L.severe).length >= 2) {
+  if(pBreakfast.length >= 3 && pBreakfast.filter(v=>v>=L.critHigh).length >= 2) {
     patt.push({ name: 'ارتفاع حاد بعد الإفطار', desc: 'السكر يرتفع بشدة بعد الإفطار في معظم الأيام.', rec: 'قد يحتاج معامل الكارب (CR) للإفطار إلى التقليل (أخذ أنسولين أكثر).', conf: 'متوسط 🟡' });
   }
 
