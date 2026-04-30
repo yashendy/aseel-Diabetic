@@ -1,34 +1,36 @@
 // js/measurements.js
 import { auth, db } from './firebase-config.js';
-import { collection, doc, getDoc, addDoc, deleteDoc, onSnapshot, query, where, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { collection, doc, getDoc, addDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 // --- الأدوات الأساسية ---
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2,'0');
-const round1 = n => Math.round((Number(n)||0)*10)/10;
 const todayISO = () => new Date().toISOString().slice(0,10);
 const nowTime = () => { const d=new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-function toast(msg) { const t=$('toast'); t.textContent=msg; t.classList.remove('hidden'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.add('hidden'), 2500); }
+function toast(msg) { const t=$('toast'); if(t){ t.textContent=msg; t.classList.remove('hidden'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.add('hidden'), 2500); } }
+function showLoader(show) { const l = $('#loader'); if(l) { if(show) l.classList.remove('hidden'); else l.classList.add('hidden'); } }
 
 const params = new URLSearchParams(location.search);
 const childId = params.get('child') || localStorage.getItem('selectedChildId');
 
 let currentUser = null;
 let childData = {};
-let todayMeasurements = []; // لحفظ قراءات اليوم لاكتشاف التكرار
+let todayMeasurements = []; 
 
 // المعاملات المحفوظة
 let sysUnit = 'mg/dL';
 let sysTarget = 100, sysCF = 50, sysCR = { breakfast: 10, lunch: 10, dinner: 10, snack: 15 };
 let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
 
-// قاموس الأوقات
+// قاموس الأوقات (نفس القديم)
 const SLOT_NAMES = {
   FASTING: 'صائم', PRE_BREAKFAST: 'قبل الفطار', POST_BREAKFAST: 'بعد الفطار',
   PRE_LUNCH: 'قبل الغدا', POST_LUNCH: 'بعد الغدا', PRE_DINNER: 'قبل العشا',
   POST_DINNER: 'بعد العشا', SNACK: 'سناك', BEDTIME: 'قبل النوم', EXERCISE: 'رياضة', OTHER: 'أخرى'
 };
+// الترتيب للفرز
+const SLOT_ORDER = { FASTING:10, PRE_BREAKFAST:20, POST_BREAKFAST:25, PRE_LUNCH:30, POST_LUNCH:35, PRE_DINNER:40, POST_DINNER:45, SNACK:50, EXERCISE:60, BEDTIME:90, OTHER:200 };
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) { location.replace('index.html'); return; }
@@ -37,8 +39,8 @@ onAuthStateChanged(auth, async (user) => {
   if(!childId) { alert("خطأ: لم يتم تحديد الطفل."); location.href="parent.html"; return; }
 
   // تهيئة الواجهة
-  $('dayPicker').value = todayISO();
-  $('timePicker').value = nowTime();
+  if($('dayPicker')) $('dayPicker').value = todayISO();
+  if($('timePicker')) $('timePicker').value = nowTime();
   autoSelectSlot();
 
   await loadChildSettings();
@@ -46,19 +48,17 @@ onAuthStateChanged(auth, async (user) => {
   setupEventListeners();
 });
 
-// 1. تحميل إعدادات الطفل الجديدة
+// 1. تحميل الإعدادات
 async function loadChildSettings() {
-  $('#loader').classList.remove('hidden');
+  showLoader(true);
   try {
     const snap = await getDoc(doc(db, "parents", currentUser.uid, "children", childId));
     if (!snap.exists()) return;
     childData = snap.data();
 
-    // الهوية
-    $('childName').textContent = childData.name || 'الطفل';
+    if($('childName')) $('childName').textContent = childData.name || 'الطفل';
     sysUnit = childData.glucoseUnit || 'mg/dL';
 
-    // المعاملات والحدود (الـ Schema الجديدة)
     if(childData.cf) sysCF = Number(childData.cf);
     if(childData.cr) sysCR = childData.cr;
     if(childData.glucose_limits) {
@@ -69,23 +69,22 @@ async function loadChildSettings() {
       sysLimits.critHigh = Number(childData.glucose_limits.critical_high) || (sysUnit==='mmol/L'? 13.9 : 250);
     }
 
-    $('unitLabel').textContent = sysUnit;
+    if($('unitLabel')) $('unitLabel').textContent = sysUnit;
     
-    // شريط المعاملات العلوي
-    $('therapyChips').innerHTML = `
-      <span class="v-chip">🎯 الهدف: ${sysTarget}</span>
-      <span class="v-chip">💉 CF: ${sysCF}</span>
-      <span class="v-chip">📊 الوحدة: ${sysUnit}</span>
-    `;
+    if($('therapyChips')) {
+      $('therapyChips').innerHTML = `
+        <span class="v-chip">🎯 الهدف: ${sysTarget}</span>
+        <span class="v-chip">💉 CF: ${sysCF}</span>
+        <span class="v-chip">📊 الوحدة: ${sysUnit}</span>
+      `;
+    }
 
-    // تحديث رابط الرجوع للوحة
-    $('backToChild').onclick = () => location.href = `child.html?child=${childId}`;
+    if($('backToChild')) $('backToChild').onclick = () => location.href = `child.html?child=${childId}`;
 
   } catch(e) { console.error(e); }
-  finally { $('#loader').classList.add('hidden'); }
+  finally { showLoader(false); }
 }
 
-// 2. الاختيار التلقائي للوقت
 function autoSelectSlot() {
   const h = new Date().getHours();
   let slot = 'OTHER';
@@ -93,75 +92,65 @@ function autoSelectSlot() {
   else if(h >= 11 && h < 16) slot = 'PRE_LUNCH';
   else if(h >= 16 && h < 22) slot = 'PRE_DINNER';
   else if(h >= 22 || h < 5) slot = 'BEDTIME';
-  $('slotKey').value = slot;
+  if($('slotKey')) $('slotKey').value = slot;
 }
 
-// 3. التنبيه الذكي (حساب الجرعة وكمية الكارب للرفع)
+// 2. إظهار الإجراءات المطلوبة حسب السكر
 function calculateSmartAlert() {
   const val = parseFloat($('reading').value);
+  const panel = $('actionsPanel');
+  if(!val || val <= 0) { panel.classList.add('hidden'); return; }
+
+  panel.classList.remove('hidden');
   const alertBox = $('smartAlert');
-  if(!val || val <= 0) { alertBox.classList.add('hidden'); return; }
-
   const icon = $('alertIcon'); const title = $('alertTitle'); const msg = $('alertMsg');
-  alertBox.className = 'smart-alert'; // reset classes
+  const corrRow = $('corrRow'); const hypoRow = $('hypoRow'); const corrInput = $('corrDoseInput');
 
-  // تحديد الـ CR الحالي بناءً على الوقت المختار (للحسابات المتقدمة للهبوط)
+  alertBox.className = 'smart-alert'; 
+
   const slot = $('slotKey').value;
   let currentCR = sysCR.snack || 15;
   if(slot.includes('BREAKFAST')) currentCR = sysCR.breakfast || 10;
   if(slot.includes('LUNCH')) currentCR = sysCR.lunch || 10;
   if(slot.includes('DINNER')) currentCR = sysCR.dinner || 10;
 
-  // الحالات
   if (val <= sysLimits.critLow || val < sysLimits.low) {
-    // هبوط! حساب الكارب المطلوب للرفع للهدف
+    // هبوط
     alertBox.classList.add(val <= sysLimits.critLow ? 'alert-danger' : 'alert-warn');
-    icon.textContent = '🧃';
-    title.textContent = val <= sysLimits.critLow ? 'هبوط حرج!' : 'هبوط في السكر';
-    
-    // المعادلة الذكية: 1 جرام كارب يرفع السكر بمقدار (CF / CR)
+    icon.textContent = '🧃'; title.textContent = val <= sysLimits.critLow ? 'هبوط حرج!' : 'هبوط في السكر';
     const raisePerGram = sysCF / currentCR; 
-    let neededCarbs = 15; // افتراضي Rule of 15
-    if(raisePerGram > 0 && sysTarget > val) {
-      neededCarbs = Math.round((sysTarget - val) / raisePerGram);
-    }
-    msg.innerHTML = `للوصول للهدف (<b>${sysTarget}</b>)، يحتاج الطفل تقريباً <b>${neededCarbs} جرام</b> من الكربوهيدرات السريعة. (قس بعد 15 دقيقة).`;
+    let neededCarbs = 15;
+    if(raisePerGram > 0 && sysTarget > val) neededCarbs = Math.round((sysTarget - val) / raisePerGram);
+    msg.innerHTML = `للوصول للهدف، يحتاج الطفل <b>${neededCarbs} جرام</b> من الكربوهيدرات السريعة.`;
+    
+    hypoRow.classList.remove('hidden');
+    corrRow.classList.add('hidden');
+    corrInput.value = '';
 
   } else if (val >= sysLimits.critHigh || val > sysLimits.high) {
-    // ارتفاع! حساب جرعة التصحيح
+    // ارتفاع
     alertBox.classList.add(val >= sysLimits.critHigh ? 'alert-danger' : 'alert-warn');
-    icon.textContent = '💉';
-    title.textContent = val >= sysLimits.critHigh ? 'ارتفاع حرج!' : 'مستوى السكر مرتفع';
+    icon.textContent = '💉'; title.textContent = val >= sysLimits.critHigh ? 'ارتفاع حرج!' : 'مستوى السكر مرتفع';
     
     let dose = 0;
-    if(sysCF > 0 && val > sysTarget) {
-      dose = (val - sysTarget) / sysCF;
-      // تقريب لأقرب نصف وحدة أو ربع حسب المضخة/القلم (سنقرب لأقرب نصف)
-      dose = Math.round(dose * 2) / 2; 
-    }
-    msg.innerHTML = dose > 0 ? `جرعة التصحيح المقترحة للوصول للهدف (<b>${sysTarget}</b>) هي: <b>${dose} وحدة</b>.` : `الارتفاع بسيط لا يحتاج تصحيح قوي.`;
+    if(sysCF > 0 && val > sysTarget) dose = Math.round(((val - sysTarget) / sysCF) * 2) / 2;
+    msg.innerHTML = dose > 0 ? `الجرعة المقترحة للتصحيح هي: <b>${dose} وحدة</b>.` : `ارتفاع بسيط.`;
+    
+    corrRow.classList.remove('hidden');
+    hypoRow.classList.add('hidden');
+    if(!$('corrDoseInput').dataset.dirty) corrInput.value = dose > 0 ? dose : '';
 
   } else {
-    // في النطاق
+    // طبيعي
     alertBox.classList.add('alert-ok');
-    icon.textContent = '🎉';
-    title.textContent = 'رائع! السكر في النطاق الطبيعي';
-    msg.innerHTML = `استمر على هذا الأداء الممتاز. الهدف هو البقاء حول <b>${sysTarget}</b>.`;
+    icon.textContent = '🎉'; title.textContent = 'في النطاق الطبيعي';
+    msg.innerHTML = `استمر على هذا الأداء الممتاز.`;
+    
+    hypoRow.classList.add('hidden');
+    corrRow.classList.add('hidden');
+    corrInput.value = '';
+    $('hypoTreatment').value = '';
   }
-}
-
-// 4. نظام المتابعة الذكي (لتكرار نفس الـ Slot)
-function generateSlotName(baseSlot) {
-  const sameSlots = todayMeasurements.filter(m => m.slotKey && m.slotKey.startsWith(baseSlot));
-  if(sameSlots.length === 0) return baseSlot;
-  return `${baseSlot}_FW${sameSlots.length}`; // يضيف FW1, FW2...
-}
-
-function getSlotDisplayName(fullSlotKey) {
-  const parts = fullSlotKey.split('_FW');
-  const baseName = SLOT_NAMES[parts[0]] || parts[0];
-  if(parts.length > 1) return `${baseName} <span class="tl-slot" style="background:#fee2e2; color:#b91c1c;">(متابعة ${parts[1]})</span>`;
-  return `<span class="tl-slot">${baseName}</span>`;
 }
 
 function getGlucoseStateCSS(val) {
@@ -172,87 +161,77 @@ function getGlucoseStateCSS(val) {
   return { dot: 'ok', bg: 'bg-ok', text: 'في النطاق' };
 }
 
-// 5. حفظ القياس الجديد
+// 3. الحفظ الموحد 
 async function saveMeasurement() {
   const val = parseFloat($('reading').value);
   if(!val) { toast("يرجى إدخال قراءة صحيحة"); return; }
 
   const day = $('dayPicker').value;
   const time = $('timePicker').value;
-  const baseSlot = $('slotKey').value;
+  const slotKey = $('slotKey').value;
   const notes = $('mNotes').value.trim();
+  const corrDose = parseFloat($('corrDoseInput').value) || 0;
+  const hypoTreat = $('hypoTreatment').value.trim();
 
-  // الحصول على اسم الـ Slot النهائي (معالج التكرار)
-  const finalSlotKey = generateSlotName(baseSlot);
   const dateTimeObj = new Date(`${day}T${time}`);
 
-  // حساب التصحيح (لتخزينه كمرجع)
-  let calcCorr = 0;
-  if(val > sysLimits.high && sysCF > 0) {
-    calcCorr = Math.max(0, (val - sysTarget) / sysCF);
-    calcCorr = Math.round(calcCorr * 2) / 2;
-  }
-
+  // الـ Payload الموحد الذي سيفهمه الـ Meals والـ Reports
   const payload = {
     value: val,
     unit: sysUnit,
     date: day,
     time: time,
-    when: dateTimeObj, // للترتيب
-    slotKey: finalSlotKey,
+    when: dateTimeObj, 
+    slotKey: slotKey, // حفظ النوع كما هو بالضبط كما طلبتِ
+    slotOrder: SLOT_ORDER[slotKey] || 200,
     state: getGlucoseStateCSS(val).text,
-    suggestedCorrection: calcCorr,
-    notes: notes,
+    correctionDose: corrDose > 0 ? corrDose : null,
+    hypoTreatment: hypoTreat || null,
+    notes: notes || null,
     createdAt: serverTimestamp()
-    // ملاحظة: لو اتسجلت وجبة بعدين، صفحة الوجبات هتعمل Update للـ Document ده وتضيف (carbs, mealDose, totalDose).
   };
 
-  $('#loader').classList.remove('hidden');
+  showLoader(true);
   try {
     await addDoc(collection(db, "parents", currentUser.uid, "children", childId, "measurements"), payload);
     toast("تم الحفظ بنجاح! ✔️");
     
-    // تصفير الحقول للقياس التالي
-    $('reading').value = '';
-    $('mNotes').value = '';
-    $('smartAlert').classList.add('hidden');
+    // إعادة التصفير
+    $('reading').value = ''; $('mNotes').value = '';
+    $('corrDoseInput').value = ''; $('corrDoseInput').dataset.dirty = "";
+    $('hypoTreatment').value = '';
+    $('actionsPanel').classList.add('hidden');
   } catch(e) {
     alert("حدث خطأ أثناء الحفظ"); console.error(e);
   } finally {
-    $('#loader').classList.add('hidden');
+    showLoader(false);
   }
 }
 
-// 6. الاستماع المباشر لقياسات اليوم (لـ Timeline)
+// 4. الخط الزمني للقياسات
 function listenToTodayMeasurements() {
   const measRef = collection(db, "parents", currentUser.uid, "children", childId, "measurements");
-  
-  // الاستماع لكل التحديثات، الفلترة تتم محلياً لتسريع الواجهة
   onSnapshot(query(measRef, orderBy('when', 'desc')), (snapshot) => {
     const allMeas = [];
     snapshot.forEach(doc => allMeas.push({ id: doc.id, ...doc.data() }));
     
-    renderTimeline(allMeas);
-    
-    // نحتفظ ببيانات اليوم المختار فقط عشان نكتشف التكرار
     const selectedDay = $('dayPicker').value;
-    todayMeasurements = allMeas.filter(m => m.date === selectedDay);
+    todayMeasurements = allMeas.filter(m => m.date === selectedDay || (m.when && m.when.toDate().toISOString().slice(0,10) === selectedDay));
+    renderTimeline(todayMeasurements);
   });
 }
 
-// 7. رسم الخط الزمني (Timeline)
-function renderTimeline(allData) {
+function renderTimeline(dataArray) {
   const grid = $('timelineGrid');
   const empty = $('empty');
-  const selectedDay = $('dayPicker').value;
   const searchQuery = $('searchBox').value.toLowerCase();
 
-  // فلترة حسب اليوم والبحث
-  let filtered = allData.filter(m => m.date === selectedDay);
+  let filtered = dataArray;
   if(searchQuery) {
     filtered = filtered.filter(m => 
       (m.notes || '').toLowerCase().includes(searchQuery) ||
-      (SLOT_NAMES[m.slotKey.split('_FW')[0]] || '').toLowerCase().includes(searchQuery)
+      (m.hypoTreatment || '').toLowerCase().includes(searchQuery) ||
+      (SLOT_NAMES[m.slotKey] || '').toLowerCase().includes(searchQuery)
     );
   }
 
@@ -265,20 +244,21 @@ function renderTimeline(allData) {
 
   filtered.forEach(m => {
     const css = getGlucoseStateCSS(m.value);
-    const slotName = getSlotDisplayName(m.slotKey);
+    const slotName = SLOT_NAMES[m.slotKey] || m.slotKey;
     const mTime = m.time || (m.when?.toDate ? pad(m.when.toDate().getHours()) + ':' + pad(m.when.toDate().getMinutes()) : '');
 
-    // التحقق هل توجد بيانات وجبة مربوطة بهذا القياس (من صفحة الوجبات)؟
+    // إظهار الحقول المكتملة
     let detailsHTML = '';
-    if (m.carbs > 0 || m.totalDose > 0) {
-      detailsHTML = `
-        <div class="tl-details mt-10">
-          ${m.carbs ? `<div class="tl-detail-item"><span>🍔 كاربالوجبة</span><b>${m.carbs}g</b></div>` : ''}
-          ${m.mealDose ? `<div class="tl-detail-item"><span>💉 أنسولين أكل</span><b>${m.mealDose}U</b></div>` : ''}
-          ${m.correctionDose ? `<div class="tl-detail-item"><span>💧 تصحيح</span><b>${m.correctionDose}U</b></div>` : ''}
-          ${m.totalDose ? `<div class="tl-detail-item" style="border-right:2px solid #cbd5e1; padding-right:10px;"><span>⚡ الإجمالي</span><b style="color:#2563eb;">${m.totalDose}U</b></div>` : ''}
-        </div>
-      `;
+    const hasDetails = m.correctionDose || m.hypoTreatment || m.carbs || m.mealDose || m.totalDose;
+    
+    if (hasDetails) {
+      detailsHTML = `<div class="tl-details mt-10">`;
+      if(m.hypoTreatment) detailsHTML += `<div class="tl-detail-item"><span>🧃 علاج هبوط</span><b style="color:#b45309;">${m.hypoTreatment}</b></div>`;
+      if(m.correctionDose) detailsHTML += `<div class="tl-detail-item"><span>💧 تصحيح</span><b style="color:#ef4444;">${m.correctionDose} U</b></div>`;
+      if(m.carbs) detailsHTML += `<div class="tl-detail-item"><span>🍔 كارب وجبة</span><b>${m.carbs}g</b></div>`;
+      if(m.mealDose) detailsHTML += `<div class="tl-detail-item"><span>💉 جرعة أكل</span><b>${m.mealDose} U</b></div>`;
+      if(m.totalDose) detailsHTML += `<div class="tl-detail-item" style="border-right:2px solid #cbd5e1; padding-right:10px;"><span>⚡ الإجمالي</span><b style="color:#2563eb;">${m.totalDose} U</b></div>`;
+      detailsHTML += `</div>`;
     }
 
     const card = document.createElement('div');
@@ -287,7 +267,7 @@ function renderTimeline(allData) {
       <div class="tl-dot ${css.dot}"></div>
       <div class="tl-card">
         <div class="tl-head">
-          <div><span class="tl-time">🕒 ${mTime}</span> | ${slotName}</div>
+          <div><span class="tl-time">🕒 ${mTime}</span> | <span class="tl-slot">${slotName}</span></div>
           <button class="icon-btn del-btn" data-id="${m.id}" title="حذف">🗑️</button>
         </div>
         <div class="tl-body">
@@ -301,10 +281,9 @@ function renderTimeline(allData) {
     grid.appendChild(card);
   });
 
-  // تفعيل أزرار الحذف
   document.querySelectorAll('.del-btn').forEach(btn => {
     btn.onclick = async () => {
-      if(confirm('هل أنت متأكد من حذف هذا السجل؟ (سيحذف بيانات الوجبة المرتبطة به إن وجدت)')) {
+      if(confirm('تأكيد الحذف؟')) {
         await deleteDoc(doc(db, "parents", currentUser.uid, "children", childId, "measurements", btn.dataset.id));
         toast('تم الحذف');
       }
@@ -312,27 +291,25 @@ function renderTimeline(allData) {
   });
 }
 
-// 8. إرسال البيانات لحاسبة الوجبات
 function sendToMeals() {
   const val = $('reading').value;
   const slot = $('slotKey').value;
   const date = $('dayPicker').value;
-  // التوجيه مع تمرير البيانات في الرابط
   location.href = `meals.html?child=${childId}&bg=${val || ''}&slot=${slot}&date=${date}`;
 }
 
-// 9. ربط الأحداث (Event Listeners)
 function setupEventListeners() {
   $('reading').addEventListener('input', calculateSmartAlert);
   $('slotKey').addEventListener('change', calculateSmartAlert);
   $('saveBtn').addEventListener('click', saveMeasurement);
   $('toMealsBtn').addEventListener('click', sendToMeals);
   
-  $('dayPicker').addEventListener('change', () => {
-    listenToTodayMeasurements(); // إعادة رسم التايم لاين حسب اليوم الجديد
-  });
+  $('corrDoseInput').addEventListener('input', () => $('corrDoseInput').dataset.dirty = "true");
   
-  $('searchBox').addEventListener('input', () => {
-    renderTimeline(todayMeasurements); // الفلترة الحية
+  document.querySelectorAll('.chip-btn').forEach(btn => {
+    btn.addEventListener('click', () => $('hypoTreatment').value = btn.dataset.val);
   });
+
+  $('dayPicker').addEventListener('change', () => listenToTodayMeasurements());
+  $('searchBox').addEventListener('input', () => renderTimeline(todayMeasurements));
 }
