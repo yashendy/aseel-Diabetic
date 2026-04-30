@@ -2,73 +2,96 @@
 :root {
   --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0; --text: #0f172a; --muted: #64748b;
   --primary: #2563eb; --shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-  
-  /* ألوان الحالات للخريطة */
-  --z-normal: #dcfce7; /* أخضر فاتح (سليم) */
-  --z-normal-border: #86efac;
-  --z-rest: #fef08a; /* أصفر (إراحة) */
-  --z-rest-border: #facc15;
-  --z-lump: #fecaca; /* أحمر (تكتل) */
-  --z-lump-border: #f87171;
+  --z-normal: #dcfce7; --z-normal-border: #86efac;
+  --z-rest: #fef08a; --z-rest-border: #facc15;
+  --z-lump: #fecaca; --z-lump-border: #f87171;
 }
 *{box-sizing:border-box}
 body{font-family:system-ui,-apple-system,sans-serif; background:var(--bg); margin:0; color:var(--text);}
-.container{padding:0 16px; margin:auto;}
+.edit-container{max-width:1100px; margin:20px auto; padding:0 16px;}
 
-.card{background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; box-shadow:var(--shadow); margin-bottom:20px;}
-.header-action-card{display:flex; justify-content:space-between; align-items:center;}
-.section-title{margin:0 0 15px 0; font-size:16px; border-bottom:1px solid var(--border); padding-bottom:8px; color:#1e293b;}
+.card{background:var(--card); border:1px solid var(--border); border-radius:16px; padding:24px; box-shadow:var(--shadow); margin-bottom:20px;}
+.header-action-card{display:flex; justify-content:space-between; align-items:center; position:sticky; top:70px; z-index:40;}
+.section-title{margin:0 0 16px 0; font-size:17px; border-bottom:2px solid #f1f5f9; padding-bottom:8px; color:#1e293b;}
 
-.main-layout{display:grid; grid-template-columns: 1fr 350px; gap:20px; align-items:start;}
-@media (max-width: 800px) { .main-layout { grid-template-columns: 1fr; } }
+.main-layout{display:grid; grid-template-columns: 1fr 1fr; gap:24px; align-items:start;}
+@media (max-width: 850px) { .main-layout { grid-template-columns: 1fr; } .header-action-card{flex-direction:column; gap:15px; align-items:stretch;} }
 
-/* الحقول (Inputs) */
-.grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
-.field{display:flex; flex-direction:column; gap:6px;}
-.field label{font-size:12px; font-weight:600; color:#475569;}
-input, select{padding:10px; border:1px solid var(--border); border-radius:8px; outline:none; background:#f8fafc; font-family:inherit;}
-input:focus, select:focus{border-color:var(--primary); background:#fff;}
+/* Inputs & Grids */
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+.field{display:flex; flex-direction:column; gap:8px;}
+.field label{font-size:13px; font-weight:600; color:#475569;}
+input, select{padding:12px; border:1px solid var(--border); border-radius:10px; outline:none; background:#f8fafc; font-family:inherit; transition:0.2s;}
+input:focus, select:focus{border-color:var(--primary); background:#fff; box-shadow:0 0 0 3px rgba(37,99,235,0.1);}
+.align-end{align-items:flex-end;}
+.mt-15{margin-top:15px;} .mt-10{margin-top:10px;} .mb-15{margin-bottom:15px;}
+.text-sm{font-size:12px;} .text-xl{font-size:24px;} .text-primary{color:var(--primary);}
 
-/* الكارب لكل وجبة */
-.cr-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-top:8px;}
-.cr-box{background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:8px; text-align:center;}
-.cr-box span{display:block; font-size:11px; font-weight:bold; color:#1d4ed8; margin-bottom:4px;}
-.cr-box input{width:100%; text-align:center; padding:6px; border-color:#93c5fd; background:#fff;}
+/* Checkboxes */
+.checkbox-group{display:flex; flex-wrap:wrap; gap:16px;}
+.checkbox-group label{display:flex; align-items:center; gap:6px; font-size:14px; cursor:pointer;}
 
-/* مستويات السكر */
-.glucose-limits-grid{display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; text-align:center;}
-@media (max-width: 600px) { .glucose-limits-grid { grid-template-columns: 1fr 1fr; } .glucose-limits-grid .field:nth-child(3) { grid-column: 1 / -1; } }
-.lbl-crit-low, .lbl-crit-high{color:#dc2626 !important;}
-.lbl-low, .lbl-high{color:#d97706 !important;}
-.lbl-target{color:#16a34a !important;}
+/* BMI Box */
+.bmi-box{background:#eff6ff; border:1px dashed #bfdbfe; border-radius:12px; padding:15px; display:flex; justify-content:center; text-align:center;}
 
-/* الأزرار */
-.btn{padding:10px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:600; font-family:inherit;}
-.btn.primary{background:var(--primary); color:#fff;}
-.btn.primary:hover{filter:brightness(0.9);}
+/* Glucose Hierarchy (التصميم الهرمي) */
+.glucose-hierarchy{display:flex; flex-direction:column; gap:16px; background:#f8fafc; padding:20px; border-radius:12px; border:1px solid var(--border);}
+.gh-row{display:flex; gap:16px;}
+.gh-row.center{justify-content:center;}
+.gh-row.split{justify-content:space-between;}
+.gh-box{background:#fff; border:1px solid var(--border); border-radius:12px; padding:12px; text-align:center; flex:1;}
+.gh-box label{display:block; font-size:13px; font-weight:bold; margin-bottom:8px;}
+.gh-box input{text-align:center; font-weight:bold; width:100%;}
+.target-box{border-color:#10b981; box-shadow:0 4px 10px rgba(16,185,129,0.1); max-width:60%;}
+.target-box label{color:#10b981; font-size:15px;}
+.target-box input{font-size:20px; color:#047857; background:#ecfdf5;}
+.warn-low-box input, .warn-high-box input{color:#b45309; background:#fffbeb; border-color:#fde68a;}
+.crit-low-box input, .crit-high-box input{color:#b91c1c; background:#fef2f2; border-color:#fecaca;}
 
-/* Chip Inputs */
-.chip-input-wrap{display:flex; flex-wrap:wrap; gap:6px; padding:6px; border:1px solid var(--border); border-radius:8px; background:#fff; min-height:42px;}
-.ui-chip{background:#e2e8f0; font-size:12px; padding:4px 8px; border-radius:999px; display:flex; align-items:center; gap:4px;}
-.ui-chip button{background:none; border:none; color:#dc2626; cursor:pointer; font-weight:bold; padding:0;}
+/* CF Box */
+.cf-highlight-box{background:#f8fafc; padding:15px; border-radius:12px; border:1px solid var(--border);}
+.cf-highlight-box label{font-size:13px; font-weight:bold; color:#0f172a; display:block; margin-bottom:8px;}
+.input-suffix{display:flex; align-items:center; gap:10px;}
+.input-suffix input{width:100px; text-align:center; font-weight:bold; font-size:16px;}
+.input-suffix .suffix{font-size:13px; color:var(--muted);}
 
-/* خريطة أماكن الحقن */
+/* CR Grid */
+.lbl-bold{font-size:13px; font-weight:bold; color:#0f172a; display:block;}
+.cr-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:12px;}
+.cr-box{background:#fff; border:1px solid var(--border); border-radius:10px; padding:10px; text-align:center; box-shadow:var(--shadow);}
+.cr-box span{display:block; font-size:12px; font-weight:bold; color:var(--primary); margin-bottom:6px;}
+.cr-box input{width:100%; text-align:center;}
+
+/* Buttons */
+.btn{padding:12px 20px; border-radius:10px; border:none; cursor:pointer; font-weight:bold; font-family:inherit; transition:0.2s;}
+.btn-lg{font-size:15px;}
+.btn.primary{background:var(--primary); color:#fff; box-shadow:0 4px 12px rgba(37,99,235,0.3);}
+.btn.primary:hover{transform:translateY(-2px); box-shadow:0 6px 15px rgba(37,99,235,0.4);}
+
+/* Chips */
+.chip-input-wrap{display:flex; flex-wrap:wrap; gap:6px; padding:8px; border:1px solid var(--border); border-radius:10px; background:#fff; min-height:45px;}
+.chip-input-field{border:none; outline:none; background:transparent; flex:1; min-width:100px; padding:0;}
+.ui-chip{background:#e2e8f0; font-size:12px; padding:4px 10px; border-radius:999px; display:flex; align-items:center; gap:6px; color:#334155; font-weight:bold;}
+.ui-chip button{background:none; border:none; color:var(--danger); cursor:pointer; padding:0; font-size:14px;}
+
+/* Map */
 .map-card{text-align:center;}
-.map-legend{display:flex; justify-content:center; gap:15px; margin:15px 0; font-size:12px; font-weight:bold;}
-.legend-item{display:flex; align-items:center; gap:4px;}
-.color-box{width:14px; height:14px; border-radius:4px; border:1px solid;}
+.map-legend{display:flex; justify-content:center; flex-wrap:wrap; gap:15px; margin:15px 0; font-size:13px; font-weight:bold;}
+.legend-item{display:flex; align-items:center; gap:6px;}
+.color-box{width:16px; height:16px; border-radius:4px; border:1px solid;}
 .st-normal{background:var(--z-normal); border-color:var(--z-normal-border);}
 .st-rest{background:var(--z-rest); border-color:var(--z-rest-border);}
 .st-lump{background:var(--z-lump); border-color:var(--z-lump-border);}
 
-.svg-container{max-width:250px; margin:0 auto; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:16px; padding:10px;}
+.svg-container{max-width:280px; margin:0 auto; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:16px; padding:15px;}
 .human-body-svg{width:100%; height:auto;}
 .zone{fill:var(--z-normal); stroke:var(--z-normal-border); stroke-width:2; cursor:pointer; transition:0.3s;}
 .zone:hover{filter:brightness(0.95); stroke-width:3;}
 .zone[data-state="rest"]{fill:var(--z-rest); stroke:var(--z-rest-border);}
 .zone[data-state="lump"]{fill:var(--z-lump); stroke:var(--z-lump-border);}
 
-.loader{position:fixed; inset:0; background:rgba(255,255,255,0.8); display:flex; justify-content:center; align-items:center; z-index:9999;}
+/* Loader */
+.loader{position:fixed; inset:0; background:rgba(255,255,255,0.9); display:flex; justify-content:center; align-items:center; z-index:9999;}
 .spinner{width:40px; height:40px; border:4px solid #e2e8f0; border-top-color:var(--primary); border-radius:50%; animation:spin 1s infinite linear;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .hidden{display:none !important;}
