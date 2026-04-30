@@ -3,7 +3,6 @@ import { auth, db } from './firebase-config.js';
 import { collection, doc, getDoc, addDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-// --- الأدوات الأساسية ---
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2,'0');
 const todayISO = () => new Date().toISOString().slice(0,10);
@@ -18,18 +17,16 @@ let currentUser = null;
 let childData = {};
 let todayMeasurements = []; 
 
-// المعاملات المحفوظة
+// إعدادات النظام للطفل
 let sysUnit = 'mg/dL';
 let sysTarget = 100, sysCF = 50, sysCR = { breakfast: 10, lunch: 10, dinner: 10, snack: 15 };
 let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
 
-// قاموس الأوقات (نفس القديم)
 const SLOT_NAMES = {
   FASTING: 'صائم', PRE_BREAKFAST: 'قبل الفطار', POST_BREAKFAST: 'بعد الفطار',
   PRE_LUNCH: 'قبل الغدا', POST_LUNCH: 'بعد الغدا', PRE_DINNER: 'قبل العشا',
   POST_DINNER: 'بعد العشا', SNACK: 'سناك', BEDTIME: 'قبل النوم', EXERCISE: 'رياضة', OTHER: 'أخرى'
 };
-// الترتيب للفرز
 const SLOT_ORDER = { FASTING:10, PRE_BREAKFAST:20, POST_BREAKFAST:25, PRE_LUNCH:30, POST_LUNCH:35, PRE_DINNER:40, POST_DINNER:45, SNACK:50, EXERCISE:60, BEDTIME:90, OTHER:200 };
 
 onAuthStateChanged(auth, async (user) => {
@@ -38,12 +35,12 @@ onAuthStateChanged(auth, async (user) => {
   
   if(!childId) { alert("خطأ: لم يتم تحديد الطفل."); location.href="parent.html"; return; }
 
-  // تهيئة الواجهة
   if($('dayPicker')) $('dayPicker').value = todayISO();
   if($('timePicker')) $('timePicker').value = nowTime();
   autoSelectSlot();
 
   await loadChildSettings();
+  initUnitSmartSwitch(); // تشغيل ميزة التحويل الذكي للوحدات
   listenToTodayMeasurements();
   setupEventListeners();
 });
@@ -69,13 +66,14 @@ async function loadChildSettings() {
       sysLimits.critHigh = Number(childData.glucose_limits.critical_high) || (sysUnit==='mmol/L'? 13.9 : 250);
     }
 
-    if($('unitLabel')) $('unitLabel').textContent = sysUnit;
+    // تعيين الوحدة الافتراضية للطفل في القائمة المنسدلة
+    if($('unitSel')) $('unitSel').value = sysUnit;
     
     if($('therapyChips')) {
       $('therapyChips').innerHTML = `
         <span class="v-chip">🎯 الهدف: ${sysTarget}</span>
         <span class="v-chip">💉 CF: ${sysCF}</span>
-        <span class="v-chip">📊 الوحدة: ${sysUnit}</span>
+        <span class="v-chip">📊 النظام: ${sysUnit}</span>
       `;
     }
 
@@ -95,11 +93,54 @@ function autoSelectSlot() {
   if($('slotKey')) $('slotKey').value = slot;
 }
 
-// 2. إظهار الإجراءات المطلوبة حسب السكر
+// 2. التحويل الذكي للوحدات وتغيير الأمثلة
+function initUnitSmartSwitch() {
+  const unitSel = $('unitSel');
+  const readingInput = $('reading');
+  if(!unitSel || !readingInput) return;
+
+  let previousUnit = unitSel.value;
+
+  unitSel.addEventListener('change', (e) => {
+    const newUnit = e.target.value;
+    
+    // 1. تغيير المثال (Placeholder)
+    readingInput.placeholder = newUnit === 'mmol/L' ? 'مثال: 6.5' : 'مثال: 120';
+
+    // 2. التحويل التلقائي للرقم المكتوب
+    if (readingInput.value) {
+      let val = parseFloat(readingInput.value);
+      if (!isNaN(val)) {
+        if (newUnit === 'mmol/L' && previousUnit === 'mg/dL') {
+          readingInput.value = (val / 18.0182).toFixed(1);
+        } else if (newUnit === 'mg/dL' && previousUnit === 'mmol/L') {
+          readingInput.value = Math.round(val * 18.0182);
+        }
+      }
+    }
+    previousUnit = newUnit;
+    calculateSmartAlert(); // إعادة الحساب بالوحدة الجديدة
+  });
+}
+
+// أداة توحيد السكر لمقارنته بالحدود النظامية (Normalization)
+function normalizeGlucoseToSystemUnit(val, fromUnit) {
+  if (fromUnit === sysUnit) return val;
+  if (fromUnit === 'mmol/L' && sysUnit === 'mg/dL') return val * 18.0182;
+  if (fromUnit === 'mg/dL' && sysUnit === 'mmol/L') return val / 18.0182;
+  return val;
+}
+
+// 3. إظهار الإجراءات المطلوبة حسب السكر
 function calculateSmartAlert() {
-  const val = parseFloat($('reading').value);
+  const rawVal = parseFloat($('reading').value);
+  const selectedUnit = $('unitSel').value;
   const panel = $('actionsPanel');
-  if(!val || val <= 0) { panel.classList.add('hidden'); return; }
+  
+  if(!rawVal || rawVal <= 0) { panel.classList.add('hidden'); return; }
+
+  // توحيد القيمة المدخلة لمقارنتها بالحدود المحفوظة في قاعدة البيانات
+  const val = normalizeGlucoseToSystemUnit(rawVal, selectedUnit);
 
   panel.classList.remove('hidden');
   const alertBox = $('smartAlert');
@@ -153,18 +194,20 @@ function calculateSmartAlert() {
   }
 }
 
-function getGlucoseStateCSS(val) {
-  if(val <= sysLimits.critLow) return { dot: 'danger', bg: 'bg-danger', text: 'هبوط حرج' };
-  if(val < sysLimits.low) return { dot: 'warn', bg: 'bg-warn', text: 'هبوط' };
-  if(val >= sysLimits.critHigh) return { dot: 'danger', bg: 'bg-danger', text: 'ارتفاع حرج' };
-  if(val > sysLimits.high) return { dot: 'warn', bg: 'bg-warn', text: 'ارتفاع' };
+function getGlucoseStateCSS(normalizedVal) {
+  if(normalizedVal <= sysLimits.critLow) return { dot: 'danger', bg: 'bg-danger', text: 'هبوط حرج' };
+  if(normalizedVal < sysLimits.low) return { dot: 'warn', bg: 'bg-warn', text: 'هبوط' };
+  if(normalizedVal >= sysLimits.critHigh) return { dot: 'danger', bg: 'bg-danger', text: 'ارتفاع حرج' };
+  if(normalizedVal > sysLimits.high) return { dot: 'warn', bg: 'bg-warn', text: 'ارتفاع' };
   return { dot: 'ok', bg: 'bg-ok', text: 'في النطاق' };
 }
 
-// 3. الحفظ الموحد 
+// 4. الحفظ
 async function saveMeasurement() {
-  const val = parseFloat($('reading').value);
-  if(!val) { toast("يرجى إدخال قراءة صحيحة"); return; }
+  const rawVal = parseFloat($('reading').value);
+  const selectedUnit = $('unitSel').value;
+
+  if(!rawVal) { toast("يرجى إدخال قراءة صحيحة"); return; }
 
   const day = $('dayPicker').value;
   const time = $('timePicker').value;
@@ -174,17 +217,20 @@ async function saveMeasurement() {
   const hypoTreat = $('hypoTreatment').value.trim();
 
   const dateTimeObj = new Date(`${day}T${time}`);
+  
+  // لضمان دقة الرسوم البيانية والألوان مستقبلاً، نحفظ القيمة الموحدة أيضاً
+  const normalizedValue = normalizeGlucoseToSystemUnit(rawVal, selectedUnit);
 
-  // الـ Payload الموحد الذي سيفهمه الـ Meals والـ Reports
   const payload = {
-    value: val,
-    unit: sysUnit,
+    value: rawVal, // القيمة المكتوبة كما هي
+    unit: selectedUnit, // الوحدة التي تم القياس بها
+    normalizedValue: normalizedValue, // القيمة الموحدة لسهولة الفرز 
     date: day,
     time: time,
     when: dateTimeObj, 
-    slotKey: slotKey, // حفظ النوع كما هو بالضبط كما طلبتِ
+    slotKey: slotKey,
     slotOrder: SLOT_ORDER[slotKey] || 200,
-    state: getGlucoseStateCSS(val).text,
+    state: getGlucoseStateCSS(normalizedValue).text,
     correctionDose: corrDose > 0 ? corrDose : null,
     hypoTreatment: hypoTreat || null,
     notes: notes || null,
@@ -196,7 +242,6 @@ async function saveMeasurement() {
     await addDoc(collection(db, "parents", currentUser.uid, "children", childId, "measurements"), payload);
     toast("تم الحفظ بنجاح! ✔️");
     
-    // إعادة التصفير
     $('reading').value = ''; $('mNotes').value = '';
     $('corrDoseInput').value = ''; $('corrDoseInput').dataset.dirty = "";
     $('hypoTreatment').value = '';
@@ -208,7 +253,7 @@ async function saveMeasurement() {
   }
 }
 
-// 4. الخط الزمني للقياسات
+// 5. الخط الزمني
 function listenToTodayMeasurements() {
   const measRef = collection(db, "parents", currentUser.uid, "children", childId, "measurements");
   onSnapshot(query(measRef, orderBy('when', 'desc')), (snapshot) => {
@@ -243,11 +288,14 @@ function renderTimeline(dataArray) {
   grid.classList.remove('hidden'); empty.classList.add('hidden');
 
   filtered.forEach(m => {
-    const css = getGlucoseStateCSS(m.value);
+    // تحديد القيمة الموحدة لمعرفة اللون الصحيح
+    const mUnit = m.unit || sysUnit;
+    const normalizedVal = m.normalizedValue || normalizeGlucoseToSystemUnit(m.value, mUnit);
+    const css = getGlucoseStateCSS(normalizedVal);
+    
     const slotName = SLOT_NAMES[m.slotKey] || m.slotKey;
     const mTime = m.time || (m.when?.toDate ? pad(m.when.toDate().getHours()) + ':' + pad(m.when.toDate().getMinutes()) : '');
 
-    // إظهار الحقول المكتملة
     let detailsHTML = '';
     const hasDetails = m.correctionDose || m.hypoTreatment || m.carbs || m.mealDose || m.totalDose;
     
@@ -271,7 +319,7 @@ function renderTimeline(dataArray) {
           <button class="icon-btn del-btn" data-id="${m.id}" title="حذف">🗑️</button>
         </div>
         <div class="tl-body">
-          <div class="tl-bg ${css.bg}">${m.value}</div>
+          <div class="tl-bg ${css.bg}">${m.value} <span style="font-size:13px; opacity:0.8; font-weight:normal;">${mUnit}</span></div>
           <div style="font-size:13px; color:#475569; font-weight:bold;">${css.text}</div>
         </div>
         ${detailsHTML}
@@ -291,11 +339,13 @@ function renderTimeline(dataArray) {
   });
 }
 
+// التمرير لحاسبة الوجبات مع تمرير الوحدة أيضاً
 function sendToMeals() {
   const val = $('reading').value;
+  const unit = $('unitSel').value;
   const slot = $('slotKey').value;
   const date = $('dayPicker').value;
-  location.href = `meals.html?child=${childId}&bg=${val || ''}&slot=${slot}&date=${date}`;
+  location.href = `meals.html?child=${childId}&bg=${val || ''}&unit=${unit}&slot=${slot}&date=${date}`;
 }
 
 function setupEventListeners() {
