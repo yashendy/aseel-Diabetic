@@ -3,172 +3,103 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>لوحة الطفل</title>
-  <link rel="stylesheet" href="css/child.css">
-  <link rel="stylesheet" href="css/header.css">
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <title>لوحة الطفل - أسيل</title>
+  <link rel="stylesheet" href="css/child.css?v=2">
+  <link rel="icon" type="image/png" href="favicon.png" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <div class="container">
+  <!-- سيتم استدعاء الهيدر الموحد هنا تلقائياً -->
 
-    <header class="child-header card">
-      <div class="head-grid">
-        <div>
-          <h1>❤️ <span id="childName">.</span></h1>
-          <p id="childMeta" class="muted">—</p>
-          <div class="chips">
-            <span class="chip" id="chipRange">النطاق الطبيعي: —</span>
-            <span class="chip" id="chipCR">CarbRatio: —</span>
-            <span class="chip" id="chipCF">CF: —</span>
-          </div>
+  <div class="container">
+    <!-- ملخص الحالة السريع -->
+    <header class="vitals-header no-print">
+      <div class="vitals-info">
+        <h1 id="childName">جاري التحميل...</h1>
+        <p id="childMeta" class="muted">—</p>
+        <div class="vitals-chips">
+          <span class="v-chip">🎯 النطاق: <b id="chipRange">—</b></span>
+          <span class="v-chip">🍔 CR: <b id="chipCR">—</b></span>
+          <span class="v-chip">💉 CF: <b id="chipCF">—</b></span>
         </div>
-        <div class="stats">
-          <div class="stat">
-            <div class="stat-num" id="todayMeasures">0</div>
-            <div class="stat-label">قياسات اليوم</div>
-          </div>
-          <div class="stat">
-            <div class="stat-num" id="todayMeals">0</div>
-            <div class="stat-label">وجبات اليوم</div>
-          </div>
-          <div class="stat">
-            <div class="stat-num" id="nextVisit">—</div>
-            <div class="stat-label">أقرب متابعة</div>
-          </div>
-        </div>
+      </div>
+      <div class="vitals-stats">
+        <div class="stat-box"><strong id="todayMeasures">0</strong><span>قياس اليوم</span></div>
+        <div class="stat-box"><strong id="todayMeals">0</strong><span>وجبة اليوم</span></div>
+        <div class="stat-box"><strong id="nextVisit">—</strong><span>المتابعة القادمة</span></div>
       </div>
     </header>
 
-    <section class="cards">
-
-      <!-- ✅ بطاقة منحنى الجلوكوز -->
-      <article class="card" style="border-left:6px solid #6366f1; grid-column: 1 / -1;">
-        <div id="glucoseSparkContainer">
-          <p style="color:#94a3b8;font-size:13px;padding:4px 0">جارِ تحميل بيانات الجلوكوز…</p>
+    <section class="dashboard-grid">
+      <!-- كارت القياسات -->
+      <a class="dash-card link-blue" id="goMeasurements">
+        <div class="icon">🩸</div>
+        <div class="content">
+          <h3>سجل القياسات</h3>
+          <p>تسجيل قراءات السكر وتتبعها</p>
         </div>
-      </article>
+      </a>
 
-      <!-- القياسات -->
-      <a class="card link measurements" id="goMeasurements">
+      <!-- كارت الوجبات -->
+      <a class="dash-card link-green" id="goMeals">
+        <div class="icon">🥗</div>
+        <div class="content">
+          <h3>حاسبة الوجبات</h3>
+          <p>بناء وجبة وحساب جرعة الأنسولين</p>
+        </div>
+      </a>
+
+      <!-- كارت التقارير -->
+      <a class="dash-card link-purple" id="goReports">
         <div class="icon">📊</div>
-        <h3>القياسات</h3>
-        <p>إضافة وعرض قراءات السكر حسب الأوقات</p>
-        <div class="mini">اليوم: <span id="miniMeasures">0</span> قياس</div>
-      </a>
-
-      <!-- الوجبات -->
-      <a class="card link meals" id="goMeals">
-        <div class="icon">🍽️</div>
-        <h3>الوجبات</h3>
-        <p>بناء الوجبة وحساب الكارب والجرعة المقترحة</p>
-        <div class="mini">اليوم: <span id="miniMeals">0</span> وجبة</div>
-      </a>
-
-      <!-- مكتبة الأصناف -->
-      <a class="card link food" id="goFoodItems">
-        <div class="icon">📚</div>
-        <h3>مكتبة الأصناف</h3>
-        <p>إضافة/تعديل أصناف + المقادير البيتية</p>
-        <div class="mini">للإستخدام داخل الوجبات</div>
-      </a>
-
-      <!-- التقارير -->
-      <a class="card link reports" id="goReports">
-        <div class="icon">📄</div>
-        <h3>التقارير</h3>
-        <p>تقرير مطبوع بنطاق تاريخ ووحدة العرض</p>
-        <div class="mini">عرض سريع لآخر 7 أيام</div>
-      </a>
-
-      <!-- الزيارات الطبية -->
-      <a class="card link visits" id="goVisits">
-        <div class="icon">🩺</div>
-        <h3>الزيارات الطبية</h3>
-        <p>سجل الزيارات والتوصيات والمرفقات</p>
-        <div class="mini">أقرب متابعة: <span id="miniFollowUp">—</span></div>
-        <div class="mini">آخر زيارة: <span id="miniLastVisit">—</span></div>
-      </a>
-
-      <!-- بيانات الطفل -->
-      <a class="card link child-edit" id="goChildEdit">
-        <div class="icon">⚙️</div>
-        <h3>بيانات الطفل</h3>
-        <p>تعديل المعلومات والحدود والجرعات</p>
-        <div class="mini-list">
-          <div><span class="lbl">الاسم:</span> <strong id="infoName">—</strong></div>
-          <div>
-            <span class="lbl">العمر:</span> <strong id="infoAge">—</strong>
-            • <span class="lbl">الجنس:</span> <strong id="infoGender">—</strong>
-          </div>
-          <div>
-            <span class="lbl">الوزن:</span> <strong id="infoWeight">—</strong>
-            • <span class="lbl">الطول:</span> <strong id="infoHeight">—</strong>
-          </div>
-          <div><span class="lbl">الجهاز:</span> <strong id="infoDevice">—</strong></div>
-          <div><span class="lbl">الأنسولين:</span> <strong id="infoInsulin">—</strong></div>
-          <div><span class="lbl">النطاق:</span> <strong id="infoRange">—</strong></div>
-          <div>
-            <span class="lbl">CR:</span> <strong id="infoCR">—</strong>
-            • <span class="lbl">CF:</span> <strong id="infoCF">—</strong>
-          </div>
+        <div class="content">
+          <h3>التقارير (Logbook)</h3>
+          <p>تحليلات الذكاء الاصطناعي والطباعة</p>
         </div>
-        <div class="mini">تحديث الإعدادات</div>
       </a>
 
-      <!-- التحاليل الطبية -->
-      <article class="card labs" id="labCard" aria-label="التحاليل الطبية">
+      <!-- كارت الزيارات -->
+      <a class="dash-card link-teal" id="goVisits">
+        <div class="icon">🩺</div>
+        <div class="content">
+          <h3>الزيارات الطبية</h3>
+          <p>مواعيد وتوصيات طبيب السكر</p>
+        </div>
+      </a>
 
-        <div class="row space">
-          <div class="row gap">
-            <div class="icon">🔬</div>
-            <div>
-              <h3>التحاليل الطبية</h3>
-              <p class="muted">HbA1c + دهون + كُلى</p>
-            </div>
-          </div>
+      <!-- كارت التحاليل -->
+      <article class="dash-card link-indigo lab-card" id="labCard">
+        <div class="lab-header">
+          <div class="row"><div class="icon">🔬</div><h3>التحاليل الطبية</h3></div>
           <span id="labDueBadge" class="pill tiny">—</span>
         </div>
-
-        <div class="lab-stats">
-          <div class="lab-stat">
-            <div class="label muted">آخر HbA1c</div>
-            <div id="labHba1cVal" class="value tone" title="—">—</div>
-            <div id="labHba1cDelta" class="tiny muted">—</div>
+        <div class="lab-body">
+          <div class="lab-metric">
+            <span class="muted">آخر HbA1c</span>
+            <strong id="labHba1cVal" class="tone">—</strong>
           </div>
-          <div class="lab-stat">
-            <div class="label muted">آخر تحليل منذ</div>
-            <div id="labLastSince" class="value">—</div>
-          </div>
-          <div class="lab-stat">
-            <div class="label muted">تاريخ آخر تحليل</div>
-            <div id="labLastDate" class="value">—</div>
-          </div>
+          <div style="flex:1; height:40px;"><canvas id="hbaSpark"></canvas></div>
         </div>
-
-        <div class="row space actions">
-          <div class="row gap">
-            <button id="addLabBtn"   class="btn ghost" type="button">➕ إضافة</button>
-            <button id="openLabsBtn" class="btn ghost" type="button">فتح التحاليل</button>
-          </div>
-          <button id="openLastPdfBtn" class="btn" type="button">📄 آخر تقرير</button>
+        <div class="lab-actions">
+          <button id="addLabBtn" class="btn ghost btn-sm">➕ إضافة</button>
+          <button id="openLabsBtn" class="btn primary btn-sm">فتح السجل</button>
         </div>
-
-        <!-- مخفية — مطلوبة للـ JS فقط -->
-        <div class="sparkline" style="display:none"><canvas id="hbaSpark" height="40"></canvas></div>
-        <div class="progress"  style="display:none">
-          <div class="progress-bar"><div id="progressFill"></div></div>
-          <div id="progressLabel"></div>
-        </div>
-
       </article>
 
-
+      <!-- كارت الإعدادات -->
+      <a class="dash-card link-red" id="goChildEdit">
+        <div class="icon">⚙️</div>
+        <div class="content">
+          <h3>إعدادات الطفل</h3>
+          <p>تعديل الجرعات، المعاملات، والنظام الغذائي</p>
+        </div>
+      </a>
     </section>
   </div>
 
-  <div id="loader" class="loader hidden">جارِ التحميل…</div>
-  <script type="module" src="js/child.js"></script>
+  <div id="loader" class="loader hidden"><div class="spinner"></div></div>
+
+  <script type="module" src="js/child.js?v=2"></script>
   <script type="module" src="js/header.js"></script>
 </body>
 </html>
