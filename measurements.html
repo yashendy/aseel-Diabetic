@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>سجل القياسات الذكي</title>
-  <link rel="stylesheet" href="css/measurements.css?v=3" />
+  <title>سجل القياسات</title>
+  <link rel="stylesheet" href="css/measurements.css?v=4" />
   <link rel="icon" href="favicon.png" />
 </head>
 <body>
@@ -20,10 +20,8 @@
       </div>
     </header>
 
-    <!-- شريط المعاملات الحالي (يُقرأ من الإعدادات الجديدة) -->
-    <div id="therapyChips" class="chips-bar mb-15">
-      <!-- سيتم تعبئته من JS (CF, Target, CR) -->
-    </div>
+    <!-- شريط المعاملات الحالي -->
+    <div id="therapyChips" class="chips-bar mb-15"></div>
 
     <!-- كارت إدخال القياس الجديد -->
     <section class="input-card">
@@ -34,12 +32,10 @@
           <label>التاريخ</label>
           <input type="date" id="dayPicker" />
         </div>
-        
         <div class="field">
           <label>الوقت</label>
           <input type="time" id="timePicker" />
         </div>
-
         <div class="field">
           <label>الفترة (Slot)</label>
           <select id="slotKey">
@@ -56,7 +52,6 @@
             <option value="OTHER">وقت آخر</option>
           </select>
         </div>
-
         <div class="field bg-input-group">
           <label>مستوى السكر</label>
           <div class="input-with-suffix">
@@ -66,38 +61,56 @@
         </div>
       </div>
 
-      <!-- منطقة التنبيهات الذكية (التصحيح أو الهبوط) -->
-      <div id="smartAlert" class="smart-alert hidden">
-        <div class="alert-icon" id="alertIcon">💡</div>
-        <div class="alert-content">
-          <h4 id="alertTitle">جاري الحساب...</h4>
-          <p id="alertMsg">...</p>
+      <!-- لوحة الإجراءات الذكية (تظهر وتختفي حسب السكر) -->
+      <div id="actionsPanel" class="action-panel hidden">
+        <div id="smartAlert" class="smart-alert">
+          <div class="alert-icon" id="alertIcon">💡</div>
+          <div class="alert-content">
+            <h4 id="alertTitle">الحالة</h4>
+            <p id="alertMsg">...</p>
+          </div>
+        </div>
+
+        <!-- حقل جرعة التصحيح (يظهر في الارتفاع) -->
+        <div id="corrRow" class="action-panel-row hidden">
+          <label class="field">
+            <span>💉 جرعة التصحيح المأخوذة (U)</span>
+            <input id="corrDoseInput" type="number" step="0.5" min="0" placeholder="مثال: 1.5">
+          </label>
+        </div>
+
+        <!-- حقل علاج الهبوط (يظهر في الهبوط) -->
+        <div id="hypoRow" class="action-panel-row hidden">
+          <label class="field">
+            <span>🧃 عالجنا الهبوط بإيه؟</span>
+            <input id="hypoTreatment" type="text" placeholder="مثال: عصير، جلوكوز، تمر...">
+          </label>
+          <div class="chips-bar" style="margin-top: 8px;">
+            <button class="v-chip chip-btn" data-val="جلوكوز 15جم">جلوكوز 15جم</button>
+            <button class="v-chip chip-btn" data-val="عصير 100مل">عصير 100مل</button>
+            <button class="v-chip chip-btn" data-val="٣ تمرات">٣ تمرات</button>
+          </div>
         </div>
       </div>
 
-      <div class="field mb-15">
+      <div class="field mb-15 mt-15">
         <label>ملاحظات (اختياري)</label>
-        <input type="text" id="mNotes" placeholder="مثال: كان بيلعب، أو أكل حلويات..." />
+        <input type="text" id="mNotes" placeholder="اكتب أي ملاحظات..." />
       </div>
 
       <div class="actions-row">
-        <button id="saveBtn" class="btn primary btn-lg">💾 حفظ القياس فقط</button>
+        <button id="saveBtn" class="btn primary btn-lg">💾 حفظ في السجل</button>
         <button id="toMealsBtn" class="btn secondary btn-lg">🍽️ إرسال لحاسبة الوجبات</button>
       </div>
     </section>
 
-    <!-- فلاتر العرض -->
+    <!-- الخط الزمني للقياسات (Timeline) -->
     <div class="filters-bar">
-      <h3 style="margin:0; font-size:16px;">سجل اليوم</h3>
-      <div class="search-box">
-        <input type="text" id="searchBox" placeholder="بحث في السجل..." />
-      </div>
+      <h3 style="margin:0; font-size:16px;">سجل قياسات اليوم</h3>
+      <div class="search-box"><input type="text" id="searchBox" placeholder="بحث..." /></div>
     </div>
 
-    <!-- الخط الزمني (Timeline) بديل الجدول -->
-    <div class="timeline-container" id="timelineGrid">
-      <!-- الكروت ستُحقن هنا بواسطة الـ JS -->
-    </div>
+    <div class="timeline-container" id="timelineGrid"></div>
     
     <div id="empty" class="empty-state hidden">
       <div class="empty-icon">📭</div>
@@ -109,6 +122,6 @@
   <div id="toast" class="toast hidden"></div>
   <div id="loader" class="screen-loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="js/measurements.js?v=3"></script>
+  <script type="module" src="js/measurements.js?v=4"></script>
 </body>
 </html>
