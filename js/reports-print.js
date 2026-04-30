@@ -21,17 +21,32 @@ let sysUnit = 'mg/dL';
 
 function limitsInUnit(targetUnit){
   if (targetUnit === sysUnit) return { ...sysLimits };
-  if (targetUnit === 'mmol/L' && sysUnit === 'mg/dL') return { low: round1(mgdl2mmol(sysLimits.low)), upper: round1(mgdl2mmol(sysLimits.high)), severe: round1(mgdl2mmol(sysLimits.critHigh)), critHigh: round1(mgdl2mmol(sysLimits.critHigh) + 2) };
-  if (targetUnit === 'mg/dL' && sysUnit === 'mmol/L') return { low: round1(mmol2mgdl(sysLimits.low)), upper: round1(mmol2mgdl(sysLimits.high)), severe: round1(mmol2mgdl(sysLimits.critHigh)), critHigh: round1(mmol2mgdl(sysLimits.critHigh) + 36) };
+  if (targetUnit === 'mmol/L' && sysUnit === 'mg/dL') {
+    return { 
+      critLow: round1(mgdl2mmol(sysLimits.critLow)), 
+      low: round1(mgdl2mmol(sysLimits.low)), 
+      high: round1(mgdl2mmol(sysLimits.high)), 
+      critHigh: round1(mgdl2mmol(sysLimits.critHigh)) 
+    }; 
+  }
+  if (targetUnit === 'mg/dL' && sysUnit === 'mmol/L') {
+    return { 
+      critLow: round1(mmol2mgdl(sysLimits.critLow)), 
+      low: round1(mmol2mgdl(sysLimits.low)), 
+      high: round1(mmol2mgdl(sysLimits.high)), 
+      critHigh: round1(mmol2mgdl(sysLimits.critHigh)) 
+    };
+  }
   return { ...sysLimits };
 }
 
-function classFor(v, u){ 
-  if(v == null) return '';
+function classFor(val, u){ 
+  if(val == null) return '';
   const L=limitsInUnit(u); 
-  if(v>=L.severe) return 'crit'; 
-  if(v>L.upper) return 'mild'; 
-  if(v<L.low) return 'sev'; 
+  if(val >= L.critHigh) return 'crit'; 
+  if(val > L.high) return 'mild'; 
+  if(val <= L.critLow) return 'sev'; 
+  if(val < L.low) return 'sev'; 
   return 'ok'; 
 }
 
@@ -46,9 +61,10 @@ onAuthStateChanged(auth, async (user) => {
     
     sysUnit = childData.glucoseUnit || 'mg/dL';
     if(childData.glucose_limits) {
-        sysLimits.low = Number(childData.glucose_limits.low) || 70;
-        sysLimits.high = Number(childData.glucose_limits.high) || 180;
-        sysLimits.severe = Number(childData.glucose_limits.critical_high) || 250;
+        sysLimits.low = Number(childData.glucose_limits.low) || (sysUnit==='mmol/L'? 3.9 : 70);
+        sysLimits.high = Number(childData.glucose_limits.high) || (sysUnit==='mmol/L'? 10.0 : 180);
+        sysLimits.critLow = Number(childData.glucose_limits.critical_low) || (sysUnit==='mmol/L'? 3.0 : 54);
+        sysLimits.critHigh = Number(childData.glucose_limits.critical_high) || (sysUnit==='mmol/L'? 13.9 : 250);
     }
 
     const displayUnit = urlUnit || sysUnit;
@@ -104,7 +120,7 @@ function createPageStructure(child, start, end, pageNum, totalPages, displayUnit
   const div = document.createElement('div');
   div.className = 'print-page';
   const cf = child.cf || child.correctionFactor || '—';
-  const cr = child.cr?.breakfast || child.carbRatio || '—'; // نموذج للـ CR
+  const cr = child.cr?.breakfast || child.carbRatio || '—';
   div.innerHTML = `
     <header class="header">
       <div class="header-right">
@@ -185,7 +201,7 @@ function renderPrintCharts(list, displayUnit) {
   const valid = list.filter(x => x.displayValue != null);
   if(valid.length === 0) return;
 
-  const TIR = valid.filter(x => x.displayValue >= L.low && x.displayValue <= L.upper).length;
+  const TIR = valid.filter(x => x.displayValue >= L.low && x.displayValue <= L.high).length;
   const ctx = document.getElementById('printPieTIR').getContext('2d');
   new Chart(ctx, {
     type: 'doughnut',
@@ -208,18 +224,18 @@ function renderAI(list, displayUnit) {
   const pDinner = valid.filter(x=>x.slotKey==='POST_DINNER').map(x=>x.displayValue);
 
   if(fast.length >= 3 && sleep.length >= 2) {
-    const highFasting = fast.filter(v => v > L.upper).length;
-    const normalSleep = sleep.filter(v => v >= L.low && v <= L.severe).length;
+    const highFasting = fast.filter(v => v > L.high).length;
+    const normalSleep = sleep.filter(v => v >= L.low && v <= L.high).length;
     if (highFasting >= 2 && normalSleep >= 2) { patt.push({ name: 'ظاهرة الفجر', desc: 'السكر طبيعي ليلاً ويرتفع صباحاً.', rec: 'تعديل المنظم.', conf: 'عالي 🔴' }); }
   }
 
   if(fast.length >= 3 && sleep.length >= 2) {
-    const highFasting = fast.filter(v => v > L.upper).length;
+    const highFasting = fast.filter(v => v > L.high).length;
     const lowSleep = sleep.filter(v => v < L.low).length;
     if (highFasting >= 2 && lowSleep >= 1) { patt.push({ name: 'هبوط ليلي (Somogyi)', desc: 'هبوط أثناء الليل يتبعه ارتفاع ارتدادي.', rec: 'تقليل المنظم.', conf: 'حرج 🚨' }); }
   }
 
-  if(pBreakfast.length >= 3 && pBreakfast.filter(v=>v>=L.severe).length >= 2) {
+  if(pBreakfast.length >= 3 && pBreakfast.filter(v=>v>=L.critHigh).length >= 2) {
     patt.push({ name: 'ارتفاع بعد الإفطار', desc: 'السكر يرتفع بشدة بعد الإفطار.', rec: 'تعديل معامل الكارب (CR).', conf: 'متوسط 🟡' });
   }
 
