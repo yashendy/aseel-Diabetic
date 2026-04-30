@@ -22,7 +22,6 @@ function calcAge(bd) {
 }
 function avatarColor(i) { const c = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ec4899']; return c[i % c.length]; }
 
-// تسجيل الخروج
 $('logoutBtn').onclick = async () => {
   await signOut(auth);
   localStorage.clear();
@@ -46,7 +45,40 @@ async function loadKids() {
   try {
     const qy = query(collection(db, `parents/${currentUser.uid}/children`), orderBy('name', 'asc'));
     const snap = await getDocs(qy);
-    kids = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    kids = snap.docs.map(d => {
+      const data = d.data();
+      const unit = data.glucoseUnit || 'mg/dL';
+      
+      // 1. استخراج الحدود (Limits)
+      let limits = {
+          critLow: unit === 'mmol/L' ? 3.0 : 54,
+          low: unit === 'mmol/L' ? 3.9 : 70,
+          high: unit === 'mmol/L' ? 10.0 : 180,
+          critHigh: unit === 'mmol/L' ? 13.9 : 250,
+          target: unit === 'mmol/L' ? 5.5 : 100
+      };
+      if (data.glucose_limits) {
+          limits = {
+              critLow: Number(data.glucose_limits.critical_low) || limits.critLow,
+              low: Number(data.glucose_limits.low) || limits.low,
+              high: Number(data.glucose_limits.high) || limits.high,
+              critHigh: Number(data.glucose_limits.critical_high) || limits.critHigh,
+              target: Number(data.glucose_limits.target) || limits.target
+          };
+      }
+      
+      // 2. استخراج المعاملات
+      const cf = data.cf || data.correctionFactor || '-';
+      let crStr = '-';
+      if (data.cr) {
+          crStr = `${data.cr.breakfast||'-'}/${data.cr.lunch||'-'}/${data.cr.dinner||'-'}`; // عرض (فطار/غدا/عشا)
+      } else if (data.carbRatio) {
+          crStr = data.carbRatio;
+      }
+
+      return { id: d.id, ...data, _limits: limits, _cf: cf, _crStr: crStr, _unit: unit };
+    });
 
     // جلب آخر قراءة لكل طفل
     await Promise.all(kids.map(async k => {
@@ -54,27 +86,33 @@ async function loadKids() {
         const mSnap = await getDocs(query(collection(db, `parents/${currentUser.uid}/children/${k.id}/measurements`), orderBy('when', 'desc'), limit(1)));
         if (!mSnap.empty) {
           const d = mSnap.docs[0].data();
-          k._lastGlucose = d.value_mgdl ?? d.value;
-          k._lastGlucoseUnit = 'mg/dL'; // لتوحيد العرض في اللوحة
+          // نستخدم القيمة الموحدة للون، والقيمة المعروضة للعرض
+          k._lastGlucoseNorm = d.normalizedValue || d.value;
+          k._lastGlucoseDisplay = d.value;
+          k._lastGlucoseUnit = d.unit || k._unit;
         }
       } catch (e) {}
     }));
 
     filtered = kids;
     render();
-  } catch (e) { alert('تعذّر تحميل قائمة الأطفال'); } 
+  } catch (e) { alert('تعذّر تحميل قائمة الأطفال'); console.error(e); } 
   finally { loader(false); }
 }
 
-function getGlucoseStatus(v, child) {
-  if (!v) return null;
-  const low = child.hypo ?? 70; // نفترض mg/dL
-  const high = child.hyper ?? 180;
-  if (v <= 54) return { text: `حرج 🚨 ${v}`, cls: 'g-danger', alert: true };
-  if (v < low) return { text: `منخفض ↓ ${v}`, cls: 'g-warn', alert: false };
-  if (v > 250) return { text: `حرج 🚨 ${v}`, cls: 'g-danger', alert: true };
-  if (v > high) return { text: `مرتفع ↑ ${v}`, cls: 'g-warn', alert: false };
-  return { text: `طبيعي ✅ ${v}`, cls: 'g-ok', alert: false };
+// دالة التلوين المحدثة بناءً على الإعدادات الذكية
+function getGlucoseStatus(valDisplay, valNorm, child) {
+  if (!valDisplay) return null;
+  const L = child._limits;
+  const v = valNorm || valDisplay; 
+  const u = child._lastGlucoseUnit;
+  const disp = `${valDisplay} <span style="font-size:11px;font-weight:normal">${u}</span>`;
+
+  if (v <= L.critLow) return { text: `هبوط حرج 🚨 ${disp}`, cls: 'g-danger', alert: true };
+  if (v < L.low) return { text: `هبوط ↓ ${disp}`, cls: 'g-sev', alert: true }; 
+  if (v >= L.critHigh) return { text: `ارتفاع حرج 🚨 ${disp}`, cls: 'g-danger', alert: true };
+  if (v > L.high) return { text: `ارتفاع ↑ ${disp}`, cls: 'g-warn', alert: false };
+  return { text: `طبيعي ✅ ${disp}`, cls: 'g-ok', alert: false };
 }
 
 function render() {
@@ -86,7 +124,7 @@ function render() {
     const linked = !!k.assignedDoctor;
     const docBadge = linked ? `<span class="doc-badge linked">مرتبط بطبيب ✓</span>` : `<span class="doc-badge unlinked">غير مرتبط</span>`;
     
-    const gs = getGlucoseStatus(k._lastGlucose, k);
+    const gs = getGlucoseStatus(k._lastGlucoseDisplay, k._lastGlucoseNorm, k);
     const glucoseHtml = gs ? `<div class="glucose-box ${gs.cls}">آخر قراءة: ${gs.text}</div>` : `<div class="glucose-box" style="background:#f1f5f9; color:#64748b">لا توجد قراءات حديثة</div>`;
 
     const card = document.createElement('div');
@@ -104,9 +142,9 @@ function render() {
       ${glucoseHtml}
 
       <div class="kc-factors">
-        <span class="factor-chip">معامل الكارب (CR): <b>${k.carbRatio || '-'}</b></span>
-        <span class="factor-chip">معامل التصحيح (CF): <b>${k.correctionFactor || '-'}</b></span>
-        <span class="factor-chip">قاعدي: <b>${k.insulin?.basalType || '-'}</b></span>
+        <span class="factor-chip" title="معامل الكارب (فطار/غدا/عشا)">CR: 🍔 <b>${k._crStr}</b></span>
+        <span class="factor-chip">CF: 💉 <b>${k._cf}</b></span>
+        <span class="factor-chip">الهدف: 🎯 <b>${k._limits.target}</b></span>
       </div>
 
       <div class="kc-actions">
@@ -123,12 +161,12 @@ function render() {
 
 function showCriticalAlert(child, gs) {
   const key = `alert_${child.id}`;
-  if (sessionStorage.getItem(key) === String(child._lastGlucose)) return;
-  sessionStorage.setItem(key, String(child._lastGlucose));
+  if (sessionStorage.getItem(key) === String(child._lastGlucoseDisplay)) return;
+  sessionStorage.setItem(key, String(child._lastGlucoseDisplay));
   
   const div = document.createElement('div');
   div.style.cssText = `position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#dc2626; color:#fff; padding:15px 24px; border-radius:12px; font-weight:bold; z-index:9999; box-shadow:0 10px 25px rgba(220,38,38,0.5); cursor:pointer;`;
-  div.textContent = `🚨 تحذير: قراءة سكر حرجة لـ (${child.name}): ${gs.text}`;
+  div.textContent = `🚨 تحذير: قراءة سكر حرجة لـ (${child.name})`; // نزعنا قيمة السكر لأن فيها HTML Tags
   div.onclick = () => div.remove();
   document.body.appendChild(div);
   setTimeout(() => div.remove(), 8000);
@@ -164,7 +202,7 @@ $('linkSubmit').onclick = async () => {
 // ------ المساعد الذكي ------
 $('aiFab').onclick = () => openAIForChild(null);
 $('aiClose').onclick = () => $('aiWidget').classList.add('hidden');
-$('aiMin').onclick = () => $('aiWidget').classList.toggle('minimized'); // يمكنك إضافة كلاس التصغير لاحقاً
+$('aiMin').onclick = () => $('aiWidget').classList.toggle('minimized'); 
 document.querySelectorAll('.ai-chip').forEach(c => c.onclick = () => { $('aiInput').value = c.dataset.q; sendAI(); });
 $('aiSend').onclick = sendAI;
 
@@ -175,7 +213,7 @@ function openAIForChild(child) {
   
   if (child) {
     $('aiContext').textContent = `الطفل: ${child.name}`;
-    appendMsg('sys', `أهلاً! أنا المساعد الذكي الخاص بـ ${child.name}. معامل الكارب له ${child.carbRatio||'-'} والتصحيح ${child.correctionFactor||'-'}. كيف أساعدك اليوم؟`);
+    appendMsg('sys', `أهلاً! أنا المساعد الذكي الخاص بـ ${child.name}.\nمعامل الكارب (CR): ${child._crStr}\nالتصحيح (CF): ${child._cf}\nالهدف (Target): ${child._limits.target}\nكيف أساعدك اليوم؟`);
   } else {
     $('aiContext').textContent = 'استشارة عامة';
     appendMsg('sys', 'مرحباً! أنا المساعد الطبي لمنصة أسيل. اسألني أي سؤال عام عن السكري.');
@@ -204,7 +242,12 @@ async function sendAI() {
     if (!KEY || KEY === 'YOUR_GEMINI_API_KEY') throw new Error('KeyMissing');
     
     const genAI = new window.GoogleGenerativeAI(KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', systemInstruction: "أنت مساعد طبي لإدارة سكر الأطفال. أجب باختصار وبأسلوب مطمئن وداعم."});
+    // إعطاء الذكاء الاصطناعي السياق الكامل للطفل ليرد بدقة
+    const sysPrompt = aiState.child 
+        ? `أنت مساعد طبي ذكي متخصص في سكري الأطفال. أجب بناءً على هذه البيانات: اسم الطفل (${aiState.child.name})، هدف السكر (${aiState.child._limits.target})، معامل التصحيح (${aiState.child._cf})، معامل الكارب (${aiState.child._crStr}). أجب باختصار وطمأنينة.` 
+        : `أنت مساعد طبي لإدارة سكر الأطفال. أجب باختصار وبأسلوب مطمئن وداعم.`;
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', systemInstruction: sysPrompt});
     
     const chat = model.startChat({ history: aiState.history });
     const res = await chat.sendMessage(text);
