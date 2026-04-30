@@ -3,136 +3,187 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>إعدادات الملف الطبي</title>
-  <link rel="stylesheet" href="css/child-edit.css?v=4">
+  <title>إعدادات الملف الطبي - أسيل</title>
+  <link rel="stylesheet" href="css/child-edit.css?v=5">
   <link rel="icon" href="favicon.png" />
 </head>
 <body>
 
-  <div class="container" style="max-width: 1000px; margin-top: 20px;">
+  <div class="container edit-container">
     <div class="card no-print header-action-card">
       <div>
-        <h2 style="margin:0; color:#2563eb;">⚙️ إعدادات الملف الطبي الدقيقة</h2>
-        <p class="muted" style="margin:5px 0 0 0; font-size:14px;">يُعتمد على هذه الأرقام لحساب جرعات الوجبات والتصحيح.</p>
+        <h2 style="margin:0; color:#2563eb;">⚙️ إعدادات الملف الطبي الشاملة</h2>
+        <p class="muted" style="margin:5px 0 0 0; font-size:14px;">يُعتمد على هذه الأرقام لحساب جرعات الوجبات والتصحيح وتقارير الذكاء الاصطناعي.</p>
       </div>
-      <button id="btnSave" class="btn primary">💾 حفظ الإعدادات</button>
+      <button id="btnSave" class="btn primary btn-lg">💾 حفظ الإعدادات</button>
     </div>
 
     <div class="main-layout">
-      <!-- العمود الأول: المعاملات والحدود -->
-      <div class="left-col">
-        <!-- الأنسولين والمعاملات -->
+      <!-- ================= العمود الأول (البيانات والنمو) ================= -->
+      <div class="col-left">
+        
+        <!-- 1. الهوية والتاريخ المرضي -->
         <section class="card">
-          <h3 class="section-title">⚖️ معاملات الأنسولين (CR & CF)</h3>
-          
-          <div class="grid2">
-            <div class="field"><label>معامل التصحيح الموحد (CF)</label><input id="f_cf" type="number" step="0.1" placeholder="مثال: 50" /></div>
-            <div class="field"><label>وحدة قياس السكر</label><select id="f_unit"><option value="mg/dL">mg/dL</option><option value="mmol/L">mmol/L</option></select></div>
-            <div class="field"><label>طويل المفعول (Basal)</label><input id="f_basal" type="text" placeholder="مثال: Lantus" /></div>
-            <div class="field"><label>سريع المفعول (Bolus)</label><input id="f_bolus" type="text" placeholder="مثال: Novorapid" /></div>
-          </div>
-
-          <label style="display:block; margin-top:15px; font-weight:bold; font-size:13px; color:#475569;">معامل الكارب لكل وجبة (CR):</label>
-          <div class="cr-grid">
-            <div class="cr-box"><span>🌅 الفطار</span><input id="cr_b" type="number" step="0.1" placeholder="CR" /></div>
-            <div class="cr-box"><span>☀️ الغداء</span><input id="cr_l" type="number" step="0.1" placeholder="CR" /></div>
-            <div class="cr-box"><span>🌙 العشاء</span><input id="cr_d" type="number" step="0.1" placeholder="CR" /></div>
-            <div class="cr-box"><span>🍎 سناك</span><input id="cr_s" type="number" step="0.1" placeholder="CR" /></div>
-          </div>
-        </section>
-
-        <!-- مستويات السكر المستهدفة -->
-        <section class="card">
-          <h3 class="section-title">🎯 مستويات السكر المستهدفة</h3>
-          <div class="glucose-limits-grid">
-            <div class="field"><label class="lbl-crit-low">هبوط حرج 🚨</label><input id="gl_crit_low" type="number" step="0.1" /></div>
-            <div class="field"><label class="lbl-low">هبوط ↓</label><input id="gl_low" type="number" step="0.1" /></div>
-            <div class="field" style="grid-column: span 2; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #cbd5e1;">
-              <label class="lbl-target" style="font-size:15px;">الهدف للتصحيح 🎯 (Target)</label>
-              <input id="gl_target" type="number" step="0.1" style="font-size:18px; font-weight:bold; text-align:center;" />
-            </div>
-            <div class="field"><label class="lbl-high">ارتفاع ↑</label><input id="gl_high" type="number" step="0.1" /></div>
-            <div class="field"><label class="lbl-crit-high">ارتفاع حرج 🚨</label><input id="gl_crit_high" type="number" step="0.1" /></div>
-          </div>
-        </section>
-
-        <!-- البيانات الشخصية والنظام الغذائي -->
-        <section class="card">
-          <h3 class="section-title">👤 البيانات الأساسية والأنظمة</h3>
+          <h3 class="section-title">👤 الهوية والتاريخ المرضي</h3>
           <div class="grid2">
             <div class="field"><label>اسم الطفل</label><input id="f_name" type="text" /></div>
-            <div class="field"><label>الوزن (كجم)</label><input id="f_weight" type="number" step="0.1" /></div>
+            <div class="field"><label>الرقم المدني (اختياري)</label><input id="f_civil" type="text" /></div>
+            <div class="field"><label>تاريخ الميلاد</label><input id="f_dob" type="date" /></div>
+            <div class="field">
+              <label>الجنس</label>
+              <select id="f_gender"><option value="female">أنثى</option><option value="male">ذكر</option></select>
+            </div>
+            <div class="field"><label>تاريخ تشخيص السكري</label><input id="f_diagnosis_date" type="date" /></div>
           </div>
-          
-          <div class="field" id="allergiesWrap" style="margin-top:15px;">
-            <label>حساسيات أو موانع طعام <small class="muted">(اكتب واضغط Enter)</small></label>
-            <div class="chip-input-wrap">
-              <div class="chip-list"></div>
-              <input type="text" placeholder="مثال: جلوتين..." style="border:none; outline:none; background:transparent;" />
+
+          <div class="field" style="margin-top: 15px;">
+            <label>أمراض مصاحبة (Co-morbidities)</label>
+            <div class="checkbox-group">
+              <label><input type="checkbox" class="comorb-flag" value="celiac"> سيلياك (حساسية قمح)</label>
+              <label><input type="checkbox" class="comorb-flag" value="thyroid"> خمول الغدة الدرقية</label>
+              <label><input type="checkbox" class="comorb-flag" value="asthma"> ربو حساسية صدر</label>
             </div>
           </div>
-          <div style="display:flex; gap:15px; margin-top:12px; flex-wrap:wrap;">
+        </section>
+
+        <!-- 2. المقاييس الحيوية (النمو) -->
+        <section class="card">
+          <h3 class="section-title">📈 المقاييس الحيوية (النمو)</h3>
+          <p class="muted" style="font-size: 12px; margin-top: -10px;">حدثي هذه الأرقام مع كل زيارة للطبيب.</p>
+          <div class="grid2 align-end">
+            <div class="field"><label>الوزن (كجم)</label><input id="f_weight" type="number" step="0.1" /></div>
+            <div class="field"><label>الطول (سم)</label><input id="f_height" type="number" step="0.1" /></div>
+            <div class="field"><label>تاريخ القياس</label><input id="f_measure_date" type="date" /></div>
+          </div>
+          
+          <div class="bmi-box mt-15">
+            <div>
+              <span class="muted text-sm">مؤشر كتلة الجسم (BMI):</span>
+              <strong id="calc_bmi" class="text-primary text-xl">—</strong>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. النظام الغذائي والحساسيات -->
+        <section class="card">
+          <h3 class="section-title">🍎 النظام الغذائي والحساسيات</h3>
+          <div class="field" id="allergiesWrap">
+            <label>حساسيات طعام <small class="muted">(اكتب واضغط Enter)</small></label>
+            <div class="chip-input-wrap">
+              <div class="chip-list"></div>
+              <input type="text" placeholder="مثال: فراولة..." class="chip-input-field" />
+            </div>
+          </div>
+          <div class="checkbox-group mt-15">
             <label><input type="checkbox" class="diet-flag" value="gluten_free"> خالي من الجلوتين</label>
             <label><input type="checkbox" class="diet-flag" value="lactose_free"> خالي من اللاكتوز</label>
             <label><input type="checkbox" class="diet-flag" value="low_carb"> قليل الكارب</label>
           </div>
         </section>
+
       </div>
 
-      <!-- العمود الثاني: خريطة أماكن الحقن التفاعلية -->
-      <div class="right-col">
-        <section class="card map-card">
-          <h3 class="section-title">🧍‍♀️ خريطة أماكن الحقن التفاعلية</h3>
-          <p class="muted" style="font-size:13px; margin-top:0;">اضغطي على أي منطقة في الجسم لتغيير حالتها. (سيقوم النظام بتنبيهك وقت أخذ الجرعة إذا كان هناك تكتل).</p>
+      <!-- ================= العمود الثاني (الأرقام الطبية) ================= -->
+      <div class="col-right">
+
+        <!-- 4. مستويات السكر المستهدفة (التصميم الهرمي) -->
+        <section class="card">
+          <h3 class="section-title">🎯 مستويات السكر (Target & Limits)</h3>
+          <div class="field mb-15"><label>وحدة قياس السكر بالنظام</label><select id="f_unit" style="max-width:200px;"><option value="mg/dL">mg/dL</option><option value="mmol/L">mmol/L</option></select></div>
           
-          <div class="map-legend">
-            <span class="legend-item"><span class="color-box st-normal"></span> سليم ✅</span>
-            <span class="legend-item"><span class="color-box st-rest"></span> فترة إراحة ⏸️</span>
-            <span class="legend-item"><span class="color-box st-lump"></span> تكتل دهني 🚨</span>
+          <div class="glucose-hierarchy">
+            <!-- الصف الأول (الهدف) -->
+            <div class="gh-row center">
+              <div class="gh-box target-box">
+                <label>الهدف للتصحيح 🎯 (Target)</label>
+                <input id="gl_target" type="number" step="0.1" placeholder="مثال: 100" />
+              </div>
+            </div>
+            <!-- الصف الثاني (إنذار أصفر) -->
+            <div class="gh-row split">
+              <div class="gh-box warn-low-box">
+                <label>هبوط ↓</label>
+                <input id="gl_low" type="number" step="0.1" placeholder="مثال: 70" />
+              </div>
+              <div class="gh-box warn-high-box">
+                <label>ارتفاع ↑</label>
+                <input id="gl_high" type="number" step="0.1" placeholder="مثال: 180" />
+              </div>
+            </div>
+            <!-- الصف الثالث (إنذار أحمر) -->
+            <div class="gh-row split">
+              <div class="gh-box crit-low-box">
+                <label>هبوط حرج 🚨</label>
+                <input id="gl_crit_low" type="number" step="0.1" placeholder="مثال: 54" />
+              </div>
+              <div class="gh-box crit-high-box">
+                <label>ارتفاع حرج 🚨</label>
+                <input id="gl_crit_high" type="number" step="0.1" placeholder="مثال: 250" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. معاملات الأنسولين -->
+        <section class="card">
+          <h3 class="section-title">⚖️ الأنسولين والمعاملات (CR & CF)</h3>
+          <div class="grid2 mb-15">
+            <div class="field"><label>طويل المفعول (Basal)</label><input id="f_basal" type="text" placeholder="Lantus" /></div>
+            <div class="field"><label>سريع المفعول (Bolus)</label><input id="f_bolus" type="text" placeholder="Novorapid" /></div>
+          </div>
+          
+          <div class="cf-highlight-box mb-15">
+            <label>معامل التصحيح الموحد (CF/ISF)</label>
+            <div class="input-suffix">
+              <input id="f_cf" type="number" step="0.1" placeholder="50" />
+              <span class="suffix">وحدة تخفض السكر بمقدار</span>
+            </div>
           </div>
 
-          <!-- رسم الجسم (SVG) التفاعلي -->
+          <label class="lbl-bold">معامل الكارب لكل وجبة (CR):</label>
+          <div class="cr-grid mt-10">
+            <div class="cr-box"><span>🌅 فطار</span><input id="cr_b" type="number" step="0.1" placeholder="CR" /></div>
+            <div class="cr-box"><span>☀️ غداء</span><input id="cr_l" type="number" step="0.1" placeholder="CR" /></div>
+            <div class="cr-box"><span>🌙 عشاء</span><input id="cr_d" type="number" step="0.1" placeholder="CR" /></div>
+            <div class="cr-box"><span>🍎 سناك</span><input id="cr_s" type="number" step="0.1" placeholder="CR" /></div>
+          </div>
+        </section>
+
+        <!-- 6. خريطة الحقن التفاعلية -->
+        <section class="card map-card">
+          <h3 class="section-title">🧍‍♀️ خريطة أماكن الحقن التفاعلية</h3>
+          <div class="map-legend">
+            <span class="legend-item"><span class="color-box st-normal"></span> سليم ✅</span>
+            <span class="legend-item"><span class="color-box st-rest"></span> إراحة ⏸️</span>
+            <span class="legend-item"><span class="color-box st-lump"></span> تكتل دهني 🚨</span>
+          </div>
           <div class="svg-container">
             <svg viewBox="0 0 200 400" id="injectionMapSvg" class="human-body-svg">
-              <!-- الرأس والرقبة (غير قابلة للحقن) -->
               <circle cx="100" cy="40" r="25" fill="#e2e8f0" />
               <rect x="90" y="65" width="20" height="20" fill="#e2e8f0" />
-              
-              <!-- الذراعين -->
               <path class="zone" data-zone="arm_right" d="M40 85 Q20 150 25 220 L45 220 Q45 150 65 85 Z" title="الذراع الأيمن" />
               <path class="zone" data-zone="arm_left" d="M160 85 Q180 150 175 220 L155 220 Q155 150 135 85 Z" title="الذراع الأيسر" />
-              
-              <!-- البطن (مقسم 4 أجزاء للحقن) -->
-              <!-- أعلى اليمين -->
               <path class="zone" data-zone="abd_top_right" d="M65 110 L100 110 L100 160 L65 160 Z" title="البطن أعلى اليمين" />
-              <!-- أعلى اليسار -->
               <path class="zone" data-zone="abd_top_left" d="M100 110 L135 110 L135 160 L100 160 Z" title="البطن أعلى اليسار" />
-              <!-- أسفل اليمين -->
               <path class="zone" data-zone="abd_bottom_right" d="M65 160 L100 160 L100 210 L70 210 Z" title="البطن أسفل اليمين" />
-              <!-- أسفل اليسار -->
               <path class="zone" data-zone="abd_bottom_left" d="M100 160 L135 160 L130 210 L100 210 Z" title="البطن أسفل اليسار" />
-              
-              <!-- السرة (غير قابلة للحقن) -->
               <circle cx="100" cy="160" r="6" fill="#cbd5e1" pointer-events="none"/>
-              
-              <!-- الفخذين -->
               <path class="zone" data-zone="thigh_right" d="M70 220 L100 220 L95 340 L75 340 Z" title="الفخذ الأيمن" />
               <path class="zone" data-zone="thigh_left" d="M100 220 L130 220 L125 340 L105 340 Z" title="الفخذ الأيسر" />
-              
-              <!-- الجزء الخلفي (الأرداف) - رسم صغير للتوضيح في الأسفل -->
               <text x="100" y="375" text-anchor="middle" font-size="10" fill="#64748b">الأرداف (الخلف)</text>
               <rect class="zone" data-zone="buttock_right" x="65" y="380" width="35" height="15" rx="5" title="الردف الأيمن" />
               <rect class="zone" data-zone="buttock_left" x="100" y="380" width="35" height="15" rx="5" title="الردف الأيسر" />
             </svg>
           </div>
         </section>
+
       </div>
     </div>
   </div>
 
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="js/child-edit.js?v=4"></script>
+  <script type="module" src="js/child-edit.js?v=5"></script>
   <script type="module" src="js/header.js"></script>
 </body>
 </html>
