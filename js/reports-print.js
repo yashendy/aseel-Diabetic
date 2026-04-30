@@ -8,22 +8,28 @@ const childId = params.get('child');
 const fromDate = params.get('from');
 const toDate = params.get('to');
 const isBlank = params.get('blank') === '1';
-// 👈 الحصول على الوحدة من الرابط لتوحيد العرض مع الشاشة
 const urlUnit = params.get('unit'); 
 
 const SLOT_KEYS = ['FASTING','PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK','BEDTIME','DURING_SLEEP'];
 const SLOT_LABELS = ['صائم','ق.الفطار','ب.الفطار','ق.الغداء','ب.الغداء','ق.العشاء','ب.العشاء','سناك','ق.النوم','أثناء النوم'];
 
-// دوال التحويل وتحديد الحدود
-const mgdl2mmol=v=>v/18, mmol2mgdl=v=>v*18, round1=n=>Math.round((+n||0)*10)/10;
-const FIXED_MMOL={low:3.9,upper:7.1,severe:10.9,critHigh:14.1};
-function limitsInUnit(u){return u.includes('mmol')?{...FIXED_MMOL}:{low:round1(mmol2mgdl(3.9)),upper:round1(mmol2mgdl(7.1)),severe:round1(mmol2mgdl(10.9)),critHigh:round1(mmol2mgdl(14.1))}}
+const mgdl2mmol=v=>v/18.0182, mmol2mgdl=v=>v*18.0182, round1=n=>Math.round((+n||0)*10)/10;
+
+// استيراد النطاقات ديناميكياً
+let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
+let sysUnit = 'mg/dL';
+
+function limitsInUnit(targetUnit){
+  if (targetUnit === sysUnit) return { ...sysLimits };
+  if (targetUnit === 'mmol/L' && sysUnit === 'mg/dL') return { low: round1(mgdl2mmol(sysLimits.low)), upper: round1(mgdl2mmol(sysLimits.high)), severe: round1(mgdl2mmol(sysLimits.critHigh)), critHigh: round1(mgdl2mmol(sysLimits.critHigh) + 2) };
+  if (targetUnit === 'mg/dL' && sysUnit === 'mmol/L') return { low: round1(mmol2mgdl(sysLimits.low)), upper: round1(mmol2mgdl(sysLimits.high)), severe: round1(mmol2mgdl(sysLimits.critHigh)), critHigh: round1(mmol2mgdl(sysLimits.critHigh) + 36) };
+  return { ...sysLimits };
+}
 
 function classFor(v, u){ 
   if(v == null) return '';
   const L=limitsInUnit(u); 
-  if(v>L.critHigh) return 'crit'; 
-  if(v>L.severe) return 'sev'; 
+  if(v>=L.severe) return 'crit'; 
   if(v>L.upper) return 'mild'; 
   if(v<L.low) return 'sev'; 
   return 'ok'; 
@@ -38,17 +44,21 @@ onAuthStateChanged(auth, async (user) => {
     const childSnap = await getDoc(childRef);
     const childData = childSnap.data();
     
-    // 👈 تحديد الوحدة النهائية (من الرابط أولاً، وإلا فمن بيانات الطفل)
-    const displayUnit = urlUnit || childData.glucoseUnit || 'mg/dL';
+    sysUnit = childData.glucoseUnit || 'mg/dL';
+    if(childData.glucose_limits) {
+        sysLimits.low = Number(childData.glucose_limits.low) || 70;
+        sysLimits.high = Number(childData.glucose_limits.high) || 180;
+        sysLimits.severe = Number(childData.glucose_limits.critical_high) || 250;
+    }
 
-    // 1. جلب البيانات
+    const displayUnit = urlUnit || sysUnit;
+
     let data = [];
     if (!isBlank) {
       const q = query(collection(childRef, 'measurements'), where('date', '>=', fromDate), where('date', '<=', toDate), orderBy('date', 'asc'));
       const snap = await getDocs(q);
       snap.forEach(d => {
          const x = d.data();
-         // 👈 تحويل القيمة للوحدة المطلوبة
          let v = displayUnit.includes('mmol') 
             ? (x.value_mmol ?? (x.unit==='mg/dL'? mgdl2mmol(x.value): x.value))
             : (x.value_mgdl ?? (x.unit==='mmol/L'? mmol2mgdl(x.value): x.value));
@@ -58,10 +68,8 @@ onAuthStateChanged(auth, async (user) => {
       });
     }
 
-    // 2. تقسيم البيانات إلى أسابيع
     const weeks = chunkIntoWeeks(fromDate, toDate);
     
-    // 3. توليد صفحات الأسابيع
     weeks.forEach((weekDays, index) => {
       const page = createPageStructure(childData, weekDays[0], weekDays[weekDays.length-1], index + 1, weeks.length, displayUnit);
       const grid = page.querySelector('.grid-body');
@@ -74,27 +82,19 @@ onAuthStateChanged(auth, async (user) => {
       container.appendChild(page);
     });
 
-    // 4. إضافة صفحة الملخص (إذا لم تكن نسخة فارغة)
     if (!isBlank && data.length > 0) {
       container.appendChild(createSummaryPage(childData, data, displayUnit));
     }
 
     document.getElementById('appLoader').style.display = 'none';
-    
-    // الانتظار ثانية ليتم رسم الشارت ثم فتح نافذة الطباعة تلقائياً
     setTimeout(() => window.print(), 1000);
 
   } catch (e) { console.error(e); }
 });
 
 function chunkIntoWeeks(start, end) {
-  let days = [];
-  let curr = new Date(start);
-  const last = new Date(end);
-  while (curr <= last) {
-    days.push(curr.toISOString().slice(0, 10));
-    curr.setDate(curr.getDate() + 1);
-  }
+  let days = []; let curr = new Date(start); const last = new Date(end);
+  while (curr <= last) { days.push(curr.toISOString().slice(0, 10)); curr.setDate(curr.getDate() + 1); }
   let chunks = [];
   for (let i = 0; i < days.length; i += 7) chunks.push(days.slice(i, i + 7));
   return chunks;
@@ -103,6 +103,8 @@ function chunkIntoWeeks(start, end) {
 function createPageStructure(child, start, end, pageNum, totalPages, displayUnit) {
   const div = document.createElement('div');
   div.className = 'print-page';
+  const cf = child.cf || child.correctionFactor || '—';
+  const cr = child.cr?.breakfast || child.carbRatio || '—'; // نموذج للـ CR
   div.innerHTML = `
     <header class="header">
       <div class="header-right">
@@ -112,7 +114,7 @@ function createPageStructure(child, start, end, pageNum, totalPages, displayUnit
       <div class="header-left">
         <b>اسم الطفل:</b> ${child.name || '—'}<br>
         <b>العمر:</b> ${calcAge(child.birthDate)} سنة | <b>الوحدة المستخدمة:</b> ${displayUnit}<br>
-        <b>المعاملات:</b> CF: ${child.correctionFactor || '—'} | CR: ${child.carbRatio || '—'}
+        <b>المعاملات:</b> CF: ${cf} | CR: ${cr}
       </div>
     </header>
     <div class="grid-wrap">
@@ -134,7 +136,7 @@ function createDayRow(date, dayData, child, displayUnit) {
   const dayName = d.toLocaleDateString('ar-EG', { weekday: 'short' });
   
   let dailyCarbs = 0, dailyIns = 0;
-  dayData.forEach(m => { dailyCarbs += (m.carbs || 0); dailyIns += (m.totalInsulin || 0); });
+  dayData.forEach(m => { dailyCarbs += (m.carbs || 0); dailyIns += (m.totalInsulin || m.correctionDose || m.totalDose || 0); });
 
   let html = `<div class="cell"><b>${date}</b><br><small>${dayName}</small></div>`;
   if(!isBlank && (dailyCarbs > 0 || dailyIns > 0)){
@@ -145,11 +147,12 @@ function createDayRow(date, dayData, child, displayUnit) {
 
   SLOT_KEYS.forEach(key => {
     const m = dayData.find(d => d.slotKey === key);
+    const ins = m ? (m.totalInsulin || m.correctionDose || m.totalDose || 0) : 0;
     html += `<div class="cell v-cell">
       ${m && !isBlank ? `
         ${m.displayValue !== null ? `<div class="val ${classFor(m.displayValue, displayUnit)}">${m.displayValue}</div>` : ''}
         ${m.carbs > 0 ? `<span class="c-badge">🍔${m.carbs}g</span>` : ''}
-        ${m.totalInsulin > 0 ? `<span class="i-badge">💉${m.totalInsulin}U</span>` : ''}
+        ${ins > 0 ? `<span class="i-badge">💉${ins}U</span>` : ''}
       ` : ''}
     </div>`;
   });
@@ -173,11 +176,7 @@ function createSummaryPage(child, allData, displayUnit) {
     <div class="footer">نهاية التقرير الطبي</div>
   `;
   
-  setTimeout(() => {
-    renderPrintCharts(allData, displayUnit);
-    renderAI(allData, displayUnit);
-  }, 100);
-  
+  setTimeout(() => { renderPrintCharts(allData, displayUnit); renderAI(allData, displayUnit); }, 100);
   return div;
 }
 
@@ -186,7 +185,7 @@ function renderPrintCharts(list, displayUnit) {
   const valid = list.filter(x => x.displayValue != null);
   if(valid.length === 0) return;
 
-  const TIR = valid.filter(x => x.displayValue >= L.low && x.displayValue <= L.severe).length;
+  const TIR = valid.filter(x => x.displayValue >= L.low && x.displayValue <= L.upper).length;
   const ctx = document.getElementById('printPieTIR').getContext('2d');
   new Chart(ctx, {
     type: 'doughnut',
@@ -211,29 +210,23 @@ function renderAI(list, displayUnit) {
   if(fast.length >= 3 && sleep.length >= 2) {
     const highFasting = fast.filter(v => v > L.upper).length;
     const normalSleep = sleep.filter(v => v >= L.low && v <= L.severe).length;
-    if (highFasting >= 2 && normalSleep >= 2) {
-      patt.push({ name: 'ظاهرة الفجر', desc: 'السكر طبيعي ليلاً ويرتفع صباحاً.', rec: 'تعديل المنظم.', conf: 'عالي 🔴' });
-    }
+    if (highFasting >= 2 && normalSleep >= 2) { patt.push({ name: 'ظاهرة الفجر', desc: 'السكر طبيعي ليلاً ويرتفع صباحاً.', rec: 'تعديل المنظم.', conf: 'عالي 🔴' }); }
   }
 
   if(fast.length >= 3 && sleep.length >= 2) {
     const highFasting = fast.filter(v => v > L.upper).length;
     const lowSleep = sleep.filter(v => v < L.low).length;
-    if (highFasting >= 2 && lowSleep >= 1) {
-      patt.push({ name: 'هبوط ليلي (Somogyi)', desc: 'هبوط أثناء الليل يتبعه ارتفاع ارتدادي.', rec: 'تقليل المنظم.', conf: 'حرج 🚨' });
-    }
+    if (highFasting >= 2 && lowSleep >= 1) { patt.push({ name: 'هبوط ليلي (Somogyi)', desc: 'هبوط أثناء الليل يتبعه ارتفاع ارتدادي.', rec: 'تقليل المنظم.', conf: 'حرج 🚨' }); }
   }
 
-  if(pBreakfast.length >= 3 && pBreakfast.filter(v=>v>L.severe).length >= 2) {
+  if(pBreakfast.length >= 3 && pBreakfast.filter(v=>v>=L.severe).length >= 2) {
     patt.push({ name: 'ارتفاع بعد الإفطار', desc: 'السكر يرتفع بشدة بعد الإفطار.', rec: 'تعديل معامل الكارب (CR).', conf: 'متوسط 🟡' });
   }
 
   if(!patt.length) patt.push({name:'✅ استقرار عام', desc:'الأنماط الحيوية للطفل ضمن الحدود الآمنة غالباً.', rec:'استمر على نفس الخطة!', conf:'—'});
 
   const aiContainer = document.getElementById('aiContent');
-  if(aiContainer){
-      aiContainer.innerHTML = patt.map(p=>`<div class="ai-item"><b>${p.name}</b>${p.desc} <br> <span style="color:#2563eb">${p.rec}</span></div>`).join('');
-  }
+  if(aiContainer) aiContainer.innerHTML = patt.map(p=>`<div class="ai-item"><b>${p.name}</b>${p.desc} <br> <span style="color:#2563eb">${p.rec}</span></div>`).join('');
 }
 
 function calcAge(bd) { if(!bd) return '—'; const b=new Date(bd), t=new Date(); let a=t.getFullYear()-b.getFullYear(); if(t.getMonth()<b.getMonth() || (t.getMonth()===b.getMonth()&&t.getDate()<b.getDate())) a--; return a; }
