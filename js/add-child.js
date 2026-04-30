@@ -1,106 +1,141 @@
+// js/add-child.js
 import { auth, db } from './firebase-config.js';
-import {
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-import {
-  collection,
-  addDoc
-} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-
-// 🧠 نحدد المستخدم الحالي
+const $ = id => document.getElementById(id);
 let currentUser = null;
 
 onAuthStateChanged(auth, (user) => {
   if (user) {
     currentUser = user;
+    initUnitSmartSwitch(); // تشغيل ميزة تحويل النطاقات التلقائي
   } else {
-    window.location.href = "index.html"; // يرجع لتسجيل الدخول لو مش مسجل
+    window.location.href = "index.html"; 
   }
 });
 
-// ✅ إضافة وجبة جديدة
-window.addMeal = function () {
-  const container = document.getElementById("mealsContainer");
+$('btnBack').addEventListener('click', () => {
+  window.location.href = "parent.html";
+});
 
-  const mealDiv = document.createElement("div");
-  mealDiv.innerHTML = `
-    <input type="text" placeholder="اسم الوجبة" class="mealName" required />
-    <input type="number" placeholder="الجرعة (وحدة)" class="mealUnits" required />
-    <input type="time" class="mealTime" required />
-    <hr />
-  `;
-  container.appendChild(mealDiv);
-};
+// 💡 ميزة التحويل الذكي لأرقام النطاقات الافتراضية
+function initUnitSmartSwitch() {
+  const unitSel = $('f_unit');
+  const target = $('gl_target');
+  const cLow = $('gl_crit_low');
+  const low = $('gl_low');
+  const high = $('gl_high');
+  const cHigh = $('gl_crit_high');
+  const cf = $('f_cf');
 
-// ✅ التعامل مع الفورم
-document.getElementById("childForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
+  const defaultValues = {
+    'mg/dL': { target: 100, cLow: 54, low: 70, high: 180, cHigh: 250, cf: 50 },
+    'mmol/L': { target: 5.5, cLow: 3.0, low: 3.9, high: 10.0, cHigh: 13.9, cf: 3 }
+  };
 
-  // جمع البيانات
-  const name = document.getElementById("name").value;
-  const gender = document.getElementById("gender").value;
-  const birthDate = document.getElementById("birthDate").value;
-  const weight = parseFloat(document.getElementById("weight").value);
-  const height = parseFloat(document.getElementById("height").value);
-
-  const longInsulin = document.getElementById("longInsulin").value;
-  const longDose = parseFloat(document.getElementById("longDose").value);
-  const longTime = document.getElementById("longTime").value;
-
-  const correctionFactor = parseFloat(document.getElementById("correctionFactor").value);
-  const carbRatio = parseFloat(document.getElementById("carbRatio").value);
-  const hypoLevel = parseFloat(document.getElementById("hypoLevel").value);
-  const hyperLevel = parseFloat(document.getElementById("hyperLevel").value);
-  const normalMin = parseFloat(document.getElementById("normalMin").value);
-  const normalMax = parseFloat(document.getElementById("normalMax").value);
-
-  const unitType = document.getElementById("unitType").value;
-
-  // 👨‍🍳 قراءة الوجبات
-  const meals = [];
-  document.querySelectorAll("#mealsContainer > div").forEach((mealDiv) => {
-    const mealName = mealDiv.querySelector(".mealName").value;
-    const mealUnits = parseFloat(mealDiv.querySelector(".mealUnits").value);
-    const mealTime = mealDiv.querySelector(".mealTime").value;
-
-    meals.push({
-      mealName,
-      units: mealUnits,
-      time: mealTime
-    });
+  unitSel.addEventListener('change', (e) => {
+    const u = e.target.value;
+    target.value = defaultValues[u].target;
+    target.placeholder = `مثال: ${defaultValues[u].target}`;
+    
+    cLow.value = defaultValues[u].cLow;
+    low.value = defaultValues[u].low;
+    high.value = defaultValues[u].high;
+    cHigh.value = defaultValues[u].cHigh;
+    
+    if(!cf.value) cf.placeholder = `مثال: ${defaultValues[u].cf}`;
   });
 
-  // بناء بيانات الطفل
-  const childData = {
-    name,
-    gender,
-    birthDate,
-    weight,
-    height,
-    longActingDose: {
-      insulin: longInsulin,
-      units: longDose,
-      time: longTime
+  // تشغيلها مرة عند التحميل لوضع القيم الافتراضية
+  unitSel.dispatchEvent(new Event('change'));
+}
+
+// 🚀 حفظ وإنشاء ملف الطفل
+$('childForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('loader').classList.remove('hidden');
+
+  // حساب مؤشر كتلة الجسم (BMI) مبدئياً
+  const weight = parseFloat($('f_weight').value);
+  const heightCm = parseFloat($('f_height').value);
+  let bmi = null;
+  if (weight && heightCm > 0) {
+    const heightM = heightCm / 100;
+    bmi = parseFloat((weight / (heightM * heightM)).toFixed(1));
+  }
+
+  // الهيكل الموحد الدقيق للمنصة (Standardized Schema)
+  const childPayload = {
+    name: $('f_name').value.trim(), // للاستخدام السريع في الواجهات
+    gender: $('f_gender').value,
+    birthDate: $('f_dob').value,
+    glucoseUnit: $('f_unit').value,
+
+    // 1. الهوية التفصيلية
+    identity: {
+      name: $('f_name').value.trim(),
+      gender: $('f_gender').value,
+      dob: $('f_dob').value
     },
-    mealsDoses: meals,
-    correctionFactor,
-    carbRatio,
-    hypoLevel,
-    hyperLevel,
-    normalRange: {
-      min: normalMin,
-      max: normalMax
+
+    // 2. التاريخ المرضي
+    medical_history: {
+      diagnosisDate: $('f_diagnosis').value || null,
+      comorbidities: []
     },
-    unitType
+
+    // 3. النمو
+    vitals: {
+      weight: weight || null,
+      height: heightCm || null,
+      bmi: bmi,
+      measurementDate: new Date().toISOString().slice(0, 10)
+    },
+
+    // 4. الأنسولين
+    insulin: {
+      basal: $('f_basal').value.trim() || null,
+      bolus: $('f_bolus').value.trim() || null
+    },
+
+    // 5. المعاملات
+    cf: parseFloat($('f_cf').value) || null,
+    cr: {
+      breakfast: parseFloat($('cr_b').value) || null,
+      lunch: parseFloat($('cr_l').value) || null,
+      dinner: parseFloat($('cr_d').value) || null,
+      snack: parseFloat($('cr_s').value) || null
+    },
+
+    // 6. النطاقات الخمسة
+    glucose_limits: {
+      target: parseFloat($('gl_target').value) || null,
+      critical_low: parseFloat($('gl_crit_low').value) || null,
+      low: parseFloat($('gl_low').value) || null,
+      high: parseFloat($('gl_high').value) || null,
+      critical_high: parseFloat($('gl_crit_high').value) || null
+    },
+
+    // 7. تهيئة خريطة الحقن بأمان كقيمة ابتدائية
+    injection_map: {
+      abd_bottom_left: "normal", abd_bottom_right: "normal", abd_top_left: "normal", abd_top_right: "normal",
+      arm_left: "normal", arm_right: "normal", thigh_left: "normal", thigh_right: "normal"
+    },
+
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
   };
 
   try {
     const childrenRef = collection(db, `parents/${currentUser.uid}/children`);
-    await addDoc(childrenRef, childData);
-    alert("✅ تم حفظ بيانات الطفل بنجاح!");
+    await addDoc(childrenRef, childPayload);
+    
+    // نجاح
     window.location.href = "parent.html";
   } catch (error) {
+    console.error(error);
     alert("❌ حدث خطأ أثناء الحفظ:\n" + error.message);
+    $('loader').classList.add('hidden');
   }
 });
