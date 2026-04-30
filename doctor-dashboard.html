@@ -3,42 +3,60 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>لوحة الدكتور</title>
-  <link rel="stylesheet" href="./css/doctor-dashboard.css" />
+  <title>لوحة الطبيب - منصة أسيل</title>
+  <link rel="stylesheet" href="./css/doctor-dashboard.css?v=2" />
+  <link rel="icon" href="favicon.ico" />
 </head>
 <body>
   <div class="container" id="doctorDashboard">
-    <header class="header">
-      <h1 class="title">
-        <span>أهلاً دكتور</span>
-        <span id="doctorName">—</span> 👋
-      </h1>
+    <header class="header no-print">
+      <div class="title">
+        <span>👨‍⚕️ أهلاً دكتور</span>
+        <span id="doctorName" style="color: var(--primary);">—</span>
+      </div>
       <div class="actions">
-        <button id="btnRefresh" class="btn secondary" type="button">تحديث</button>
+        <button id="btnRefresh" class="btn secondary">🔄 تحديث البيانات</button>
+        <button id="btnLogout" class="btn danger-outline">🚪 خروج</button>
       </div>
     </header>
 
-    <!-- أكواد الربط -->
-    <section class="card">
-      <div class="section-head">
-        <h2>أكواد الربط</h2>
-        <div class="inline">
-          <button id="btnCreateCode" class="btn good" type="button">إنشاء كود ربط</button>
-          <button id="btnReloadCodes" class="btn secondary" type="button">تحديث الأكواد</button>
+    <div class="dashboard-grid">
+      <!-- كارت أكواد الربط -->
+      <section class="card codes-card">
+        <div class="section-head">
+          <h2>🔗 أكواد الربط</h2>
+          <button id="btnCreateCode" class="btn good">إنشاء كود جديد</button>
         </div>
-      </div>
-      <p class="muted">يمكنك إنشاء كود لربط وليّ الأمر بطفله معك كطبيب. التفعيل يتم من صفحة إعدادات الطفل لدى وليّ الأمر.</p>
-      <div id="codesList" class="list">
-        <div class="empty">لا توجد أكواد بعد.</div>
-      </div>
-    </section>
+        <p class="muted" style="margin-top:0;">أعطِ هذا الكود لولي الأمر لربط حساب طفله بملفك الطبي.</p>
+        <div id="codesList" class="list">
+          <div class="empty">لا توجد أكواد نشطة.</div>
+        </div>
+      </section>
 
-    <!-- الأطفال المرتبطين -->
+      <!-- كارت إحصائيات سريعة (اختياري مستقبلاً) -->
+      <section class="card stats-card">
+        <div class="section-head">
+          <h2>📊 نظرة عامة</h2>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <span class="stat-num" id="totalPatients">0</span>
+            <span class="stat-label">إجمالي المرضى</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num" id="criticalPatients" style="color: #dc2626;">0</span>
+            <span class="stat-label">حالات حرجة اليوم</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- قائمة الأطفال (المرضى) -->
     <section class="card">
       <div class="section-head">
-        <h2>أطفالي</h2>
+        <h2>أطفالي (المرضى)</h2>
         <div class="inline">
-          <input id="childSearch" class="input" type="search" placeholder="ابحث باسم الطفل…" />
+          <input id="childSearch" class="input" type="search" placeholder="ابحث باسم المريض…" />
           <span class="badge" id="childrenCount">—</span>
         </div>
       </div>
@@ -47,22 +65,24 @@
         <table>
           <thead>
             <tr>
-              <th>الاسم</th>
-              <th>الجنس</th>
-              <th>تاريخ الميلاد</th>
+              <th>اسم المريض</th>
               <th>العمر</th>
-              <th>وحدة الجلوكوز</th>
-              <th style="width:220px">الإجراءات</th>
+              <th>الوحدة</th>
+              <th>آخر قراءة</th>
+              <th>حالة القياس</th>
+              <th style="width: 250px; text-align: center;">الإجراءات الطبية</th>
             </tr>
           </thead>
           <tbody id="childrenTbody">
-            <tr><td class="empty" colspan="6">جارِ التحميل…</td></tr>
+            <tr><td class="empty" colspan="6">جارِ تحميل بيانات المرضى…</td></tr>
           </tbody>
         </table>
       </div>
     </section>
   </div>
 
-  <script type="module" src="./js/doctor-dashboard.js"></script>
+  <div id="loader" class="loader hidden"><div class="spinner"></div></div>
+
+  <script type="module" src="./js/doctor-dashboard.js?v=2"></script>
 </body>
 </html>
