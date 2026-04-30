@@ -4,12 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>سجل القياسات</title>
-  <link rel="stylesheet" href="css/measurements.css?v=4" />
+  <link rel="stylesheet" href="css/measurements.css?v=5" />
   <link rel="icon" href="favicon.png" />
 </head>
 <body>
   <div class="container">
-    <!-- الهيدر العلوي -->
     <header class="page-head no-print">
       <div class="right">
         <strong id="childName">جاري التحميل...</strong>
@@ -20,10 +19,8 @@
       </div>
     </header>
 
-    <!-- شريط المعاملات الحالي -->
     <div id="therapyChips" class="chips-bar mb-15"></div>
 
-    <!-- كارت إدخال القياس الجديد -->
     <section class="input-card">
       <h3 class="card-title">🩸 تسجيل قراءة جديدة</h3>
       
@@ -52,16 +49,20 @@
             <option value="OTHER">وقت آخر</option>
           </select>
         </div>
+        
+        <!-- حقل السكر والوحدة الذكية المتغيرة -->
         <div class="field bg-input-group">
           <label>مستوى السكر</label>
           <div class="input-with-suffix">
             <input type="number" id="reading" step="0.1" placeholder="مثال: 120" />
-            <span class="suffix" id="unitLabel">mg/dL</span>
+            <select id="unitSel" class="suffix-select">
+              <option value="mg/dL">mg/dL</option>
+              <option value="mmol/L">mmol/L</option>
+            </select>
           </div>
         </div>
       </div>
 
-      <!-- لوحة الإجراءات الذكية (تظهر وتختفي حسب السكر) -->
       <div id="actionsPanel" class="action-panel hidden">
         <div id="smartAlert" class="smart-alert">
           <div class="alert-icon" id="alertIcon">💡</div>
@@ -71,7 +72,6 @@
           </div>
         </div>
 
-        <!-- حقل جرعة التصحيح (يظهر في الارتفاع) -->
         <div id="corrRow" class="action-panel-row hidden">
           <label class="field">
             <span>💉 جرعة التصحيح المأخوذة (U)</span>
@@ -79,7 +79,6 @@
           </label>
         </div>
 
-        <!-- حقل علاج الهبوط (يظهر في الهبوط) -->
         <div id="hypoRow" class="action-panel-row hidden">
           <label class="field">
             <span>🧃 عالجنا الهبوط بإيه؟</span>
@@ -104,7 +103,6 @@
       </div>
     </section>
 
-    <!-- الخط الزمني للقياسات (Timeline) -->
     <div class="filters-bar">
       <h3 style="margin:0; font-size:16px;">سجل قياسات اليوم</h3>
       <div class="search-box"><input type="text" id="searchBox" placeholder="بحث..." /></div>
@@ -122,6 +120,6 @@
   <div id="toast" class="toast hidden"></div>
   <div id="loader" class="screen-loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="js/measurements.js?v=4"></script>
+  <script type="module" src="js/measurements.js?v=5"></script>
 </body>
 </html>
