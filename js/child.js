@@ -1,4 +1,4 @@
-// js/child.js — نسخة محسّنة
+// js/child.js — نسخة محسّنة متوافقة مع قاعدة البيانات الجديدة (CR/CF/Limits)
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
@@ -31,16 +31,8 @@ const goFoodItems     = $('goFoodItems');
 const goReports       = $('goReports');
 const goVisits        = $('goVisits');
 const goChildEdit     = $('goChildEdit');
-const infoName        = $('infoName');
-const infoAge         = $('infoAge');
-const infoGender      = $('infoGender');
-const infoWeight      = $('infoWeight');
-const infoHeight      = $('infoHeight');
-const infoDevice      = $('infoDevice');
-const infoInsulin     = $('infoInsulin');
-const infoRange       = $('infoRange');
-const infoCR          = $('infoCR');
-const infoCF          = $('infoCF');
+
+// كارت التحاليل
 const labCard         = $('labCard');
 const labHba1cVal     = $('labHba1cVal');
 const labHba1cDelta   = $('labHba1cDelta');
@@ -88,28 +80,29 @@ function formatCountdown(baseDate,dueDate){
   return `باقي ${parts.join(' و ')}`;
 }
 
-/* ---- وقت الوجبة الحالي ---- */
+/* ---- وقت الوجبة الحالي (محدث ليطابق قاعدة البيانات) ---- */
 function currentMeal(){
-  const h=new Date().getHours();
-  if(h>=5  && h<10)  return {key:'b', label:'الفطور'};
-  if(h>=12 && h<15)  return {key:'l', label:'الغداء'};
-  if(h>=18 && h<21)  return {key:'d', label:'العشاء'};
-  return {key:'s', label:'سناك'};
+  const h = new Date().getHours();
+  if(h >= 5  && h < 11) return { key: 'breakfast', label: 'الفطور' };
+  if(h >= 11 && h < 16) return { key: 'lunch', label: 'الغداء' };
+  if(h >= 16 && h < 22) return { key: 'dinner', label: 'العشاء' };
+  return { key: 'snack', label: 'سناك' };
 }
 
-/* ---- حالة الجلوكوز ---- */
+/* ---- حالة الجلوكوز (محدث للحدود الـ 5 الجديدة) ---- */
 function glucoseState(v, child){
-  if(v==null) return null;
-  const nr=child.normalRange||{};
-  const critLow  = nr.criticalLow  ?? child.criticalLow  ?? 3.0;
-  const critHigh = nr.criticalHigh ?? child.criticalHigh ?? 14.0;
-  const low  = nr.min ?? child.hypo  ?? 3.9;
-  const high = nr.max ?? child.hyper ?? 10.0;
-  if(v<=critLow)  return {cls:'crit-low',  label:'حرج منخفض', color:'#dc2626'};
-  if(v>=critHigh) return {cls:'crit-high', label:'حرج مرتفع', color:'#dc2626'};
-  if(v<low)       return {cls:'low',       label:'منخفض',      color:'#3b82f6'};
-  if(v>high)      return {cls:'high',      label:'مرتفع',      color:'#f59e0b'};
-  return              {cls:'ok',        label:'طبيعي',      color:'#10b981'};
+  if(v == null) return null;
+  const limits = child.glucose_limits || {};
+  const critLow  = limits.critical_low ?? 54;
+  const low      = limits.low ?? 70;
+  const high     = limits.high ?? 180;
+  const critHigh = limits.critical_high ?? 250;
+
+  if(v <= critLow)  return { cls: 'crit-low',  label: 'حرج منخفض', color: '#dc2626' };
+  if(v >= critHigh) return { cls: 'crit-high', label: 'حرج مرتفع', color: '#dc2626' };
+  if(v < low)       return { cls: 'low',       label: 'منخفض',     color: '#3b82f6' };
+  if(v > high)      return { cls: 'high',      label: 'مرتفع',     color: '#f59e0b' };
+  return            { cls: 'ok',        label: 'في النطاق', color: '#10b981' };
 }
 
 function pointColors(readings, child){
@@ -117,13 +110,12 @@ function pointColors(readings, child){
 }
 
 /* ============================================================
-   Sparkline الجلوكوز
+   Sparkline الجلوكوز (محدث لقراءة النطاقات الجديدة)
    ============================================================ */
 async function renderGlucoseSparkline(uid, child){
   const container = $('glucoseSparkContainer');
   if(!container) return;
 
-  // جلب آخر 7 أيام
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate()-7);
 
@@ -141,24 +133,25 @@ async function renderGlucoseSparkline(uid, child){
                  : data.value_mgdl ? +(data.value_mgdl/18).toFixed(1) : null);
     const when = data.when?.toDate ? data.when.toDate() : new Date(data.when);
     return { val, when, slotKey: data.slotKey, state: data.state };
-  }).filter(p=>p.val!=null).reverse(); // تصاعدي زمنياً
+  }).filter(p=>p.val!=null).reverse();
 
   if(!points.length){ container.innerHTML = '<p style="color:#94a3b8;font-size:13px">لا توجد قراءات صالحة</p>'; return; }
 
-  // آخر قراءة
   const last = points[points.length-1];
   const gs   = glucoseState(last.val, child);
-  const unit = child.glucoseUnit || 'mmol/L';
+  const unit = child.glucoseUnit || 'mg/dL';
 
-  // إحصائيات
   const vals   = points.map(p=>p.val);
   const avg    = (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);
   const minVal = Math.min(...vals).toFixed(1);
   const maxVal = Math.max(...vals).toFixed(1);
-  const nr     = child.normalRange||{};
-  const low    = nr.min ?? child.hypo  ?? 3.9;
-  const high   = nr.max ?? child.hyper ?? 10.0;
-  const inRange= vals.filter(v=>v>=low&&v<=high).length;
+  
+  // استخدام النطاقات الجديدة للـ TIR
+  const limits = child.glucose_limits || {};
+  const low    = limits.low ?? 70;
+  const high   = limits.high ?? 180;
+  
+  const inRange = vals.filter(v=>v>=low && v<=high).length;
   const tir    = Math.round(inRange/vals.length*100);
 
   container.innerHTML = `
@@ -170,8 +163,6 @@ async function renderGlucoseSparkline(uid, child){
           ${last.val} ${unit} — ${gs?.label??''}
         </span>
       </div>
-      <a href="measurements.html?child=${encodeURIComponent(childId)}"
-         style="font-size:12px;color:#2563eb;text-decoration:none">عرض كل القراءات ←</a>
     </div>
 
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
@@ -202,14 +193,8 @@ async function renderGlucoseSparkline(uid, child){
       <div style="width:${tir}%;background:#10b981;height:100%"></div>
       <div style="width:${Math.round(vals.filter(v=>v>high).length/vals.length*100)}%;background:#f59e0b;height:100%"></div>
     </div>
-    <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:10px;color:#94a3b8">
-      <span style="color:#3b82f6">منخفض</span>
-      <span style="color:#10b981">في النطاق (${tir}%)</span>
-      <span style="color:#f59e0b">مرتفع</span>
-    </div>
   `;
 
-  // رسم الـ Chart
   const colors = pointColors(vals, child);
   const ctx = $('glucoseSparkCanvas')?.getContext('2d');
   if(!ctx) return;
@@ -237,12 +222,7 @@ async function renderGlucoseSparkline(uid, child){
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false},
-        tooltip:{ callbacks:{
-          label: ctx=>`${ctx.parsed.y} ${unit}`,
-          title: ctx=>labels[ctx[0].dataIndex]
-        }}
-      },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label: ctx=>`${ctx.parsed.y} ${unit}`, title: ctx=>labels[ctx[0].dataIndex]}} },
       scales:{
         x:{ display:false },
         y:{
@@ -276,61 +256,41 @@ onAuthStateChanged(auth, async (user)=>{
     const c = snap.data();
     localStorage.setItem('lastChildId', childId);
 
-    /* ---- هيدر ---- */
-    setText(childNameEl, c.name||'طفل');
-    setText(childMetaEl, `${c.gender||'-'} • العمر: ${calcAge(c.birthDate)} سنة`);
+    /* ---- الهوية والنمو ---- */
+    const name = c.identity?.name || c.name || 'طفل';
+    const gender = c.identity?.gender || c.gender || '-';
+    const dob = c.identity?.dob || c.birthDate || null;
+    
+    setText(childNameEl, name);
+    setText(childMetaEl, `${gender === 'female' ? 'أنثى' : (gender === 'male' ? 'ذكر' : gender)} • العمر: ${calcAge(dob)} سنة`);
 
-    const min = Number(c.normalRange?.min ?? 4.4);
-    const max = Number(c.normalRange?.max ?? 7.8);
-    const cf  = c.correctionFactor != null ? Number(c.correctionFactor) : null;
+    /* ---- قراءة الإعدادات الطبية الجديدة ---- */
+    const unit = c.glucoseUnit || 'mg/dL';
+    const limits = c.glucose_limits || {};
+    const min = limits.low ?? (unit === 'mmol/L' ? 3.9 : 70);
+    const max = limits.high ?? (unit === 'mmol/L' ? 10.0 : 180);
+    
+    const cf = c.cf ?? c.correctionFactor ?? null;
+    
+    const meal = currentMeal();
+    const crNow = c.cr?.[meal.key] ?? c.carbRatio ?? '—';
 
-    // CR/CF حسب وقت الأكل الحالي
-    const meal  = currentMeal();
-    const crNow = c.carbRatioByMeal?.[meal.key] ?? c.carbRatio ?? '—';
-    const cfNow = c.correctionFactorByMeal?.[meal.key] ?? cf ?? '—';
+    setText(chipRangeEl, `النطاق الطبيعي: ${min}–${max} ${unit}`);
+    setText(chipCREl,    `CR (${meal.label}): ${crNow}`);
+    setText(chipCFEl,    `CF: ${cf != null ? cf : '—'}`);
 
-    setText(chipRangeEl, `النطاق الطبيعي: ${min}–${max} ${c.glucoseUnit||'mmol/L'}`);
-    setText(chipCREl,    `CR (${meal.label}): ${crNow} g/U`);
-    setText(chipCFEl,    `CF (${meal.label}): ${cfNow} mmol/L per U`);
-
-    /* ---- ملخص بيانات الطفل ---- */
-    const weightStr = c.weightKg!=null?`${c.weightKg} كجم`:c.weight!=null?`${c.weight} كجم`:'—';
-    const heightStr = c.heightCm!=null?`${c.heightCm} سم`:c.height!=null?`${c.height} سم`:'—';
-    const devType   = c.device?.type||null;
-    const devName   = c.device?.name||c.deviceName||null;
-    const devModel  = c.device?.model||null;
-    let deviceStr   = devName||devType||'—';
-    if(devType&&devName) deviceStr=`${devType} — ${devName}`;
-    if(devModel) deviceStr+=` (${devModel})`;
-    const bolus     = c.insulin?.bolusType||c.insulinBolusType||c.insulinType||null;
-    const basal     = c.insulin?.basalType||c.insulinBasalType||null;
-    let insulinStr  = '—';
-    if(bolus||basal){
-      insulinStr=`${bolus?`Bolus: ${bolus}`:''}${(bolus&&basal)?' • ':''}${basal?`Basal: ${basal}`:''}`;
-    }
-
-    setText(infoName,    c.name??'—');
-    setText(infoAge,     calcAge(c.birthDate));
-    setText(infoGender,  c.gender??'—');
-    setText(infoWeight,  weightStr);
-    setText(infoHeight,  heightStr);
-    setText(infoDevice,  deviceStr);
-    setText(infoInsulin, insulinStr);
-    setText(infoRange,   `${min}–${max} ${c.glucoseUnit||'mmol/L'}`);
-    setText(infoCR,      `${crNow} g/U`);
-    setText(infoCF,      cfNow!=null&&cfNow!='—'?`${cfNow} mmol/L/U`:'—');
-
-    /* ---- روابط ---- */
+    /* ---- الروابط ---- */
     setHref(goMeasurements,`measurements.html?child=${encodeURIComponent(childId)}`);
     setHref(goMeals,       `meals.html?child=${encodeURIComponent(childId)}`);
     setHref(goFoodItems,   `food-items.html?child=${encodeURIComponent(childId)}`);
     setHref(goReports,     `reports.html?child=${encodeURIComponent(childId)}`);
     setHref(goVisits,      `visits.html?child=${encodeURIComponent(childId)}`);
+    
     localStorage.setItem('selectedParentId',user.uid);
     localStorage.setItem('selectedChildId',childId);
     setHref(goChildEdit,`child-edit.html?parentId=${encodeURIComponent(user.uid)}&id=${encodeURIComponent(childId)}`);
 
-    /* ---- إحصائيات اليوم (مظبوطة مع الـ Timestamps والتحديث اللحظي) ---- */
+    /* ---- إحصائيات اليوم ---- */
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
@@ -340,19 +300,16 @@ onAuthStateChanged(auth, async (user)=>{
     const mealsRef = collection(db,`parents/${user.uid}/children/${childId}/meals`);
     const visRef   = collection(db,`parents/${user.uid}/children/${childId}/visits`);
 
-    // 1. عداد القياسات (باستخدام حقل when والتحديث اللحظي)
     onSnapshot(query(measRef, where('when', '>=', startOfDay), where('when', '<', endOfDay)), (snap) => {
       setText(todayMeasuresEl, snap.size);
       setText(miniMeasuresEl,  snap.size);
     });
 
-    // 2. عداد الوجبات (بافتراض إنها محفوظة بحقل date كنص)
     onSnapshot(query(mealsRef, where('date', '==', todayStrFormat)), (snap) => {
       setText(todayMealsEl, snap.size);
       setText(miniMealsEl,  snap.size);
     });
 
-    // 3. أقرب متابعة طبية (Get عادية لأنها مش بتتغير كتير)
     const snapVisit = await getDocs(query(visRef, where('date','>=',todayStrFormat), orderBy('date','asc'), limit(1)));
     let displayFollow = '—';
     if(!snapVisit.empty){
@@ -363,10 +320,8 @@ onAuthStateChanged(auth, async (user)=>{
     setText(nextVisitEl, displayFollow);
     setText(miniFollowUpEl, displayFollow);
 
-    /* ---- Sparkline الجلوكوز ---- */
+    /* ---- Sparkline والتحاليل ---- */
     await renderGlucoseSparkline(user.uid, c);
-
-    /* ---- التحاليل ---- */
     await renderLabCard(user.uid);
 
     addLabBtn?.addEventListener('click',e=>{ e.stopPropagation(); location.href=`labs.html?child=${encodeURIComponent(childId)}`; });
@@ -428,12 +383,6 @@ async function renderLabCard(uid){
   if(daysToDue<0){ setText(labDueBadge,`متأخر — ${fmt(nextDue)}`); if(labDueBadge) labDueBadge.className='pill tiny bad'; }
   else if(daysToDue<=14){ setText(labDueBadge,`قرب الموعد — ${fmt(nextDue)}`); if(labDueBadge) labDueBadge.className='pill tiny warn'; }
   else { setText(labDueBadge,`التحليل القادم: ${fmt(nextDue)}`); if(labDueBadge) labDueBadge.className='pill tiny ok'; }
-
-  const totalDays=Math.max(1,dayDiff(nextDue,when));
-  const passedDays=Math.max(0,Math.min(totalDays,dayDiff(new Date(),when)));
-  const pct=Math.round((passedDays/totalDays)*100);
-  if(progressFill) progressFill.style.width=`${pct}%`;
-  setText(progressLabel,`${passedDays} / ${totalDays} يوم (${pct}%)`);
 
   const sorted=[...labs].reverse();
   const chartLabels=sorted.map(l=>{const d=l.when?.toDate?l.when.toDate():(l.date?new Date(l.date):new Date());return fmt(d);});
