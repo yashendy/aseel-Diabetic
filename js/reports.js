@@ -217,11 +217,11 @@ async function renderReport(){
   showLoader(false);
 }
 
-// دالة الإحصائيات (وتلوين كارت المتوسط الذكي)
+// دالة الإحصائيات
 function updateStats(list){
   const validList = list.filter(x => x.val !== null);
   const unit=unitSel.value, L=limitsInUnit(unit);
-  const avgCard = $('statAvg').parentElement; // الحصول على الكارت الخاص بالمتوسط
+  const avgCard = $('statAvg').parentElement; 
 
   if(!validList.length){ 
     $('statTIR').textContent='0%'; $('statLow').textContent='0%'; $('statHigh').textContent='0%'; $('statAvg').textContent='—'; $('statSD').textContent='—'; $('statCrit').textContent='0'; 
@@ -245,16 +245,15 @@ function updateStats(list){
   $('statAvg').textContent=`${round1(mean)} ${unit}`;
   $('statSD').textContent=round1(sd);
 
-  // 🌟 تلوين كارت المتوسط بذكاء بناءً على طلبك
   avgCard.className = 'card';
   if (mean < L.low) {
-    avgCard.classList.add('low');           // أحمر
+    avgCard.classList.add('low');           
     avgCard.style.backgroundColor = '';
   } else if (mean > L.high) {
-    avgCard.classList.add('high');          // برتقالي/أصفر
+    avgCard.classList.add('high');          
     avgCard.style.backgroundColor = '';
   } else {
-    avgCard.style.backgroundColor = '#dcfce7'; // أخضر (طبيعي)
+    avgCard.style.backgroundColor = '#dcfce7'; 
   }
 }
 
@@ -312,44 +311,89 @@ async function runCompare(){
   showLoader(false);
 }
 
+// --- محرك الذكاء الاصطناعي الطبي الاستشاري 🧠 ---
 function buildAI(list,unit){
   const L=limitsInUnit(unit);
   const patt=[];
   const valid = list.filter(x=>x.val!==null);
-  
-  const fast = valid.filter(x=>x.slot==='FASTING' || x.slot==='WAKE').map(x=>x.val);
-  const sleep = valid.filter(x=>x.slot==='DURING_SLEEP' || x.slot==='BEDTIME').map(x=>x.val);
-  const pBreakfast = valid.filter(x=>x.slot==='POST_BREAKFAST').map(x=>x.val);
-  const pDinner = valid.filter(x=>x.slot==='POST_DINNER').map(x=>x.val);
 
-  if(fast.length >= 3 && sleep.length >= 2) {
-    const highFasting = fast.filter(v => v > L.high).length;
-    const normalSleep = sleep.filter(v => v >= L.low && v <= L.high).length;
-    if (highFasting >= 2 && normalSleep >= 2) {
-      patt.push({ name: 'ظاهرة الفجر (Dawn Phenomenon)', desc: 'السكر يكون طبيعياً أثناء النوم، ولكنه يرتفع بشكل ملحوظ عند الاستيقاظ.', rec: 'قد يقترح الطبيب زيادة طفيفة في جرعة المنظم (Basal) أو تغيير توقيتها.', conf: 'عالي 🔴' });
+  if(valid.length === 0) {
+    $('aiTable').innerHTML = `<div style="grid-column:1/-1; padding:15px; text-align:center; color:#64748b;">لا توجد بيانات كافية للتحليل.</div>`;
+    return;
+  }
+
+  const SLOT_NAMES = { FASTING:'صائم', WAKE:'استيقاظ', PRE_BREAKFAST:'ق. الفطار', POST_BREAKFAST:'ب. الفطار', PRE_LUNCH:'ق. الغداء', POST_LUNCH:'ب. الغداء', PRE_DINNER:'ق. العشاء', POST_DINNER:'ب. العشاء', SNACK:'سناك', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم' };
+
+  // 1. التقييم العام (Macro Patterns)
+  const total = valid.length;
+  const pctTBR = Math.round((valid.filter(x => x.val < L.low).length / total) * 100);
+  const pctTAR = Math.round((valid.filter(x => x.val > L.high).length / total) * 100);
+  const pctTIR = Math.round((valid.filter(x => x.val >= L.low && x.val <= L.high).length / total) * 100);
+
+  if (pctTBR > 15) patt.push({ name: 'كثرة الهبوطات (TBR)', desc: `نسبة الهبوط (${pctTBR}%) تتخطى الحد المسموح (15%).`, rec: 'تقليل الجرعات أو مراجعة النشاط البدني.', conf: 'حرج 🚨', color: '#dc2626' });
+  if (pctTAR > 25) patt.push({ name: 'كثرة الارتفاعات (TAR)', desc: `نسبة الارتفاع (${pctTAR}%) تتخطى الحد المسموح (25%).`, rec: 'قد يحتاج المريض لتعديل المعاملات (CR/CF).', conf: 'عالي 🔴', color: '#b45309' });
+  if (pctTIR < 60 && pctTBR <= 15 && pctTAR <= 25) patt.push({ name: 'ضعف السيطرة (TIR)', desc: `نسبة البقاء في النطاق (${pctTIR}%) أقل من 60%.`, rec: 'مراجعة شاملة للخطة وجرعات الإنسولين.', conf: 'متوسط 🟡', color: '#d97706' });
+
+  // 2. تحليل التذبذب الجلايسيمي (CV)
+  const vals = valid.map(x => x.val);
+  const mean = vals.reduce((a, b) => a + b, 0) / total;
+  const variance = vals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / total;
+  const cv = (Math.sqrt(variance) / mean) * 100;
+
+  if (cv > 36) {
+    patt.push({ name: 'تذبذب عالي (Glycemic Variability)', desc: `السكر يتأرجح بشدة (CV: ${Math.round(cv)}%).`, rec: 'التركيز على استقرار القراءات قبل محاولة خفض المتوسط.', conf: 'عالي 🔴', color: '#b45309' });
+  }
+
+  // 3. الإفراط في علاج الهبوط & كفاءة التصحيح
+  let reboundCount = 0;
+  let weakCFCount = 0;
+
+  for(let i=0; i < valid.length - 1; i++) {
+    const curr = valid[i];
+    const next = valid[i+1];
+    const diffHours = (next.when - curr.when) / (1000 * 60 * 60);
+
+    if (curr.val < L.low && next.val > L.high && diffHours <= 6) reboundCount++;
+    if (curr.val > L.high && curr.ins > 0 && next.val > L.high && diffHours <= 4) weakCFCount++;
+  }
+
+  if (reboundCount >= 2) patt.push({ name: 'إفراط علاج الهبوط', desc: `تم رصد ارتداد عكسي بعد الهبوط ${reboundCount} مرات.`, rec: 'توعية بقاعدة الـ 15 لتجنب الإفراط في إعطاء السكريات.', conf: 'حرج 🚨', color: '#dc2626' });
+  if (weakCFCount >= 3) patt.push({ name: 'ضعف معامل التصحيح', desc: `جرعات التصحيح لا تخفض السكر للمعدل الطبيعي.`, rec: 'قد يحتاج الـ CF للتقليل لزيادة قوة الجرعة.', conf: 'متوسط 🟡', color: '#d97706' });
+
+  // 4. الكاشف الديناميكي للفترات
+  const slotsData = {};
+  valid.forEach(m => {
+    if(!slotsData[m.slot]) slotsData[m.slot] = [];
+    slotsData[m.slot].push(m.val);
+  });
+
+  for(let s in slotsData) {
+    const sVals = slotsData[s];
+    if(sVals.length >= 3) {
+      const highPct = sVals.filter(v => v > L.high).length / sVals.length;
+      const lowPct = sVals.filter(v => v < L.low).length / sVals.length;
+      const slotName = SLOT_NAMES[s] || s;
+
+      if(highPct >= 0.5) patt.push({ name: `ارتفاع متكرر (${slotName})`, desc: `السكر يرتفع بنسبة >50% في هذه الفترة.`, rec: 'راجع الجرعة المرتبطة بها.', conf: 'متوسط 🟡', color: '#d97706' });
+      if(lowPct >= 0.4) patt.push({ name: `هبوط متكرر (${slotName})`, desc: `نمط هبوط متكرر في هذه الفترة.`, rec: 'تقليل الجرعة لتجنب المخاطر.', conf: 'حرج 🚨', color: '#dc2626' });
     }
   }
 
-  if(fast.length >= 3 && sleep.length >= 2) {
-    const highFasting = fast.filter(v => v > L.high).length;
-    const lowSleep = sleep.filter(v => v < L.low).length;
-    if (highFasting >= 2 && lowSleep >= 1) {
-      patt.push({ name: 'هبوط ليلي وارتداد (Somogyi Effect)', desc: 'اكتشف النظام هبوطاً في السكر أثناء الليل، يتبعه ارتفاع ارتدادي في الصباح.', rec: 'يُرجى مناقشة الطبيب في تقليل جرعة المنظم المسائية أو إضافة سناك قبل النوم.', conf: 'حرج 🚨' });
-    }
-  }
+  if(!patt.length) patt.push({name:'✅ استقرار ممتاز', desc:'المؤشرات الحيوية ضمن الحدود المطلوبة.', rec:'استمر على نفس الخطة الرائعة!', conf:'ممتاز 🟢', color: '#16a34a'});
 
-  if(pBreakfast.length >= 3 && pBreakfast.filter(v=>v>=L.critHigh).length >= 2) {
-    patt.push({ name: 'ارتفاع حاد بعد الإفطار', desc: 'السكر يرتفع بشدة بعد الإفطار في معظم الأيام.', rec: 'قد يحتاج معامل الكارب (CR) للإفطار إلى التقليل (أخذ أنسولين أكثر).', conf: 'متوسط 🟡' });
-  }
+  const uniquePatt = Array.from(new Set(patt.map(p => JSON.stringify(p)))).map(str => JSON.parse(str));
 
-  if(pDinner.length >= 3 && pDinner.filter(v=>v<L.low).length >= 2) {
-    patt.push({ name: 'هبوط متكرر بعد العشاء', desc: 'تم تسجيل هبوط للسكر بعد وجبة العشاء أكثر من مرة.', rec: 'قد يحتاج معامل الكارب (CR) للعشاء إلى الزيادة (أخذ أنسولين أقل).', conf: 'عالي 🔴' });
-  }
-
-  if(!patt.length) patt.push({name:'✅ استقرار عام', desc:'الأنماط الحيوية للطفل ضمن الحدود الآمنة غالباً.', rec:'استمر على نفس الخطة الرائعة!', conf:'—'});
-
-  aiTable.innerHTML = ['<div>النمط</div><div>الوصف</div><div>التوصية الطبية</div><div>مستوى الأهمية</div>'].join('')
-   + patt.map(p=>`<div><b>${p.name}</b></div><div>${p.desc}</div><div style="color:#2563eb">${p.rec}</div><div>${p.conf}</div>`).join('');
+  aiTable.innerHTML = `
+    <div style="font-weight:bold; background:#f1f5f9; padding:8px; border-radius: 0 8px 0 0;">النمط</div>
+    <div style="font-weight:bold; background:#f1f5f9; padding:8px;">الوصف</div>
+    <div style="font-weight:bold; background:#f1f5f9; padding:8px;">التوصية الطبية</div>
+    <div style="font-weight:bold; background:#f1f5f9; padding:8px; border-radius: 8px 0 0 0;">مستوى الأهمية</div>
+  ` + uniquePatt.map(p => `
+    <div style="font-weight:bold; color:${p.color}">${p.name}</div>
+    <div style="font-size:13px;">${p.desc}</div>
+    <div style="font-size:13px; color:#2563eb;">${p.rec}</div>
+    <div style="font-size:13px; font-weight:bold; color:${p.color}">${p.conf}</div>
+  `).join('');
 }
 
 async function exportCSV(){ }
