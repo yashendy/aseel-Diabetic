@@ -45,7 +45,6 @@ async function loadChildProfile() {
   childData = snap.data();
   sysUnit = childData.glucoseUnit || 'mg/dL';
   
-  // استخراج النطاقات (الاعتماد على الهيكل الجديد glucose_limits)
   if(childData.glucose_limits) {
     sysLimits = {
       critLow: Number(childData.glucose_limits.critical_low) || (sysUnit==='mmol/L'? 3.0 : 54),
@@ -58,7 +57,6 @@ async function loadChildProfile() {
       sysLimits = { critLow: 3.0, low: 3.9, target: 5.5, high: 10.0, critHigh: 13.9 };
   }
 
-  // تعبئة الواجهة العلوية
   $('childTitle').textContent = childData.name || '—';
   $('c_name').textContent = childData.name || '—';
   $('c_gender').textContent = childData.gender === 'female' ? 'أنثى' : 'ذكر';
@@ -81,7 +79,6 @@ async function loadChildProfile() {
   $('c_cr_d').textContent = cr.dinner || '—';
   $('c_cr_s').textContent = cr.snack || '—';
 
-  // تعبئة محرر الإعدادات
   $('f_target').value = sysLimits.target;
   $('f_critLow').value = sysLimits.critLow;
   $('f_low').value = sysLimits.low;
@@ -97,14 +94,12 @@ async function loadChildProfile() {
   $('f_basal').value = childData.insulin?.basal || childData.basalType || '';
   $('f_bolus').value = childData.insulin?.bolus || childData.bolusType || '';
 
-  // تعبئة خريطة الحقن
   const imap = childData.injection_map || {};
   const mapIds = ['abd_top_right', 'abd_top_left', 'abd_bottom_right', 'abd_bottom_left', 'arm_right', 'arm_left', 'thigh_right', 'thigh_left'];
   mapIds.forEach(id => {
     if($(`inj_${id}`)) $(`inj_${id}`).value = imap[id] || 'normal';
   });
 
-  // تعبئة روشتة الطبيب
   if(childData.doctor_note) {
     $('doctorPrescription').value = childData.doctor_note;
   }
@@ -144,7 +139,7 @@ async function fetchAndRenderData(daysBack) {
     });
   });
 
-  measurementsData.sort((a, b) => b.when - a.when); 
+  measurementsData.sort((a, b) => b.when - a.when); // تنازلي (الأحدث أولاً)
   
   renderTable();
   renderAnalytics();
@@ -213,34 +208,102 @@ function renderAnalytics() {
   });
 }
 
-// --- 5. الذكاء الاصطناعي المصغر 🧠 ---
+// --- 5. محرك الذكاء الاصطناعي الطبي الاستشاري 🧠 ---
 function runQuickAI() {
   const valid = measurementsData.filter(x => x.val !== null);
-  const fast = valid.filter(x=>x.slotKey==='FASTING' || x.slotKey==='WAKE').map(x=>x.val);
-  const sleep = valid.filter(x=>x.slotKey==='DURING_SLEEP' || x.slotKey==='BEDTIME').map(x=>x.val);
-  const pBreakfast = valid.filter(x=>x.slotKey==='POST_BREAKFAST').map(x=>x.val);
-  
-  const patt = [];
+  if(valid.length === 0) return;
 
-  if(fast.length >= 2 && sleep.length >= 2) {
-    if (fast.filter(v => v > sysLimits.high).length >= 2 && sleep.filter(v => v >= sysLimits.low && v <= sysLimits.high).length >= 2) {
-      patt.push({ name: 'ظاهرة الفجر', desc: 'ارتفاع السكر صباحاً رغم استقراره ليلاً. (فكّر بتعديل القاعدي).', cls: 'warn' });
+  const patt = [];
+  const SLOT_NAMES = { FASTING:'صائم', WAKE:'الاستيقاظ', PRE_BREAKFAST:'ق. الفطار', POST_BREAKFAST:'ب. الفطار', PRE_LUNCH:'ق. الغداء', POST_LUNCH:'ب. الغداء', PRE_DINNER:'ق. العشاء', POST_DINNER:'ب. العشاء', SNACK:'سناك', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم' };
+
+  // 1. تقييم النسب العامة (TIR, TAR, TBR)
+  const total = valid.length;
+  const pctTBR = Math.round((valid.filter(x => x.val < sysLimits.low).length / total) * 100);
+  const pctTAR = Math.round((valid.filter(x => x.val > sysLimits.high).length / total) * 100);
+  const pctTIR = Math.round((valid.filter(x => x.val >= sysLimits.low && x.val <= sysLimits.high).length / total) * 100);
+
+  if (pctTBR > 15) patt.push({ name: 'كثرة الهبوطات (TBR)', desc: `نسبة الهبوط (${pctTBR}%) تتخطى الحد المسموح (15%). يتطلب تقليل الجرعات أو مراجعة النشاط البدني.`, cls: 'crit' });
+  if (pctTAR > 25) patt.push({ name: 'كثرة الارتفاعات (TAR)', desc: `نسبة الارتفاع (${pctTAR}%) تتخطى الحد المسموح (25%). قد يحتاج المريض لتعديل المعاملات (CR/CF).`, cls: 'warn' });
+  if (pctTIR < 60 && pctTBR <= 15 && pctTAR <= 25) patt.push({ name: 'ضعف السيطرة (TIR)', desc: `نسبة البقاء في النطاق (${pctTIR}%) أقل من الهدف (60%). الخطة تحتاج لمراجعة.`, cls: 'warn' });
+
+  // 2. تحليل التذبذب الجلايسيمي (CV)
+  const vals = valid.map(x => x.val);
+  const mean = vals.reduce((a, b) => a + b, 0) / total;
+  const variance = vals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / total;
+  const cv = (Math.sqrt(variance) / mean) * 100;
+  
+  if (cv > 36) {
+    patt.push({ name: 'تذبذب عالي (Glycemic Variability)', desc: `السكر يتأرجح بشدة (CV: ${Math.round(cv)}%). يُنصح بالتركيز على استقرار القراءات قبل محاولة خفض المتوسط العام.`, cls: 'warn' });
+  }
+
+  // ترتيب القياسات زمنياً من الأقدم للأحدث للتحليل التسلسلي
+  const chrono = [...valid].reverse();
+
+  // 3. اكتشاف الإفراط في علاج الهبوط (Overtreatment)
+  let reboundCount = 0;
+  for(let i=0; i < chrono.length - 1; i++) {
+    const curr = chrono[i];
+    const next = chrono[i+1];
+    const diffHours = (next.when - curr.when) / (1000 * 60 * 60);
+    // هبوط يتبعه ارتفاع في غضون 6 ساعات
+    if (curr.val < sysLimits.low && next.val > sysLimits.high && diffHours <= 6) {
+      reboundCount++;
+    }
+  }
+  if (reboundCount >= 2) {
+    patt.push({ name: 'إفراط في علاج الهبوط (Overtreatment)', desc: `تم رصد ارتداد عكسي وارتفاع للسكر بعد الهبوط ${reboundCount} مرات. يُنصح بتوعية الأهل بقاعدة الـ 15 لتجنب إعطاء سكريات مفرطة.`, cls: 'crit' });
+  }
+
+  // 4. كفاءة معامل التصحيح (CF Efficiency)
+  let weakCFCount = 0;
+  for(let i=0; i < chrono.length - 1; i++) {
+    const curr = chrono[i];
+    const next = chrono[i+1];
+    const diffHours = (next.when - curr.when) / (1000 * 60 * 60);
+    // أخذ جرعة أثناء الارتفاع، والقراءة التالية بعد ساعات ما زالت مرتفعة
+    if (curr.val > sysLimits.high && curr.ins > 0 && next.val > sysLimits.high && diffHours <= 4) {
+      weakCFCount++;
+    }
+  }
+  if (weakCFCount >= 3) {
+    patt.push({ name: 'ضعف معامل التصحيح (CF)', desc: `جرعات التصحيح لا تخفض السكر للمعدل الطبيعي. قد يحتاج الـ CF للتقليل لزيادة قوة الجرعة.`, cls: 'warn' });
+  }
+
+  // 5. الكاشف الديناميكي للفترات (Dynamic Slot Analyzer)
+  const slotsData = {};
+  valid.forEach(m => {
+    if(!slotsData[m.slotKey]) slotsData[m.slotKey] = [];
+    slotsData[m.slotKey].push(m.val);
+  });
+
+  for(let s in slotsData) {
+    const sVals = slotsData[s];
+    if(sVals.length >= 3) { // يجب توفر 3 قراءات على الأقل للحكم
+      const highPct = sVals.filter(v => v > sysLimits.high).length / sVals.length;
+      const lowPct = sVals.filter(v => v < sysLimits.low).length / sVals.length;
+      const slotName = SLOT_NAMES[s] || s;
+      
+      if(highPct >= 0.5) {
+        patt.push({ name: `ارتفاع متكرر (${slotName})`, desc: `السكر يرتفع في هذه الفترة بنسبة تتخطى 50% من الأيام. راجع الجرعة المرتبطة بها.`, cls: 'warn' });
+      }
+      if(lowPct >= 0.4) {
+        patt.push({ name: `هبوط متكرر (${slotName})`, desc: `نمط هبوط متكرر في هذه الفترة. يرجى تقليل الجرعة لتجنب المخاطر.`, cls: 'crit' });
+      }
     }
   }
 
-  if(pBreakfast.length >= 3 && pBreakfast.filter(v=>v >= sysLimits.critHigh).length >= 2) {
-    patt.push({ name: 'قفزات إفطار', desc: 'السكر يقفز بشدة بعد الإفطار. (تحقق من CR الفطار).', cls: 'crit' });
-  }
-
+  // طباعة النتائج في الواجهة
   const aiBox = $('aiQuickLook');
   const aiSum = $('aiSummary');
   
   if(patt.length > 0) {
     aiBox.classList.remove('hidden');
-    aiSum.innerHTML = patt.map(p => `<div class="ai-item ${p.cls}"><b>${p.name}:</b> ${p.desc}</div>`).join('');
+    // إزالة التكرار إن وجد
+    const uniquePatt = Array.from(new Set(patt.map(p => JSON.stringify(p)))).map(str => JSON.parse(str));
+    aiSum.innerHTML = uniquePatt.map(p => `<div class="ai-item ${p.cls}"><b>${p.name}:</b> ${p.desc}</div>`).join('');
   } else {
     aiBox.classList.remove('hidden');
-    aiSum.innerHTML = `<div class="ai-item" style="border-color:#16a34a;">لا توجد أنماط حرجة واضحة في هذه الفترة. السيطرة تبدو جيدة ✅.</div>`;
+    aiSum.innerHTML = `<div class="ai-item" style="border-color:#16a34a; background:#f0fdf4;">جميع المؤشرات والأنماط الطبية مستقرة. السيطرة تبدو جيدة ✅.</div>`;
   }
 }
 
