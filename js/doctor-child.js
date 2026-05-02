@@ -4,7 +4,6 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/fi
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
-const pad = n => String(n).padStart(2, '0');
 const mgdl2mmol = v => v / 18.0182;
 const mmol2mgdl = v => v * 18.0182;
 
@@ -28,7 +27,7 @@ onAuthStateChanged(auth, async (user) => {
   showLoader(true);
   try {
     await loadChildProfile();
-    await fetchAndRenderData(14); // افتراضياً آخر 14 يوم
+    await fetchAndRenderData(parseInt($('preset').value) || 14); 
     setupEvents();
   } catch (e) {
     console.error(e);
@@ -46,7 +45,7 @@ async function loadChildProfile() {
   childData = snap.data();
   sysUnit = childData.glucoseUnit || 'mg/dL';
   
-  // استخراج النطاقات (Fallback للقيم الافتراضية إذا لم تكن موجودة)
+  // استخراج النطاقات (الاعتماد على الهيكل الجديد glucose_limits)
   if(childData.glucose_limits) {
     sysLimits = {
       critLow: Number(childData.glucose_limits.critical_low) || (sysUnit==='mmol/L'? 3.0 : 54),
@@ -59,7 +58,7 @@ async function loadChildProfile() {
       sysLimits = { critLow: 3.0, low: 3.9, target: 5.5, high: 10.0, critHigh: 13.9 };
   }
 
-  // تعبئة واجهة المعلومات
+  // تعبئة الواجهة العلوية
   $('childTitle').textContent = childData.name || '—';
   $('c_name').textContent = childData.name || '—';
   $('c_gender').textContent = childData.gender === 'female' ? 'أنثى' : 'ذكر';
@@ -73,10 +72,9 @@ async function loadChildProfile() {
   
   $('c_target').textContent = sysLimits.target;
   $('c_cf').textContent = childData.cf || childData.correctionFactor || '—';
-  $('c_basal').textContent = childData.insulin?.basal || '—';
-  $('c_bolus').textContent = childData.insulin?.bolus || '—';
+  $('c_basal').textContent = childData.insulin?.basal || childData.basalType || '—';
+  $('c_bolus').textContent = childData.insulin?.bolus || childData.bolusType || '—';
   
-  // 4 CRs
   const cr = childData.cr || {};
   $('c_cr_b').textContent = cr.breakfast || '—';
   $('c_cr_l').textContent = cr.lunch || '—';
@@ -96,8 +94,8 @@ async function loadChildProfile() {
   $('f_cr_d').value = cr.dinner || '';
   $('f_cr_s').value = cr.snack || '';
 
-  $('f_basal').value = childData.insulin?.basal || '';
-  $('f_bolus').value = childData.insulin?.bolus || '';
+  $('f_basal').value = childData.insulin?.basal || childData.basalType || '';
+  $('f_bolus').value = childData.insulin?.bolus || childData.bolusType || '';
 
   // تعبئة خريطة الحقن
   const imap = childData.injection_map || {};
@@ -130,7 +128,6 @@ async function fetchAndRenderData(daysBack) {
   measurementsData = [];
   snap.forEach(d => {
     const x = d.data();
-    // توحيد القيمة لوحدة العرض
     let v = sysUnit.includes('mmol') 
         ? (x.value_mmol ?? (x.unit==='mg/dL'? mgdl2mmol(x.value): x.value))
         : (x.value_mgdl ?? (x.unit==='mmol/L'? mmol2mgdl(x.value): x.value));
@@ -139,7 +136,7 @@ async function fetchAndRenderData(daysBack) {
       dateStr: x.date,
       timeStr: x.time || '',
       when: x.when?.toDate() || new Date(x.date),
-      slotKey: x.slotKey || 'OTHER',
+      slotKey: x.slotKey || x.slot || 'OTHER',
       val: Number.isFinite(+v) ? Math.round((+v)*10)/10 : null,
       carbs: x.carbs || 0,
       ins: x.totalInsulin || x.totalDose || x.correctionDose || 0,
@@ -147,7 +144,7 @@ async function fetchAndRenderData(daysBack) {
     });
   });
 
-  measurementsData.sort((a, b) => b.when - a.when); // الأحدث أولاً
+  measurementsData.sort((a, b) => b.when - a.when); 
   
   renderTable();
   renderAnalytics();
@@ -162,7 +159,7 @@ function renderTable() {
   tbody.innerHTML = '';
   if(!measurementsData.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">لا توجد بيانات في هذه الفترة.</td></tr>'; return; }
 
-  const SLOT_LABELS = { FASTING:'صائم', PRE_BREAKFAST:'ق. الفطار', POST_BREAKFAST:'ب. الفطار', PRE_LUNCH:'ق. الغداء', PRE_DINNER:'ق. العشاء', SNACK:'سناك', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم' };
+  const SLOT_LABELS = { FASTING:'صائم', WAKE:'الاستيقاظ', PRE_BREAKFAST:'ق. الفطار', POST_BREAKFAST:'ب. الفطار', PRE_LUNCH:'ق. الغداء', POST_LUNCH:'ب. الغداء', PRE_DINNER:'ق. العشاء', POST_DINNER:'ب. العشاء', SNACK:'سناك', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم' };
 
   measurementsData.forEach(m => {
     let statusHtml = '';
@@ -204,7 +201,7 @@ function renderAnalytics() {
   $('analysisNumbers').innerHTML = `
     <div class="stat-badge ok"><span>داخل النطاق (TIR)</span> <span>${pctTIR}%</span></div>
     <div class="stat-badge danger"><span>انخفاض (TBR)</span> <span>${pctTBR}%</span></div>
-    <div class="stat-badge danger" style="border-color:#fde68a; background:#fffbeb; color:#b45309;"><span>ارتفاع (TAR)</span> <span>${pctTAR}%</span></div>
+    <div class="stat-badge warn"><span>ارتفاع (TAR)</span> <span>${pctTAR}%</span></div>
   `;
 
   const ctx = $('doughnutChart').getContext('2d');
@@ -216,7 +213,7 @@ function renderAnalytics() {
   });
 }
 
-// --- 5. الذكاء الاصطناعي المصغر للطبيب 🧠 ---
+// --- 5. الذكاء الاصطناعي المصغر 🧠 ---
 function runQuickAI() {
   const valid = measurementsData.filter(x => x.val !== null);
   const fast = valid.filter(x=>x.slotKey==='FASTING' || x.slotKey==='WAKE').map(x=>x.val);
@@ -284,23 +281,51 @@ async function saveMedicalProtocol() {
   try {
     const childRef = doc(db, "parents", parentId, "children", childId);
     await updateDoc(childRef, payload);
-    status.textContent = 'تم حفظ البروتوكول وتحديث حساب الأم بنجاح ✅'; status.style.color = 'var(--success)';
+    status.textContent = 'تم حفظ البروتوكول بنجاح ✅'; status.style.color = 'var(--success)';
     
-    // تحديث الأرقام المعروضة في البطاقة العلوية فوراً
     loadChildProfile(); 
     
     setTimeout(()=> status.textContent = '', 4000);
   } catch (e) {
     console.error(e);
-    status.textContent = 'خطأ في الحفظ!'; status.style.color = 'var(--danger)';
+    status.textContent = 'خطأ في الحفظ! تأكد من الصلاحيات.'; status.style.color = 'var(--danger)';
   }
 }
 
-// --- 7. ربط الأحداث ---
+// --- 7. التصدير لـ CSV ---
+function exportCsv() {
+  const BOM = "\uFEFF";
+  const header = ["التاريخ", "الوقت", "النوع", "السكر", "الكارب", "الإنسولين", "ملاحظات"];
+  const rows = [header];
+
+  measurementsData.forEach(m => {
+    rows.push([
+      m.dateStr,
+      m.timeStr,
+      m.slotKey,
+      m.val !== null ? m.val : "",
+      m.carbs || "",
+      m.ins || "",
+      `"${m.notes.replace(/"/g, '""')}"`
+    ]);
+  });
+
+  const csv = rows.map(r => r.join(",")).join("\n");
+  const blob = new Blob([BOM + csv], {type:"text/csv;charset=utf-8;"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `Patient_${childData.name}_Data.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// --- 8. ربط الأحداث ---
 function setupEvents() {
   $('runData').onclick = () => fetchAndRenderData(parseInt($('preset').value));
   $('btnSaveMedical').onclick = saveMedicalProtocol;
-  $('btnSaveNote').onclick = saveMedicalProtocol; // زر إضافي للروشتة يقوم بنفس عمل الحفظ الكامل
+  $('btnSaveNote').onclick = saveMedicalProtocol; 
+  $('exportCsv').onclick = exportCsv;
   
   $('btnOpenReport').onclick = () => {
     window.open(`reports.html?child=${childId}&parentId=${parentId}`, '_blank');
