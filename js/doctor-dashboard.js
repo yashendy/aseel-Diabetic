@@ -13,14 +13,17 @@ onAuthStateChanged(auth, async (user) => {
   if (!user) { location.href = "index.html"; return; }
   currentUser = user;
   
-  // التحقق من أنه طبيب
-  const docSnap = await getDoc(doc(db, "doctors", user.uid));
-  if (!docSnap.exists() || docSnap.data().status !== 'approved') {
-    alert("حسابك غير معتمد كطبيب بعد.");
+  // التحقق من جدول users مباشرة بناءً على فكرتك الهندسية
+  const userSnap = await getDoc(doc(db, "users", user.uid));
+  
+  if (!userSnap.exists() || userSnap.data().role !== 'doctor') {
+    alert("حسابك لا يمتلك صلاحيات الطبيب.");
     location.href = "index.html"; return;
   }
   
-  $('doctorName').textContent = docSnap.data().fullName || 'دكتور';
+  // أخذ اسم الطبيب من جدول users
+  const userData = userSnap.data();
+  $('doctorName').textContent = userData.name || userData.displayName || 'دكتور';
   
   await loadCodes();
   await loadPatients();
@@ -177,8 +180,7 @@ function renderPatients(list) {
 
   document.querySelectorAll('.btn-open-report').forEach(btn => {
     btn.onclick = () => {
-      // فتح التقرير الذكي الذي برمجناه مسبقاً! 🔥
-      // نحتاج لتمرير childId لصفحة التقارير، وصفحة التقارير يجب أن تتعامل مع الطبيب أيضاً إذا لزم الأمر
+      // فتح التقرير الذكي
       window.open(`reports.html?child=${btn.dataset.id}&parentId=${btn.dataset.pid}`, '_blank');
     };
   });
