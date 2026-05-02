@@ -215,34 +215,107 @@ function renderPrintCharts(list, displayUnit) {
 
 function renderAI(list, displayUnit) {
   const L = limitsInUnit(displayUnit);
-  const patt=[];
-  const valid = list.filter(x => x.displayValue !== null && x.displayValue !== undefined);
+  const patterns = [];
   
-  const fast = valid.filter(x=>x.slotKey==='FASTING' || x.slotKey==='WAKE').map(x=>x.displayValue);
-  const sleep = valid.filter(x=>x.slotKey==='DURING_SLEEP' || x.slotKey==='BEDTIME').map(x=>x.displayValue);
-  const pBreakfast = valid.filter(x=>x.slotKey==='POST_BREAKFAST').map(x=>x.displayValue);
-  const pDinner = valid.filter(x=>x.slotKey==='POST_DINNER').map(x=>x.displayValue);
+  // استخراج القراءات الصحيحة فقط
+  const valid = list.filter(x => typeof x.displayValue === 'number');
 
-  if(fast.length >= 3 && sleep.length >= 2) {
-    const highFasting = fast.filter(v => v > L.high).length;
-    const normalSleep = sleep.filter(v => v >= L.low && v <= L.high).length;
-    if (highFasting >= 2 && normalSleep >= 2) { patt.push({ name: 'ظاهرة الفجر', desc: 'السكر طبيعي ليلاً ويرتفع صباحاً.', rec: 'تعديل المنظم.', conf: 'عالي 🔴' }); }
+  if (valid.length < 5) {
+    const aiContainer = document.getElementById('aiContent');
+    if (aiContainer) {
+      aiContainer.innerHTML = '<div style="color:#64748b; font-size:14px;">لا توجد قراءات كافية في هذه الفترة لاستخراج أنماط دقيقة (مطلوب 5 قراءات على الأقل).</div>';
+    }
+    return;
   }
 
-  if(fast.length >= 3 && sleep.length >= 2) {
-    const highFasting = fast.filter(v => v > L.high).length;
-    const lowSleep = sleep.filter(v => v < L.low).length;
-    if (highFasting >= 2 && lowSleep >= 1) { patt.push({ name: 'هبوط ليلي (Somogyi)', desc: 'هبوط أثناء الليل يتبعه ارتفاع ارتدادي.', rec: 'تقليل المنظم.', conf: 'حرج 🚨' }); }
+  // تجميع القراءات حسب الفترات
+  const slots = {};
+  valid.forEach(m => {
+    if (!slots[m.slotKey]) slots[m.slotKey] = [];
+    slots[m.slotKey].push(m.displayValue);
+  });
+
+  const countHigh = (arr) => arr ? arr.filter(v => v > L.high).length : 0;
+  const countLow = (arr) => arr ? arr.filter(v => v < L.low).length : 0;
+
+  const sleep = slots['DURING_SLEEP'] || [];
+  const fast = slots['FASTING'] || slots['WAKE'] || slots['PRE_BREAKFAST'] || [];
+
+  // 1. تحليل فترة النوم والصباح (ظاهرة الفجر مقابل تأثير سوموجي)
+  if (fast.length >= 3) {
+    const fastHighRatio = countHigh(fast) / fast.length;
+    if (fastHighRatio >= 0.5) {
+      const sleepLowRatio = sleep.length > 0 ? (countLow(sleep) / sleep.length) : 0;
+      if (sleepLowRatio >= 0.3) {
+        patterns.push({
+          name: 'تأثير سوموجي (Somogyi Effect) 🚨',
+          desc: 'هبوط متكرر أثناء النوم يتبعه ارتفاع ارتدادي في الصباح.',
+          rec: 'يُرجى مراجعة الطبيب لمناقشة تقليل جرعة المنظم (القاعدي) المسائي.'
+        });
+      } else {
+        patterns.push({
+          name: 'ظاهرة الفجر (Dawn Phenomenon) 🌅',
+          desc: 'ارتفاع متكرر في سكر الصباح (الصائم) بدون تسجيل هبوط ليلي.',
+          rec: 'قد تحتاج جرعة المنظم (القاعدي) لضبط توقيتها أو زيادتها طفيفاً بعد استشارة الطبيب.'
+        });
+      }
+    } else if (countLow(fast) / fast.length >= 0.3) {
+        patterns.push({
+          name: 'هبوط صباحي متكرر 📉',
+          desc: 'قراءات الصائم تميل للهبوط المتكرر عن المعدل الطبيعي.',
+          rec: 'يُرجى مراجعة الطبيب لمناقشة تقليل جرعة المنظم (القاعدي).'
+        });
+    }
   }
 
-  if(pBreakfast.length >= 3 && pBreakfast.filter(v=>v>=L.critHigh).length >= 2) {
-    patt.push({ name: 'ارتفاع بعد الإفطار', desc: 'السكر يرتفع بشدة بعد الإفطار.', rec: 'تعديل معامل الكارب (CR).', conf: 'متوسط 🟡' });
+  // 2. تحليل الوجبات (مراجعة معامل الكارب CR)
+  const meals = [
+    { name: 'الإفطار', post: slots['POST_BREAKFAST'] },
+    { name: 'الغداء', post: slots['POST_LUNCH'] },
+    { name: 'العشاء', post: slots['POST_DINNER'] }
+  ];
+
+  meals.forEach(meal => {
+    if (meal.post && meal.post.length >= 3) {
+      const postHighRatio = countHigh(meal.post) / meal.post.length;
+      const postLowRatio = countLow(meal.post) / meal.post.length;
+
+      if (postHighRatio >= 0.5) {
+        patterns.push({
+          name: `ارتفاع متكرر بعد ${meal.name} 📈`,
+          desc: `السكر يرتفع باستمرار بعد وجبة ${meal.name} ويتجاوز النطاق المستهدف.`,
+          rec: 'قد تحتاج لتعديل معامل الكارب (CR) لهذه الوجبة (تقليل الرقم لزيادة الجرعة) بالتنسيق مع طبيبك.'
+        });
+      } else if (postLowRatio >= 0.3) {
+        patterns.push({
+          name: `هبوط متكرر بعد ${meal.name} 📉`,
+          desc: `السكر يهبط باستمرار بعد وجبة ${meal.name}.`,
+          rec: 'قد تحتاج لتعديل معامل الكارب (CR) لهذه الوجبة (زيادة الرقم لتقليل الجرعة) بالتنسيق مع طبيبك.'
+        });
+      }
+    }
+  });
+
+  // 3. حالة الاستقرار (إذا لم يتم رصد أي أنماط سلبية)
+  if (patterns.length === 0) {
+    patterns.push({
+      name: 'استقرار عام في القراءات ✅',
+      desc: 'لم يتم رصد أنماط خطيرة أو تذبذبات حادة متكررة في هذه الفترة.',
+      rec: 'استمر على الخطة العلاجية والغذائية الحالية، أداء ممتاز!'
+    });
   }
 
-  if(!patt.length) patt.push({name:'✅ استقرار عام', desc:'الأنماط الحيوية للطفل ضمن الحدود الآمنة غالباً.', rec:'استمر على نفس الخطة!', conf:'—'});
-
+  // طباعة النتائج في التقرير
   const aiContainer = document.getElementById('aiContent');
-  if(aiContainer) aiContainer.innerHTML = patt.map(p=>`<div class="ai-item"><b>${p.name}</b>${p.desc} <br> <span style="color:#2563eb">${p.rec}</span></div>`).join('');
+  if (aiContainer) {
+    aiContainer.innerHTML = patterns.map(p => `
+      <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #cbd5e1; page-break-inside: avoid;">
+        <div style="font-weight: 700; color: #1e3a8a; font-size: 14px; margin-bottom: 4px;">${p.name}</div>
+        <div style="color: #475569; font-size: 13px; margin-bottom: 6px; line-height: 1.4;">${p.desc}</div>
+        <div style="color: #059669; font-size: 13px; font-weight: 600;">💡 توصية: ${p.rec}</div>
+      </div>
+    `).join('');
+  }
 }
 
 function calcAge(bd) { if(!bd) return '—'; const b=new Date(bd), t=new Date(); let a=t.getFullYear()-b.getFullYear(); if(t.getMonth()<b.getMonth() || (t.getMonth()===b.getMonth()&&t.getDate()<b.getDate())) a--; return a; }
