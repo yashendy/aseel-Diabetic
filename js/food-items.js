@@ -10,9 +10,6 @@ let cache = [];
 let lastPickedFile = null;
 let currentImagePath = '';
 
-// صورة بديلة آمنة جداً (مشفرة لتجنب كسر الـ HTML)
-const SAFE_PLACEHOLDER = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22300%22%20style%3D%22background%3A%23f8fafc%22%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%2394a3b8%22%20font-size%3D%2224%22%20font-family%3D%22system-ui%2C-apple-system%2Csans-serif%22%3E%E2%9B%94%20%D8%A8%D8%AF%D9%88%D9%86%20%D8%B5%D9%88%D8%B1%D8%A9%3C%2Ftext%3E%3C%2Fsvg%3E';
-
 // --- 1. التحقق من دخول الأدمن ---
 onAuthStateChanged(auth, (user) => {
   if (!user) { location.href = 'index.html'; return; }
@@ -24,8 +21,9 @@ if($('btn-logout')) $('btn-logout').onclick = () => signOut(auth).then(()=> loca
 // --- 2. إدارة المقاييس (Portions) ---
 function createUnitRow(u = { label:'', grams:null }) {
   const row = document.createElement('div'); row.className = 'unit-row';
+  row.style.marginBottom = '8px';
   row.innerHTML = `
-    <input type="text" class="u-lbl" placeholder="الاسم (مثال: كوب)" value="${u.label||''}" required>
+    <input type="text" class="u-lbl" placeholder="الاسم (مثال: كوب)" value="${u.label||''}" required style="flex:1;">
     <input type="number" class="u-gr" placeholder="جرام" value="${u.grams||''}" required style="width: 80px;">
     <button type="button" class="btn danger sm u-del">✕</button>
   `;
@@ -60,7 +58,7 @@ document.querySelectorAll('.tag-btn').forEach(btn => {
 function getActiveTags() {
   const tags = [];
   document.querySelectorAll('.tag-btn.active').forEach(b => tags.push(b.dataset.tag));
-  const manual = $('hashTagsManual').value.split(' ').map(t => t.trim()).filter(t => t.startsWith('#'));
+  const manual = $('hashTagsManual').value ? $('hashTagsManual').value.split(' ').map(t => t.trim()).filter(t => t.startsWith('#')) : [];
   return [...new Set([...tags, ...manual])];
 }
 
@@ -75,7 +73,7 @@ function setActiveTags(tagsArr) {
   if($('hashTagsManual')) $('hashTagsManual').value = manual.join(' ');
 }
 
-// --- 4. رفع الصور ---
+// --- 4. معالجة الصور (رفع أو رابط خارجي) ---
 if($('btn-pick')) $('btn-pick').onclick = () => $('imageFile').click();
 if($('imageFile')) {
   $('imageFile').onchange = (e) => {
@@ -84,27 +82,45 @@ if($('imageFile')) {
     lastPickedFile = file;
     $('imagePreview').src = URL.createObjectURL(file);
     $('imagePreview').style.display = 'block';
+    if($('imageUrl')) $('imageUrl').value = ''; // تفريغ الرابط لو اختار ملف
+  };
+}
+if($('imageUrl')) {
+  $('imageUrl').oninput = () => {
+    if($('imageUrl').value) {
+      $('imagePreview').src = $('imageUrl').value;
+      $('imagePreview').style.display = 'block';
+      lastPickedFile = null; // تفريغ الملف لو وضع رابط
+    } else {
+      $('imagePreview').style.display = 'none';
+    }
   };
 }
 
 async function handleImageUpload(itemId) {
-  if(!lastPickedFile) return currentImagePath;
+  if(!lastPickedFile) return null;
   const ext = lastPickedFile.name.split('.').pop();
   const path = `food-items/${itemId}/main.${ext}`; 
   
   $('upload-bar').classList.remove('hidden');
   const storageRef = sRef(storage, path);
   
-  await new Promise((resolve, reject) => {
-    const task = uploadBytesResumable(storageRef, lastPickedFile);
-    task.on('state_changed', 
-      snap => { $('upload-bar-fill').style.width = Math.round((snap.bytesTransferred/snap.totalBytes)*100) + '%'; },
-      reject, resolve
-    );
-  });
-  
-  $('upload-bar').classList.add('hidden');
-  return path;
+  try {
+    await new Promise((resolve, reject) => {
+      const task = uploadBytesResumable(storageRef, lastPickedFile);
+      task.on('state_changed', 
+        snap => { $('upload-bar-fill').style.width = Math.round((snap.bytesTransferred/snap.totalBytes)*100) + '%'; },
+        reject, resolve
+      );
+    });
+    const url = await getDownloadURL(storageRef);
+    $('upload-bar').classList.add('hidden');
+    return { path, url };
+  } catch(err) {
+    console.warn("Storage upload failed:", err);
+    $('upload-bar').classList.add('hidden');
+    return null; // فشل الرفع (غالباً بسبب الصلاحيات أو الخطة المجانية)
+  }
 }
 
 // --- 5. فتح وإغلاق المحرر (CRUD) ---
@@ -133,7 +149,10 @@ async function openEditor(id) {
     (d.units || []).forEach(u => $('units-list').appendChild(createUnitRow(u)));
     setActiveTags(d.tags || []);
     
-    if(d.image && d.image.url) { $('imagePreview').src = d.image.url; $('imagePreview').style.display = 'block'; currentImagePath = d.image.path; }
+    const imgData = d.image || {};
+    currentImagePath = imgData.path || '';
+    if($('imageUrl')) $('imageUrl').value = imgData.url || '';
+    if(imgData.url) { $('imagePreview').src = imgData.url; $('imagePreview').style.display = 'block'; }
   } else {
     $('item-id').value = '';
     $('units-list').appendChild(createUnitRow({ label: '100 جرام', grams: 100 }));
@@ -149,11 +168,18 @@ if($('edit-form')) {
     
     try {
       const id = $('item-id').value || doc(FOODS).id;
-      const uploadedPath = await handleImageUpload(id);
-      let imgUrl = '';
+      let finalUrl = $('imageUrl') ? $('imageUrl').value.trim() : '';
+      let finalPath = currentImagePath;
       
-      if(uploadedPath) {
-         imgUrl = await getDownloadURL(sRef(storage, uploadedPath));
+      // لو المستخدم اختار ملف، حاول ترفعه للفاير بيز
+      if(lastPickedFile) {
+        const uploadResult = await handleImageUpload(id);
+        if(uploadResult) {
+          finalUrl = uploadResult.url;
+          finalPath = uploadResult.path;
+        } else {
+          alert("⚠️ فشل رفع الصورة للسيرفر (قد تحتاج لترقية خطة الفايربيز). تم حفظ بيانات الصنف بدون الصورة. يُنصح باستخدام رابط خارجي.");
+        }
       }
 
       const payload = {
@@ -164,7 +190,7 @@ if($('edit-form')) {
           cal_kcal: Number($('cal_kcal').value), gi: Number($('gi').value)
         },
         units: getUnits(), tags: getActiveTags(),
-        image: { path: uploadedPath, url: imgUrl },
+        image: { path: finalPath, url: finalUrl },
         searchText: `${$('name').value} ${$('category').value} ${getActiveTags().join(' ')}`.toLowerCase(),
         updatedAt: serverTimestamp()
       };
@@ -186,7 +212,7 @@ if($('btn-delete')) {
   };
 }
 
-// --- 7. العرض الحي (Live Feed) ---
+// --- 7. العرض الحي (Live Feed) وإصلاح شكل الكارت ---
 function startLive() {
   onSnapshot(FOODS, snap => {
     cache = []; snap.forEach(s => cache.push({ id: s.id, ...s.data() }));
@@ -205,23 +231,30 @@ function render() {
     return matchQ && matchCat;
   });
 
-  $('cards').innerHTML = list.map(x => `
-    <article class="food-card">
-      ${x.per100?.gi > 0 ? `<div class="gi-badge">GI: ${x.per100.gi}</div>` : ''}
-      <img src="${x.image?.url || SAFE_PLACEHOLDER}" onerror="this.onerror=null; this.src='${SAFE_PLACEHOLDER}';" alt="${x.name}">
-      <h3>${x.name}</h3>
-      <div class="cat">${x.category} | ${x.per100?.cal_kcal || 0} kcal</div>
-      <div class="macros">
-        <div><strong>${x.per100?.carbs_g || 0}g</strong>كارب</div>
-        <div><strong>${x.per100?.protein_g || 0}g</strong>بروتين</div>
-        <div><strong>${x.per100?.fat_g || 0}g</strong>دهون</div>
-      </div>
-      <button class="btn ghost sm mt-10" onclick="document.getElementById('edit-dialog').dispatchEvent(new CustomEvent('edit-item', {detail: '${x.id}'}))" style="width:100%">تعديل الصنف</button>
-    </article>
-  `).join('');
+  $('cards').innerHTML = list.map(x => {
+    // تحديد شكل الصورة: لو مفيش رابط، ارسم Div رمادي متناسق وصغير
+    const imgSrc = x.image?.url || x.imageUrl || '';
+    const imageElement = imgSrc 
+      ? `<img src="${imgSrc}" onerror="this.style.display='none'" alt="${x.name}">` 
+      : `<div style="height:140px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; border-radius:8px; margin-bottom:12px; color:#94a3b8; font-size:14px; border: 1px dashed #cbd5e1;">🍽️ بدون صورة</div>`;
+
+    return `
+      <article class="food-card">
+        ${x.per100?.gi > 0 ? `<div class="gi-badge">GI: ${x.per100.gi}</div>` : ''}
+        ${imageElement}
+        <h3>${x.name}</h3>
+        <div class="cat">${x.category} | ${x.per100?.cal_kcal || 0} kcal</div>
+        <div class="macros">
+          <div><strong>${x.per100?.carbs_g || 0}g</strong>كارب</div>
+          <div><strong>${x.per100?.protein_g || 0}g</strong>بروتين</div>
+          <div><strong>${x.per100?.fat_g || 0}g</strong>دهون</div>
+        </div>
+        <button class="btn ghost sm mt-10" onclick="document.getElementById('edit-dialog').dispatchEvent(new CustomEvent('edit-item', {detail: '${x.id}'}))" style="width:100%">تعديل الصنف</button>
+      </article>
+    `;
+  }).join('');
 }
 
-// Event listener for dynamic edit buttons
 if($('edit-dialog')) $('edit-dialog').addEventListener('edit-item', (e) => openEditor(e.detail));
 if($('search')) $('search').oninput = render;
 if($('filter-category')) $('filter-category').onchange = render;
