@@ -1,362 +1,216 @@
-// /js/food-items.js — FULL REPLACEMENT
-// ✅ Schema v2
-// ✅ رفع الصور إلى food-items/items/{itemId}/main.jpg
-// ✅ تحويل image.path ➜ HTTPS عبر getDownloadURL
-// ✅ searchText والوسوم
-// ✅ صورة مصغّرة داخل البطاقة بدون تغيير مساحة الكرت
+import { db, storage, auth } from './firebase-config.js';
+import { collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
+import { ref as sRef, uploadBytesResumable, getDownloadURL } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js';
+import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 
-import { app, db, auth, storage } from './firebase-config.js';
-import {
-  collection, doc, getDoc, setDoc, deleteDoc,
-  onSnapshot, serverTimestamp
-} from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
-import {
-  ref as sRef, uploadBytesResumable, getDownloadURL
-} from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js';
-import {
-  onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut
-} from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
-
-// ---------- عناصر الواجهة
-const els = {
-  search:       document.getElementById('search'),
-  filterCat:    document.getElementById('filter-category'),
-  filterActive: document.getElementById('filter-active'),
-  btnClear:     document.getElementById('btn-clear'),
-  btnAdd:       document.getElementById('btn-add'),
-  grid:         document.getElementById('cards'),
-  tableWrap:    document.getElementById('table-wrap'),
-  tableBody:    document.getElementById('table-body'),
-  btnCards:     document.getElementById('btn-cards'),
-  btnTable:     document.getElementById('btn-table'),
-
-  dlg:          document.getElementById('edit-dialog'),
-  dlgTitle:     document.getElementById('dlg-title'),
-  dlgClose:     document.getElementById('dlg-close'),
-  form:         document.getElementById('edit-form'),
-  id:           document.getElementById('item-id'),
-  name:         document.getElementById('name'),
-  category:     document.getElementById('category'),
-  cal:          document.getElementById('cal_kcal'),
-  carbs:        document.getElementById('carbs_g'),
-  protein:      document.getElementById('protein_g'),
-  fat:          document.getElementById('fat_g'),
-  fiber:        document.getElementById('fiber_g'),
-  sodium:       document.getElementById('sodium_mg'),
-  gi:           document.getElementById('gi'),
-  isActive:     document.getElementById('isActive'),
-  unitsList:    document.getElementById('units-list'),
-  btnAddUnit:   document.getElementById('btn-add-unit'),
-  chipsUnits:   document.querySelectorAll('.chips [data-unit]'),
-  hashTagsManual: document.getElementById('hashTagsManual'),
-  dietAutoView: document.getElementById('diet-auto-view'),
-  imageUrl:     document.getElementById('imageUrl'),
-  imageFile:    document.getElementById('imageFile'),
-  btnPick:      document.getElementById('btn-pick'),
-  fileName:     document.getElementById('file-name'),
-  uploadBar:    document.getElementById('upload-bar'),
-  uploadFill:   document.getElementById('upload-bar-fill'),
-  imagePreview: document.getElementById('imagePreview'),
-  btnDelete:    document.getElementById('btn-delete'),
-  btnCancel:    document.getElementById('btn-cancel'),
-  btnSave:      document.getElementById('btn-save'),
-  adminName:    document.getElementById('admin-name'),
-  adminRole:    document.getElementById('admin-role'),
-  btnAuth:      document.getElementById('btn-auth'),
-  btnLogout:    document.getElementById('btn-logout'),
-};
-
+const $ = id => document.getElementById(id);
 const FOODS = collection(db, 'admin', 'global', 'foodItems');
-let unsubscribe = null;
 let cache = [];
-let currentImagePath = '';
 let lastPickedFile = null;
+let currentImagePath = '';
 
-// ---------- Helpers
-const num = v => (v === '' || v == null) ? null : Number(v);
-const tidy = s => (s || '').toString().trim();
-const toArabicSearch = s => (s||'').toLowerCase()
-  .replace(/[أإآا]/g,'ا').replace(/[ى]/g,'ي').replace(/[ؤئ]/g,'ء').replace(/\s+/g,' ').trim();
+// --- 1. التحقق من دخول الأدمن ---
+onAuthStateChanged(auth, (user) => {
+  if (!user) { location.href = 'index.html'; return; }
+  $('admin-name').textContent = user.displayName || user.email;
+  startLive();
+});
+$('btn-logout').onclick = () => signOut(auth).then(()=> location.href = 'index.html');
 
-function unitRow(u = { label:'', grams:null, default:false }) {
-  const row = document.createElement('div');
-  row.className = 'unit-row';
+// --- 2. إدارة المقاييس (Portions) ---
+function createUnitRow(u = { label:'', grams:null }) {
+  const row = document.createElement('div'); row.className = 'unit-row';
   row.innerHTML = `
-    <label class="radio"><input type="radio" name="unit-default" ${u.default?'checked':''} /></label>
-    <input class="unit-label" type="text" placeholder="الاسم الظاهر (مثال: كوب)" value="${u.label||''}">
-    <input class="unit-grams" type="number" step="0.1" placeholder="جرامات" value="${u.grams??''}">
-    <button class="icon danger btn-del-unit" type="button" title="حذف">🗑</button>
+    <input type="text" class="u-lbl" placeholder="الاسم (مثال: كوب)" value="${u.label||''}" required>
+    <input type="number" class="u-gr" placeholder="جرام" value="${u.grams||''}" required style="width: 80px;">
+    <button type="button" class="btn danger sm u-del">✕</button>
   `;
-  row.querySelector('.btn-del-unit').onclick = () => row.remove();
-  row.querySelector('input[type=radio]').onchange = () => {
-    document.querySelectorAll('.unit-row input[type=radio]').forEach(r=> r.checked=false);
-    row.querySelector('input[type=radio]').checked = true;
-  };
+  row.querySelector('.u-del').onclick = () => row.remove();
   return row;
 }
-function readUnits() {
-  const list = [...els.unitsList.querySelectorAll('.unit-row')].map(r => {
-    const label = tidy(r.querySelector('.unit-label').value);
-    const grams = num(r.querySelector('.unit-grams').value);
-    const def   = r.querySelector('input[type=radio]').checked;
-    if (!label || !(grams>0)) return null;
-    return { key: label, label, grams, default: def };
-  }).filter(Boolean);
-  if (list.length && !list.some(x=>x.default)) list[0].default = true;
-  if (!list.length && (num(els.cal.value)!=null || num(els.carbs.value)!=null || num(els.protein.value)!=null || num(els.fat.value)!=null)) {
-    list.push({ key:'g100', label:'100 جم', grams:100, default:true });
-  }
-  return list;
-}
-function fillUnits(units=[]) { els.unitsList.innerHTML = ''; units.forEach(u => els.unitsList.appendChild(unitRow(u))); }
-function parseUnitChip(str){ const [k,l,g]=(str||'').split('|'); return {key:k,label:l,grams:Number(g),default:false}; }
-function buildSearchText(d){ const u=(d.units||[]).map(v=>v.label).join(' '); const t=[...(d.dietTags||[]),...(d.hashTags||[])].join(' '); return toArabicSearch(`${d.name} ${d.category} ${t} ${u}`); }
-function mergeTags(manualStr,autoArr){ const manual=(manualStr||'').split('#').map(x=>'#'+x.trim()).filter(x=>x!=='#'); return [...new Set([...(autoArr||[]),...manual])]; }
 
-// تحويل مسارات التخزين إلى روابط HTTPS لاستخدامها في العرض
-async function resolveImages(list){
-  await Promise.all(list.map(async x=>{
-    const path = x.image?.path || x.imagePath;
-    const hasUrl = x.image?.url || x.imageUrl;
-    if (!hasUrl && path && !/^https?:\/\//.test(path)){
-      try{
-        const url = await getDownloadURL(sRef(storage, path));
-        // خزّنه داخل عنصر الكاش لسهولة العرض
-        if (!x.image) x.image = {};
-        x.image.url = url;
-      }catch(e){
-        // تجاهل الأخطاء الفردية
-      }
-    }
-  }));
-}
-
-// ---------- Map Doc <-> Form
-function mapDocToForm(d){
-  els.id.value       = d.id || '';
-  els.name.value     = d.name || '';
-  els.category.value = d.category || 'أخرى';
-
-  const per100 = d.per100 || d.nutrPer100g || {
-    cal_kcal: d.cal_kcal, carbs_g: d.carbs_g, protein_g: d.protein_g, fat_g: d.fat_g,
-    fiber_g: d.fiber_g, sodium_mg: d.sodium_mg, gi: d.gi
-  } || {};
-  els.cal.value    = per100.cal_kcal ?? '';
-  els.carbs.value  = per100.carbs_g ?? '';
-  els.protein.value= per100.protein_g ?? '';
-  els.fat.value    = per100.fat_g ?? '';
-  els.fiber.value  = per100.fiber_g ?? '';
-  els.sodium.value = per100.sodium_mg ?? '';
-  els.gi.value     = per100.gi ?? '';
-
-  const units = d.units
-    || (Array.isArray(d.measures) ? d.measures.map(m=>({label:m.name||m.label, grams:Number(m.grams), default: m.default||false})) : null)
-    || (d.measureQty && typeof d.measureQty==='object' ? Object.entries(d.measureQty).map(([k,v])=>({label:k, grams:Number(v), default:false})) : null)
-    || (Array.isArray(d.householdUnits) ? d.householdUnits.map(m=>({label:m.name, grams:Number(m.grams), default:false})) : null)
-    || [];
-  fillUnits(units);
-
-  const image = d.image || {};
-  currentImagePath = image.path || d.imagePath || '';
-  els.imageUrl.value = image.url || d.imageUrl || '';
-  els.imagePreview.src = els.imageUrl.value || '';
-
-  const dietTags = d.dietTags || [...(d.dietTagsAuto||[]), ...(d.dietTagsManual||[])];
-  const hashTags = d.hashTags || [...(d.hashTagsAuto||[]), ...(d.hashTagsManual||[])];
-  els.hashTagsManual.value = (hashTags||[]).join(' ');
-  els.dietAutoView.innerHTML = (dietTags||[]).map(t=>`<span class="tag">${t}</span>`).join('');
-  els.isActive.value = String(d.isActive !== false);
-}
-
-function mapFormToPayload() {
-  const per100 = {
-    cal_kcal: num(els.cal.value) ?? 0,
-    carbs_g:  num(els.carbs.value) ?? 0,
-    protein_g:num(els.protein.value) ?? 0,
-    fat_g:    num(els.fat.value) ?? 0,
-    fiber_g:  num(els.fiber.value) ?? 0,
-    sodium_mg:num(els.sodium.value) ?? 0,
-    gi:       num(els.gi.value) ?? 0,
+$('btn-add-unit').onclick = () => $('units-list').appendChild(createUnitRow());
+document.querySelectorAll('.chip-sm').forEach(btn => {
+  btn.onclick = () => {
+    const [_, lbl, gr] = btn.dataset.unit.split('|');
+    $('units-list').appendChild(createUnitRow({ label: lbl, grams: gr }));
   };
-  const units = readUnits();
-  const dietTags = mergeTags('', []);
-  const hashTags = mergeTags(els.hashTagsManual.value, []);
-  const image = { url: tidy(els.imageUrl.value), path: currentImagePath || '' };
-  const payload = {
-    name: tidy(els.name.value),
-    category: tidy(els.category.value),
-    isActive: (els.isActive.value === 'true'),
-    per100, units, image, dietTags, hashTags,
-    searchText: buildSearchText({ name: els.name.value, category: els.category.value, units, dietTags, hashTags }),
-    schemaVersion: 2,
-    updatedAt: serverTimestamp()
-  };
-  if (!els.id.value) payload.createdAt = serverTimestamp();
-  return payload;
+});
+
+function getUnits() {
+  const arr = [];
+  document.querySelectorAll('.unit-row').forEach(r => {
+    const lbl = r.querySelector('.u-lbl').value.trim();
+    const gr = Number(r.querySelector('.u-gr').value);
+    if(lbl && gr > 0) arr.push({ label: lbl, grams: gr });
+  });
+  if(arr.length === 0) arr.push({ label: '100 جرام', grams: 100 });
+  return arr;
 }
 
-// ---------- رفع الصورة
-els.btnPick?.addEventListener('click', ()=> els.imageFile.click());
-els.imageFile?.addEventListener('change', (e)=>{
-  const file = e.target.files?.[0];
+// --- 3. إدارة الوسوم الطبية (Smart Tags) ---
+document.querySelectorAll('.tag-btn').forEach(btn => {
+  btn.onclick = () => btn.classList.toggle('active');
+});
+
+function getActiveTags() {
+  const tags = [];
+  document.querySelectorAll('.tag-btn.active').forEach(b => tags.push(b.dataset.tag));
+  const manual = $('hashTagsManual').value.split(' ').map(t => t.trim()).filter(t => t.startsWith('#'));
+  return [...new Set([...tags, ...manual])];
+}
+
+function setActiveTags(tagsArr) {
+  document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+  $('hashTagsManual').value = '';
+  const manual = [];
+  (tagsArr || []).forEach(t => {
+    const btn = document.querySelector(`.tag-btn[data-tag="${t}"]`);
+    if(btn) btn.classList.add('active'); else manual.push(t);
+  });
+  $('hashTagsManual').value = manual.join(' ');
+}
+
+// --- 4. رفع الصور إلى Firebase Storage ---
+$('btn-pick').onclick = () => $('imageFile').click();
+$('imageFile').onchange = (e) => {
+  const file = e.target.files[0];
   if(!file) return;
   lastPickedFile = file;
-  els.fileName.textContent = file.name;
-  els.imagePreview.src = URL.createObjectURL(file);
-});
-async function uploadImageIfNeeded(itemId){
-  if(!lastPickedFile) return;
-  const ext = (lastPickedFile.name.split('.').pop()||'jpg').toLowerCase();
-  const path = `food-items/items/${itemId}/main.${ext}`;
-  const r = sRef(storage, path);
-  if (els.uploadBar) els.uploadBar.style.display = 'block';
-  if (els.uploadFill) els.uploadFill.style.width = '0%';
-  await new Promise((resolve, reject)=>{
-    const task = uploadBytesResumable(r, lastPickedFile);
-    task.on('state_changed', snap=>{
-      if (els.uploadFill) {
-        const pct = Math.round((snap.bytesTransferred/snap.totalBytes)*100);
-        els.uploadFill.style.width = pct + '%';
-      }
-    }, reject, ()=> resolve());
+  $('imagePreview').src = URL.createObjectURL(file);
+  $('imagePreview').style.display = 'block';
+};
+
+async function handleImageUpload(itemId) {
+  if(!lastPickedFile) return currentImagePath;
+  const ext = lastPickedFile.name.split('.').pop();
+  const path = `food-items/${itemId}/main.${ext}`; // مسار منظم لكل صنف
+  
+  $('upload-bar').classList.remove('hidden');
+  const storageRef = sRef(storage, path);
+  
+  await new Promise((resolve, reject) => {
+    const task = uploadBytesResumable(storageRef, lastPickedFile);
+    task.on('state_changed', 
+      snap => { $('upload-bar-fill').style.width = Math.round((snap.bytesTransferred/snap.totalBytes)*100) + '%'; },
+      reject, resolve
+    );
   });
-  if (els.uploadBar) els.uploadBar.style.display = 'none';
-  currentImagePath = path;
+  
+  $('upload-bar').classList.add('hidden');
+  return path;
 }
 
-// ---------- CRUD
-async function openEditor(id=null){
-  els.form.reset(); els.unitsList.innerHTML=''; currentImagePath=''; lastPickedFile=null;
-  els.imagePreview.src=''; els.hashTagsManual.value=''; els.dietAutoView.innerHTML='';
-  if(id){
-    els.dlgTitle.textContent='تعديل صنف';
+// --- 5. فتح وإغلاق المحرر (CRUD) ---
+const dialog = $('edit-dialog');
+$('btn-add').onclick = () => openEditor(null);
+$('dlg-close').onclick = () => dialog.close();
+$('btn-cancel').onclick = () => dialog.close();
+
+async function openEditor(id) {
+  $('edit-form').reset(); $('units-list').innerHTML = ''; setActiveTags([]);
+  $('imagePreview').style.display = 'none'; lastPickedFile = null; currentImagePath = '';
+  $('btn-delete').style.display = id ? 'block' : 'none';
+  $('dlg-title').textContent = id ? 'تعديل صنف' : 'إضافة صنف جديد';
+
+  if (id) {
     const snap = await getDoc(doc(FOODS, id));
-    if(snap.exists()) mapDocToForm({ id:snap.id, ...snap.data() });
-  }else{
-    els.dlgTitle.textContent='إضافة صنف';
-    fillUnits([{ key:'g100', label:'100 جم', grams:100, default:true }]);
+    const d = snap.data();
+    $('item-id').value = snap.id;
+    $('name').value = d.name || ''; $('category').value = d.category || 'أخرى';
+    
+    const p = d.per100 || {};
+    $('carbs_g').value = p.carbs_g || ''; $('fiber_g').value = p.fiber_g || '';
+    $('protein_g').value = p.protein_g || ''; $('fat_g').value = p.fat_g || '';
+    $('cal_kcal').value = p.cal_kcal || ''; $('gi').value = p.gi || '';
+    
+    (d.units || []).forEach(u => $('units-list').appendChild(createUnitRow(u)));
+    setActiveTags(d.tags || []);
+    
+    if(d.image && d.image.url) { $('imagePreview').src = d.image.url; $('imagePreview').style.display = 'block'; currentImagePath = d.image.path; }
+  } else {
+    $('item-id').value = '';
+    $('units-list').appendChild(createUnitRow({ label: '100 جرام', grams: 100 }));
   }
-  els.dlg.showModal();
-}
-async function saveItem(){
-  const id = tidy(els.id.value);
-  const newId = id || doc(FOODS).id;
-  await uploadImageIfNeeded(newId);
-  const payload = mapFormToPayload();
-  if(currentImagePath) payload.image.path = currentImagePath;
-  if(id){ await setDoc(doc(FOODS,id), payload, {merge:true}); }
-  else  { await setDoc(doc(FOODS,newId), { ...payload, createdAt: serverTimestamp() }, {merge:true}); els.id.value=newId; }
-  els.dlg.close();
-}
-async function removeItem(){
-  const id = tidy(els.id.value);
-  if(!id) return els.dlg.close();
-  if(!confirm('هل تريد حذف هذا الصنف؟')) return;
-  await deleteDoc(doc(FOODS,id)); els.dlg.close();
+  dialog.showModal();
 }
 
-// ---------- عرض (مع صورة مصغّرة)
-function render(){
-  const q = toArabicSearch(els.search?.value);
-  const cat = tidy(els.filterCat?.value);
-  const activeOnly = !!els.filterActive?.checked;
-  let list = [...cache];
+// --- 6. حفظ الصنف ---
+$('edit-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const btnSave = $('btn-save'); btnSave.disabled = true; btnSave.textContent = 'جاري الحفظ...';
+  
+  try {
+    const id = $('item-id').value || doc(FOODS).id;
+    const uploadedPath = await handleImageUpload(id);
+    let imgUrl = '';
+    
+    if(uploadedPath) {
+       imgUrl = await getDownloadURL(sRef(storage, uploadedPath));
+    }
 
-  if (q) {
-    list = list.filter(x=>{
-      const unitsTxt = (x.units||[]).map(u=>u.label).join(' ');
-      const hay = toArabicSearch(`${x.name} ${x.category} ${x.searchText||''} ${(x.hashTags||[]).join(' ')} ${unitsTxt}`);
-      return hay.includes(q);
-    });
+    const payload = {
+      name: $('name').value.trim(), category: $('category').value,
+      per100: {
+        carbs_g: Number($('carbs_g').value), fiber_g: Number($('fiber_g').value),
+        protein_g: Number($('protein_g').value), fat_g: Number($('fat_g').value),
+        cal_kcal: Number($('cal_kcal').value), gi: Number($('gi').value)
+      },
+      units: getUnits(), tags: getActiveTags(),
+      image: { path: uploadedPath, url: imgUrl },
+      searchText: `${$('name').value} ${$('category').value} ${getActiveTags().join(' ')}`.toLowerCase(),
+      updatedAt: serverTimestamp()
+    };
+
+    if(!$('item-id').value) payload.createdAt = serverTimestamp();
+    await setDoc(doc(FOODS, id), payload, { merge: true });
+    
+    dialog.close();
+  } catch(err) { alert('خطأ في الحفظ: ' + err.message); }
+  finally { btnSave.disabled = false; btnSave.textContent = '💾 حفظ الصنف في المكتبة'; }
+};
+
+$('btn-delete').onclick = async () => {
+  if(confirm('هل أنت متأكد من حذف هذا الصنف نهائياً؟')) {
+    await deleteDoc(doc(FOODS, $('item-id').value)); dialog.close();
   }
-  if (cat) list = list.filter(x => x.category === cat);
-  if (activeOnly) list = list.filter(x => x.isActive !== false);
+};
 
-  if (els.grid) {
-    els.grid.innerHTML = list.map(x=>{
-      const img = x.image?.url || x.imageUrl || ''; // بعد resolveImages
-      return `
-        <article class="card-item ${img ? '' : 'no-thumb'}">
-          ${img ? `<img class="card-thumb" src="${img}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
-
-          <div class="name">${x.name || '—'}</div>
-          <div class="meta">${x.category || ''}</div>
-          <div class="meta">kcal/100g: ${x.per100?.cal_kcal ?? x.nutrPer100g?.cal_kcal ?? '—'}</div>
-
-          <div class="card-actions" style="margin-top:8px">
-            <button class="btn ghost" data-edit="${x.id}">تعديل</button>
-          </div>
-        </article>
-      `;
-    }).join('');
-    els.grid.querySelectorAll('[data-edit]').forEach(b=> b.onclick = ()=> openEditor(b.dataset.edit));
-  }
-
-  if (els.tableBody){
-    els.tableBody.innerHTML = list.map(x=>`
-      <tr>
-        <td>${x.name||''}</td>
-        <td>${x.category||''}</td>
-        <td>${x.per100?.cal_kcal ?? x.nutrPer100g?.cal_kcal ?? ''}</td>
-        <td>${x.per100?.carbs_g ?? x.nutrPer100g?.carbs_g ?? ''}</td>
-        <td>${x.per100?.protein_g ?? x.nutrPer100g?.protein_g ?? ''}</td>
-        <td>${x.per100?.fat_g ?? x.nutrPer100g?.fat_g ?? ''}</td>
-        <td>${x.isActive!==false ? '✓' : '✗'}</td>
-        <td><button class="btn ghost" data-edit="${x.id}">تعديل</button></td>
-      </tr>
-    `).join('');
-    els.tableBody.querySelectorAll('[data-edit]').forEach(b=> b.onclick = ()=> openEditor(b.dataset.edit));
-  }
-}
-
-// ---------- اشتراك لحظي + حلّ الصور
-function startLive(){
-  if (unsubscribe) return;
-  unsubscribe = onSnapshot(FOODS, async snap=>{
-    const arr = [];
-    snap.forEach(s=>{
-      const d = { id:s.id, ...s.data() };
-      d.per100 = d.per100 || d.nutrPer100g || {};
-      d.units  = d.units || d.measures || d.householdUnits || [];
-      arr.push(d);
-    });
-    await resolveImages(arr); // 👈 هنا التحويل لرابط HTTPS
-    cache = arr;
+// --- 7. العرض الحي (Live Feed) ---
+function startLive() {
+  onSnapshot(FOODS, snap => {
+    cache = []; snap.forEach(s => cache.push({ id: s.id, ...s.data() }));
     render();
   });
 }
 
-// ---------- أحداث
-els.btnAdd?.addEventListener('click', ()=> openEditor(null));
-els.dlgClose?.addEventListener('click', ()=> els.dlg.close());
-els.btnCancel?.addEventListener('click', ()=> els.dlg.close());
-els.form?.addEventListener('submit', (e)=>{ e.preventDefault(); saveItem().catch(err=>alert(err.message)); });
-els.btnDelete?.addEventListener('click', ()=> removeItem().catch(err=>alert(err.message)));
-els.search?.addEventListener('input', render);
-els.filterCat?.addEventListener('change', render);
-els.filterActive?.addEventListener('change', render);
-els.btnClear?.addEventListener('click', ()=>{ if(els.search) els.search.value=''; if(els.filterCat) els.filterCat.value=''; if(els.filterActive) els.filterActive.checked=true; render(); });
-els.btnAddUnit?.addEventListener('click', ()=> els.unitsList.appendChild(unitRow()));
-els.chipsUnits.forEach(ch=> ch.addEventListener('click', ()=> els.unitsList.appendChild(unitRow(parseUnitChip(ch.dataset.unit))) ));
-els.btnCards?.addEventListener('click', ()=>{ els.btnCards?.classList.add('active'); els.btnTable?.classList.remove('active'); els.grid.style.display='grid'; els.tableWrap.style.display='none'; });
-els.btnTable?.addEventListener('click', ()=>{ els.btnTable?.classList.add('active'); els.btnCards?.classList.remove('active'); els.grid.style.display='none'; els.tableWrap.style.display='block'; });
+function render() {
+  const q = $('search').value.toLowerCase();
+  const cat = $('filter-category').value;
+  
+  const list = cache.filter(x => {
+    const matchQ = !q || (x.searchText && x.searchText.includes(q));
+    const matchCat = !cat || x.category === cat;
+    return matchQ && matchCat;
+  });
 
-const provider = new GoogleAuthProvider();
-els.btnAuth?.addEventListener('click', ()=> signInWithPopup(auth, provider));
-els.btnLogout?.addEventListener('click', ()=> signOut(auth));
-onAuthStateChanged(auth, (u)=>{
-  if(u){
-    els.adminName && (els.adminName.textContent = u.displayName || u.email || 'Admin');
-    els.adminRole && (els.adminRole.textContent = 'admin');
-    els.btnAuth && (els.btnAuth.style.display='none');
-    els.btnLogout && (els.btnLogout.style.display='inline-flex');
-    startLive();
-  } else {
-    els.adminName && (els.adminName.textContent = '');
-    els.adminRole && (els.adminRole.textContent = '');
-    els.btnAuth && (els.btnAuth.style.display='inline-flex');
-    els.btnLogout && (els.btnLogout.style.display='none');
-    if(unsubscribe){ unsubscribe(); unsubscribe=null; }
-    cache = []; render();
-  }
-});
+  $('cards').innerHTML = list.map(x => `
+    <article class="food-card">
+      ${x.per100?.gi > 0 ? `<div class="gi-badge">GI: ${x.per100.gi}</div>` : ''}
+      <img src="${x.image?.url || 'images/food-placeholder.png'}" onerror="this.src='images/food-placeholder.png'" alt="${x.name}">
+      <h3>${x.name}</h3>
+      <div class="cat">${x.category} | ${x.per100?.cal_kcal || 0} kcal</div>
+      <div class="macros">
+        <div><strong>${x.per100?.carbs_g || 0}g</strong>كارب</div>
+        <div><strong>${x.per100?.protein_g || 0}g</strong>بروتين</div>
+        <div><strong>${x.per100?.fat_g || 0}g</strong>دهون</div>
+      </div>
+      <button class="btn ghost sm mt-10" onclick="document.getElementById('edit-dialog').dispatchEvent(new CustomEvent('edit-item', {detail: '${x.id}'}))" style="width:100%">تعديل الصنف</button>
+    </article>
+  `).join('');
+}
+
+// Event listener for dynamic edit buttons
+$('edit-dialog').addEventListener('edit-item', (e) => openEditor(e.detail));
+$('search').oninput = render;
+$('filter-category').onchange = render;
