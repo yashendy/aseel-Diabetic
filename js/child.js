@@ -1,4 +1,4 @@
-// js/child.js — نسخة محسّنة متوافقة مع قاعدة البيانات الجديدة (CR/CF/Limits)
+// js/child.js 
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
@@ -22,15 +22,15 @@ const chipCFEl        = $('chipCF');
 const todayMeasuresEl = $('todayMeasures');
 const todayMealsEl    = $('todayMeals');
 const nextVisitEl     = $('nextVisit');
-const miniMeasuresEl  = $('miniMeasures');
-const miniMealsEl     = $('miniMeals');
-const miniFollowUpEl  = $('miniFollowUp');
 const goMeasurements  = $('goMeasurements');
 const goMeals         = $('goMeals');
-const goFoodItems     = $('goFoodItems');
 const goReports       = $('goReports');
 const goVisits        = $('goVisits');
 const goChildEdit     = $('goChildEdit');
+
+// روشتة الطبيب
+const doctorNoteAlert = $('doctorNoteAlert');
+const doctorNoteText  = $('doctorNoteText');
 
 // كارت التحاليل
 const labCard         = $('labCard');
@@ -80,7 +80,6 @@ function formatCountdown(baseDate,dueDate){
   return `باقي ${parts.join(' و ')}`;
 }
 
-/* ---- وقت الوجبة الحالي (محدث ليطابق قاعدة البيانات) ---- */
 function currentMeal(){
   const h = new Date().getHours();
   if(h >= 5  && h < 11) return { key: 'breakfast', label: 'الفطور' };
@@ -89,7 +88,6 @@ function currentMeal(){
   return { key: 'snack', label: 'سناك' };
 }
 
-/* ---- حالة الجلوكوز (محدث للحدود الـ 5 الجديدة) ---- */
 function glucoseState(v, child){
   if(v == null) return null;
   const limits = child.glucose_limits || {};
@@ -109,9 +107,6 @@ function pointColors(readings, child){
   return readings.map(r => glucoseState(r, child)?.color ?? '#10b981');
 }
 
-/* ============================================================
-   Sparkline الجلوكوز (محدث لقراءة النطاقات الجديدة)
-   ============================================================ */
 async function renderGlucoseSparkline(uid, child){
   const container = $('glucoseSparkContainer');
   if(!container) return;
@@ -146,7 +141,6 @@ async function renderGlucoseSparkline(uid, child){
   const minVal = Math.min(...vals).toFixed(1);
   const maxVal = Math.max(...vals).toFixed(1);
   
-  // استخدام النطاقات الجديدة للـ TIR
   const limits = child.glucose_limits || {};
   const low    = limits.low ?? 70;
   const high   = limits.high ?? 180;
@@ -186,12 +180,6 @@ async function renderGlucoseSparkline(uid, child){
 
     <div style="position:relative;height:100px">
       <canvas id="glucoseSparkCanvas"></canvas>
-    </div>
-
-    <div style="margin-top:8px;background:#f1f5f9;border-radius:6px;overflow:hidden;height:10px;display:flex">
-      <div style="width:${Math.round(vals.filter(v=>v<low).length/vals.length*100)}%;background:#3b82f6;height:100%"></div>
-      <div style="width:${tir}%;background:#10b981;height:100%"></div>
-      <div style="width:${Math.round(vals.filter(v=>v>high).length/vals.length*100)}%;background:#f59e0b;height:100%"></div>
     </div>
   `;
 
@@ -237,9 +225,6 @@ async function renderGlucoseSparkline(uid, child){
   });
 }
 
-/* ============================================================
-   التشغيل الرئيسي
-   ============================================================ */
 document.getElementById('logoutBtn')?.addEventListener('click',()=>signOut(auth).catch(()=>{}));
 
 onAuthStateChanged(auth, async (user)=>{
@@ -256,7 +241,14 @@ onAuthStateChanged(auth, async (user)=>{
     const c = snap.data();
     localStorage.setItem('lastChildId', childId);
 
-    /* ---- الهوية والنمو ---- */
+    /* ---- إظهار تعليمات الطبيب المباشرة ---- */
+    if (c.doctor_note && c.doctor_note.trim() !== '') {
+      if(doctorNoteText) doctorNoteText.textContent = c.doctor_note;
+      if(doctorNoteAlert) doctorNoteAlert.classList.remove('hidden');
+    } else {
+      if(doctorNoteAlert) doctorNoteAlert.classList.add('hidden');
+    }
+
     const name = c.identity?.name || c.name || 'طفل';
     const gender = c.identity?.gender || c.gender || '-';
     const dob = c.identity?.dob || c.birthDate || null;
@@ -264,7 +256,6 @@ onAuthStateChanged(auth, async (user)=>{
     setText(childNameEl, name);
     setText(childMetaEl, `${gender === 'female' ? 'أنثى' : (gender === 'male' ? 'ذكر' : gender)} • العمر: ${calcAge(dob)} سنة`);
 
-    /* ---- قراءة الإعدادات الطبية الجديدة ---- */
     const unit = c.glucoseUnit || 'mg/dL';
     const limits = c.glucose_limits || {};
     const min = limits.low ?? (unit === 'mmol/L' ? 3.9 : 70);
@@ -279,10 +270,8 @@ onAuthStateChanged(auth, async (user)=>{
     setText(chipCREl,    `CR (${meal.label}): ${crNow}`);
     setText(chipCFEl,    `CF: ${cf != null ? cf : '—'}`);
 
-    /* ---- الروابط ---- */
     setHref(goMeasurements,`measurements.html?child=${encodeURIComponent(childId)}`);
     setHref(goMeals,       `meals.html?child=${encodeURIComponent(childId)}`);
-    setHref(goFoodItems,   `food-items.html?child=${encodeURIComponent(childId)}`);
     setHref(goReports,     `reports.html?child=${encodeURIComponent(childId)}`);
     setHref(goVisits,      `visits.html?child=${encodeURIComponent(childId)}`);
     
@@ -290,7 +279,6 @@ onAuthStateChanged(auth, async (user)=>{
     localStorage.setItem('selectedChildId',childId);
     setHref(goChildEdit,`child-edit.html?parentId=${encodeURIComponent(user.uid)}&id=${encodeURIComponent(childId)}`);
 
-    /* ---- إحصائيات اليوم ---- */
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
@@ -302,12 +290,10 @@ onAuthStateChanged(auth, async (user)=>{
 
     onSnapshot(query(measRef, where('when', '>=', startOfDay), where('when', '<', endOfDay)), (snap) => {
       setText(todayMeasuresEl, snap.size);
-      setText(miniMeasuresEl,  snap.size);
     });
 
     onSnapshot(query(mealsRef, where('date', '==', todayStrFormat)), (snap) => {
       setText(todayMealsEl, snap.size);
-      setText(miniMealsEl,  snap.size);
     });
 
     const snapVisit = await getDocs(query(visRef, where('date','>=',todayStrFormat), orderBy('date','asc'), limit(1)));
@@ -318,9 +304,7 @@ onAuthStateChanged(auth, async (user)=>{
       displayFollow = `${nf} — ${formatCountdown(new Date(), due)}`;
     }
     setText(nextVisitEl, displayFollow);
-    setText(miniFollowUpEl, displayFollow);
 
-    /* ---- Sparkline والتحاليل ---- */
     await renderGlucoseSparkline(user.uid, c);
     await renderLabCard(user.uid);
 
@@ -337,7 +321,6 @@ onAuthStateChanged(auth, async (user)=>{
   finally{ loader(false); }
 });
 
-/* ---- بطاقة التحاليل ---- */
 async function getLastLabId(uid){
   const sn=await getDocs(query(collection(db,`parents/${uid}/children/${childId}/labs`),orderBy('when','desc'),limit(1)));
   return sn.empty?null:sn.docs[0].id;
