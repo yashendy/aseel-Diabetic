@@ -11,7 +11,6 @@
     .smart-alert.danger { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
     .smart-alert strong { display: block; margin-bottom: 6px; font-size: 15px; }
     
-    /* تنبيه خريطة الحقن */
     .injection-alert { display:flex; align-items:flex-start; gap:12px; background:#fef2f2; border:1px solid #fecaca; border-radius:12px; padding:12px; margin-top:16px; display:none; }
     .inj-icon { font-size:24px; }
     .inj-text strong { color:#b91c1c; display:block; margin-bottom:4px; }
@@ -78,6 +77,12 @@
         </div>
         <div class="row"><label>تاريخ الوجبة</label><input id="dateInput" type="date" /></div>
         
+        <!-- حقل الكارب اليدوي الجديد -->
+        <div class="row" style="background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 12px; margin-top: 12px;">
+          <label style="flex:1;">إجمالي الكارب (g) 🍔 <br><span class="muted tiny">أدخل يدوياً أو اختر من المكتبة</span></label>
+          <input id="manualCarbs" type="number" step="0.5" style="width: 100px; font-weight: bold; color: #7c3aed; font-size: 16px; text-align: center;" placeholder="0" />
+        </div>
+
         <div class="row">
           <label>قراءة السكر قبل الوجبة</label>
           <div style="display:flex; gap:8px; width:100%">
@@ -119,11 +124,10 @@
     </section>
   </main>
 
-  <!-- نوافذ المكتبة (نفس القديم) -->
   <div id="libModal" class="lib-modal"><div id="libOverlay" class="lib-overlay" data-close></div><div class="lib-panel"><div class="lib-header"><h4>مكتبة الأصناف</h4><button id="libClose" class="lib-close" data-close>×</button></div><div class="lib-content"><div class="lib-actions"><input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف..." /></div><div id="itemsGrid" class="grid"></div></div></div></div>
   <div id="tplModal" class="lib-modal"><div class="lib-overlay" data-close></div><div class="lib-panel"><div class="lib-header"><h4>القوالب</h4><button class="lib-close" data-close>×</button></div><div class="lib-content"><div id="tplList" class="tpl-list"></div></div></div></div>
 
-  <script type="module" src="js/meals.js?v=2026.01.01"></script>
+  <script type="module" src="js/meals.js?v=2026.01.02"></script>
   <script type="module" src="js/header.js"></script>
 </body>
 </html>
