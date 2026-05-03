@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>إدارة مكتبة الطعام | لوحة الأدمن</title>
+  
+  <!-- استدعاء ملف التنسيق الخاص بالصفحة -->
   <link rel="stylesheet" href="./css/food-items.css" />
   <link rel="icon" href="favicon.ico" />
 </head>
@@ -21,7 +23,7 @@
     <nav class="admin-nav">
       <a href="admin-dashboard.html" class="nav-btn">الرئيسية</a>
       <a href="admin-users.html" class="nav-btn">المستخدمين</a>
-      <a href="admin-food.html" class="nav-btn active">مكتبة الطعام</a>
+      <a href="food-items.html" class="nav-btn active">مكتبة الطعام</a>
       <a href="admin-approvals.html" class="nav-btn">طلبات الأطباء</a>
     </nav>
     <div class="admin-profile">
@@ -34,11 +36,10 @@
     <!-- شريط الفلاتر والإحصائيات -->
     <section class="filters card">
       <div class="row end">
-        <div class="search-box">
-          <span class="search-icon">🔍</span>
-          <input id="search" type="search" placeholder="ابحث بالاسم، الفئة، أو الوسوم..." />
+        <div class="search-box" style="flex: 1; min-width: 250px; position: relative;">
+          <input id="search" type="search" placeholder="ابحث بالاسم، الفئة، أو الوسوم..." style="width: 100%;" />
         </div>
-        <select id="filter-category" class="input">
+        <select id="filter-category" class="input" style="width: auto; min-width: 150px;">
           <option value="">كل الفئات</option>
           <option>النشويات</option>
           <option>منتجات الألبان</option>
@@ -47,6 +48,7 @@
           <option>البروتينات</option>
           <option>الدهون</option>
           <option>حلويات ومشروبات</option>
+          <option>أخرى</option>
         </select>
         <button id="btn-add" class="btn primary">➕ إضافة صنف جديد</button>
       </div>
@@ -61,7 +63,7 @@
     <form id="edit-form" method="dialog">
       <div class="dialog-header">
         <h3 id="dlg-title">إضافة صنف جديد</h3>
-        <button id="dlg-close" class="icon-btn" type="button">✕</button>
+        <button id="dlg-close" class="icon-btn" type="button" title="إغلاق">✕</button>
       </div>
 
       <input id="item-id" type="hidden" />
@@ -69,22 +71,36 @@
       <div class="dialog-body">
         
         <div class="grid-2">
+          <!-- العمود الأول -->
           <div class="col">
             <!-- الأساسيات والصورة -->
             <div class="section-card">
               <h4>البيانات الأساسية</h4>
-              <label class="field"><span>اسم الصنف</span><input id="name" type="text" required /></label>
+              <label class="field"><span>اسم الصنف</span><input id="name" type="text" required placeholder="مثال: تفاح أخضر" /></label>
               <label class="field"><span>الفئة</span>
                 <select id="category" required>
-                  <option>النشويات</option><option>منتجات الألبان</option><option>الفاكهة</option>
-                  <option>الخضروات</option><option>البروتينات</option><option>الدهون</option><option>أخرى</option>
+                  <option>النشويات</option>
+                  <option>منتجات الألبان</option>
+                  <option>الفاكهة</option>
+                  <option>الخضروات</option>
+                  <option>البروتينات</option>
+                  <option>الدهون</option>
+                  <option>حلويات ومشروبات</option>
+                  <option>أخرى</option>
                 </select>
               </label>
               
-              <div class="image-upload-area">
+              <!-- منطقة رفع أو ربط الصورة المحدثة -->
+              <div class="image-upload-area" style="margin-top: 16px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px dashed #cbd5e1;">
                 <input id="imageFile" type="file" accept="image/*" hidden />
-                <button id="btn-pick" class="btn ghost outline" type="button">📸 اختر صورة للصنف</button>
-                <div class="preview"><img id="imagePreview" style="display:none;" /></div>
+                <button id="btn-pick" class="btn ghost outline sm" type="button" style="width:100%; margin-bottom:10px;">📸 اختر صورة من الجهاز (تتطلب ترقية)</button>
+                
+                <label class="field" style="margin-bottom:0;">
+                  <span style="font-size:12px; color:#64748b;">أو ضع رابط صورة خارجي (مجاني وموصى به):</span>
+                  <input id="imageUrl" type="url" placeholder="https://..." dir="ltr" style="text-align:left; margin-top:4px;" />
+                </label>
+                
+                <div class="preview"><img id="imagePreview" style="display:none; max-height:120px; margin-top:10px; border-radius:8px;" /></div>
                 <div id="upload-bar" class="progress hidden"><div id="upload-bar-fill"></div></div>
               </div>
             </div>
@@ -93,15 +109,21 @@
             <div class="section-card">
               <h4>المقاييس والأحجام (Portions)</h4>
               <div id="units-list" class="units"></div>
-              <button id="btn-add-unit" class="btn ghost outline sm mt-10" type="button">+ إضافة مقدار</button>
-              <div class="quick-chips mt-10">
-                <span class="chip-sm" data-unit="cup|كوب|240">كوب (240g)</span>
-                <span class="chip-sm" data-unit="tbsp|ملعقة كبيرة|15">ملعقة كبيرة (15g)</span>
-                <span class="chip-sm" data-unit="piece|حبة متوسطة|150">حبة متوسطة (150g)</span>
+              <button id="btn-add-unit" class="btn ghost outline sm mt-10" type="button">+ إضافة مقدار يدوي</button>
+              
+              <div class="quick-chips mt-10" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11px; color:#64748b; margin-bottom:6px;">مقادير سريعة جاهزة:</span>
+                <div class="chips">
+                  <span class="chip-sm" data-unit="cup|كوب|240">كوب (240g)</span>
+                  <span class="chip-sm" data-unit="tbsp|ملعقة كبيرة|15">ملعقة كبيرة (15g)</span>
+                  <span class="chip-sm" data-unit="tsp|ملعقة صغيرة|5">ملعقة صغيرة (5g)</span>
+                  <span class="chip-sm" data-unit="piece|حبة متوسطة|150">حبة متوسطة (150g)</span>
+                </div>
               </div>
             </div>
           </div>
 
+          <!-- العمود الثاني -->
           <div class="col">
             <!-- القيم الغذائية -->
             <div class="section-card">
@@ -112,7 +134,7 @@
                 <label class="field"><span>بروتين (g) 🥩</span><input id="protein_g" type="number" step="0.1" required></label>
                 <label class="field"><span>دهون (g) 🥑</span><input id="fat_g" type="number" step="0.1" required></label>
                 <label class="field"><span>سعرات (kcal) 🔥</span><input id="cal_kcal" type="number" step="1"></label>
-                <label class="field"><span>مؤشر جلايسيمي (GI) 📈</span><input id="gi" type="number" step="1"></label>
+                <label class="field"><span>مؤشر جلايسيمي (GI) 📈</span><input id="gi" type="number" step="1" placeholder="اختياري"></label>
               </div>
             </div>
 
@@ -121,7 +143,7 @@
               <h4>التصنيف الطبي (Smart Tags)</h4>
               <p class="hint">حددي الموانع ليقوم النظام بتحذير المرضى عند حساب الوجبات.</p>
               
-              <strong>🚫 خالي من (مسببات الحساسية):</strong>
+              <strong style="display:block; margin-bottom:6px; font-size:13px; color:#dc2626;">🚫 خالي من (مسببات الحساسية):</strong>
               <div class="chips mb-10" id="allergy-tags">
                 <button class="tag-btn" type="button" data-tag="#خالي_من_الجلوتين">جلوتين</button>
                 <button class="tag-btn" type="button" data-tag="#خالي_من_الألبان">ألبان</button>
@@ -129,14 +151,14 @@
                 <button class="tag-btn" type="button" data-tag="#خالي_من_البيض">بيض</button>
               </div>
 
-              <strong>✅ مناسب لأنظمة:</strong>
+              <strong style="display:block; margin-top:12px; margin-bottom:6px; font-size:13px; color:#16a34a;">✅ مناسب لأنظمة:</strong>
               <div class="chips" id="diet-tags">
                 <button class="tag-btn" type="button" data-tag="#كيتو">كيتو</button>
                 <button class="tag-btn" type="button" data-tag="#نباتي">نباتي (Vegan)</button>
                 <button class="tag-btn" type="button" data-tag="#لو_كارب">لو كارب</button>
               </div>
               
-              <label class="field mt-10">
+              <label class="field mt-10" style="margin-top: 16px;">
                 <span>وسوم إضافية (مفصولة بمسافة)</span>
                 <input id="hashTagsManual" type="text" placeholder="مثال: #عشاء #سريع #موز" />
               </label>
@@ -154,6 +176,7 @@
     </form>
   </dialog>
 
+  <!-- استدعاء ملف الجافاسكريبت كـ Module -->
   <script type="module" src="./js/food-items.js"></script>
 </body>
 </html>
