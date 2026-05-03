@@ -194,10 +194,13 @@ function render() {
     return matchQ && matchCat;
   });
 
+  // كود الصورة البديلة الذكية (SVG) بدلاً من ملف خارجي
+  const placeholderObj = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" style="background:%23f8fafc"><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="24" font-family="system-ui,-apple-system,sans-serif">🍽️ بدون صورة</text></svg>`;
+
   $('cards').innerHTML = list.map(x => `
     <article class="food-card">
       ${x.per100?.gi > 0 ? `<div class="gi-badge">GI: ${x.per100.gi}</div>` : ''}
-      <img src="${x.image?.url || 'images/food-placeholder.png'}" onerror="this.src='images/food-placeholder.png'" alt="${x.name}">
+      <img src="${x.image?.url || placeholderObj}" onerror="this.onerror=null; this.src='${placeholderObj}';" alt="${x.name}">
       <h3>${x.name}</h3>
       <div class="cat">${x.category} | ${x.per100?.cal_kcal || 0} kcal</div>
       <div class="macros">
