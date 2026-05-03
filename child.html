@@ -30,6 +30,15 @@
       </div>
     </header>
 
+    <!-- تنبيه روشتة الطبيب (إغلاق الدائرة) -->
+    <div id="doctorNoteAlert" class="hidden" style="background: #eff6ff; border: 1px solid #bfdbfe; border-inline-start: 4px solid #3b82f6; border-radius: 12px; padding: 16px; margin-bottom: 24px; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+      <div style="font-size: 24px;">👨‍⚕️</div>
+      <div>
+        <strong style="color: #1e40af; display: block; margin-bottom: 4px; font-size: 15px;">تعليمات الطبيب المباشرة:</strong>
+        <p id="doctorNoteText" style="margin: 0; color: #1e3a8a; font-size: 14px; line-height: 1.5;"></p>
+      </div>
+    </div>
+
     <section class="dashboard-grid">
       <!-- كارت القياسات -->
       <a class="dash-card link-blue" id="goMeasurements">
@@ -99,7 +108,7 @@
 
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="js/child.js?v=2"></script>
+  <script type="module" src="js/child.js?v=3"></script>
   <script type="module" src="js/header.js"></script>
 </body>
 </html>
