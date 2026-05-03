@@ -1,3 +1,4 @@
+// js/food-items.js
 import { db, storage, auth } from './firebase-config.js';
 import { collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 import { ref as sRef, uploadBytesResumable, getDownloadURL } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js';
@@ -9,13 +10,16 @@ let cache = [];
 let lastPickedFile = null;
 let currentImagePath = '';
 
+// صورة بديلة آمنة جداً (مشفرة لتجنب كسر الـ HTML)
+const SAFE_PLACEHOLDER = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22300%22%20style%3D%22background%3A%23f8fafc%22%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%2394a3b8%22%20font-size%3D%2224%22%20font-family%3D%22system-ui%2C-apple-system%2Csans-serif%22%3E%E2%9B%94%20%D8%A8%D8%AF%D9%88%D9%86%20%D8%B5%D9%88%D8%B1%D8%A9%3C%2Ftext%3E%3C%2Fsvg%3E';
+
 // --- 1. التحقق من دخول الأدمن ---
 onAuthStateChanged(auth, (user) => {
   if (!user) { location.href = 'index.html'; return; }
-  $('admin-name').textContent = user.displayName || user.email;
+  if($('admin-name')) $('admin-name').textContent = user.displayName || user.email;
   startLive();
 });
-$('btn-logout').onclick = () => signOut(auth).then(()=> location.href = 'index.html');
+if($('btn-logout')) $('btn-logout').onclick = () => signOut(auth).then(()=> location.href = 'index.html');
 
 // --- 2. إدارة المقاييس (Portions) ---
 function createUnitRow(u = { label:'', grams:null }) {
@@ -29,7 +33,7 @@ function createUnitRow(u = { label:'', grams:null }) {
   return row;
 }
 
-$('btn-add-unit').onclick = () => $('units-list').appendChild(createUnitRow());
+if($('btn-add-unit')) $('btn-add-unit').onclick = () => $('units-list').appendChild(createUnitRow());
 document.querySelectorAll('.chip-sm').forEach(btn => {
   btn.onclick = () => {
     const [_, lbl, gr] = btn.dataset.unit.split('|');
@@ -62,29 +66,31 @@ function getActiveTags() {
 
 function setActiveTags(tagsArr) {
   document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
-  $('hashTagsManual').value = '';
+  if($('hashTagsManual')) $('hashTagsManual').value = '';
   const manual = [];
   (tagsArr || []).forEach(t => {
     const btn = document.querySelector(`.tag-btn[data-tag="${t}"]`);
     if(btn) btn.classList.add('active'); else manual.push(t);
   });
-  $('hashTagsManual').value = manual.join(' ');
+  if($('hashTagsManual')) $('hashTagsManual').value = manual.join(' ');
 }
 
-// --- 4. رفع الصور إلى Firebase Storage ---
-$('btn-pick').onclick = () => $('imageFile').click();
-$('imageFile').onchange = (e) => {
-  const file = e.target.files[0];
-  if(!file) return;
-  lastPickedFile = file;
-  $('imagePreview').src = URL.createObjectURL(file);
-  $('imagePreview').style.display = 'block';
-};
+// --- 4. رفع الصور ---
+if($('btn-pick')) $('btn-pick').onclick = () => $('imageFile').click();
+if($('imageFile')) {
+  $('imageFile').onchange = (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    lastPickedFile = file;
+    $('imagePreview').src = URL.createObjectURL(file);
+    $('imagePreview').style.display = 'block';
+  };
+}
 
 async function handleImageUpload(itemId) {
   if(!lastPickedFile) return currentImagePath;
   const ext = lastPickedFile.name.split('.').pop();
-  const path = `food-items/${itemId}/main.${ext}`; // مسار منظم لكل صنف
+  const path = `food-items/${itemId}/main.${ext}`; 
   
   $('upload-bar').classList.remove('hidden');
   const storageRef = sRef(storage, path);
@@ -103,9 +109,9 @@ async function handleImageUpload(itemId) {
 
 // --- 5. فتح وإغلاق المحرر (CRUD) ---
 const dialog = $('edit-dialog');
-$('btn-add').onclick = () => openEditor(null);
-$('dlg-close').onclick = () => dialog.close();
-$('btn-cancel').onclick = () => dialog.close();
+if($('btn-add')) $('btn-add').onclick = () => openEditor(null);
+if($('dlg-close')) $('dlg-close').onclick = () => dialog.close();
+if($('btn-cancel')) $('btn-cancel').onclick = () => dialog.close();
 
 async function openEditor(id) {
   $('edit-form').reset(); $('units-list').innerHTML = ''; setActiveTags([]);
@@ -136,45 +142,49 @@ async function openEditor(id) {
 }
 
 // --- 6. حفظ الصنف ---
-$('edit-form').onsubmit = async (e) => {
-  e.preventDefault();
-  const btnSave = $('btn-save'); btnSave.disabled = true; btnSave.textContent = 'جاري الحفظ...';
-  
-  try {
-    const id = $('item-id').value || doc(FOODS).id;
-    const uploadedPath = await handleImageUpload(id);
-    let imgUrl = '';
+if($('edit-form')) {
+  $('edit-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btnSave = $('btn-save'); btnSave.disabled = true; btnSave.textContent = 'جاري الحفظ...';
     
-    if(uploadedPath) {
-       imgUrl = await getDownloadURL(sRef(storage, uploadedPath));
+    try {
+      const id = $('item-id').value || doc(FOODS).id;
+      const uploadedPath = await handleImageUpload(id);
+      let imgUrl = '';
+      
+      if(uploadedPath) {
+         imgUrl = await getDownloadURL(sRef(storage, uploadedPath));
+      }
+
+      const payload = {
+        name: $('name').value.trim(), category: $('category').value,
+        per100: {
+          carbs_g: Number($('carbs_g').value), fiber_g: Number($('fiber_g').value),
+          protein_g: Number($('protein_g').value), fat_g: Number($('fat_g').value),
+          cal_kcal: Number($('cal_kcal').value), gi: Number($('gi').value)
+        },
+        units: getUnits(), tags: getActiveTags(),
+        image: { path: uploadedPath, url: imgUrl },
+        searchText: `${$('name').value} ${$('category').value} ${getActiveTags().join(' ')}`.toLowerCase(),
+        updatedAt: serverTimestamp()
+      };
+
+      if(!$('item-id').value) payload.createdAt = serverTimestamp();
+      await setDoc(doc(FOODS, id), payload, { merge: true });
+      
+      dialog.close();
+    } catch(err) { alert('خطأ في الحفظ: ' + err.message); }
+    finally { btnSave.disabled = false; btnSave.textContent = '💾 حفظ الصنف في المكتبة'; }
+  };
+}
+
+if($('btn-delete')) {
+  $('btn-delete').onclick = async () => {
+    if(confirm('هل أنت متأكد من حذف هذا الصنف نهائياً؟')) {
+      await deleteDoc(doc(FOODS, $('item-id').value)); dialog.close();
     }
-
-    const payload = {
-      name: $('name').value.trim(), category: $('category').value,
-      per100: {
-        carbs_g: Number($('carbs_g').value), fiber_g: Number($('fiber_g').value),
-        protein_g: Number($('protein_g').value), fat_g: Number($('fat_g').value),
-        cal_kcal: Number($('cal_kcal').value), gi: Number($('gi').value)
-      },
-      units: getUnits(), tags: getActiveTags(),
-      image: { path: uploadedPath, url: imgUrl },
-      searchText: `${$('name').value} ${$('category').value} ${getActiveTags().join(' ')}`.toLowerCase(),
-      updatedAt: serverTimestamp()
-    };
-
-    if(!$('item-id').value) payload.createdAt = serverTimestamp();
-    await setDoc(doc(FOODS, id), payload, { merge: true });
-    
-    dialog.close();
-  } catch(err) { alert('خطأ في الحفظ: ' + err.message); }
-  finally { btnSave.disabled = false; btnSave.textContent = '💾 حفظ الصنف في المكتبة'; }
-};
-
-$('btn-delete').onclick = async () => {
-  if(confirm('هل أنت متأكد من حذف هذا الصنف نهائياً؟')) {
-    await deleteDoc(doc(FOODS, $('item-id').value)); dialog.close();
-  }
-};
+  };
+}
 
 // --- 7. العرض الحي (Live Feed) ---
 function startLive() {
@@ -185,8 +195,9 @@ function startLive() {
 }
 
 function render() {
-  const q = $('search').value.toLowerCase();
-  const cat = $('filter-category').value;
+  if(!$('cards')) return;
+  const q = $('search') ? $('search').value.toLowerCase() : '';
+  const cat = $('filter-category') ? $('filter-category').value : '';
   
   const list = cache.filter(x => {
     const matchQ = !q || (x.searchText && x.searchText.includes(q));
@@ -194,13 +205,10 @@ function render() {
     return matchQ && matchCat;
   });
 
-  // كود الصورة البديلة الذكية (SVG) بدلاً من ملف خارجي
-  const placeholderObj = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" style="background:%23f8fafc"><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="24" font-family="system-ui,-apple-system,sans-serif">🍽️ بدون صورة</text></svg>`;
-
   $('cards').innerHTML = list.map(x => `
     <article class="food-card">
       ${x.per100?.gi > 0 ? `<div class="gi-badge">GI: ${x.per100.gi}</div>` : ''}
-      <img src="${x.image?.url || placeholderObj}" onerror="this.onerror=null; this.src='${placeholderObj}';" alt="${x.name}">
+      <img src="${x.image?.url || SAFE_PLACEHOLDER}" onerror="this.onerror=null; this.src='${SAFE_PLACEHOLDER}';" alt="${x.name}">
       <h3>${x.name}</h3>
       <div class="cat">${x.category} | ${x.per100?.cal_kcal || 0} kcal</div>
       <div class="macros">
@@ -214,6 +222,6 @@ function render() {
 }
 
 // Event listener for dynamic edit buttons
-$('edit-dialog').addEventListener('edit-item', (e) => openEditor(e.detail));
-$('search').oninput = render;
-$('filter-category').onchange = render;
+if($('edit-dialog')) $('edit-dialog').addEventListener('edit-item', (e) => openEditor(e.detail));
+if($('search')) $('search').oninput = render;
+if($('filter-category')) $('filter-category').onchange = render;
