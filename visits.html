@@ -8,6 +8,17 @@
   <link rel="icon" href="favicon.ico">
 </head>
 <body>
+  <!-- شريط التنقل الموحد -->
+  <header class="topbar no-print" style="background: #1e3a8a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 24px;">🩺</span>
+      <h2 style="margin: 0; font-size: 18px;">الزيارات والمتابعات الطبية (Visits)</h2>
+    </div>
+    <div>
+      <button onclick="window.close()" class="btn" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold;">إغلاق النافذة ✕</button>
+    </div>
+  </header>
+
   <div id="appLoader" class="loader"><span class="spinner"></span><span>جاري جلب البيانات...</span></div>
 
   <div class="container">
@@ -70,6 +81,7 @@
 
   </div>
 
+  <!-- نافذة إضافة زيارة -->
   <div id="visitModal" class="modal hidden">
     <div class="modal-body">
       <div class="modal-header">
@@ -117,9 +129,9 @@
         </div>
         <div class="field hidden" id="existingWrap"><label>المرفقات الحالية</label><div id="existingFiles" class="files-wrap"></div></div>
 
-        <div class="form-actions">
-          <button type="submit" id="saveVisitBtn" class="btn primary">💾 حفظ الزيارة</button>
+        <div class="form-actions" style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
           <button type="button" id="cancelVisitBtn" class="btn ghost">إلغاء</button>
+          <button type="submit" id="saveVisitBtn" class="btn primary">💾 حفظ الزيارة</button>
         </div>
       </form>
     </div>
