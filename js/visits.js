@@ -142,7 +142,6 @@ function renderVisits(){
     card.querySelector('.act-edit').onclick = () => openModal(r);
     card.querySelector('.act-del').onclick = () => deleteVisit(r.id);
     
-    // ربط الفحوصات بصفحة التحاليل مباشرة
     card.querySelectorAll('.lab-chip').forEach(chip => {
       chip.onclick = async () => {
         const labName = chip.getAttribute('data-lab');
@@ -164,7 +163,6 @@ async function toggleLabDone(v, labName, chipEl){
   const done = new Set(v.labsCompleted);
   if(done.has(labName)) done.delete(labName); else {
     done.add(labName);
-    // تلميح ذكي للذهاب لصفحة التحاليل
     if(confirm(`تم تحديد "${labName}" كمكتمل. هل تريد الانتقال لصفحة التحاليل لتسجيل النتيجة؟`)) {
       window.location.href = `labs.html?child=${childId}`;
     }
@@ -294,4 +292,24 @@ function copyAgendaToClipboard(){
   navigator.clipboard.writeText(txt).then(()=> alert('تم النسخ ✅'));
 }
 
-function exportCSV(){ /* Code remains same but uses filteredVisits */ }
+// دالة التصدير المكتملة
+function exportCSV(){
+  if(!filteredVisits || filteredVisits.length === 0) return alert('لا توجد زيارات لتصديرها');
+  let csv = '\uFEFFالتاريخ,الوقت,النوع,الطبيب/المركز,السبب,تشخيص الطبيب,التوصيات,حالة التطبيق\n';
+  
+  filteredVisits.forEach(v => {
+    const isApplied = String(v.applied) === 'true' ? 'تم التطبيق' : 'بانتظار التطبيق';
+    // تنظيف النصوص من الفواصل والأسطر الجديدة لتجنب كسر ملف الـ CSV
+    const reason = (v.reason || '').replace(/"/g, '""').replace(/\n/g, ' ');
+    const summary = (v.summary || '').replace(/"/g, '""').replace(/\n/g, ' ');
+    const rec = (v.recommendations || '').replace(/"/g, '""').replace(/\n/g, ' ');
+    
+    csv += `${v.date},${v.time||''},${v.type},${v.doctorName},"${reason}","${summary}","${rec}",${isApplied}\n`;
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `Visits_Report_${todayStr()}.csv`;
+  link.click();
+}
