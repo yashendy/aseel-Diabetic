@@ -26,17 +26,34 @@ let unitSel, fromDate, toDate, reportGrid, emptyGrid, pie, cmpElems, aiTable;
 
 let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
 let sysUnit = 'mg/dL';
+let parentIdForQuery = null; // تخزين رقم الأب لاستخدامه لاحقاً
 
 onAuthStateChanged(auth, async (u)=>{
   if(!u) return;
   currentUser=u;
+  
+  // تحديد الـ Parent ID بناءً على الرابط أو المستخدم
+  parentIdForQuery = new URLSearchParams(location.search).get('parentId') || u.uid;
+  
+  // تحديث زر الرجوع بذكاء (طبيب أم ولي أمر)
+  const backBtn = $('backBtn');
+  if(backBtn) {
+    if(new URLSearchParams(location.search).has('parentId') && parentIdForQuery !== u.uid) {
+      backBtn.innerHTML = '🩺 رجوع للعيادة';
+      backBtn.onclick = () => location.href = 'doctor-dashboard.html';
+    } else {
+      backBtn.innerHTML = '🏠 رجوع للوحة الطفل';
+      backBtn.onclick = () => location.href = `child.html?child=${childId}`;
+    }
+  }
+
   wire(); 
   showLoader(true);
   try {
-    await loadChild(u.uid);
+    await loadChild(parentIdForQuery);
     unitSel.value = sysUnit;
     fillThresholdChips();
-    setQuickRange('1w'); // افتراضي آخر أسبوع
+    setQuickRange('1w'); 
     await renderReport();
   } catch(e) { console.error(e); }
   finally { showLoader(false); }
@@ -47,8 +64,9 @@ function wire(){
   reportGrid=$('reportGrid'); emptyGrid=$('emptyGrid'); aiTable=$('aiTable');
   cmpElems={AFrom:$('cmpAFrom'), ATo:$('cmpATo'), BFrom:$('cmpBFrom'), BTo:$('cmpBTo')};
   
-  $('openPrint').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&from=${fromDate.value}&to=${toDate.value}&unit=${encodeURIComponent(unitSel.value)}`,'_blank');
-  $('openPrintBlank').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&from=${fromDate.value}&to=${toDate.value}&unit=${encodeURIComponent(unitSel.value)}&blank=1`,'_blank');
+  // تم إضافة parentIdForQuery للطباعة حتى تعمل مع الطبيب
+  $('openPrint').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&parentId=${encodeURIComponent(parentIdForQuery)}&from=${fromDate.value}&to=${toDate.value}&unit=${encodeURIComponent(unitSel.value)}`,'_blank');
+  $('openPrintBlank').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&parentId=${encodeURIComponent(parentIdForQuery)}&from=${fromDate.value}&to=${toDate.value}&unit=${encodeURIComponent(unitSel.value)}&blank=1`,'_blank');
   
   $('exportPdf').onclick=exportPdf; $('exportCsv').onclick=exportCSV; $('exportXlsx').onclick=exportXLSX;
   
@@ -56,7 +74,6 @@ function wire(){
   $('cmpRun').onclick = runCompare;
   unitSel.onchange = () => { fillThresholdChips(); renderReport(); };
 
-  // تفاعل الفترات السريعة
   $('quickRange').onchange = (e) => {
     if(e.target.value === 'custom') return;
     setQuickRange(e.target.value);
@@ -77,7 +94,6 @@ function setQuickRange(range) {
   $('toDate').value = to.toISOString().slice(0, 10);
   $('fromDate').value = from.toISOString().slice(0, 10);
   
-  // تحديث المقارنة تلقائياً
   cmpElems.AFrom.value = $('fromDate').value; 
   cmpElems.ATo.value = $('toDate').value;
   const diffTime = Math.abs(to - from);
@@ -87,8 +103,7 @@ function setQuickRange(range) {
   cmpElems.BTo.value = prevTo.toISOString().slice(0, 10);
 }
 
-async function loadChild(uid){
-  const parentId = new URLSearchParams(location.search).get('parentId') || uid;
+async function loadChild(parentId){
   childRef=doc(db,'parents',parentId,'children',childId);
   const snap=await getDoc(childRef);
   if(!snap.exists()) { throw new Error('child-not-found'); }
@@ -139,12 +154,11 @@ async function fetchRange(fromISO,toISO){
   const qy=query(col, where('date','>=',fromISO), where('date','<=',toISO));
   const snap=await getDocs(qy);
   const unit=unitSel.value;
-  const mType = $('measureType').value; // تصفية نوع القياس
+  const mType = $('measureType').value; 
   const arr=[];
   
   snap.forEach(s=>{
     const x=s.data();
-    // تصفية حسب نوع القياس (لو السجل يحتوي على measureMethod)
     if(mType !== 'all' && x.measureMethod && x.measureMethod !== mType) return;
     
     let v = unit.includes('mmol') ? (x.value_mmol ?? (x.unit==='mg/dL'? mgdl2mmol(x.value): x.value))
@@ -228,9 +242,6 @@ async function renderReport(){
   buildAI(data,unit);
   showLoader(false);
 }
-
-// ... (نفس دوال updateStats, drawPie, runCompare, و buildAI الأصلية التي برمجتيها)
-// سأضع لكِ الجزء الخاص بالتصدير (Export) هنا مباشرة لإكمال الكود:
 
 function updateStats(list){
   const validList = list.filter(x => x.val !== null);
@@ -393,14 +404,11 @@ function buildAI(list,unit){
   `).join('');
 }
 
-// --- الأكواد المضافة للتصدير الفعلي للبيانات ---
-
 async function exportCSV(){
   showLoader(true);
   try {
     const data = await fetchRange(fromDate.value, toDate.value);
-    let csv = '\uFEFF'; 
-    csv += 'التاريخ,الوقت,الفترة,القراءة,الوحدة,كارب (جرام),إنسولين (وحدة),ملاحظات\n';
+    let csv = '\uFEFFالتاريخ,الوقت,الفترة,القراءة,الوحدة,كارب (جرام),إنسولين (وحدة),ملاحظات\n';
     
     data.forEach(d => {
       const time = d.when.toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'});
@@ -439,21 +447,12 @@ async function exportXLSX(){
     XLSX.utils.book_append_sheet(wb, ws, "اللوجبوك");
     XLSX.writeFile(wb, `Logbook_${fromDate.value}_to_${toDate.value}.xlsx`);
     toast("✅ تم تصدير ملف Excel بنجاح");
-  } catch(e) { 
-    console.error(e); 
-    alert('حدث خطأ. تأكد من الاتصال لتشغيل مكتبة التصدير.'); 
-  }
+  } catch(e) { console.error(e); alert('حدث خطأ.'); }
   showLoader(false);
 }
 
 function exportPdf(){
   const node=document.querySelector('.container'); 
-  const opt={
-    margin: 10,
-    filename:`report-${fromDate.value}_${toDate.value}.pdf`, 
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas:{ scale:2, useCORS: true }, 
-    jsPDF:{ unit: 'mm', format: 'a4', orientation:'landscape' }
-  };
+  const opt={ margin: 10, filename:`report-${fromDate.value}_${toDate.value}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas:{ scale:2, useCORS: true }, jsPDF:{ unit: 'mm', format: 'a4', orientation:'landscape' } };
   window.html2pdf().from(node).set(opt).save();
 }
