@@ -1,7 +1,7 @@
 // js/doctor-dashboard.js
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { collection, collectionGroup, getDocs, doc, getDoc, setDoc, query, where, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { collection, collectionGroup, getDocs, doc, getDoc, updateDoc, setDoc, query, where, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
 let currentUser = null;
@@ -28,7 +28,7 @@ onAuthStateChanged(auth, async (user) => {
   setupEvents();
 });
 
-// --- 2. إدارة أكواد الربط (مبني على أسطر الكود الخاصة بك) ---
+// --- 2. إدارة أكواد الربط ---
 async function loadCodes() {
   const list = $('codesList');
   list.innerHTML = '<div class="empty">جاري التحميل...</div>';
@@ -161,6 +161,13 @@ const modal = $('medical-modal');
 $('modal-close').onclick = () => modal.close();
 $('btn-cancel').onclick = () => modal.close();
 
+// ربط زرار التقرير داخل المودال بشكل ديناميكي
+$('btn-view-reports').onclick = () => {
+  const pId = $('parent-id').value;
+  const cId = $('child-id').value;
+  if(pId && cId) window.open(`reports.html?child=${cId}&parentId=${pId}`, '_blank');
+};
+
 window.openMedicalModal = (childId) => {
   const p = patients.find(x => x.id === childId);
   if (!p) return;
@@ -194,22 +201,28 @@ $('medical-form').onsubmit = async (e) => {
     const newMap = {};
     ['arm_right', 'arm_left', 'abd_top_right', 'abd_top_left', 'abd_bottom_right', 'abd_bottom_left', 'thigh_right', 'thigh_left'].forEach(z => newMap[z] = $(`inj_${z}`).value);
 
+    // استخدام الدوت نوتيشن عشان ميمسحش أي داتا تانية (زي الحدود القصوى والدنيا)
     const payload = {
-      glucose_limits: { target: Number($('targetBg').value) },
+      "glucose_limits.target": Number($('targetBg').value),
       cf: Number($('cfVal').value),
-      cr: { breakfast: Number($('crBreakfast').value), lunch: Number($('crLunch').value), dinner: Number($('crDinner').value), snack: Number($('crSnack').value) },
+      "cr.breakfast": Number($('crBreakfast').value),
+      "cr.lunch": Number($('crLunch').value),
+      "cr.dinner": Number($('crDinner').value),
+      "cr.snack": Number($('crSnack').value),
       doctor_note: $('doctorNote').value.trim(),
       injection_map: newMap,
       lastMedicalUpdate: serverTimestamp()
     };
 
-    // التحديث بخاصية merge للاحتفاظ بالحدود الخطرة القديمة
-    await setDoc(doc(db, `parents/${pId}/children/${cId}`), payload, { merge: true });
+    await updateDoc(doc(db, `parents/${pId}/children/${cId}`), payload);
     
     alert("✅ تم حفظ البروتوكول! ستظهر التعليمات عند الأم فوراً.");
     modal.close();
     await loadPatients();
-  } catch (err) { alert("❌ حدث خطأ أثناء الحفظ."); } 
+  } catch (err) { 
+    console.error(err);
+    alert("❌ حدث خطأ أثناء الحفظ. تأكد من تحديث القواعد (Rules) في الفايربيز كما هو موضح."); 
+  } 
   finally { btn.disabled = false; btn.textContent = '💾 اعتماد وتحديث البروتوكول'; }
 };
 
