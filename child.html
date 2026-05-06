@@ -9,10 +9,36 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <!-- سيتم استدعاء الهيدر الموحد هنا تلقائياً -->
+  <!-- 1. شريط التنقل العلوي (Topbar) -->
+  <header class="main-topbar no-print">
+    <div class="topbar-right">
+      <div class="top-avatar" id="topAvatar">أ</div>
+      <div class="top-info">
+        <h3 id="topChildName">جاري التحميل...</h3>
+        <span id="topChildMeta" class="muted tiny">—</span>
+      </div>
+    </div>
+    
+    <nav class="topbar-nav">
+      <a href="#" class="nav-pill active">🏠 الرئيسية</a>
+      <a href="measurements.html" class="nav-pill" id="navMeas">📊 القياسات</a>
+      <a href="meals.html" class="nav-pill" id="navMeals">🍽️ الوجبات</a>
+      <a href="visits.html" class="nav-pill" id="navVisits">🩺 الزيارات</a>
+      <a href="labs.html" class="nav-pill" id="navLabs">🔬 التحاليل</a>
+    </nav>
+    
+    <div class="topbar-left">
+      <button id="logoutBtn" class="btn-logout-outline">↪ خروج</button>
+    </div>
+  </header>
+
+  <!-- 2. مسار التنقل (Breadcrumbs) -->
+  <div class="breadcrumbs no-print">
+    <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="#" id="breadChildName">الطفل</a> <span>›</span> <b>الرئيسية 🏠</b>
+  </div>
 
   <div class="container">
-    <!-- ملخص الحالة السريع -->
+    <!-- 3. لوحة القياسات الطبية السريعة (Vitals Header) -->
     <header class="vitals-header no-print">
       <div class="vitals-info">
         <h1 id="childName">جاري التحميل...</h1>
@@ -29,6 +55,9 @@
         <div class="stat-box"><strong id="nextVisit">—</strong><span>المتابعة القادمة</span></div>
       </div>
     </header>
+
+    <!-- تنبيه روشتة الطبيب -->
+    <!-- ... (باقي الكود كما هو في ملفك الأصلي) ... -->
 
     <!-- تنبيه روشتة الطبيب (إغلاق الدائرة) -->
     <div id="doctorNoteAlert" class="hidden" style="background: #eff6ff; border: 1px solid #bfdbfe; border-inline-start: 4px solid #3b82f6; border-radius: 12px; padding: 16px; margin-bottom: 24px; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
