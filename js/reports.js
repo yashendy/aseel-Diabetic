@@ -23,7 +23,6 @@ function showLoader(v){ const l=$('appLoader'); if(l) l.style.display = v ? 'fle
 let currentUser, childId=new URLSearchParams(location.search).get('child')||localStorage.getItem('selectedChildId'), childRef, child;
 let unitSel, fromDate, toDate, reportGrid, emptyGrid, pie, cmpElems, aiTable;
 
-// النطاقات الديناميكية من الإعدادات (أسماء موحدة)
 let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
 let sysUnit = 'mg/dL';
 
@@ -55,13 +54,14 @@ function wire(){
 }
 
 async function loadChild(uid){
-  childRef=doc(db,'parents',uid,'children',childId);
+  // معالجة ذكية لو المستخدم أدمن أو طبيب بيستعرض ملف الطفل
+  const parentId = new URLSearchParams(location.search).get('parentId') || uid;
+  childRef=doc(db,'parents',parentId,'children',childId);
   const snap=await getDoc(childRef);
   if(!snap.exists()) { throw new Error('child-not-found'); }
   child=snap.data();
   sysUnit = child.glucoseUnit || 'mg/dL';
 
-  // تحديث القيم بدقة حسب إعدادات الطفل
   if(child.glucose_limits) {
     sysLimits.low = Number(child.glucose_limits.low) || (sysUnit==='mmol/L'? 3.9 : 70);
     sysLimits.high = Number(child.glucose_limits.high) || (sysUnit==='mmol/L'? 10.0 : 180);
@@ -70,24 +70,13 @@ async function loadChild(uid){
   }
 }
 
-// دالة التحويل مع الأسماء الصحيحة للحدود
 function limitsInUnit(targetUnit){
   if (targetUnit === sysUnit) return { ...sysLimits };
   if (targetUnit === 'mmol/L' && sysUnit === 'mg/dL') {
-    return { 
-      critLow: round1(mgdl2mmol(sysLimits.critLow)), 
-      low: round1(mgdl2mmol(sysLimits.low)), 
-      high: round1(mgdl2mmol(sysLimits.high)), 
-      critHigh: round1(mgdl2mmol(sysLimits.critHigh)) 
-    }; 
+    return { critLow: round1(mgdl2mmol(sysLimits.critLow)), low: round1(mgdl2mmol(sysLimits.low)), high: round1(mgdl2mmol(sysLimits.high)), critHigh: round1(mgdl2mmol(sysLimits.critHigh)) }; 
   }
   if (targetUnit === 'mg/dL' && sysUnit === 'mmol/L') {
-    return { 
-      critLow: round1(mmol2mgdl(sysLimits.critLow)), 
-      low: round1(mmol2mgdl(sysLimits.low)), 
-      high: round1(mmol2mgdl(sysLimits.high)), 
-      critHigh: round1(mmol2mgdl(sysLimits.critHigh)) 
-    };
+    return { critLow: round1(mmol2mgdl(sysLimits.critLow)), low: round1(mmol2mgdl(sysLimits.low)), high: round1(mmol2mgdl(sysLimits.high)), critHigh: round1(mmol2mgdl(sysLimits.critHigh)) };
   }
   return { ...sysLimits };
 }
@@ -114,15 +103,14 @@ function initDefaultRange(){
   cmpElems.BTo.value=prevTo.toISOString().slice(0,10);
 }
 
-// دالة التلوين المحدثة (مهمة جداً)
 function classFor(val,u){
   if(val == null) return '';
   const L=limitsInUnit(u);
-  if(val >= L.critHigh) return 'crit';   // أحمر غامق (حرج)
-  if(val > L.high) return 'mild';        // برتقالي (ارتفاع)
-  if(val <= L.critLow) return 'crit';    // هبوط حرج
-  if(val < L.low) return 'sev';          // أحمر (هبوط)
-  return 'ok';                           // أخضر (في النطاق)
+  if(val >= L.critHigh) return 'crit';   
+  if(val > L.high) return 'mild';        
+  if(val <= L.critLow) return 'crit';    
+  if(val < L.low) return 'sev';          
+  return 'ok';                           
 }
 
 async function fetchRange(fromISO,toISO){
@@ -217,7 +205,6 @@ async function renderReport(){
   showLoader(false);
 }
 
-// دالة الإحصائيات
 function updateStats(list){
   const validList = list.filter(x => x.val !== null);
   const unit=unitSel.value, L=limitsInUnit(unit);
@@ -225,9 +212,7 @@ function updateStats(list){
 
   if(!validList.length){ 
     $('statTIR').textContent='0%'; $('statLow').textContent='0%'; $('statHigh').textContent='0%'; $('statAvg').textContent='—'; $('statSD').textContent='—'; $('statCrit').textContent='0'; 
-    avgCard.className = 'card';
-    avgCard.style.backgroundColor = '';
-    return; 
+    avgCard.className = 'card'; avgCard.style.backgroundColor = ''; return; 
   }
   
   const n=validList.length;
@@ -246,18 +231,11 @@ function updateStats(list){
   $('statSD').textContent=round1(sd);
 
   avgCard.className = 'card';
-  if (mean < L.low) {
-    avgCard.classList.add('low');           
-    avgCard.style.backgroundColor = '';
-  } else if (mean > L.high) {
-    avgCard.classList.add('high');          
-    avgCard.style.backgroundColor = '';
-  } else {
-    avgCard.style.backgroundColor = '#dcfce7'; 
-  }
+  if (mean < L.low) { avgCard.classList.add('low'); avgCard.style.backgroundColor = ''; } 
+  else if (mean > L.high) { avgCard.classList.add('high'); avgCard.style.backgroundColor = ''; } 
+  else { avgCard.style.backgroundColor = '#dcfce7'; }
 }
 
-// دالة الشارت الدائرية
 function calcParts(list,unit){
   const validList = list.filter(x => x.val !== null);
   const L=limitsInUnit(unit), n=validList.length||1;
@@ -311,7 +289,6 @@ async function runCompare(){
   showLoader(false);
 }
 
-// --- محرك الذكاء الاصطناعي الطبي الاستشاري 🧠 ---
 function buildAI(list,unit){
   const L=limitsInUnit(unit);
   const patt=[];
@@ -324,7 +301,6 @@ function buildAI(list,unit){
 
   const SLOT_NAMES = { FASTING:'صائم', WAKE:'استيقاظ', PRE_BREAKFAST:'ق. الفطار', POST_BREAKFAST:'ب. الفطار', PRE_LUNCH:'ق. الغداء', POST_LUNCH:'ب. الغداء', PRE_DINNER:'ق. العشاء', POST_DINNER:'ب. العشاء', SNACK:'سناك', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم' };
 
-  // 1. التقييم العام (Macro Patterns)
   const total = valid.length;
   const pctTBR = Math.round((valid.filter(x => x.val < L.low).length / total) * 100);
   const pctTAR = Math.round((valid.filter(x => x.val > L.high).length / total) * 100);
@@ -334,7 +310,6 @@ function buildAI(list,unit){
   if (pctTAR > 25) patt.push({ name: 'كثرة الارتفاعات (TAR)', desc: `نسبة الارتفاع (${pctTAR}%) تتخطى الحد المسموح (25%).`, rec: 'قد يحتاج المريض لتعديل المعاملات (CR/CF).', conf: 'عالي 🔴', color: '#b45309' });
   if (pctTIR < 60 && pctTBR <= 15 && pctTAR <= 25) patt.push({ name: 'ضعف السيطرة (TIR)', desc: `نسبة البقاء في النطاق (${pctTIR}%) أقل من 60%.`, rec: 'مراجعة شاملة للخطة وجرعات الإنسولين.', conf: 'متوسط 🟡', color: '#d97706' });
 
-  // 2. تحليل التذبذب الجلايسيمي (CV)
   const vals = valid.map(x => x.val);
   const mean = vals.reduce((a, b) => a + b, 0) / total;
   const variance = vals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / total;
@@ -344,13 +319,9 @@ function buildAI(list,unit){
     patt.push({ name: 'تذبذب عالي (Glycemic Variability)', desc: `السكر يتأرجح بشدة (CV: ${Math.round(cv)}%).`, rec: 'التركيز على استقرار القراءات قبل محاولة خفض المتوسط.', conf: 'عالي 🔴', color: '#b45309' });
   }
 
-  // 3. الإفراط في علاج الهبوط & كفاءة التصحيح
-  let reboundCount = 0;
-  let weakCFCount = 0;
-
+  let reboundCount = 0; let weakCFCount = 0;
   for(let i=0; i < valid.length - 1; i++) {
-    const curr = valid[i];
-    const next = valid[i+1];
+    const curr = valid[i]; const next = valid[i+1];
     const diffHours = (next.when - curr.when) / (1000 * 60 * 60);
 
     if (curr.val < L.low && next.val > L.high && diffHours <= 6) reboundCount++;
@@ -360,7 +331,6 @@ function buildAI(list,unit){
   if (reboundCount >= 2) patt.push({ name: 'إفراط علاج الهبوط', desc: `تم رصد ارتداد عكسي بعد الهبوط ${reboundCount} مرات.`, rec: 'توعية بقاعدة الـ 15 لتجنب الإفراط في إعطاء السكريات.', conf: 'حرج 🚨', color: '#dc2626' });
   if (weakCFCount >= 3) patt.push({ name: 'ضعف معامل التصحيح', desc: `جرعات التصحيح لا تخفض السكر للمعدل الطبيعي.`, rec: 'قد يحتاج الـ CF للتقليل لزيادة قوة الجرعة.', conf: 'متوسط 🟡', color: '#d97706' });
 
-  // 4. الكاشف الديناميكي للفترات
   const slotsData = {};
   valid.forEach(m => {
     if(!slotsData[m.slot]) slotsData[m.slot] = [];
@@ -396,10 +366,69 @@ function buildAI(list,unit){
   `).join('');
 }
 
-async function exportCSV(){ }
-async function exportXLSX(){ }
+// --- الأكواد المضافة للتصدير الفعلي للبيانات 🚀 ---
+
+async function exportCSV(){
+  showLoader(true);
+  try {
+    const data = await fetchRange(fromDate.value, toDate.value);
+    let csv = '\uFEFF'; // لدعم اللغة العربية في ملفات CSV
+    csv += 'التاريخ,الوقت,الفترة,القراءة,الوحدة,كارب (جرام),إنسولين (وحدة),ملاحظات\n';
+    
+    data.forEach(d => {
+      const time = d.when.toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'});
+      const period = SLOT_LABEL[d.slot] || d.slot;
+      const val = d.val !== null ? d.val : '';
+      csv += `${d.date},${time},${period},${val},${unitSel.value},${d.carbs||0},${d.ins||0},"${d.notes||''}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Logbook_${fromDate.value}_to_${toDate.value}.csv`;
+    link.click();
+    toast("✅ تم تصدير ملف CSV بنجاح");
+  } catch(e) { console.error(e); alert('خطأ في تصدير CSV'); }
+  showLoader(false);
+}
+
+async function exportXLSX(){
+  showLoader(true);
+  try {
+    const data = await fetchRange(fromDate.value, toDate.value);
+    const exportData = data.map(d => ({
+      "التاريخ": d.date,
+      "الوقت": d.when.toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}),
+      "الفترة": SLOT_LABEL[d.slot] || d.slot,
+      "القراءة": d.val !== null ? d.val : '—',
+      "الوحدة": unitSel.value,
+      "كارب (g)": d.carbs || 0,
+      "إنسولين (U)": d.ins || 0,
+      "ملاحظات": d.notes || ''
+    }));
+
+    // استخدام مكتبة XLSX المحملة مسبقاً في ملف HTML
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "اللوجبوك");
+    XLSX.writeFile(wb, `Logbook_${fromDate.value}_to_${toDate.value}.xlsx`);
+    toast("✅ تم تصدير ملف Excel بنجاح");
+  } catch(e) { 
+    console.error(e); 
+    alert('حدث خطأ. تأكد من اتصال الإنترنت لتشغيل مكتبة التصدير.'); 
+  }
+  showLoader(false);
+}
+
 function exportPdf(){
-  const node=document.querySelector('.container'); const opt={filename:`report-${fromDate.value}_${toDate.value}.pdf`, html2canvas:{scale:2}, jsPDF:{orientation:'landscape'}};
+  const node=document.querySelector('.container'); 
+  const opt={
+    margin: 10,
+    filename:`report-${fromDate.value}_${toDate.value}.pdf`, 
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas:{ scale:2, useCORS: true }, 
+    jsPDF:{ unit: 'mm', format: 'a4', orientation:'landscape' }
+  };
   window.html2pdf().from(node).set(opt).save();
 }
 
