@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>حاسبة الوجبات ومطبخ أسيل</title>
-  <link rel="stylesheet" href="css/meals.css?v=2026.03.01">
+  <link rel="stylesheet" href="css/meals.css?v=2026.03.02">
   <link rel="icon" href="favicon.ico">
 </head>
 <body>
@@ -36,19 +36,31 @@
 
   <div class="container">
     
-    <!-- مؤشر الدايت والريجيم الحر -->
+    <!-- مؤشرات الاستهلاك اليومي (كارب + سعرات) -->
     <div class="diet-tracker">
       <div class="diet-header">
-        <div class="diet-title">مؤشر استهلاك الكارب اليومي 🥗</div>
-        <div class="diet-inputs">
-          <label style="font-size:12px; color:#64748b;">الحد الأقصى اليومي (g):</label>
-          <input type="number" id="dailyCarbTarget" placeholder="مثال: 150">
+        <div class="diet-title">مؤشرات الاستهلاك اليومي 🥗</div>
+      </div>
+      
+      <!-- مؤشر الكارب -->
+      <div class="tracker-row">
+        <div class="tracker-info">
+          <span>الكارب (g)</span>
+          <input type="number" id="dailyCarbTarget" class="tracker-input" placeholder="الحد الأقصى">
         </div>
+        <div class="progress-bg"><div class="progress-fill carb-fill" id="carbProgressBar"></div></div>
+        <div class="diet-status" id="carbProgressText">إجمالي المستهلك اليوم: 0 جرام</div>
       </div>
-      <div class="progress-bg">
-        <div class="progress-fill" id="carbProgressBar"></div>
+
+      <!-- مؤشر السعرات -->
+      <div class="tracker-row mt-10">
+        <div class="tracker-info">
+          <span>السعرات (kcal)</span>
+          <input type="number" id="dailyCalorieTarget" class="tracker-input" placeholder="الحد الأقصى">
+        </div>
+        <div class="progress-bg"><div class="progress-fill cal-fill" id="calProgressBar"></div></div>
+        <div class="diet-status" id="calProgressText">إجمالي المستهلك اليوم: 0 kcal</div>
       </div>
-      <div class="diet-status" id="carbProgressText">إجمالي المستهلك اليوم: 0 جرام</div>
     </div>
 
     <!-- كابينة الحاسبة الذكية (في الصدارة) -->
@@ -179,9 +191,9 @@
       <div class="card-header"><h2>📝 سجل وجبات اليوم (<span id="todayDateLabel"></span>)</h2></div>
       <div style="overflow-x:auto;">
         <table class="meal-table">
-          <thead><tr><th>الوقت/الوجبة</th><th>الكارب</th><th>جرعة الكارب</th><th>جرعة التصحيح</th><th>الجرعة الإجمالية</th></tr></thead>
+          <thead><tr><th>الوقت/الوجبة</th><th>الكارب</th><th>السعرات</th><th>جرعة الكارب</th><th>جرعة التصحيح</th><th>الجرعة الإجمالية</th></tr></thead>
           <tbody id="dailyMealsBody">
-            <tr><td colspan="5" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>
+            <tr><td colspan="6" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>
           </tbody>
         </table>
       </div>
@@ -200,12 +212,12 @@
       <div style="padding:16px;">
         <input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف (مثال: أرز، تفاح، بيض)..." style="width:100%; margin-bottom:16px;" />
         <div id="loadingLibrary" style="text-align:center; color:#64748b;">جاري جلب الأصناف...</div>
-        <div id="itemsGrid" style="display:flex; flex-direction:column; gap:10px; max-height:400px; overflow-y:auto;"></div>
+        <div id="itemsGrid" style="display:flex; flex-direction:column; gap:10px; max-height:400px; overflow-y:auto; padding-bottom: 20px;"></div>
       </div>
     </div>
   </div>
 
   <div id="loader" class="loader"><div class="spinner"></div></div>
-  <script type="module" src="js/meals.js?v=2026.03.02"></script>
+  <script type="module" src="js/meals.js?v=2026.03.03"></script>
 </body>
 </html>
