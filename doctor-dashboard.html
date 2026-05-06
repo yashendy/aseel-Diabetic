@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>لوحة الطبيب | منصة أسيل</title>
-  <link rel="stylesheet" href="./css/doctor-dashboard.css" />
+  <link rel="stylesheet" href="./css/admin.css" />
   <link rel="icon" href="favicon.ico" />
 </head>
 <body>
@@ -14,8 +14,8 @@
     <div class="brand-area">
       <span class="icon">🩺</span>
       <div class="titles">
-        <h1>بوابة الأطباء (Doctor Portal)</h1>
-        <p>متابعة وتوجيه المرضى لحظياً</p>
+        <h1 style="margin: 0; font-size: 18px; color: #fff;">بوابة الأطباء (Doctor Portal)</h1>
+        <p style="margin: 0; font-size: 12px; color: #bfdbfe;">متابعة وتوجيه المرضى لحظياً</p>
       </div>
     </div>
     <nav class="doctor-nav">
@@ -34,7 +34,7 @@
     </div>
 
     <div class="dashboard-grid">
-      <!-- كارت أكواد الربط (مبني على فكرتك) -->
+      <!-- كارت أكواد الربط -->
       <section class="card codes-card">
         <div class="section-head">
           <h2>🔗 أكواد الربط بالمرضى</h2>
@@ -159,7 +159,7 @@
         </div>
       </div>
       <div class="dialog-footer">
-        <a id="btn-view-reports" href="#" class="btn alt" target="_blank">📊 فتح التقرير الذكي للمريض</a>
+        <button type="button" id="btn-view-reports" class="btn alt">📊 فتح التقرير الذكي للمريض</button>
         <div style="flex:1"></div>
         <button class="btn ghost" type="button" id="btn-cancel">إلغاء</button>
         <button id="btn-save-medical" class="btn primary" type="submit">💾 اعتماد وتحديث البروتوكول</button>
@@ -169,6 +169,6 @@
 
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="./js/doctor-dashboard.js"></script>
+  <script type="module" src="./js/admin.js"></script>
 </body>
 </html>
