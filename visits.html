@@ -9,16 +9,16 @@
 </head>
 <body>
   <!-- شريط التنقل الموحد -->
+  <!-- شريط التنقل الموحد -->
   <header class="topbar no-print" style="background: #1e3a8a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
     <div style="display: flex; align-items: center; gap: 10px;">
       <span style="font-size: 24px;">🩺</span>
       <h2 style="margin: 0; font-size: 18px;">الزيارات والمتابعات الطبية (Visits)</h2>
     </div>
     <div>
-      <button onclick="window.close()" class="btn" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold;">إغلاق النافذة ✕</button>
+      <button onclick="location.href='child.html?child=' + new URLSearchParams(location.search).get('child')" class="btn" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s;">🏠 رجوع للوحة الطفل</button>
     </div>
   </header>
-
   <div id="appLoader" class="loader"><span class="spinner"></span><span>جاري جلب البيانات...</span></div>
 
   <div class="container">
