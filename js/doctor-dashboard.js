@@ -15,6 +15,8 @@ onAuthStateChanged(auth, async (user) => {
   currentUser = user;
   
   const userSnap = await getDoc(doc(db, "users", user.uid));
+  
+  // هنا التأكد إن اللي داخل هو "طبيب" مش "أدمن"
   if (!userSnap.exists() || userSnap.data().role !== 'doctor') {
     alert("حسابك لا يمتلك صلاحيات الطبيب.");
     location.href = "index.html"; return;
@@ -161,7 +163,6 @@ const modal = $('medical-modal');
 $('modal-close').onclick = () => modal.close();
 $('btn-cancel').onclick = () => modal.close();
 
-// ربط زرار التقرير داخل المودال بشكل ديناميكي
 $('btn-view-reports').onclick = () => {
   const pId = $('parent-id').value;
   const cId = $('child-id').value;
@@ -201,7 +202,6 @@ $('medical-form').onsubmit = async (e) => {
     const newMap = {};
     ['arm_right', 'arm_left', 'abd_top_right', 'abd_top_left', 'abd_bottom_right', 'abd_bottom_left', 'thigh_right', 'thigh_left'].forEach(z => newMap[z] = $(`inj_${z}`).value);
 
-    // استخدام الدوت نوتيشن عشان ميمسحش أي داتا تانية (زي الحدود القصوى والدنيا)
     const payload = {
       "glucose_limits.target": Number($('targetBg').value),
       cf: Number($('cfVal').value),
