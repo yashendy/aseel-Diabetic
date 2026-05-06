@@ -6,7 +6,6 @@ import {
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
 const childNameEl = document.getElementById('childName');
-const hdrChild    = document.getElementById('hdrChild');
 const labDateEl   = document.getElementById('labDate');
 const labTypeEl   = document.getElementById('labType');
 const dueBadge    = document.getElementById('dueBadge');
@@ -75,29 +74,29 @@ function checkRanges() {
 
 // ربط الحقول بنظام التلوين الذكي عند الكتابة
 [hba1cVal, lip_tc, lip_ldl, lip_hdl, lip_tg, thy_tsh, thy_ft4, ren_mac, ren_creat].forEach(input => {
-  input.addEventListener('input', checkRanges);
+  if(input) input.addEventListener('input', checkRanges);
 });
 
 onAuthStateChanged(auth, async user=>{
   if(!user){ location.href='index.html'; return; }
-  if(!childId){ alert('No child ID found in URL.'); return; }
+  if(!childId){ alert('لم يتم العثور على رقم الطفل.'); return; }
 
   const cref = doc(db, `parents/${user.uid}/children/${childId}`);
   const csnp = await getDoc(cref);
-  const childName = csnp.exists() ? (csnp.data().name || 'Child') : 'Child';
-  childNameEl.textContent = childName;
-  hdrChild.textContent = `— ${childName}`;
+  const childName = csnp.exists() ? (csnp.data().name || 'طفل') : 'طفل';
+  
+  if(childNameEl) childNameEl.textContent = childName;
 
   await loadHistory(user.uid, childId, childName);
 
   if (labIdParam){
     const labRef = doc(db, `parents/${user.uid}/children/${childId}/labs/${labIdParam}`);
     const labSnap= await getDoc(labRef);
-    if (!labSnap.exists()){ alert('Lab report not found.'); return; }
+    if (!labSnap.exists()){ alert('التقرير غير موجود.'); return; }
     const labData = labSnap.data();
     _currentLabId = labSnap.id;
     fillFormFromDoc(labData);
-    checkRanges(); // تطبيق الألوان عند فتح سجل قديم
+    checkRanges(); 
     showDueBadge(labData.nextDue?.toDate ? labData.nextDue.toDate() : addMonths(labData.when?.toDate ? labData.when.toDate() : new Date(labData.date)));
     openPdf(_currentLabId, childName, labData);
   } else {
@@ -112,17 +111,18 @@ onAuthStateChanged(auth, async user=>{
     }
   }
 
-  saveBtn.addEventListener('click', ()=> saveLab(user.uid, childId, childName, false));
-  savePdfBtn.addEventListener('click', ()=> saveLab(user.uid, childId, childName, true));
-  pdfBtn.addEventListener('click', ()=>{
+  // ربط الأزرار الآن سيعمل بنجاح
+  if(saveBtn) saveBtn.addEventListener('click', ()=> saveLab(user.uid, childId, childName, false));
+  if(savePdfBtn) savePdfBtn.addEventListener('click', ()=> saveLab(user.uid, childId, childName, true));
+  if(pdfBtn) pdfBtn.addEventListener('click', ()=>{
     const fake = buildDocFromForm();
     openPdf(_currentLabId || 'preview', childName, fake);
   });
-  printBtn.addEventListener('click', ()=> window.print());
+  if(printBtn) printBtn.addEventListener('click', ()=> window.print());
 });
 
 function showDueBadge(dueDate){
-  if (!dueDate){ dueBadge.textContent=''; return; }
+  if (!dueDate || !dueBadge){ return; }
   const today = new Date();
   const days = Math.ceil((dueDate - today)/86400000);
   const txt = `التحليل القادم: ${fmt(dueDate)} (${days} يوم)`;
@@ -131,42 +131,42 @@ function showDueBadge(dueDate){
 }
 
 function fillFormFromDoc(d){
-  labDateEl.value = d.date || (d.when?.toDate ? fmt(d.when.toDate()) : fmt(new Date()));
-  labTypeEl.value = d.type || 'full';
+  if(labDateEl) labDateEl.value = d.date || (d.when?.toDate ? fmt(d.when.toDate()) : fmt(new Date()));
+  if(labTypeEl) labTypeEl.value = d.type || 'full';
 
-  hba1cVal.value  = d?.hba1c?.value ?? '';
-  hba1cNote.value = d?.hba1c?.note  ?? '';
+  if(hba1cVal) hba1cVal.value  = d?.hba1c?.value ?? '';
+  if(hba1cNote) hba1cNote.value = d?.hba1c?.note  ?? '';
 
-  lip_tc.value = d?.lipid?.tc ?? '';
-  lip_ldl.value= d?.lipid?.ldl?? '';
-  lip_hdl.value= d?.lipid?.hdl?? '';
-  lip_tg.value = d?.lipid?.tg ?? '';
-  lip_note.value= d?.lipid?.note ?? '';
+  if(lip_tc) lip_tc.value = d?.lipid?.tc ?? '';
+  if(lip_ldl) lip_ldl.value= d?.lipid?.ldl?? '';
+  if(lip_hdl) lip_hdl.value= d?.lipid?.hdl?? '';
+  if(lip_tg) lip_tg.value = d?.lipid?.tg ?? '';
+  if(lip_note) lip_note.value= d?.lipid?.note ?? '';
 
-  thy_tsh.value= d?.thyroid?.tsh ?? '';
-  thy_ft4.value= d?.thyroid?.ft4 ?? '';
-  thy_note.value= d?.thyroid?.note ?? '';
+  if(thy_tsh) thy_tsh.value= d?.thyroid?.tsh ?? '';
+  if(thy_ft4) thy_ft4.value= d?.thyroid?.ft4 ?? '';
+  if(thy_note) thy_note.value= d?.thyroid?.note ?? '';
 
-  ren_mac.value= d?.renal?.microalb_creat ?? '';
-  ren_creat.value= d?.renal?.creatinine ?? '';
-  ren_note.value= d?.renal?.note ?? '';
+  if(ren_mac) ren_mac.value= d?.renal?.microalb_creat ?? '';
+  if(ren_creat) ren_creat.value= d?.renal?.creatinine ?? '';
+  if(ren_note) ren_note.value= d?.renal?.note ?? '';
 
-  generalNote.value = d?.generalNote ?? '';
+  if(generalNote) generalNote.value = d?.generalNote ?? '';
 }
 
 function buildDocFromForm(){
-  const when = new Date(labDateEl.value+'T00:00:00');
+  const when = new Date((labDateEl?.value || fmt(new Date()))+'T00:00:00');
   const nextDue = addMonths(when, 4);
   return {
     when,
     date: fmt(when),
     nextDue,
-    type: labTypeEl.value,
-    hba1c: { value: numOrNull(hba1cVal.value), note: strOrNull(hba1cNote.value) },
-    lipid: { tc:numOrNull(lip_tc.value), ldl:numOrNull(lip_ldl.value), hdl:numOrNull(lip_hdl.value), tg:numOrNull(lip_tg.value), note: strOrNull(lip_note.value) },
-    thyroid: { tsh:numOrNull(thy_tsh.value), ft4:numOrNull(thy_ft4.value), note: strOrNull(thy_note.value) },
-    renal: { microalb_creat:numOrNull(ren_mac.value), creatinine:numOrNull(ren_creat.value), note: strOrNull(ren_note.value) },
-    generalNote: strOrNull(generalNote.value),
+    type: labTypeEl?.value || 'full',
+    hba1c: { value: numOrNull(hba1cVal?.value), note: strOrNull(hba1cNote?.value) },
+    lipid: { tc:numOrNull(lip_tc?.value), ldl:numOrNull(lip_ldl?.value), hdl:numOrNull(lip_hdl?.value), tg:numOrNull(lip_tg?.value), note: strOrNull(lip_note?.value) },
+    thyroid: { tsh:numOrNull(thy_tsh?.value), ft4:numOrNull(thy_ft4?.value), note: strOrNull(thy_note?.value) },
+    renal: { microalb_creat:numOrNull(ren_mac?.value), creatinine:numOrNull(ren_creat?.value), note: strOrNull(ren_note?.value) },
+    generalNote: strOrNull(generalNote?.value),
     updatedAt: serverTimestamp(),
     createdAt: serverTimestamp()
   };
@@ -314,6 +314,7 @@ async function openPdf(labId, childName, data){
 }
 
 async function loadHistory(uid, childId, childName){
+  if(!historyBody) return;
   const lref = collection(db, `parents/${uid}/children/${childId}/labs`);
   const qy = query(lref, orderBy('when','desc'), limit(20));
   const sn = await getDocs(qy);
