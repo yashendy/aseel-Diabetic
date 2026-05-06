@@ -3,80 +3,147 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>السجل الطبي والتحاليل الشاملة</title>
+  <title>تقارير التحاليل الطبية</title>
   <link rel="icon" href="favicon.ico">
-  <link rel="stylesheet" href="css/labs.css?v=3">
+  <link rel="stylesheet" href="css/labs.css">
 
+  <!-- مكتبات PDF وباركود (تم الحفاظ عليها) -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+
+  <!-- دعم تشكيل العربية + ترتيب RTL -->
+  <script src="https://cdn.jsdelivr.net/npm/arabic-persian-reshaper@2.2.1/dist/arabic-persian-reshaper.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bidi-js@1.0.3/dist/bidi.min.js"></script>
 </head>
 <body>
   <!-- شريط التنقل الموحد -->
-  <header class="topbar no-print" style="background: #2563eb; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+  <header class="topbar no-print" style="background: #1e3a8a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
     <div style="display: flex; align-items: center; gap: 10px;">
-      <span style="font-size: 24px;">🧪</span>
-      <h2 style="margin: 0; font-size: 18px;">سجل التحاليل الطبية (Labs)</h2>
+      <span style="font-size: 24px;">🔬</span>
+      <h2 style="margin: 0; font-size: 18px;">تقارير التحاليل الطبية الشاملة (Labs)</h2>
     </div>
     <div>
-      <button onclick="window.close()" class="btn" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer;">إغلاق النافذة ✕</button>
+      <button onclick="window.close()" class="btn" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold;">إغلاق النافذة ✕</button>
     </div>
   </header>
 
-  <div id="appLoader" class="loader"><span class="spinner"></span><span>جاري معالجة البيانات الطبية...</span></div>
-
   <div class="container">
-    <div class="card no-print row space top-bar">
+
+    <div class="row space no-print" style="margin-bottom: 15px;">
       <div class="row">
-        <button id="saveBtn" class="btn primary">💾 حفظ السجل</button>
-        <button id="savePdfBtn" class="btn ghost">💾 حفظ + ⬇️ PDF</button>
-        <button id="printBtn" class="btn secondary">🖨️ طباعة</button>
+        <button class="btn ghost" onclick="history.back()" style="border: 1px solid #cbd5e1;">↩︎ رجوع للملف</button>
       </div>
-      <div id="dueBadge" class="pill bold"></div>
-    </div>
-
-    <!-- ... باقي كود صفحة التحاليل القديم الخاص بكِ كما هو ... -->
-    <div class="grid-main">
-      <div class="card">
-        <h3>📅 بيانات التقرير</h3>
-        <label class="tiny">تاريخ التحليل</label>
-        <input id="labDate" type="date">
-        <label class="tiny" style="margin-top:10px">نوع الفحص</label>
-        <select id="labType">
-          <option value="hba1c_only">دوري (HbA1c فقط)</option>
-          <option value="full">شامل (سنوي / فحص كامل)</option>
-        </select>
-      </div>
-      <div class="card">
-        <h3>📈 تطور السكر التراكمي (HbA1c)</h3>
-        <div style="height:140px"><canvas id="hba1cChart"></canvas></div>
+      <div class="row">
+        <button id="printBtn" class="btn secondary">🖨️ طباعة السجل</button>
       </div>
     </div>
 
-    <div class="card section-card">
-      <div class="section-head"><h3 style="margin:0;">🩸 السكر التراكمي</h3> <span class="ref-range" style="font-size:12px; color:#64748b;">الهدف: &lt; 7.0%</span></div>
+    <!-- بيانات عامة -->
+    <div class="card">
+      <div class="row space" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 15px;">
+        <div class="row">
+          <div style="font-size: 15px; color: #475569;">اسم الطفل: <b id="childName" style="color: #0f172a; font-size: 18px;">—</b></div>
+          <span id="dueBadge" class="pill tiny"></span>
+        </div>
+        <div class="row">
+          <button id="saveBtn" class="btn">💾 حفظ التقرير</button>
+          <button id="savePdfBtn" class="btn ghost">💾 حفظ + ⬇️ PDF</button>
+          <button id="pdfBtn" class="btn ghost" style="color: #2563eb; border-color: #bfdbfe; background: #eff6ff;">👁️ معاينة PDF</button>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label class="tiny">تاريخ التحليل</label>
+          <input id="labDate" type="date">
+        </div>
+        <div>
+          <label class="tiny">نوع التقرير</label>
+          <select id="labType">
+            <option value="full">شامل (Full Profile)</option>
+            <option value="hba1c_only">HbA1c فقط</option>
+          </select>
+        </div>
+      </div>
+      <div class="tiny" id="fileLinkBox" style="margin-top: 8px;"></div>
+    </div>
+
+    <!-- HbA1c -->
+    <div class="card">
+      <h3 style="color: #1e3a8a; margin-top:0;">السكر التراكمي (HbA1c)</h3>
       <table>
-        <tr><th>النتيجة (%)</th><th>الحالة</th><th>ملاحظات الطبيب</th></tr>
+        <tr><th>القيمة</th><th>الوحدة</th><th>ملاحظات الطبيب</th></tr>
         <tr>
-          <td><input id="hba1cVal" type="number" step="0.1" class="main-input"></td>
-          <td id="hba1cStatus" style="text-align: center; font-weight: bold;">—</td>
-          <td><input id="hba1cNote" placeholder="مثال: استمر على الخطة"></td>
+          <td><input id="hba1cVal" type="number" step="0.1" placeholder="مثال: 6.5"></td>
+          <td style="text-align: center;">%</td>
+          <td><input id="hba1cNote" placeholder="تعليق الطبيب / الهدف القادم"></td>
         </tr>
       </table>
     </div>
 
-    <!-- ... نفس باقي الهيكل لـ CBC والفيتامينات ... -->
+    <!-- Lipid -->
+    <div class="card">
+      <h3 style="color: #1e3a8a; margin-top:0;">دهون الدم (Lipid Profile)</h3>
+      <table>
+        <tr><th>البند</th><th>القيمة</th><th>الوحدة</th><th>ملاحظات</th></tr>
+        <tr><td>TC (الكوليسترول الكلي)</td><td><input id="lip_tc" type="number"></td><td>mg/dL</td><td><input id="lip_note" placeholder="ملاحظات"></td></tr>
+        <tr><td>LDL (الدهون الضارة)</td><td><input id="lip_ldl" type="number"></td><td>mg/dL</td><td></td></tr>
+        <tr><td>HDL (الدهون النافعة)</td><td><input id="lip_hdl" type="number"></td><td>mg/dL</td><td></td></tr>
+        <tr><td>TG (الدهون الثلاثية)</td><td><input id="lip_tg" type="number"></td><td>mg/dL</td><td></td></tr>
+      </table>
+    </div>
+
+    <!-- الغدة والكلى -->
+    <div class="card">
+      <h3 style="color: #1e3a8a; margin-top:0;">الغدة الدرقية والكُلى</h3>
+      <table>
+        <tr><th>الاختبار</th><th>القيمة</th><th>الوحدة</th><th>ملاحظات</th></tr>
+        <tr><td>TSH (تحفيز الغدة)</td><td><input id="thy_tsh" type="number" step="0.01"></td><td>mIU/L</td><td><input id="thy_note" placeholder="ملاحظات"></td></tr>
+        <tr><td>FT4 (هرمون الغدة)</td><td><input id="thy_ft4" type="number" step="0.01"></td><td>ng/dL</td><td></td></tr>
+        <tr><td>Microalbumin/Creatinine (الزلال)</td><td><input id="ren_mac" type="number" step="0.01"></td><td>mg/g</td><td><input id="ren_note" placeholder="ملاحظات"></td></tr>
+        <tr><td>Creatinine (الكرياتينين)</td><td><input id="ren_creat" type="number" step="0.01"></td><td>mg/dL</td><td></td></tr>
+      </table>
+    </div>
+
+    <!-- ملاحظات عامة -->
+    <div class="card">
+      <h3 style="color: #1e3a8a; margin-top:0;">ملاحظات عامة</h3>
+      <textarea id="generalNote" rows="3" placeholder="توصيات الطبيب / أي ملاحظات أخرى بخصوص التحاليل"></textarea>
+    </div>
+
+    <!-- السجلات السابقة -->
     <div class="card no-print">
-      <h3>📜 سجل التحاليل السابقة</h3>
-      <div class="table-scroll">
-        <table id="historyTable">
-          <thead><tr><th>التاريخ</th><th>النوع</th><th>التراكمي</th><th>إجراءات</th></tr></thead>
-          <tbody id="historyBody"></tbody>
+      <div class="row space" style="margin-bottom: 12px;">
+        <h3 style="margin:0;">السجلات السابقة</h3>
+        <small class="muted">آخر 20 تقرير</small>
+      </div>
+      <div style="overflow-x: auto;">
+        <table id="historyTable" style="margin-top:0;">
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>HbA1c</th>
+              <th>ملاحظات</th>
+              <th style="text-align: center;">العمليات</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr><td colspan="4" class="muted" style="text-align: center; padding: 20px;">لا توجد سجلات سابقة</td></tr>
+          </tbody>
         </table>
       </div>
     </div>
+
+    <!-- canvases المخفيّة لتوليد الباركود/QR -->
+    <div class="hidden">
+      <svg id="barcode"></svg>
+      <div id="qr"></div>
+    </div>
   </div>
 
-  <script type="module" src="js/labs.js?v=4"></script>
+  <!-- سكربت -->
+  <script type="module" src="js/labs.js"></script>
 </body>
 </html>
