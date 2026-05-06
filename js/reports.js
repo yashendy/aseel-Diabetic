@@ -20,7 +20,8 @@ function formatDate(d){return d.toLocaleDateString('ar-EG',{weekday:'short', day
 function toast(m){const t=$('toast'); t.textContent=m; t.style.display='block'; clearTimeout(t._t); t._t=setTimeout(()=>t.style.display='none',2200);}
 function showLoader(v){ const l=$('appLoader'); if(l) l.style.display = v ? 'flex' : 'none'; }
 
-let currentUser, childId=new URLSearchParams(location.search).get('child')||localStorage.getItem('selectedChildId'), childRef, child;
+let currentUser, childId=new URLSearchParams(location.search).get('child')||localStorage.getItem('selectedChildId');
+let childRef, child;
 let unitSel, fromDate, toDate, reportGrid, emptyGrid, pie, cmpElems, aiTable;
 
 let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
@@ -35,9 +36,8 @@ onAuthStateChanged(auth, async (u)=>{
     await loadChild(u.uid);
     unitSel.value = sysUnit;
     fillThresholdChips();
-    initDefaultRange();
+    setQuickRange('1w'); // افتراضي آخر أسبوع
     await renderReport();
-    wireEvents();
   } catch(e) { console.error(e); }
   finally { showLoader(false); }
 });
@@ -51,10 +51,43 @@ function wire(){
   $('openPrintBlank').onclick=()=>window.open(`reports-print.html?child=${encodeURIComponent(childId)}&from=${fromDate.value}&to=${toDate.value}&unit=${encodeURIComponent(unitSel.value)}&blank=1`,'_blank');
   
   $('exportPdf').onclick=exportPdf; $('exportCsv').onclick=exportCSV; $('exportXlsx').onclick=exportXLSX;
+  
+  $('applyBtn').onclick = renderReport;
+  $('cmpRun').onclick = runCompare;
+  unitSel.onchange = () => { fillThresholdChips(); renderReport(); };
+
+  // تفاعل الفترات السريعة
+  $('quickRange').onchange = (e) => {
+    if(e.target.value === 'custom') return;
+    setQuickRange(e.target.value);
+    renderReport();
+  };
+
+  $('measureType').onchange = renderReport;
+}
+
+function setQuickRange(range) {
+  const to = new Date();
+  const from = new Date();
+  if (range === '1w') from.setDate(from.getDate() - 7);
+  else if (range === '2w') from.setDate(from.getDate() - 14);
+  else if (range === '1m') from.setMonth(from.getMonth() - 1);
+  else if (range === '3m') from.setMonth(from.getMonth() - 3);
+  
+  $('toDate').value = to.toISOString().slice(0, 10);
+  $('fromDate').value = from.toISOString().slice(0, 10);
+  
+  // تحديث المقارنة تلقائياً
+  cmpElems.AFrom.value = $('fromDate').value; 
+  cmpElems.ATo.value = $('toDate').value;
+  const diffTime = Math.abs(to - from);
+  const prevTo = new Date(from); prevTo.setDate(prevTo.getDate() - 1);
+  const prevFrom = new Date(prevTo.getTime() - diffTime);
+  cmpElems.BFrom.value = prevFrom.toISOString().slice(0, 10);
+  cmpElems.BTo.value = prevTo.toISOString().slice(0, 10);
 }
 
 async function loadChild(uid){
-  // معالجة ذكية لو المستخدم أدمن أو طبيب بيستعرض ملف الطفل
   const parentId = new URLSearchParams(location.search).get('parentId') || uid;
   childRef=doc(db,'parents',parentId,'children',childId);
   const snap=await getDoc(childRef);
@@ -91,18 +124,6 @@ function fillThresholdChips(){
   `;
 }
 
-function initDefaultRange(){
-  const now=new Date();
-  const to=now.toISOString().slice(0,10);
-  const from=new Date(now); from.setDate(from.getDate()-6);
-  fromDate.value=from.toISOString().slice(0,10); toDate.value=to;
-  cmpElems.AFrom.value=fromDate.value; cmpElems.ATo.value=toDate.value;
-  const prevFrom=new Date(from); prevFrom.setDate(prevFrom.getDate()-7);
-  const prevTo=new Date(from); prevTo.setDate(prevTo.getDate()-1);
-  cmpElems.BFrom.value=prevFrom.toISOString().slice(0,10);
-  cmpElems.BTo.value=prevTo.toISOString().slice(0,10);
-}
-
 function classFor(val,u){
   if(val == null) return '';
   const L=limitsInUnit(u);
@@ -118,9 +139,14 @@ async function fetchRange(fromISO,toISO){
   const qy=query(col, where('date','>=',fromISO), where('date','<=',toISO));
   const snap=await getDocs(qy);
   const unit=unitSel.value;
+  const mType = $('measureType').value; // تصفية نوع القياس
   const arr=[];
+  
   snap.forEach(s=>{
     const x=s.data();
+    // تصفية حسب نوع القياس (لو السجل يحتوي على measureMethod)
+    if(mType !== 'all' && x.measureMethod && x.measureMethod !== mType) return;
+    
     let v = unit.includes('mmol') ? (x.value_mmol ?? (x.unit==='mg/dL'? mgdl2mmol(x.value): x.value))
                                   : (x.value_mgdl ?? (x.unit==='mmol/L'? mmol2mgdl(x.value): x.value));
     
@@ -167,7 +193,6 @@ function cellHTML(vals,u){
 
 async function renderReport(){
   showLoader(true);
-  fillThresholdChips();
   const unit=unitSel.value, from=fromDate.value, to=toDate.value;
   const data=await fetchRange(from,to);
   const days=groupByDaySlot(data);
@@ -176,8 +201,7 @@ async function renderReport(){
   if(!days.length){
     $('emptyGrid').classList.remove('hidden');
     updateStats([]); drawPie({TIR:0,TBR:0,TAR:0}); buildAI([],unit); 
-    showLoader(false);
-    return;
+    showLoader(false); return;
   }
   $('emptyGrid').classList.add('hidden');
 
@@ -204,6 +228,9 @@ async function renderReport(){
   buildAI(data,unit);
   showLoader(false);
 }
+
+// ... (نفس دوال updateStats, drawPie, runCompare, و buildAI الأصلية التي برمجتيها)
+// سأضع لكِ الجزء الخاص بالتصدير (Export) هنا مباشرة لإكمال الكود:
 
 function updateStats(list){
   const validList = list.filter(x => x.val !== null);
@@ -366,13 +393,13 @@ function buildAI(list,unit){
   `).join('');
 }
 
-// --- الأكواد المضافة للتصدير الفعلي للبيانات 🚀 ---
+// --- الأكواد المضافة للتصدير الفعلي للبيانات ---
 
 async function exportCSV(){
   showLoader(true);
   try {
     const data = await fetchRange(fromDate.value, toDate.value);
-    let csv = '\uFEFF'; // لدعم اللغة العربية في ملفات CSV
+    let csv = '\uFEFF'; 
     csv += 'التاريخ,الوقت,الفترة,القراءة,الوحدة,كارب (جرام),إنسولين (وحدة),ملاحظات\n';
     
     data.forEach(d => {
@@ -407,7 +434,6 @@ async function exportXLSX(){
       "ملاحظات": d.notes || ''
     }));
 
-    // استخدام مكتبة XLSX المحملة مسبقاً في ملف HTML
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "اللوجبوك");
@@ -415,7 +441,7 @@ async function exportXLSX(){
     toast("✅ تم تصدير ملف Excel بنجاح");
   } catch(e) { 
     console.error(e); 
-    alert('حدث خطأ. تأكد من اتصال الإنترنت لتشغيل مكتبة التصدير.'); 
+    alert('حدث خطأ. تأكد من الاتصال لتشغيل مكتبة التصدير.'); 
   }
   showLoader(false);
 }
@@ -430,10 +456,4 @@ function exportPdf(){
     jsPDF:{ unit: 'mm', format: 'a4', orientation:'landscape' }
   };
   window.html2pdf().from(node).set(opt).save();
-}
-
-function wireEvents(){
-  $('applyBtn').onclick=renderReport;
-  $('cmpRun').onclick=runCompare;
-  unitSel.onchange=()=>{ fillThresholdChips(); renderReport(); };
 }
