@@ -18,7 +18,7 @@
     <div class="admin-info">
       <button id="themeToggle" class="icon-btn" title="تبديل الإضاءة">🌞</button>
       <span id="adminName" style="font-weight: bold; color: var(--muted);">—</span>
-      <button id="btnSignOut" class="btn danger" style="height: 36px;">تسجيل خروج</button>
+      <button id="btnSignOut" class="btn danger" style="height: 36px; font-size: 13px;">تسجيل خروج</button>
     </div>
   </header>
 
@@ -34,17 +34,18 @@
         <div class="card-title">👶 إجمالي الأطفال المسجلين</div>
         <div class="card-value" id="childrenCount">0</div>
       </div>
+      <!-- الروابط محدثة بالمسميات الصحيحة -->
       <a href="food-items.html" class="card" style="border-color: var(--primary);">
         <div class="card-title">📘 إدارة مكتبة الطعام</div>
         <div class="card-value" style="font-size: 16px; margin-top: 10px;">إضافة وتعديل الأصناف ➔</div>
       </a>
-      <a href="usda-import.html" class="card" style="border-color: var(--success);">
+      <a href="admin-import.html" class="card" style="border-color: var(--success);">
         <div class="card-title">🗂️ استيراد بيانات USDA</div>
         <div class="card-value" style="font-size: 16px; margin-top: 10px;">سحب الأصناف عالمياً ➔</div>
       </a>
     </section>
 
-    <!-- 2. بوابة اعتماد الأطباء وإدارة المستخدمين -->
+    <!-- 2. بوابة اعتماد الأطباء -->
     <section class="panel">
       <div class="panel-head">
         <h2>🛡️ إدارة المستخدمين واعتماد الأطباء</h2>
@@ -57,7 +58,7 @@
             <tr>
               <th>اسم الطبيب</th>
               <th>البريد الإلكتروني</th>
-              <th>تاريخ التسجيل</th>
+              <th>الحالة</th>
               <th style="text-align: center;">القرار</th>
             </tr>
           </thead>
@@ -68,7 +69,7 @@
       </div>
     </section>
 
-    <!-- 3. الربط والإسناد -->
+    <!-- 3. الربط والإسناد (الجداول المنسقة بدون تداخل) -->
     <section class="panel">
       <div class="panel-head">
         <h2>🔗 إدارة المرضى وإسناد الأطباء المعتمدين</h2>
@@ -87,41 +88,30 @@
           <input id="doctorSearch" type="text" class="input" placeholder="اكتب اسم الطبيب..." />
         </div>
         <div class="field align-end">
-          <button id="btnOpenAssign" class="btn primary">تأكيد الربط</button>
+          <button id="btnOpenAssign" class="btn primary" style="width: 100%;">تأكيد الربط</button>
         </div>
       </div>
 
-     <div class="lists-wrap">
-        <!-- جدول الأطفال -->
+      <div class="lists-wrap">
+        <!-- جدول الأطفال (بدون ID وبشكل أنيق) -->
         <div class="list-card">
           <div class="list-title">👶 الأطفال (<span id="childrenHint">0</span>)</div>
           <table class="tbl">
             <thead>
-              <tr>
-                <th>الطفل المريض</th>
-                <th>حالة الموافقة</th>
-                <th style="text-align: center;">تحديد</th>
-              </tr>
+              <tr><th>الطفل المريض</th><th>حالة الموافقة</th><th style="text-align: center;">تحديد</th></tr>
             </thead>
-            <tbody id="childrenTbody">
-              <tr><td colspan="3" style="text-align: center; color: var(--muted);">جارٍ التحميل…</td></tr>
-            </tbody>
+            <tbody id="childrenTbody"></tbody>
           </table>
         </div>
 
-        <!-- جدول الأطباء -->
+        <!-- جدول الأطباء (الاسم والمركز) -->
         <div class="list-card">
           <div class="list-title">👨‍⚕️ الأطباء المعتمدين (<span id="doctorsHint">0</span>)</div>
           <table class="tbl">
             <thead>
-              <tr>
-                <th>اسم الطبيب (والمركز)</th>
-                <th style="text-align: center;">تحديد</th>
-              </tr>
+              <tr><th>اسم الطبيب (والمركز)</th><th style="text-align: center;">تحديد</th></tr>
             </thead>
-            <tbody id="doctorsTbody">
-              <tr><td colspan="2" style="text-align: center; color: var(--muted);">جارٍ التحميل…</td></tr>
-            </tbody>
+            <tbody id="doctorsTbody"></tbody>
           </table>
         </div>
       </div>
@@ -129,7 +119,34 @@
   </main>
 
   <!-- نافذة الاعتماد والإسناد -->
-  <!-- ... (تم تقليص حجم الرد لتجاوز القيود، يمكنك استخدام نفس الـ Modal القديم هنا) ... -->
+  <div id="assignModal" class="modal hidden">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3>تأكيد إسناد الطبيب للمريض</h3>
+        <button class="icon-btn" id="btnCloseModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+          <div class="field">
+            <label>الطفل المريض</label>
+            <select id="childSelect" class="input" disabled></select>
+          </div>
+          <div class="field">
+            <label>الطبيب المعالج</label>
+            <select id="doctorSelect" class="input" disabled></select>
+          </div>
+        </div>
+        <div style="color: var(--muted); font-size: 13px; background: rgba(128,128,128,0.1); padding: 10px; border-radius: 8px;">
+          ⚠️ <strong>تنبيه أمني:</strong> بمجرد الاعتماد، سيُسمح للطبيب المختار بفتح بيانات المريض وتعديلها.
+        </div>
+        <div id="modalStatus" style="margin-top: 10px; font-weight: bold; text-align: center;"></div>
+      </div>
+      <div class="modal-foot">
+        <button id="btnCancelAssign" class="btn ghost">إلغاء</button>
+        <button id="btnAssign" class="btn primary">✅ اعتماد الإسناد الآن</button>
+      </div>
+    </div>
+  </div>
 
   <div id="loader" class="loader hidden">جارٍ مزامنة القواعد...</div>
   <script type="module" src="./js/admin.js"></script>
