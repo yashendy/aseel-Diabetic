@@ -31,6 +31,12 @@ $('logoutBtn').onclick = async () => {
 onAuthStateChanged(auth, async (u) => {
   if (!u) { location.href = 'index.html'; return; }
   currentUser = u;
+  
+  // تحديث بيانات ولي الأمر في الهيدر بذكاء
+  const parentName = u.displayName || (u.email ? u.email.split('@')[0] : 'ولي الأمر');
+  if($('parentNameDisplay')) $('parentNameDisplay').textContent = `مرحباً، ${parentName}`;
+  if($('parentAvatar')) $('parentAvatar').textContent = parentName.charAt(0).toUpperCase();
+  
   await loadKids();
 });
 
@@ -166,7 +172,7 @@ function showCriticalAlert(child, gs) {
   
   const div = document.createElement('div');
   div.style.cssText = `position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#dc2626; color:#fff; padding:15px 24px; border-radius:12px; font-weight:bold; z-index:9999; box-shadow:0 10px 25px rgba(220,38,38,0.5); cursor:pointer;`;
-  div.textContent = `🚨 تحذير: قراءة سكر حرجة لـ (${child.name})`; // نزعنا قيمة السكر لأن فيها HTML Tags
+  div.textContent = `🚨 تحذير: قراءة سكر حرجة لـ (${child.name})`; 
   div.onclick = () => div.remove();
   document.body.appendChild(div);
   setTimeout(() => div.remove(), 8000);
@@ -242,7 +248,6 @@ async function sendAI() {
     if (!KEY || KEY === 'YOUR_GEMINI_API_KEY') throw new Error('KeyMissing');
     
     const genAI = new window.GoogleGenerativeAI(KEY);
-    // إعطاء الذكاء الاصطناعي السياق الكامل للطفل ليرد بدقة
     const sysPrompt = aiState.child 
         ? `أنت مساعد طبي ذكي متخصص في سكري الأطفال. أجب بناءً على هذه البيانات: اسم الطفل (${aiState.child.name})، هدف السكر (${aiState.child._limits.target})، معامل التصحيح (${aiState.child._cf})، معامل الكارب (${aiState.child._crStr}). أجب باختصار وطمأنينة.` 
         : `أنت مساعد طبي لإدارة سكر الأطفال. أجب باختصار وبأسلوب مطمئن وداعم.`;
