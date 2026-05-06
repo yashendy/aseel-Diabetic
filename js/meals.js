@@ -39,10 +39,15 @@ const els = {
 
 function showLoader(v) { els.loader.classList.toggle('hidden', !v); }
 
+// تحويل أسماء الوجبات للعربية في الجدول
+function getSlotLabel(key) {
+  const labels = { PRE_BREAKFAST: 'الفطار', PRE_LUNCH: 'الغداء', PRE_DINNER: 'العشاء', SNACK: 'سناك' };
+  return labels[key] || key;
+}
+
 onAuthStateChanged(auth, async (u) => {
   if (!u) { location.href = 'index.html'; return; }
   
-  // استقبال الداتا من الرابط (عشان التكامل مع صفحة القياسات)
   const qp = new URLSearchParams(location.search);
   state.childId = qp.get('child') || localStorage.getItem('selectedChildId');
   state.parentId = localStorage.getItem('selectedParentId') || u.uid;
@@ -65,10 +70,10 @@ onAuthStateChanged(auth, async (u) => {
   try {
     await loadChildData();
     setupEvents();
-    if(!qp.get("slot")) autoSelectMealSlot(); // يحدد الوقت لوحده لو مش جاي من الرابط
+    if(!qp.get("slot")) autoSelectMealSlot(); 
     fetchFoodLibrary();
     await loadTodayMeals();
-    if (passedBg) calculateBolus(); // لو فيه قراءة سكر جاية نحسب الجرعة فوراً
+    if (passedBg) calculateBolus();
   } catch (e) { console.error(e); }
   finally { showLoader(false); }
 });
@@ -259,6 +264,7 @@ function updateMealTotals() {
   calculateBolus(sumFat, sumPro, giSum>0 ? Math.round(weightedGI/giSum) : 0, sumFib);
 }
 
+// --- Smart Bolus Engine ---
 function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   const bg = parseFloat(els.preBg.value);
   const carbs = parseFloat(els.manualCarbs.value) || 0;
@@ -270,10 +276,17 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   if(state.slot.includes('LUNCH')) currentCR = state.CRs.lunch || 10;
   if(state.slot.includes('DINNER')) currentCR = state.CRs.dinner || 10;
 
-  let effectiveBg = bg;
+  // توحيد الوحدات لضمان دقة الحساب (حل مشكلة الجرعة الخاطئة)
+  const childUnit = state.child?.glucoseUnit || 'mg/dL';
+  let bgInChildUnit = bg;
+  if (bg > 0 && unit !== childUnit) {
+    bgInChildUnit = (childUnit === 'mmol/L') ? mgdl2mmol(bg) : mmol2mgdl(bg);
+  }
+
+  let effectiveBg = bgInChildUnit;
   if(bg && els.measureSource.value === 'cgm') {
     const trend = Number(els.trendArrow.value);
-    effectiveBg += (unit === 'mmol/L' ? trend/18.0 : trend);
+    effectiveBg += (childUnit === 'mmol/L' ? trend/18.0 : trend);
   }
 
   let corr = 0;
@@ -290,14 +303,14 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   els.smartAlerts.style.display = 'none';
   let alerts = "";
   if (els.measureSource.value === 'cgm' && Number(els.trendArrow.value) < 0) alerts += `<strong>⬇️ سهم هبوط:</strong> الذكاء الاصطناعي خفض الجرعة لمنع الهبوط المتوقع.<br>`;
-  if (fat > 30 || pro > 40) alerts += `<strong>🍕 تأثير البيتزا (وجبة دسمة):</strong> قد تحتاج لتقسيم الجرعة (Split Bolus) لتجنب الارتفاع المتأخر.<br>`;
+  if (fat > 30 || pro > 40) alerts += `<strong>🍕 تأثير البيتزا (وجبة دسمة):</strong> قد تحتاج لتقسيم الجرعة لتجنب الارتفاع المتأخر.<br>`;
   if (avgGI >= 70) alerts += `<strong>📈 مؤشر جلايسيمي مرتفع:</strong> يُفضل حقن الأنسولين قبل الأكل بـ 15 دقيقة.<br>`;
   if (fiber >= 10 && avgGI < 70) alerts += `<strong>🌾 وجبة ممتازة:</strong> الألياف ستساعد في استقرار السكر.<br>`;
   
   if(alerts) { els.smartAlerts.innerHTML = alerts; els.smartAlerts.style.display = 'block'; }
 }
 
-els.btnFetchPre.onclick = async () => {
+async function autoFetchPreMeasurement() {
   els.btnFetchPre.textContent = "⏳...";
   try {
     const qy = query(collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`), where('date', '==', state.date));
@@ -316,24 +329,36 @@ els.btnFetchPre.onclick = async () => {
       els.measureSource.value = found.measureMethod === 'sensor' ? 'cgm' : 'bgm';
       els.measureSource.dispatchEvent(new Event('change'));
       calculateBolus(); 
-      alert(`تم سحب القراءة (${found.value}) المسجلة للوجبة المحددة بنجاح.`);
-    } else { alert('لا توجد قراءة سكر مسجلة لهذه الوجبة في هذا التاريخ.'); }
-  } catch(e) { console.error(e); }
-  finally { els.btnFetchPre.textContent = "🔄 جلب"; }
-};
+      els.btnFetchPre.textContent = "✅ تم الجلب";
+      setTimeout(() => els.btnFetchPre.textContent = "🔄 جلب", 2000);
+    } else {
+      els.preBg.value = "";
+      els.btnFetchPre.textContent = "❌ لا يوجد قياس";
+      setTimeout(() => els.btnFetchPre.textContent = "🔄 جلب", 2000);
+      calculateBolus();
+    }
+  } catch(e) { console.error(e); els.btnFetchPre.textContent = "🔄 جلب"; }
+}
+
+els.btnFetchPre.onclick = autoFetchPreMeasurement;
 
 async function loadTodayMeals() {
-  const qy = query(collection(db, `parents/${state.parentId}/children/${state.childId}/meals`), where('date', '==', state.date));
+  // الاعتماد على ملف القياسات لجلب الوجبات القديمة والجديدة بانتظام
+  const qy = query(collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`), where('date', '==', state.date));
   const snap = await getDocs(qy);
   state.eatenToday = 0; state.caloriesEatenToday = 0;
   
-  if(snap.empty) { els.dailyMealsBody.innerHTML = `<tr><td colspan="6" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>`; } 
-  else {
+  const validDocs = snap.docs.map(d=>d.data()).filter(m => m.carbs > 0 || m.totalDose > 0);
+
+  if(validDocs.length === 0) { 
+    els.dailyMealsBody.innerHTML = `<tr><td colspan="6" class="muted" style="text-align:center;">لا توجد وجبات أو قياسات مسجلة في هذا اليوم</td></tr>`; 
+  } else {
+    validDocs.sort((a,b) => a.when.seconds - b.when.seconds);
     let html = '';
-    snap.forEach(d => {
-      const m = d.data(); 
-      state.eatenToday += Number(m.carbs||0); state.caloriesEatenToday += Number(m.calories||0);
-      html += `<tr><td>${m.slotKey}</td><td>${m.carbs}g</td><td>${m.calories||0} kcal</td><td>${m.carbDose||0}U</td><td>${m.correctionDose||0}U</td><td><strong style="color:var(--primary)">${m.totalInsulin||0}U</strong></td></tr>`;
+    validDocs.forEach(m => {
+      state.eatenToday += Number(m.carbs||0); 
+      state.caloriesEatenToday += Number(m.calories||0);
+      html += `<tr><td>${getSlotLabel(m.slotKey)}</td><td>${m.carbs||0}g</td><td>${m.calories||0} kcal</td><td>${m.carbDose||0}U</td><td>${m.correctionDose||0}U</td><td><strong style="color:var(--primary)">${m.totalDose||m.totalInsulin||0}U</strong></td></tr>`;
     });
     els.dailyMealsBody.innerHTML = html;
   }
@@ -357,27 +382,45 @@ els.btnSaveMeal.onclick = async () => {
     if(tCal > 0 && tCal !== state.child.calorieGoal) updates.calorieGoal = tCal;
     if(Object.keys(updates).length > 0) await setDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`), updates, { merge: true });
 
-    if (carbs > 0) {
-      await addDoc(collection(db, `parents/${state.parentId}/children/${state.childId}/meals`), {
-        date: state.date, when: timeObj, slotKey: state.slot, carbs: carbs, calories: state.currentMealCalories, totalInsulin: state.finalDoseVal,
-        items: state.mealItems.map(m=>({name:m.name, qty:m.mealQty, netCarb:m.carbs_g})), createdAt: serverTimestamp()
-      });
+    // حفظ القياس مع الوجبة في ملف القياسات (عشان يظهر في اللوجبوك القديم والجديد)
+    let payload = {
+      date: state.date, time: `${hh}:${min}`, when: timeObj, slotKey: state.slot, 
+      carbs: carbs, calories: state.currentMealCalories, 
+      carbDose: parseFloat(els.doseCarbs?.value) || (state.CRs[state.slot]? carbs/state.CRs[state.slot] : 0),
+      correctionDose: parseFloat(els.doseCorrection?.value) || 0,
+      totalDose: state.finalDoseVal, createdAt: serverTimestamp()
+    };
+
+    if(state.mealItems.length > 0) {
+      payload.mealItemsRef = state.mealItems.map(m=>({name:m.name, qty:m.mealQty, netCarb:m.carbs_g}));
     }
+
     if (!isNaN(bg)) {
-      await addDoc(collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`), {
-        date: state.date, when: timeObj, slotKey: state.slot, value: bg, unit: els.preBgUnit.value,
-        measureMethod: els.measureSource.value === 'cgm' ? 'sensor' : 'blood', carbs: carbs, totalDose: state.finalDoseVal, createdAt: serverTimestamp()
-      });
+      payload.value = bg; payload.unit = els.preBgUnit.value;
+      payload.measureMethod = els.measureSource.value === 'cgm' ? 'sensor' : 'blood';
     }
-    alert("تم اعتماد الجرعة وحفظ السجل بنجاح! ✅"); location.href = `child.html?child=${state.childId}`;
+
+    await addDoc(collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`), payload);
+
+    alert("تم اعتماد الجرعة وحفظ السجل بنجاح! ✅"); location.href = `measurements.html?child=${state.childId}`;
   } catch(e) { console.error(e); alert("خطأ في الحفظ"); } finally { els.btnSaveMeal.disabled = false; els.btnSaveMeal.textContent = "💾 اعتماد الجرعة وحفظ الوجبة"; }
 };
 
 function setupEvents() {
   $('logoutBtn').onclick = () => signOut(auth);
-  els.dateInput.onchange = () => { state.date = els.dateInput.value; els.todayDateLabel.textContent = state.date; loadTodayMeals(); };
+  
+  // تحديث تلقائي عند تغيير التاريخ والوقت
+  els.dateInput.onchange = () => { 
+    state.date = els.dateInput.value; els.todayDateLabel.textContent = state.date; 
+    loadTodayMeals(); autoFetchPreMeasurement(); 
+  };
   els.timeInput.onchange = () => { state.time = els.timeInput.value; };
-  els.slotSelect.onchange = () => { state.slot = els.slotSelect.value; updateFactorsDisplay(); };
+  
+  // تحديث تلقائي عند تغيير الوجبة
+  els.slotSelect.onchange = () => { 
+    state.slot = els.slotSelect.value; updateFactorsDisplay(); autoFetchPreMeasurement(); 
+  };
+  
   els.netCarbRule.onchange = () => { state.rule = els.netCarbRule.value; renderMealTable(); updateMealTotals(); };
   els.preBg.oninput = calculateBolus; els.iobValue.oninput = calculateBolus;
   els.trendArrow.onchange = calculateBolus;
