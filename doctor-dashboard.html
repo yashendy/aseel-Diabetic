@@ -3,37 +3,50 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>لوحة الطبيب - منصة أسيل</title>
-  <link rel="stylesheet" href="./css/doctor-dashboard.css?v=2" />
+  <title>لوحة الطبيب | منصة أسيل</title>
+  <link rel="stylesheet" href="./css/doctor.css" />
   <link rel="icon" href="favicon.ico" />
 </head>
 <body>
+
+  <!-- شريط التنقل الموحد للطبيب -->
+  <header class="doctor-topbar no-print">
+    <div class="brand-area">
+      <span class="icon">🩺</span>
+      <div class="titles">
+        <h1>بوابة الأطباء (Doctor Portal)</h1>
+        <p>متابعة وتوجيه المرضى لحظياً</p>
+      </div>
+    </div>
+    <nav class="doctor-nav">
+      <a href="#" class="nav-btn active">المرضى والتقارير</a>
+      <a href="#" class="nav-btn">الرسائل (قريباً)</a>
+    </nav>
+    <div class="doctor-profile">
+      <span id="doctorName">د. جاري التحميل...</span>
+      <button id="btnLogout" class="btn danger sm">🚪 خروج</button>
+    </div>
+  </header>
+
   <div class="container" id="doctorDashboard">
-    <header class="header no-print">
-      <div class="title">
-        <span>👨‍⚕️ أهلاً دكتور</span>
-        <span id="doctorName" style="color: var(--primary);">—</span>
-      </div>
-      <div class="actions">
-        <button id="btnRefresh" class="btn secondary">🔄 تحديث البيانات</button>
-        <button id="btnLogout" class="btn danger-outline">🚪 خروج</button>
-      </div>
-    </header>
+    <div class="dashboard-actions no-print">
+      <button id="btnRefresh" class="btn secondary">🔄 تحديث البيانات</button>
+    </div>
 
     <div class="dashboard-grid">
-      <!-- كارت أكواد الربط -->
+      <!-- كارت أكواد الربط (مبني على فكرتك) -->
       <section class="card codes-card">
         <div class="section-head">
-          <h2>🔗 أكواد الربط</h2>
-          <button id="btnCreateCode" class="btn good">إنشاء كود جديد</button>
+          <h2>🔗 أكواد الربط بالمرضى</h2>
+          <button id="btnCreateCode" class="btn good sm">➕ إنشاء كود جديد</button>
         </div>
-        <p class="muted" style="margin-top:0;">أعطِ هذا الكود لولي الأمر لربط حساب طفله بملفك الطبي.</p>
-        <div id="codesList" class="list">
+        <p class="muted tiny" style="margin-top:0;">أعطِ هذا الكود لولي الأمر لربط حساب طفله بملفك الطبي.</p>
+        <div id="codesList" class="list codes-scroll">
           <div class="empty">لا توجد أكواد نشطة.</div>
         </div>
       </section>
 
-      <!-- كارت إحصائيات سريعة (اختياري مستقبلاً) -->
+      <!-- كارت الإحصائيات -->
       <section class="card stats-card">
         <div class="section-head">
           <h2>📊 نظرة عامة</h2>
@@ -43,8 +56,8 @@
             <span class="stat-num" id="totalPatients">0</span>
             <span class="stat-label">إجمالي المرضى</span>
           </div>
-          <div class="stat-box">
-            <span class="stat-num" id="criticalPatients" style="color: #dc2626;">0</span>
+          <div class="stat-box alert">
+            <span class="stat-num" id="criticalPatients">0</span>
             <span class="stat-label">حالات حرجة اليوم</span>
           </div>
         </div>
@@ -52,17 +65,17 @@
     </div>
 
     <!-- قائمة الأطفال (المرضى) -->
-    <section class="card">
+    <section class="card mt-20">
       <div class="section-head">
-        <h2>أطفالي (المرضى)</h2>
+        <h2>أطفالي (المرضى المتابعين)</h2>
         <div class="inline">
-          <input id="childSearch" class="input" type="search" placeholder="ابحث باسم المريض…" />
-          <span class="badge" id="childrenCount">—</span>
+          <input id="childSearch" class="input" type="search" placeholder="ابحث باسم المريض…" style="width:250px;" />
+          <span class="badge badge-primary" id="childrenCount">—</span>
         </div>
       </div>
 
       <div class="table-wrap">
-        <table>
+        <table class="modern-table">
           <thead>
             <tr>
               <th>اسم المريض</th>
@@ -70,7 +83,7 @@
               <th>الوحدة</th>
               <th>آخر قراءة</th>
               <th>حالة القياس</th>
-              <th style="width: 250px; text-align: center;">الإجراءات الطبية</th>
+              <th style="text-align: center;">الإجراءات الطبية</th>
             </tr>
           </thead>
           <tbody id="childrenTbody">
@@ -81,8 +94,81 @@
     </section>
   </div>
 
+  <!-- النافذة المنبثقة: الملف الطبي وإغلاق الدائرة -->
+  <dialog id="medical-modal" class="dialog">
+    <form id="medical-form" method="dialog">
+      <div class="dialog-header">
+        <div>
+          <h3 id="patientNameTitle" style="margin:0; color:#1e3a8a;">ملف المريض</h3>
+        </div>
+        <button id="modal-close" class="icon-btn" type="button">✕</button>
+      </div>
+
+      <input id="parent-id" type="hidden" />
+      <input id="child-id" type="hidden" />
+
+      <div class="dialog-body">
+        <div class="grid-2">
+          
+          <!-- العمود الأول: المعاملات والروشتة -->
+          <div class="col">
+            <div class="section-card">
+              <h4>⚙️ المعاملات الطبية (Dosing Rules)</h4>
+              <div class="grid-2-mini">
+                <label class="field"><span>الهدف (Target BG)</span><input id="targetBg" type="number" required></label>
+                <label class="field"><span>معامل التصحيح (CF)</span><input id="cfVal" type="number" required></label>
+              </div>
+              <hr style="border-top:1px dashed #cbd5e1; margin:12px 0;">
+              <strong>معاملات الكارب (CR) للوجبات:</strong>
+              <div class="grid-2-mini mt-10">
+                <label class="field"><span>الفطور</span><input id="crBreakfast" type="number" required></label>
+                <label class="field"><span>الغداء</span><input id="crLunch" type="number" required></label>
+                <label class="field"><span>العشاء</span><input id="crDinner" type="number" required></label>
+                <label class="field"><span>السناك</span><input id="crSnack" type="number" required></label>
+              </div>
+            </div>
+
+            <div class="section-card" style="background:#eff6ff; border-color:#bfdbfe;">
+              <h4>👨‍⚕️ روشتة الطبيب المباشرة</h4>
+              <p class="muted tiny" style="margin-bottom:8px;">تظهر هذه التعليمات فوراً كشريط تحذيري في لوحة الأم.</p>
+              <textarea id="doctorNote" rows="3" placeholder="اكتب تعليماتك هنا..."></textarea>
+            </div>
+          </div>
+
+          <!-- العمود الثاني: خريطة الحقن -->
+          <div class="col">
+            <div class="section-card">
+              <h4>🧍‍♂️ خريطة أماكن الحقن (Injection Map)</h4>
+              <p class="muted tiny">حدد أماكن التكتل لمنع الأم من الحقن فيها.</p>
+              
+              <div class="injection-grid">
+                <label class="field"><span>الذراع الأيمن</span><select id="inj_arm_right"><option value="ok">✅ سليم</option><option value="lump">🚨 تكتل دهني</option><option value="rest">⏸️ فترة إراحة</option></select></label>
+                <label class="field"><span>الذراع الأيسر</span><select id="inj_arm_left"><option value="ok">✅ سليم</option><option value="lump">🚨 تكتل دهني</option><option value="rest">⏸️ فترة إراحة</option></select></label>
+                
+                <label class="field"><span>البطن يمين (علوي)</span><select id="inj_abd_top_right"><option value="ok">✅ سليم</option><option value="lump">🚨 تكتل دهني</option><option value="rest">⏸️ فترة إراحة</option></select></label>
+                <label class="field"><span>البطن يسار (علوي)</span><select id="inj_abd_top_left"><option value="ok">✅ سليم</option><option value="lump">🚨 تكتل دهني</option><option value="rest">⏸️ فترة إراحة</option></select></label>
+                <label class="field"><span>البطن يمين (سفلي)</span><select id="inj_abd_bottom_right"><option value="ok">✅ سليم</option><option value="lump">🚨 تكتل دهني</option><option value="rest">⏸️ فترة إراحة</option></select></label>
+                <label class="field"><span>البطن يسار (سفلي)</span><select id="inj_abd_bottom_left"><option value="ok">✅ سليم</option><option value="lump">🚨 تكتل دهني</option><option value="rest">⏸️ فترة إراحة</option></select></label>
+                
+                <label class="field"><span>الفخذ الأيمن</span><select id="inj_thigh_right"><option value="ok">✅ سليم</option><option value="lump">🚨 تكتل دهني</option><option value="rest">⏸️ فترة إراحة</option></select></label>
+                <label class="field"><span>الفخذ الأيسر</span><select id="inj_thigh_left"><option value="ok">✅ سليم</option><option value="lump">🚨 تكتل دهني</option><option value="rest">⏸️ فترة إراحة</option></select></label>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <a id="btn-view-reports" href="#" class="btn alt" target="_blank">📊 فتح التقرير الذكي للمريض</a>
+        <div style="flex:1"></div>
+        <button class="btn ghost" type="button" id="btn-cancel">إلغاء</button>
+        <button id="btn-save-medical" class="btn primary" type="submit">💾 اعتماد وتحديث البروتوكول</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="./js/doctor-dashboard.js?v=2"></script>
+  <script type="module" src="./js/doctor-dashboard.js"></script>
 </body>
 </html>
