@@ -1,4 +1,3 @@
-// js/admin-dashboard.js
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { collection, collectionGroup, query, where, getDocs, getDoc, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
@@ -83,7 +82,7 @@ async function loadLists(){
   $('loader').classList.add('hidden');
 }
 
-async function /* جلب الأطباء مع إضافة المركز */
+/* جلب الأطباء مع إضافة المركز */
 async function loadDoctors(){
   ALL_DOCTORS_APPROVED = []; ALL_DOCTORS_PENDING = [];
   try {
@@ -91,7 +90,6 @@ async function loadDoctors(){
     const snap = await getDocs(qy);
     snap.forEach(s => {
       const d = s.data();
-      // سحبنا حقل المركز (center) أو العيادة (clinic)، ولو مش موجود بنعرض الإيميل
       const docData = { 
         uid: s.id, 
         name: d.displayName || d.name, 
@@ -110,7 +108,40 @@ async function loadDoctors(){
   }
 }
 
-/* رسم جدول الأطباء المعلقين */
+/* جلب الأطفال */
+async function loadChildren(){
+  try{
+    const qy = query(collectionGroup(db, 'children'));
+    const snap = await getDocs(qy);
+    ALL_CHILDREN = [];
+    snap.forEach(s=>{
+      const parts = s.ref.path.split('/');
+      const parentId = parts[1], childId = parts[3];
+      const d = s.data();
+      const consent = d?.sharingConsent === true || (d?.sharingConsent && typeof d.sharingConsent === 'object' && d.sharingConsent.doctor === true) || d?.shareDoctor === true;
+
+      ALL_CHILDREN.push({ parentId, childId, name: d?.name || '—', parentName: d?.parentName || parentId, assignedDoctor: d?.assignedDoctor || null, consent: !!consent });
+    });
+    renderChildrenTable(ALL_CHILDREN);
+    if($('childrenHint')) $('childrenHint').textContent = ALL_CHILDREN.length;
+  }catch(e){
+    console.error("Error loading children:", e);
+    if($('childrenTbody')) $('childrenTbody').innerHTML = `<tr><td colspan="3" style="text-align:center;">تعذّر تحميل الأطفال.</td></tr>`;
+  }
+}
+
+/* 4. البحث داخل الجداول */
+function filterChildrenTable(){
+  const t = ($('childSearch').value || '').trim().toLowerCase();
+  renderChildrenTable(ALL_CHILDREN.filter(c => (c.name||'').toLowerCase().includes(t) || (c.parentName||'').toLowerCase().includes(t)));
+}
+
+function filterDoctorsTable(){
+  const t = ($('doctorSearch').value || '').trim().toLowerCase();
+  renderApprovedDoctors(ALL_DOCTORS_APPROVED.filter(d => (d.name||'').toLowerCase().includes(t) || (d.email||'').toLowerCase().includes(t)));
+}
+
+/* 5. رسم الجداول (بالتنسيق الجديد) */
 function renderPendingDoctors(){
   const tbody = $('pendingDoctorsTbody'); 
   if(!tbody) return;
@@ -132,7 +163,6 @@ function renderPendingDoctors(){
   });
 }
 
-/* رسم جدول الأطباء المعتمدين (شكل جديد ومرتب) */
 function renderApprovedDoctors(list){
   const tbody = $('doctorsTbody'); 
   if(!tbody) return;
@@ -152,10 +182,8 @@ function renderApprovedDoctors(list){
     `;
     tbody.appendChild(tr);
   }
-  if($('doctorsHint')) $('doctorsHint').textContent = list.length;
 }
 
-/* رسم جدول الأطفال (بدون الـ IDs وبشكل Badges منظم) */
 function renderChildrenTable(list){
   const tbody = $('childrenTbody'); 
   if(!tbody) return;
@@ -178,95 +206,6 @@ function renderChildrenTable(list){
       <td style="text-align:center; vertical-align:middle;">
         <input type="radio" name="childPick" value="${escapeHtml(`${c.parentId}|${c.childId}|${c.name}`)}" style="transform: scale(1.5); cursor:pointer;">
       </td>
-    `;
-    tbody.appendChild(tr);
-  }
-}
-
-async function loadChildren(){
-  try{
-    const qy = query(collectionGroup(db, 'children'));
-    const snap = await getDocs(qy);
-    ALL_CHILDREN = [];
-    snap.forEach(s=>{
-      const parts = s.ref.path.split('/');
-      const parentId = parts[1], childId = parts[3];
-      const d = s.data();
-      const consent = d?.sharingConsent === true || (d?.sharingConsent && typeof d.sharingConsent === 'object' && d.sharingConsent.doctor === true) || d?.shareDoctor === true;
-
-      ALL_CHILDREN.push({ parentId, childId, name: d?.name || '—', parentName: d?.parentName || parentId, assignedDoctor: d?.assignedDoctor || null, consent: !!consent });
-    });
-    renderChildrenTable(ALL_CHILDREN);
-    if($('childrenHint')) $('childrenHint').textContent = ALL_CHILDREN.length;
-  }catch(e){
-    console.error("Error loading children:", e);
-    if($('childrenTbody')) $('childrenTbody').innerHTML = `<tr><td colspan="4" style="text-align:center;">تعذّر تحميل الأطفال.</td></tr>`;
-  }
-}
-
-/* 4. البحث داخل الجداول */
-function filterChildrenTable(){
-  const t = ($('childSearch').value || '').trim().toLowerCase();
-  renderChildrenTable(ALL_CHILDREN.filter(c => (c.name||'').toLowerCase().includes(t) || (c.parentName||'').toLowerCase().includes(t)));
-}
-
-function filterDoctorsTable(){
-  const t = ($('doctorSearch').value || '').trim().toLowerCase();
-  renderApprovedDoctors(ALL_DOCTORS_APPROVED.filter(d => (d.name||'').toLowerCase().includes(t) || (d.email||'').toLowerCase().includes(t)));
-}
-
-/* 5. رسم الجداول */
-function renderPendingDoctors(){
-  const tbody = $('pendingDoctorsTbody'); 
-  if(!tbody) return;
-  tbody.innerHTML = '';
-  if(!ALL_DOCTORS_PENDING.length){ tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--muted);">لا يوجد أطباء بانتظار الاعتماد.</td></tr>`; return; }
-  
-  ALL_DOCTORS_PENDING.forEach(d => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${escapeHtml(d.name || '—')}</td><td>${escapeHtml(d.email)}</td><td>جديد</td>
-      <td style="text-align:center;">
-        <button class="btn primary" style="height:30px; font-size:12px;" onclick="approveDoctor('${d.uid}')">✅ اعتماد</button>
-      </td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function renderApprovedDoctors(list){
-  const tbody = $('doctorsTbody'); 
-  if(!tbody) return;
-  tbody.innerHTML = '';
-  if (!list.length){ tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;">لا يوجد أطباء معتمدين.</td></tr>`; return; }
-  
-  for (const d of list){
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${escapeHtml(d.name)}</td>
-      <td>${escapeHtml(d.email)}</td>
-      <td style="text-align:center;"><input type="radio" name="doctorPick" value="${escapeHtml(`${d.uid}|${d.name}|${d.email}`)}" style="transform: scale(1.5);"></td>
-    `;
-    tbody.appendChild(tr);
-  }
-  if($('doctorsHint')) $('doctorsHint').textContent = list.length;
-}
-
-function renderChildrenTable(list){
-  const tbody = $('childrenTbody'); 
-  if(!tbody) return;
-  tbody.innerHTML = '';
-  if (!list.length){ tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;">لا يوجد بيانات.</td></tr>`; return; }
-  
-  for (const c of list){
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${escapeHtml(c.name)}</td>
-      <td>${escapeHtml(c.parentName || c.parentId)}</td>
-      <td>
-        ${c.consent ? '<span class="badge">✅ مُصرّح</span>' : '<span class="badge err">❌ غير مُصرّح</span>'}
-        ${c.assignedDoctor ? ` <span class="badge" style="background:var(--primary);color:#fff;border-color:var(--primary);">تم الربط</span>` : ''}
-      </td>
-      <td style="text-align:center;"><input type="radio" name="childPick" value="${escapeHtml(`${c.parentId}|${c.childId}|${c.name}`)}" style="transform: scale(1.5);"></td>
     `;
     tbody.appendChild(tr);
   }
