@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>حاسبة الوجبات | أسيل</title>
-  <link rel="stylesheet" href="css/meals.css?v=1">
+  <title>حاسبة الوجبات ومطبخ أسيل</title>
+  <link rel="stylesheet" href="css/meals.css?v=2026.03.01">
   <link rel="icon" href="favicon.ico">
 </head>
 <body>
@@ -18,14 +18,12 @@
         <span id="topChildMeta" class="muted tiny">—</span>
       </div>
     </div>
-    
     <nav class="topbar-nav">
       <a href="child.html" class="nav-pill" id="navHome">🏠 الرئيسية</a>
       <a href="measurements.html" class="nav-pill" id="navMeas">📊 القياسات</a>
       <a href="#" class="nav-pill active">🍽️ الوجبات</a>
       <a href="reports.html" class="nav-pill" id="navReports">📈 التقارير</a>
     </nav>
-    
     <div class="topbar-left">
       <button id="logoutBtn" class="btn-logout-outline">↪ خروج</button>
     </div>
@@ -33,136 +31,181 @@
 
   <!-- مسار التنقل -->
   <div class="breadcrumbs no-print">
-    <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>حاسبة الوجبات 🍽️</b>
+    <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>حاسبة ومطبخ أسيل 🍽️</b>
   </div>
 
   <div class="container">
     
-    <!-- مؤشر الدايت والريجيم (Daily Carb Goal) -->
+    <!-- مؤشر الدايت والريجيم الحر -->
     <div class="diet-tracker">
-      <div class="diet-info">
-        <span>مؤشر استهلاك الكارب اليومي 🥗</span>
-        <span id="carbProgressText">0 / 150 جرام</span>
+      <div class="diet-header">
+        <div class="diet-title">مؤشر استهلاك الكارب اليومي 🥗</div>
+        <div class="diet-inputs">
+          <label style="font-size:12px; color:#64748b;">الحد الأقصى اليومي (g):</label>
+          <input type="number" id="dailyCarbTarget" placeholder="مثال: 150">
+        </div>
       </div>
       <div class="progress-bg">
         <div class="progress-fill" id="carbProgressBar"></div>
       </div>
+      <div class="diet-status" id="carbProgressText">إجمالي المستهلك اليوم: 0 جرام</div>
     </div>
 
-    <div class="grid-layout">
-      <!-- القسم الأيسر: محرك الحاسبة الذكي -->
-      <section class="card">
-        <div class="card-header"><h2>🧮 حاسبة الأنسولين الذكية</h2></div>
-        
-        <div class="factors-bar">
-          <span class="f-chip">🎯 الهدف: <span id="lblTarget">—</span></span>
-          <span class="f-chip">🍔 معامل الكارب (CR): <span id="lblCR">—</span></span>
-          <span class="f-chip">💉 معامل التصحيح (CF): <span id="lblCF">—</span></span>
-        </div>
+    <!-- كابينة الحاسبة الذكية (في الصدارة) -->
+    <section class="card">
+      <div class="card-header"><h2>🧮 حاسبة الأنسولين الذكية</h2></div>
+      
+      <div class="factors-bar">
+        <span class="f-chip">🎯 الهدف: <span id="lblTarget">—</span></span>
+        <span class="f-chip">🍔 CR: <span id="lblCR">—</span></span>
+        <span class="f-chip">💉 CF: <span id="lblCF">—</span></span>
+      </div>
 
-        <div class="calc-row">
-          <div class="field">
-            <label>وقت الوجبة</label>
-            <select id="mealSlot">
-              <option value="BREAKFAST">الفطور</option>
-              <option value="LUNCH">الغداء</option>
-              <option value="DINNER">العشاء</option>
-              <option value="SNACK">سناك</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>نوع القياس</label>
-            <select id="measureSource">
-              <option value="bgm">وخز الإصبع (BGM)</option>
-              <option value="cgm">حساس سكر (CGM)</option>
-            </select>
-          </div>
+      <div class="calc-row">
+        <div class="field">
+          <label>وقت الوجبة</label>
+          <select id="slotSelect">
+            <option value="PRE_BREAKFAST">فطار</option>
+            <option value="PRE_LUNCH">غدا</option>
+            <option value="PRE_DINNER">عشا</option>
+            <option value="SNACK">سناك</option>
+          </select>
         </div>
+        <div class="field">
+          <label>نوع القياس</label>
+          <select id="measureSource">
+            <option value="bgm">وخز الإصبع (BGM)</option>
+            <option value="cgm" selected>حساس سكر (CGM)</option>
+          </select>
+        </div>
+      </div>
 
-        <div class="calc-row">
-          <div class="field">
-            <label>قراءة السكر قبل الوجبة</label>
-            <div class="input-group">
-              <button class="btn-fetch" id="btnFetchBG" title="سحب آخر قراءة من السجل">🔄 سحب</button>
-              <input type="number" id="bgInput" class="input" placeholder="مثال: 120">
-              <span style="padding:10px; background:#f1f5f9; border-radius:8px; border:1px solid #cbd5e1" id="unitLbl">mg/dL</span>
-            </div>
-          </div>
-          <div class="field hidden" id="trendContainer">
-            <label>سهم الاتجاه (Trend)</label>
-            <select id="trendArrow" class="input">
-              <option value="0">➔ ثابت</option>
-              <option value="15">↑ يرتفع ببطء</option>
-              <option value="30">⇈ يرتفع بسرعة</option>
-              <option value="-15">↓ ينخفض ببطء</option>
-              <option value="-30">⇊ ينخفض بسرعة</option>
-            </select>
+      <div class="calc-row">
+        <div class="field">
+          <label>قراءة السكر الحالية</label>
+          <div class="input-group">
+            <button class="btn-fetch" id="btnFetchPre" title="سحب آخر قراءة من السجل">🔄 جلب</button>
+            <input type="number" step="0.1" id="preBg" class="input" placeholder="مثال: 120">
+            <select id="preBgUnit" style="width:80px; padding:10px 4px;"><option value="mg/dL">mg/dL</option><option value="mmol/L">mmol/L</option></select>
           </div>
         </div>
-
-        <div class="calc-row">
-          <div class="field">
-            <label>إجمالي الكارب (جرام) 🍔</label>
-            <input type="number" id="carbsInput" class="input" placeholder="يُحسب آلياً أو أدخله يدوياً">
-          </div>
-          <div class="field">
-            <label>أنسولين نشط (IOB) 💉</label>
-            <input type="number" step="0.1" id="iobInput" class="input" placeholder="الجرعة الفعالة المتبقية">
-          </div>
+        <div class="field" id="trendContainer">
+          <label>سهم الحساس (الذكاء الاصطناعي سيعدل الجرعة)</label>
+          <select id="trendArrow" class="input">
+            <option value="0">➔ ثابت (لا تعديل)</option>
+            <option value="15">↑ يرتفع ببطء (+15 mg/dL)</option>
+            <option value="30">⇈ يرتفع بسرعة (+30 mg/dL)</option>
+            <option value="-15">↓ ينخفض ببطء (-15 mg/dL)</option>
+            <option value="-30">⇊ ينخفض بسرعة (-30 mg/dL)</option>
+          </select>
         </div>
+      </div>
 
-        <div class="result-box" id="resultBox">
-          <h3>الجرعة النهائية المطلوبة</h3>
-          <p class="final-dose" id="finalDoseDisplay">0.0 U</p>
-          <div class="dose-details" id="doseDetailsStr">جرعة الكارب: 0 | التصحيح: 0 | الخصم: 0</div>
+      <div class="calc-row">
+        <div class="field" style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+          <label style="color:#7c3aed;">إجمالي الكارب الصافي (g) 🍔 <br><span class="muted tiny">يأتي من الجدول بالأسفل، أو أدخله يدوياً</span></label>
+          <input type="number" step="0.5" id="manualCarbs" class="input" style="font-weight:bold; font-size:18px; color:#7c3aed;" placeholder="0">
         </div>
-
-        <!-- التنبؤ الجلايسيمي -->
-        <div class="ai-pred hidden" id="aiPrediction">
-          <span style="font-size:24px">🤖</span>
-          <div>
-            <strong>تنبؤ أسيل الذكي:</strong>
-            <p id="aiPredText">بناءً على التواريخ السابقة، هذه الوجبة قد تسبب ارتفاعاً بعد ساعتين. يرجى المتابعة.</p>
-          </div>
+        <div class="field">
+          <label>أنسولين نشط (IOB) للخصم 💉</label>
+          <input type="number" step="0.1" id="iobValue" class="input" placeholder="0">
         </div>
+      </div>
 
-        <button id="btnSaveLog" class="btn primary" style="margin-top:20px;">💾 اعتماد وتسجيل الوجبة</button>
-      </section>
+      <div class="calc-row" style="display:none;">
+        <input id="doseCorrection" type="number">
+        <input id="doseCarbs" type="number">
+      </div>
 
-      <!-- القسم الأيمن: مكتبة الطعام وبناء الوجبة -->
-      <section class="card" style="background: #f8fafc;">
-        <div class="card-header"><h2>🍱 مطبخ أسيل</h2></div>
-        <p class="muted" style="font-size:13px; margin-top:0">ابحثي وأضيفي مكونات الوجبة ليتم حساب الكارب بدقة.</p>
-        
-        <div class="search-food-box">
-          <input type="text" id="foodSearch" class="input" style="width:100%" placeholder="🔍 ابحث عن صنف (مثال: تفاح، خبز)...">
-          <div class="food-suggestions" id="foodSuggestions"></div>
+      <div class="result-box" id="resultBox">
+        <h3>الجرعة النهائية المطلوبة</h3>
+        <p class="final-dose" id="doseFinal">0.0 U</p>
+        <div class="dose-details" id="doseDetailsStr">كارب: 0 | تصحيح: 0 | خصم نشط: 0</div>
+      </div>
+
+      <!-- تحذيرات الذكاء الاصطناعي للحاسبة -->
+      <div id="smartAlerts" class="smart-alert"></div>
+    </section>
+
+    <!-- مطبخ أسيل الأصلي (أسفل الحاسبة) -->
+    <section class="card">
+      <div class="card-header">
+        <h2>🍱 مطبخ أسيل (الأنظمة وبناء الوجبات)</h2>
+        <button id="btnOpenLibrary" class="btn alt sm">➕ أضف صنف من المكتبة</button>
+      </div>
+      
+      <div class="calc-row" style="margin-bottom:12px;">
+        <div class="field">
+          <label>قاعدة خصم الألياف من الكارب (الدايت)</label>
+          <select id="netCarbRule" class="input">
+            <option value="none">بدون خصم الألياف</option>
+            <option value="halfFiber">خصم نصف الألياف</option>
+            <option value="fullFiber" selected>خصم كامل الألياف</option>
+          </select>
         </div>
+      </div>
 
+      <div style="overflow-x:auto;">
         <table class="meal-table" id="mealTable">
           <thead>
-            <tr>
-              <th>الصنف</th>
-              <th style="width:60px">الكمية</th>
-              <th style="width:60px">كارب</th>
-              <th style="width:30px"></th>
-            </tr>
+            <tr><th>الصنف</th><th>الكمية</th><th>الوحدة</th><th>(Net) كارب</th><th>ألياف</th><th>بروتين</th><th>دهون</th><th>Calories</th><th>GI</th><th></th></tr>
           </thead>
-          <tbody id="mealItemsBody">
-            <tr><td colspan="4" style="text-align:center; color:#94a3b8">لم يتم إضافة أصناف.</td></tr>
+          <tbody id="mealBody">
+            <tr><td colspan="10" class="muted" style="text-align:center;">لم يتم إضافة أي أصناف للوجبة بعد.</td></tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" style="text-align:left; font-weight:bold;">إجمالي الوجبة الحالية:</td>
+              <td id="sumCarbsNet" style="font-weight:bold;color:#7c3aed; font-size:15px;">0 g</td>
+              <td id="sumFiber" class="muted">0 g</td>
+              <td id="sumProtein" class="muted">0 g</td>
+              <td id="sumFat" class="muted">0 g</td>
+              <td id="sumCalories" class="muted">0 kcal</td>
+              <td id="avgGI" class="muted">—</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button id="btnSaveMeal" class="btn primary">💾 اعتماد الجرعة وحفظ الوجبة</button>
+        <button id="btnClearMeal" class="btn gray" style="width:auto;">مسح</button>
+      </div>
+    </section>
+
+    <!-- سجل وجبات اليوم -->
+    <section class="card">
+      <div class="card-header"><h2>📝 سجل وجبات اليوم (<span id="todayDateLabel"></span>)</h2></div>
+      <div style="overflow-x:auto;">
+        <table class="meal-table">
+          <thead><tr><th>الوقت/الوجبة</th><th>الكارب</th><th>جرعة الكارب</th><th>جرعة التصحيح</th><th>الجرعة الإجمالية</th></tr></thead>
+          <tbody id="dailyMealsBody">
+            <tr><td colspan="5" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>
           </tbody>
         </table>
-        
-        <div style="text-align:left; font-weight:bold; color:var(--primary); font-size:15px">
-          مجموع الكارب: <span id="totalMealCarbs">0</span> جرام
-        </div>
-      </section>
-    </div>
+      </div>
+    </section>
 
   </div>
 
-  <div id="loader" class="loader"><div class="spinner"></div></div>
+  <!-- مكتبة الطعام (Modal) -->
+  <div id="libModal" class="lib-modal">
+    <div id="libOverlay" class="lib-overlay"></div>
+    <div class="lib-panel">
+      <div class="lib-header">
+        <h4>🍎 مكتبة الطعام الشاملة</h4>
+        <button id="libClose" class="lib-close">✕</button>
+      </div>
+      <div style="padding:16px;">
+        <input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف (مثال: أرز، تفاح، بيض)..." style="width:100%; margin-bottom:16px;" />
+        <div id="loadingLibrary" style="text-align:center; color:#64748b;">جاري جلب الأصناف...</div>
+        <div id="itemsGrid" style="display:flex; flex-direction:column; gap:10px; max-height:400px; overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
 
-  <script type="module" src="js/meals.js?v=1"></script>
+  <div id="loader" class="loader"><div class="spinner"></div></div>
+  <script type="module" src="js/meals.js?v=2026.03.02"></script>
 </body>
 </html>
