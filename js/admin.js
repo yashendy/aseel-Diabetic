@@ -83,6 +83,7 @@ async function loadLists(){
   $('loader').classList.add('hidden');
 }
 
+async function /* جلب الأطباء مع إضافة المركز */
 async function loadDoctors(){
   ALL_DOCTORS_APPROVED = []; ALL_DOCTORS_PENDING = [];
   try {
@@ -90,7 +91,14 @@ async function loadDoctors(){
     const snap = await getDocs(qy);
     snap.forEach(s => {
       const d = s.data();
-      const docData = { uid: s.id, name: d.displayName || d.name, email: d.email, isApproved: d.isApproved };
+      // سحبنا حقل المركز (center) أو العيادة (clinic)، ولو مش موجود بنعرض الإيميل
+      const docData = { 
+        uid: s.id, 
+        name: d.displayName || d.name, 
+        email: d.email, 
+        center: d.center || d.clinic || d.email, 
+        isApproved: d.isApproved 
+      };
       
       if(d.isApproved === true) ALL_DOCTORS_APPROVED.push(docData);
       else ALL_DOCTORS_PENDING.push(docData);
@@ -99,6 +107,79 @@ async function loadDoctors(){
     renderApprovedDoctors(ALL_DOCTORS_APPROVED);
   } catch(e) {
     console.error("Error loading doctors:", e);
+  }
+}
+
+/* رسم جدول الأطباء المعلقين */
+function renderPendingDoctors(){
+  const tbody = $('pendingDoctorsTbody'); 
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  if(!ALL_DOCTORS_PENDING.length){ tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--muted);">لا يوجد أطباء بانتظار الاعتماد.</td></tr>`; return; }
+  
+  ALL_DOCTORS_PENDING.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div style="font-weight:bold;">${escapeHtml(d.name || '—')}</div>
+      </td>
+      <td>${escapeHtml(d.email)}</td>
+      <td><span class="badge warn">جديد</span></td>
+      <td style="text-align:center;">
+        <button class="btn primary" style="height:30px; font-size:12px;" onclick="approveDoctor('${d.uid}')">✅ اعتماد</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* رسم جدول الأطباء المعتمدين (شكل جديد ومرتب) */
+function renderApprovedDoctors(list){
+  const tbody = $('doctorsTbody'); 
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  if (!list.length){ tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--muted);">لا يوجد أطباء معتمدين.</td></tr>`; return; }
+  
+  for (const d of list){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div style="font-weight:bold; font-size:15px;">${escapeHtml(d.name)}</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:4px;">🏥 ${escapeHtml(d.center)}</div>
+      </td>
+      <td style="text-align:center; vertical-align:middle;">
+        <input type="radio" name="doctorPick" value="${escapeHtml(`${d.uid}|${d.name}|${d.email}`)}" style="transform: scale(1.5); cursor:pointer;">
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+  if($('doctorsHint')) $('doctorsHint').textContent = list.length;
+}
+
+/* رسم جدول الأطفال (بدون الـ IDs وبشكل Badges منظم) */
+function renderChildrenTable(list){
+  const tbody = $('childrenTbody'); 
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  if (!list.length){ tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--muted);">لا توجد بيانات.</td></tr>`; return; }
+  
+  for (const c of list){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div style="font-weight:bold; font-size:15px;">${escapeHtml(c.name)}</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:4px;">ولي الأمر: ${escapeHtml(c.parentName || 'غير مسجل')}</div>
+      </td>
+      <td>
+        <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-start;">
+          ${c.consent ? '<span class="badge">✅ مُصرّح</span>' : '<span class="badge err">❌ غير مُصرّح</span>'}
+          ${c.assignedDoctor ? `<span class="badge" style="background:var(--primary);color:#fff;border-color:var(--primary);">🔗 تم الربط</span>` : ''}
+        </div>
+      </td>
+      <td style="text-align:center; vertical-align:middle;">
+        <input type="radio" name="childPick" value="${escapeHtml(`${c.parentId}|${c.childId}|${c.name}`)}" style="transform: scale(1.5); cursor:pointer;">
+      </td>
+    `;
+    tbody.appendChild(tr);
   }
 }
 
