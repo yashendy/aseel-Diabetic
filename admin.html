@@ -91,24 +91,37 @@
         </div>
       </div>
 
-      <div class="lists-wrap">
+     <div class="lists-wrap">
+        <!-- جدول الأطفال -->
         <div class="list-card">
           <div class="list-title">👶 الأطفال (<span id="childrenHint">0</span>)</div>
           <table class="tbl">
             <thead>
-              <tr><th>الطفل</th><th>حالة الموافقة</th><th>تحديد</th></tr>
+              <tr>
+                <th>الطفل المريض</th>
+                <th>حالة الموافقة</th>
+                <th style="text-align: center;">تحديد</th>
+              </tr>
             </thead>
-            <tbody id="childrenTbody"></tbody>
+            <tbody id="childrenTbody">
+              <tr><td colspan="3" style="text-align: center; color: var(--muted);">جارٍ التحميل…</td></tr>
+            </tbody>
           </table>
         </div>
 
+        <!-- جدول الأطباء -->
         <div class="list-card">
           <div class="list-title">👨‍⚕️ الأطباء المعتمدين (<span id="doctorsHint">0</span>)</div>
           <table class="tbl">
             <thead>
-              <tr><th>اسم الطبيب</th><th>تحديد</th></tr>
+              <tr>
+                <th>اسم الطبيب (والمركز)</th>
+                <th style="text-align: center;">تحديد</th>
+              </tr>
             </thead>
-            <tbody id="doctorsTbody"></tbody>
+            <tbody id="doctorsTbody">
+              <tr><td colspan="2" style="text-align: center; color: var(--muted);">جارٍ التحميل…</td></tr>
+            </tbody>
           </table>
         </div>
       </div>
