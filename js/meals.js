@@ -14,7 +14,8 @@ let state = {
   childId: null, parentId: null, child: null, date: todayStr(), slot: "PRE_BREAKFAST",
   CF: 50, Target: 100, CRs: { breakfast: 10, lunch: 10, dinner: 10, snack: 15 },
   rule: "fullFiber", globalFoods: [], mealItems: [], IOB: 0, finalDoseVal: 0,
-  manualCarbDirty: false, eatenToday: 0
+  manualCarbDirty: false, eatenToday: 0, caloriesEatenToday: 0,
+  currentMealCarbs: 0, currentMealCalories: 0
 };
 
 const els = {
@@ -30,6 +31,7 @@ const els = {
   libModal: $("libModal"), libOverlay: $("libOverlay"), libClose: $("libClose"),
   searchBox: $("searchBox"), itemsGrid: $("itemsGrid"), loadingLibrary: $("loadingLibrary"),
   dailyCarbTarget: $("dailyCarbTarget"), carbProgressBar: $("carbProgressBar"), carbProgressText: $("carbProgressText"),
+  dailyCalorieTarget: $("dailyCalorieTarget"), calProgressBar: $("calProgressBar"), calProgressText: $("calProgressText"),
   todayDateLabel: $("todayDateLabel"), dailyMealsBody: $("dailyMealsBody")
 };
 
@@ -57,7 +59,6 @@ async function loadChildData() {
   const c = snap.data();
   state.child = { id: snap.id, ...c };
 
-  // Topbar
   const name = c.name || 'الطفل';
   $('topAvatar').textContent = name.charAt(0);
   $('topChildName').textContent = name;
@@ -68,7 +69,6 @@ async function loadChildData() {
   $('navMeas').href = `measurements.html?child=${state.childId}`;
   $('navReports').href = `reports.html?child=${state.childId}`;
 
-  // Factors
   state.CF = Number(c.cf || c.correctionFactor) || 50;
   if(c.cr) state.CRs = c.cr;
   if(c.glucose_limits) state.Target = Number(c.glucose_limits.target) || (c.glucoseUnit === 'mmol/L' ? 5.5 : 100);
@@ -79,6 +79,7 @@ async function loadChildData() {
   els.todayDateLabel.textContent = state.date;
   
   if(c.dietGoal) { els.dailyCarbTarget.value = c.dietGoal; }
+  if(c.calorieGoal) { els.dailyCalorieTarget.value = c.calorieGoal; }
   
   updateFactorsDisplay();
 }
@@ -105,21 +106,36 @@ function updateFactorsDisplay() {
   calculateBolus();
 }
 
-// --- Diet Progress Tracker ---
-function updateDietProgress() {
-  const target = Number(els.dailyCarbTarget.value);
-  if(target > 0) {
-    els.carbProgressText.textContent = `${Math.round(state.eatenToday)} / ${target} جرام`;
-    const pct = Math.min(100, (state.eatenToday / target) * 100);
+// التحديث اللحظي لمؤشرات الدايت
+function updateDietProgress(mealCarbs = 0, mealCals = 0) {
+  // الكارب
+  const targetCarb = Number(els.dailyCarbTarget.value);
+  const totalCarb = state.eatenToday + mealCarbs;
+  if(targetCarb > 0) {
+    els.carbProgressText.textContent = `${Math.round(totalCarb)} / ${targetCarb} جرام`;
+    const pct = Math.min(100, (totalCarb / targetCarb) * 100);
     els.carbProgressBar.style.width = pct + '%';
-    els.carbProgressBar.className = `progress-fill ${pct > 100 ? 'danger' : pct > 85 ? 'warn' : ''}`;
+    els.carbProgressBar.className = `progress-fill carb-fill ${pct > 100 ? 'danger' : pct > 85 ? 'warn' : ''}`;
   } else {
-    els.carbProgressText.textContent = `إجمالي المستهلك اليوم: ${Math.round(state.eatenToday)} جرام`;
+    els.carbProgressText.textContent = `إجمالي المستهلك اليوم: ${Math.round(totalCarb)} جرام`;
     els.carbProgressBar.style.width = '0%';
+  }
+
+  // السعرات
+  const targetCal = Number(els.dailyCalorieTarget.value);
+  const totalCal = state.caloriesEatenToday + mealCals;
+  if(targetCal > 0) {
+    els.calProgressText.textContent = `${Math.round(totalCal)} / ${targetCal} kcal`;
+    const pct = Math.min(100, (totalCal / targetCal) * 100);
+    els.calProgressBar.style.width = pct + '%';
+    els.calProgressBar.className = `progress-fill cal-fill ${pct > 100 ? 'danger' : pct > 85 ? 'warn' : ''}`;
+  } else {
+    els.calProgressText.textContent = `إجمالي المستهلك اليوم: ${Math.round(totalCal)} kcal`;
+    els.calProgressBar.style.width = '0%';
   }
 }
 
-// --- Food Library ---
+// جلب وبناء مكتبة الطعام بالتصميم المطور
 async function fetchFoodLibrary() {
   try {
     const snap = await getDocs(collection(db, "admin/global/foodItems"));
@@ -132,21 +148,32 @@ async function fetchFoodLibrary() {
 function renderLibrary() {
   const q = els.searchBox.value.toLowerCase();
   const list = state.globalFoods.filter(f => !q || (f.searchText || f.name).toLowerCase().includes(q));
-  if(!list.length) { els.itemsGrid.innerHTML = `<div style="text-align:center; padding:20px; color:#94a3b8;">لا توجد نتائج.</div>`; return; }
+  if(!list.length) { els.itemsGrid.innerHTML = `<div style="text-align:center; padding:20px; color:#94a3b8;">لا توجد نتائج مطابقة لبحثك.</div>`; return; }
 
-  els.itemsGrid.innerHTML = list.map(f => `
-    <div class="food-lib-item" data-id="${f.id}">
-      <img src="${f.image?.url || SAFE_PLACEHOLDER}" onerror="this.src='${SAFE_PLACEHOLDER}';">
-      <div class="details">
-        <h4>${f.name}</h4>
-        <div class="macros"><span>كارب: ${f.per100?.carbs_g||0}g</span> <span>ألياف: ${f.per100?.fiber_g||0}g</span></div>
+  els.itemsGrid.innerHTML = list.map(f => {
+    const giStr = f.per100?.gi ? `<span class="gi-badge ${f.per100.gi > 70 ? 'high' : ''}">GI: ${f.per100.gi}</span>` : '';
+    return `
+      <div class="food-lib-item" data-id="${f.id}">
+        <div class="food-img-col">
+          <img src="${f.image?.url || SAFE_PLACEHOLDER}" onerror="this.src='${SAFE_PLACEHOLDER}';">
+          ${giStr}
+        </div>
+        <div class="details">
+          <div class="food-title">${f.name}</div>
+          <div class="macros-grid">
+            <div class="m-box"><span class="m-val">${f.per100?.carbs_g||0}g</span><span class="m-lbl">كارب</span></div>
+            <div class="m-box"><span class="m-val">${f.per100?.protein_g||0}g</span><span class="m-lbl">بروتين</span></div>
+            <div class="m-box"><span class="m-val">${f.per100?.fat_g||0}g</span><span class="m-lbl">دهون</span></div>
+            <div class="m-box"><span class="m-val" style="color:#f59e0b">${f.per100?.cal_kcal||0}</span><span class="m-lbl">kcal</span></div>
+          </div>
+        </div>
+        <button class="btn primary sm add-btn">إضافة</button>
       </div>
-      <button class="btn primary sm">إضافة</button>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   document.querySelectorAll('.food-lib-item').forEach(item => {
-    item.onclick = () => { addItemToMeal(item.dataset.id); els.libModal.classList.remove('open'); };
+    item.querySelector('.add-btn').onclick = () => { addItemToMeal(item.dataset.id); els.libModal.classList.remove('open'); };
   });
 }
 
@@ -208,7 +235,15 @@ function updateMealTotals() {
   els.sumProtein.textContent = `${fmt(sumPro)} g`; els.sumFat.textContent = `${fmt(sumFat)} g`;
   els.sumCalories.textContent = `${fmt(sumCal,0)} kcal`; els.avgGI.textContent = giSum>0 ? Math.round(weightedGI/giSum) : '—';
 
+  state.currentMealCarbs = sumNet;
+  state.currentMealCalories = sumCal;
+
   if(!state.manualCarbDirty) els.manualCarbs.value = fmt(sumNet, 1);
+  
+  // تحديث المؤشرات اللحظية في الدايت
+  updateDietProgress(state.currentMealCarbs, state.currentMealCalories);
+  
+  // تحديث الحاسبة الذكية
   calculateBolus(sumFat, sumPro, giSum>0 ? Math.round(weightedGI/giSum) : 0, sumFib);
 }
 
@@ -267,17 +302,20 @@ async function loadTodayMeals() {
   const qy = query(collection(db, `parents/${state.parentId}/children/${state.childId}/meals`), where('date', '==', state.date));
   const snap = await getDocs(qy);
   state.eatenToday = 0;
+  state.caloriesEatenToday = 0;
   
-  if(snap.empty) { els.dailyMealsBody.innerHTML = `<tr><td colspan="5" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>`; } 
+  if(snap.empty) { els.dailyMealsBody.innerHTML = `<tr><td colspan="6" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>`; } 
   else {
     let html = '';
     snap.forEach(d => {
-      const m = d.data(); state.eatenToday += Number(m.carbs||0);
-      html += `<tr><td>${m.slotKey}</td><td>${m.carbs}g</td><td>${m.carbDose||0}U</td><td>${m.correctionDose||0}U</td><td><strong style="color:var(--primary)">${m.totalInsulin||0}U</strong></td></tr>`;
+      const m = d.data(); 
+      state.eatenToday += Number(m.carbs||0);
+      state.caloriesEatenToday += Number(m.calories||0);
+      html += `<tr><td>${m.slotKey}</td><td>${m.carbs}g</td><td>${m.calories||0} kcal</td><td>${m.carbDose||0}U</td><td>${m.correctionDose||0}U</td><td><strong style="color:var(--primary)">${m.totalInsulin||0}U</strong></td></tr>`;
     });
     els.dailyMealsBody.innerHTML = html;
   }
-  updateDietProgress();
+  updateDietProgress(); // بدون إضافة الوجبة الحالية لسة
 }
 
 els.btnSaveMeal.onclick = async () => {
@@ -288,14 +326,20 @@ els.btnSaveMeal.onclick = async () => {
   els.btnSaveMeal.disabled = true; els.btnSaveMeal.textContent = "جاري الحفظ...";
   try {
     const timeObj = new Date();
-    const target = Number(els.dailyCarbTarget.value);
-    if(target > 0 && target !== state.child.dietGoal) {
-      await setDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`), { dietGoal: target }, { merge: true });
+    
+    // حفظ أهداف الدايت لو اتعدلت
+    let updates = {};
+    const tCarb = Number(els.dailyCarbTarget.value);
+    const tCal = Number(els.dailyCalorieTarget.value);
+    if(tCarb > 0 && tCarb !== state.child.dietGoal) updates.dietGoal = tCarb;
+    if(tCal > 0 && tCal !== state.child.calorieGoal) updates.calorieGoal = tCal;
+    if(Object.keys(updates).length > 0) {
+      await setDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`), updates, { merge: true });
     }
 
     if (carbs > 0) {
       await addDoc(collection(db, `parents/${state.parentId}/children/${state.childId}/meals`), {
-        date: state.date, when: timeObj, slotKey: state.slot, carbs: carbs, totalInsulin: state.finalDoseVal,
+        date: state.date, when: timeObj, slotKey: state.slot, carbs: carbs, calories: state.currentMealCalories, totalInsulin: state.finalDoseVal,
         items: state.mealItems.map(m=>({name:m.name, qty:m.mealQty, netCarb:m.carbs_g})), createdAt: serverTimestamp()
       });
     }
@@ -317,11 +361,17 @@ function setupEvents() {
   els.trendArrow.onchange = calculateBolus;
   els.manualCarbs.oninput = () => { state.manualCarbDirty = true; calculateBolus(); };
   els.measureSource.onchange = () => { els.trendContainer.classList.toggle('hidden', els.measureSource.value !== 'cgm'); calculateBolus(); };
-  els.dailyCarbTarget.oninput = updateDietProgress;
+  
+  els.dailyCarbTarget.oninput = () => updateDietProgress(state.currentMealCarbs, state.currentMealCalories);
+  els.dailyCalorieTarget.oninput = () => updateDietProgress(state.currentMealCarbs, state.currentMealCalories);
   
   els.btnOpenLibrary.onclick = () => els.libModal.classList.add('open');
   els.libClose.onclick = () => els.libModal.classList.remove('open');
   els.libOverlay.onclick = () => els.libModal.classList.remove('open');
   els.searchBox.oninput = renderLibrary;
-  els.btnClearMeal.onclick = () => { state.mealItems=[]; state.manualCarbDirty=false; renderMealTable(); updateMealTotals(); els.manualCarbs.value=''; calculateBolus(); };
+  els.btnClearMeal.onclick = () => { 
+    state.mealItems=[]; state.manualCarbDirty=false; 
+    state.currentMealCarbs = 0; state.currentMealCalories = 0;
+    renderMealTable(); updateMealTotals(); els.manualCarbs.value=''; calculateBolus(); 
+  };
 }
