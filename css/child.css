@@ -22,6 +22,46 @@ body {
 }
 
 /* الهيدر العلوي لبيانات الطفل */
+/* ================= Topbar & Breadcrumbs ================= */
+.main-topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #ffffff; padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 50; box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+}
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.top-avatar {
+  width: 42px; height: 42px; background: #8b5cf6; color: #fff;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: bold; box-shadow: 0 4px 8px rgba(139,92,246,0.3);
+}
+.top-info h3 { margin: 0; font-size: 16px; color: var(--text); }
+.top-info span { font-size: 11px; color: var(--muted); }
+
+.topbar-nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.nav-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 12px; font-size: 14px; font-weight: 600;
+  text-decoration: none; color: var(--muted); border: 1px solid transparent;
+  transition: 0.2s; background: #f8fafc;
+}
+.nav-pill:hover { background: #f1f5f9; color: var(--primary); border-color: #e2e8f0; }
+.nav-pill.active { background: #eff6ff; color: var(--primary); border-color: #bfdbfe; }
+
+.topbar-left { display: flex; align-items: center; }
+.btn-logout-outline {
+  background: transparent; color: var(--danger); border: 1px solid #fca5a5;
+  padding: 8px 16px; border-radius: 10px; cursor: pointer; font-weight: bold; transition: 0.2s;
+}
+.btn-logout-outline:hover { background: #fef2f2; }
+
+.breadcrumbs {
+  background: #f8fafc; padding: 10px 24px; font-size: 13px; color: var(--muted);
+  border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: center;
+}
+.breadcrumbs a { color: var(--primary); text-decoration: none; font-weight: 600; }
+.breadcrumbs b { color: var(--text); }
+/* ========================================================= */
 .vitals-header {
   background: var(--card);
   border: 1px solid var(--border);
