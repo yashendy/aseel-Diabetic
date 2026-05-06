@@ -1,5 +1,4 @@
 // js/labs.js
-
 import { auth, db } from './firebase-config.js';
 import {
   collection, doc, setDoc, addDoc, getDoc, getDocs, query, orderBy, serverTimestamp, deleteDoc, limit
@@ -53,8 +52,31 @@ function addMonths(date, m=4){
   return d;
 }
 
-// حالة تعديل/إنشاء
 let _currentLabId = null;
+
+// --- نظام التلوين الذكي للمراجع الطبية ---
+function checkRanges() {
+  const validate = (el, condition) => {
+    if (!el.value) { el.classList.remove('out-of-range'); return; }
+    if (condition(Number(el.value))) el.classList.add('out-of-range');
+    else el.classList.remove('out-of-range');
+  };
+
+  validate(hba1cVal, v => v >= 7.0);
+  validate(lip_tc, v => v > 200);
+  validate(lip_ldl, v => v > 100);
+  validate(lip_hdl, v => v < 40);
+  validate(lip_tg, v => v > 150);
+  validate(thy_tsh, v => v < 0.4 || v > 4.0);
+  validate(thy_ft4, v => v < 0.9 || v > 1.7);
+  validate(ren_mac, v => v > 30);
+  validate(ren_creat, v => v > 1.2);
+}
+
+// ربط الحقول بنظام التلوين الذكي عند الكتابة
+[hba1cVal, lip_tc, lip_ldl, lip_hdl, lip_tg, thy_tsh, thy_ft4, ren_mac, ren_creat].forEach(input => {
+  input.addEventListener('input', checkRanges);
+});
 
 onAuthStateChanged(auth, async user=>{
   if(!user){ location.href='index.html'; return; }
@@ -66,7 +88,6 @@ onAuthStateChanged(auth, async user=>{
   childNameEl.textContent = childName;
   hdrChild.textContent = `— ${childName}`;
 
-  // Load history records
   await loadHistory(user.uid, childId, childName);
 
   if (labIdParam){
@@ -76,10 +97,10 @@ onAuthStateChanged(auth, async user=>{
     const labData = labSnap.data();
     _currentLabId = labSnap.id;
     fillFormFromDoc(labData);
+    checkRanges(); // تطبيق الألوان عند فتح سجل قديم
     showDueBadge(labData.nextDue?.toDate ? labData.nextDue.toDate() : addMonths(labData.when?.toDate ? labData.when.toDate() : new Date(labData.date)));
     openPdf(_currentLabId, childName, labData);
   } else {
-    // Show badge from last report
     const lref = collection(db, `parents/${user.uid}/children/${childId}/labs`);
     const qy = query(lref, orderBy('when','desc'), limit(1));
     const sn = await getDocs(qy);
@@ -104,7 +125,7 @@ function showDueBadge(dueDate){
   if (!dueDate){ dueBadge.textContent=''; return; }
   const today = new Date();
   const days = Math.ceil((dueDate - today)/86400000);
-  const txt = `Next Lab: ${fmt(dueDate)} (${days} days)`;
+  const txt = `التحليل القادم: ${fmt(dueDate)} (${days} يوم)`;
   dueBadge.textContent = txt;
   dueBadge.className = 'pill tiny ' + (days<0 ? 'danger' : (days<=14 ? 'warn' : 'ok'));
 }
@@ -160,13 +181,11 @@ async function saveLab(uid, childId, childName, andPdf=false){
     const col = collection(db, `parents/${uid}/children/${childId}/labs`);
 
     if (_currentLabId){
-      // Edit existing doc
       const ref = doc(db, `parents/${uid}/children/${childId}/labs/${_currentLabId}`);
       await setDoc(ref, { ...data }, { merge: true });
       if (andPdf) openPdf(_currentLabId, childName, data);
-      alert('Report updated successfully.');
+      alert('تم تحديث التقرير بنجاح.');
     } else {
-      // Create new
       const added = await addDoc(col, {
         ...data,
         when: data.when,
@@ -174,18 +193,16 @@ async function saveLab(uid, childId, childName, andPdf=false){
       });
       _currentLabId = added.id;
       if (andPdf) openPdf(added.id, childName, data);
-      alert('Report saved successfully.');
+      alert('تم حفظ التقرير بنجاح.');
     }
 
-    // Update history table
     await loadHistory(uid, childId, childName);
   }catch(e){
     console.error(e);
-    alert('An error occurred while saving/updating the report.');
+    alert('حدث خطأ أثناء الحفظ.');
   }
 }
 
-// Build report URL (absolute link to open from QR)
 function buildReportUrl(labId){
   const url = new URL('labs.html', location.href);
   url.searchParams.set('child', childId);
@@ -193,22 +210,18 @@ function buildReportUrl(labId){
   return url.toString();
 }
 
-// 🖨️ Generate PDF
 async function openPdf(labId, childName, data){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({orientation:'p', unit:'pt', format:'a4'});
   
-  // Use a standard font for English
   doc.setFont('Helvetica');
 
-  // Titles
   doc.setFontSize(16);
   doc.text(`Lab Report — ${childName}`, 40, 40);
   doc.setFontSize(11);
   doc.text(`Report ID: ${labId}`, 40, 62);
   doc.text(`Sample Date: ${data.date}`, 40, 78);
 
-  // QR + Barcode with a direct link
   const reportUrl = labId==='preview' ? location.href : buildReportUrl(labId);
 
   try{
@@ -226,14 +239,12 @@ async function openPdf(labId, childName, data){
     if (qrDataUrl) doc.addImage(qrDataUrl, 'PNG', 40, 96, 90, 90);
     doc.addImage(svgBase64, 'SVG', 140, 120, 220, 40);
 
-    // Clickable area over QR
     doc.link(40, 96, 90, 90, { url: reportUrl });
     doc.textWithLink('Open Report', 370, 135, { url: reportUrl, align: 'right' });
   }catch(e){ console.warn('Barcode/QR warning', e); }
 
   let y = 210;
 
-  // General table settings for English
   const baseTable = {
     styles:{halign:'left', font: 'Helvetica'},
     headStyles:{fillColor:[244,247,255], font:'Helvetica'},
@@ -302,7 +313,6 @@ async function openPdf(labId, childName, data){
   window.open(url, '_blank');
 }
 
-/* =================== السجلات السابقة =================== */
 async function loadHistory(uid, childId, childName){
   const lref = collection(db, `parents/${uid}/children/${childId}/labs`);
   const qy = query(lref, orderBy('when','desc'), limit(20));
@@ -310,7 +320,7 @@ async function loadHistory(uid, childId, childName){
 
   historyBody.innerHTML = '';
   if (sn.empty){
-    historyBody.innerHTML = `<tr><td colspan="4" class="muted">No records found.</td></tr>`;
+    historyBody.innerHTML = `<tr><td colspan="4" class="muted" style="text-align: center; padding: 20px;">لا توجد سجلات سابقة</td></tr>`;
     return;
   }
 
@@ -320,13 +330,13 @@ async function loadHistory(uid, childId, childName){
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${fmt(when)}</td>
-      <td>${v?.hba1c?.value!=null ? Number(v.hba1c.value).toFixed(1)+'%' : '—'}</td>
+      <td style="font-weight: bold; color: ${v?.hba1c?.value >= 7 ? '#ef4444' : '#15803d'}">${v?.hba1c?.value!=null ? Number(v.hba1c.value).toFixed(1)+'%' : '—'}</td>
       <td>${v?.hba1c?.note ?? '—'}</td>
-      <td>
-        <div class="actions">
-          <button class="btn small gray act-open">Open PDF</button>
-          <button class="btn small act-edit">Edit</button>
-          <button class="btn small danger act-del">Delete</button>
+      <td style="text-align: center;">
+        <div class="row" style="justify-content: center;">
+          <button class="btn small ghost act-open" style="border-color:#cbd5e1;">📄 PDF</button>
+          <button class="btn small secondary act-edit">✏️ تعديل</button>
+          <button class="btn small danger act-del">🗑️ حذف</button>
         </div>
       </td>
     `;
@@ -334,14 +344,15 @@ async function loadHistory(uid, childId, childName){
     tr.querySelector('.act-edit').addEventListener('click', ()=>{
       _currentLabId = d.id;
       fillFormFromDoc(v);
+      checkRanges();
       window.scrollTo({top:0, behavior:'smooth'});
     });
     tr.querySelector('.act-del').addEventListener('click', async ()=>{
-      if (confirm('Are you sure you want to delete this report?')){
+      if (confirm('هل أنت متأكد من حذف التقرير؟')){
         await deleteDoc(doc(db, `parents/${uid}/children/${childId}/labs/${d.id}`));
         if (_currentLabId === d.id) _currentLabId = null;
         await loadHistory(uid, childId, childName);
-        alert('Report deleted successfully.');
+        alert('تم حذف التقرير.');
       }
     });
     historyBody.appendChild(tr);
