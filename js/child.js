@@ -252,9 +252,30 @@ onAuthStateChanged(auth, async (user)=>{
     const name = c.identity?.name || c.name || 'طفل';
     const gender = c.identity?.gender || c.gender || '-';
     const dob = c.identity?.dob || c.birthDate || null;
+    const ageStr = `${gender === 'female' ? 'أنثى' : (gender === 'male' ? 'ذكر' : gender)} • ${calcAge(dob)} سنة`;
     
+    // --- تحديث الـ Vitals Header القديم ---
     setText(childNameEl, name);
-    setText(childMetaEl, `${gender === 'female' ? 'أنثى' : (gender === 'male' ? 'ذكر' : gender)} • العمر: ${calcAge(dob)} سنة`);
+    setText(childMetaEl, ageStr);
+
+    // --- تحديث الـ Topbar والـ Breadcrumbs الجديد ---
+    const topAvatar = $('topAvatar');
+    if(topAvatar) topAvatar.textContent = name.charAt(0);
+    
+    const topChildName = $('topChildName');
+    if(topChildName) topChildName.textContent = name;
+    
+    const topChildMeta = $('topChildMeta');
+    if(topChildMeta) topChildMeta.textContent = ageStr;
+    
+    const breadChildName = $('breadChildName');
+    if(breadChildName) breadChildName.textContent = name;
+    
+    // --- تحديث روابط الـ Nav Pills الجديدة ---
+    setHref($('navMeas'), `measurements.html?child=${encodeURIComponent(childId)}`);
+    setHref($('navMeals'), `meals.html?child=${encodeURIComponent(childId)}`);
+    setHref($('navVisits'), `visits.html?child=${encodeURIComponent(childId)}`);
+    setHref($('navLabs'), `labs.html?child=${encodeURIComponent(childId)}`);
 
     const unit = c.glucoseUnit || 'mg/dL';
     const limits = c.glucose_limits || {};
