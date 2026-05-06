@@ -3,155 +3,140 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>لوحة الإدارة</title>
-    <link rel="stylesheet" href="./css/admin.css" />
-    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <title>لوحة التحكم العليا | منصة أسيل</title>
+  <link rel="stylesheet" href="./css/admin-dashboard.css" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
 </head>
 <body>
+
+  <!-- شريط التنقل الموحد للأدمن -->
   <header class="topbar">
-    <div class="brand">
-      <span class="logo">SK</span>
-      <strong>لوحة الإدارة</strong>
+    <div class="brand-area">
+      <span class="icon">👑</span>
+      <h2>غرفة التحكم الاستراتيجية (Super Admin)</h2>
     </div>
-
-    <div class="spacer"></div>
-
-    <!-- زر الأصناف الغذائية -->
-    <a class="btn ghost" href="food-items.html" id="btnFoodItems">الأصناف الغذائية</a>
-    <a class="btn ghost" href="admin-import.html" id="btnUsdaImport">استيراد USDA</a>
-
-
     <div class="admin-info">
-      <span id="adminName">—</span>
-      <button id="btnSignOut" class="btn ghost">خروج</button>
+      <span id="adminName" style="font-weight: bold; color: #94a3b8;">—</span>
+      <button id="btnSignOut" class="btn danger">🚪 تسجيل خروج</button>
     </div>
   </header>
 
   <main class="container">
-    <!-- بطاقات إحصائية -->
+    
+    <!-- الكروت الإحصائية والاختصارات -->
     <section class="cards">
       <div class="card">
-        <div class="card-title">الأطباء</div>
+        <div class="card-title">👨‍⚕️ إجمالي الأطباء المعتمدين</div>
         <div class="card-value" id="doctorsCount">0</div>
       </div>
       <div class="card">
-        <div class="card-title">الأطفال</div>
+        <div class="card-title">👶 إجمالي الأطفال المسجلين</div>
         <div class="card-value" id="childrenCount">0</div>
       </div>
-      <div class="card">
-        <div class="card-title">عمليات اليوم</div>
-        <div class="card-value" id="opsToday">—</div>
-      </div>
+      <a href="food-items.html" class="card" style="border-color: #3b82f6;">
+        <div class="card-title">📘 إدارة مكتبة الطعام</div>
+        <div class="card-value" style="font-size: 16px; margin-top: 10px;">إضافة وتعديل الأصناف للمستخدمين ➔</div>
+      </a>
+      <a href="usda-import.html" class="card" style="border-color: #10b981;">
+        <div class="card-title">🗂️ استيراد بيانات USDA</div>
+        <div class="card-value" style="font-size: 16px; margin-top: 10px;">سحب الأصناف من قواعد عالمية ➔</div>
+      </a>
     </section>
 
-    <!-- سكشن إسناد طبيب لطفل -->
+    <!-- سكشن إسناد طبيب لطفل (من الكود الخاص بكِ) -->
     <section class="panel">
       <div class="panel-head">
-        <h2>إسناد طبيب لطفل</h2>
+        <h2>🛡️ إدارة المرضى وإسناد الأطباء</h2>
         <div class="actions" style="display:flex; gap:8px">
-          <button id="btnRefreshChildren" class="btn ghost">تحديث الأطفال ↻</button>
-          <button id="btnRefreshLists" class="btn ghost">تحديث القوائم ↻↻</button>
+          <button id="btnRefreshLists" class="btn ghost">تحديث قواعد البيانات 🔄</button>
         </div>
       </div>
 
       <div class="grid-3">
         <div class="field">
-          <label for="childSearch">بحث عن طفل</label>
-          <input id="childSearch" type="text" class="input" placeholder="اكتب اسم الطفل أو ولي الأمر…" />
+          <label for="childSearch">بحث عن طفل أو ولي أمر</label>
+          <input id="childSearch" type="text" class="input" placeholder="اكتب اسم الطفل..." />
         </div>
         <div class="field">
           <label for="doctorSearch">بحث عن دكتور</label>
-          <input id="doctorSearch" type="text" class="input" placeholder="اكتب اسم/إيميل الدكتور…" />
+          <input id="doctorSearch" type="text" class="input" placeholder="اكتب اسم أو إيميل الطبيب..." />
         </div>
         <div class="field align-end">
-          <button id="btnOpenAssign" class="btn primary">فتح نافذة الإسناد</button>
+          <button id="btnOpenAssign" class="btn primary">🔗 فتح نافذة الربط والإسناد</button>
         </div>
       </div>
 
       <div class="lists-wrap">
         <!-- جدول الأطفال -->
         <div class="list-card">
-          <div class="list-title">الأطفال</div>
-          <div class="list-sub">اختر طفلًا للإسناد</div>
-          <div class="list-actions">
-            <span class="muted small" id="childrenHint">—</span>
-          </div>
-          <div class="list-body">
-            <table class="tbl">
-              <thead>
-                <tr>
-                  <th>الطفل</th>
-                  <th>وليّ الأمر</th>
-                  <th>الموافقة</th>
-                  <th>اختيار</th>
-                </tr>
-              </thead>
-              <tbody id="childrenTbody">
-                <tr><td class="empty" colspan="4">جارٍ التحميل…</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <div class="list-title">👶 قائمة الأطفال (<span id="childrenHint">0</span>)</div>
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>الطفل</th>
+                <th>وليّ الأمر</th>
+                <th>حالة الموافقة</th>
+                <th>تحديد</th>
+              </tr>
+            </thead>
+            <tbody id="childrenTbody">
+              <tr><td colspan="4" style="text-align: center; color: #94a3b8;">جارٍ التحميل…</td></tr>
+            </tbody>
+          </table>
         </div>
 
         <!-- جدول الأطباء -->
         <div class="list-card">
-          <div class="list-title">الأطباء</div>
-          <div class="list-sub">اختر طبيبًا</div>
-          <div class="list-actions">
-            <span class="muted small" id="doctorsHint">—</span>
-          </div>
-          <div class="list-body">
-            <table class="tbl">
-              <thead>
-                <tr>
-                  <th>الاسم</th>
-                  <th>الإيميل</th>
-                  <th>اختيار</th>
-                </tr>
-              </thead>
-              <tbody id="doctorsTbody">
-                <tr><td class="empty" colspan="3">جارٍ التحميل…</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <div class="list-title">👨‍⚕️ قائمة الأطباء (<span id="doctorsHint">0</span>)</div>
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>اسم الطبيب</th>
+                <th>البريد الإلكتروني</th>
+                <th>تحديد</th>
+              </tr>
+            </thead>
+            <tbody id="doctorsTbody">
+              <tr><td colspan="3" style="text-align: center; color: #94a3b8;">جارٍ التحميل…</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
-
-      <div id="assignStatus" class="status"></div>
     </section>
   </main>
 
-  <!-- مودال الإسناد -->
-  <div id="assignModal" class="modal hidden" aria-hidden="true" role="dialog">
-    <div class="modal-dialog" role="document">
+  <!-- نافذة تأكيد الإسناد -->
+  <div id="assignModal" class="modal hidden">
+    <div class="modal-dialog">
       <div class="modal-head">
-        <h3>تأكيد إسناد الطبيب</h3>
-        <button class="icon-btn" id="btnCloseModal" aria-label="إغلاق">✕</button>
+        <h3>تأكيد إسناد الطبيب للمريض</h3>
+        <button class="icon-btn" id="btnCloseModal">✕</button>
       </div>
       <div class="modal-body">
-        <div class="grid-2">
-          <div>
-            <label>الطفل</label>
-            <select id="childSelect" class="input"></select>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+          <div class="field">
+            <label>الطفل المريض</label>
+            <select id="childSelect" class="input" disabled></select>
           </div>
-          <div>
-            <label>الطبيب</label>
-            <select id="doctorSelect" class="input"></select>
+          <div class="field">
+            <label>الطبيب المعالج</label>
+            <select id="doctorSelect" class="input" disabled></select>
           </div>
         </div>
-        <div class="muted" id="modalHint">سيتم تعيين الطبيب المختار ويُسمح له بالاطلاع.</div>
-        <div id="modalStatus" class="status"></div>
+        <div style="color: #94a3b8; font-size: 13px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+          ⚠️ <strong>تنبيه أمني:</strong> بمجرد الاعتماد، سيُسمح للطبيب بفتح اللوجبوك (Logbook) وتعديل جرعات المريض المختار.
+        </div>
+        <div id="modalStatus" style="margin-top: 10px; font-weight: bold;"></div>
       </div>
       <div class="modal-foot">
-        <button id="btnAssign" class="btn primary">إسناد الآن ✅</button>
         <button id="btnCancelAssign" class="btn ghost">إلغاء</button>
+        <button id="btnAssign" class="btn primary">✅ اعتماد الإسناد الآن</button>
       </div>
     </div>
   </div>
 
-  <div id="loader" class="loader hidden" aria-live="polite">جارٍ المعالجة…</div>
-  <div id="toast" class="toast hidden"><div class="msg">تم</div></div>
+  <div id="loader" class="loader hidden">جارٍ مزامنة قواعد البيانات...</div>
 
-  <script type="module" src="./js/admin.js"></script>
+  <script type="module" src="./js/admin-dashboard.js"></script>
 </body>
 </html>
