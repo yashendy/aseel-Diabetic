@@ -78,7 +78,6 @@ async function loadChildData() {
   els.preBgUnit.value = c.glucoseUnit || 'mg/dL';
   els.todayDateLabel.textContent = state.date;
   
-  // استعادة هدف الدايت لو كان محفوظاً
   if(c.dietGoal) { els.dailyCarbTarget.value = c.dietGoal; }
   
   updateFactorsDisplay();
@@ -225,26 +224,23 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   if(state.slot.includes('LUNCH')) currentCR = state.CRs.lunch || 10;
   if(state.slot.includes('DINNER')) currentCR = state.CRs.dinner || 10;
 
-  // Trend Adjustment
   let effectiveBg = bg;
   if(bg && els.measureSource.value === 'cgm') {
     const trend = Number(els.trendArrow.value);
     effectiveBg += (unit === 'mmol/L' ? trend/18.0 : trend);
   }
 
-  // Dose Math
   let corr = 0;
   if(effectiveBg > state.Target && state.CF > 0) corr = (effectiveBg - state.Target) / state.CF;
   let carbDose = currentCR > 0 ? (carbs / currentCR) : 0;
   
   let netDose = Math.max(0, (corr + carbDose) - iob);
-  state.finalDoseVal = Math.round(netDose*2)/2; // Step 0.5
+  state.finalDoseVal = Math.round(netDose*2)/2; 
   
   els.doseFinal.textContent = state.finalDoseVal.toFixed(1) + " U";
   els.doseDetailsStr.textContent = `كارب: ${carbDose.toFixed(1)} | تصحيح: ${corr.toFixed(1)} | خصم نشط: -${iob.toFixed(1)}`;
   els.resultBox.className = (state.finalDoseVal > 0 && effectiveBg >= state.Target) ? 'result-box safe' : 'result-box';
 
-  // AI Alerts
   els.smartAlerts.style.display = 'none';
   let alerts = "";
   if (els.measureSource.value === 'cgm' && Number(els.trendArrow.value) < 0) alerts += `<strong>⬇️ سهم هبوط:</strong> الذكاء الاصطناعي خفض الجرعة لمنع الهبوط المتوقع.<br>`;
@@ -255,7 +251,6 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   if(alerts) { els.smartAlerts.innerHTML = alerts; els.smartAlerts.style.display = 'block'; }
 }
 
-// --- Fetch & Save ---
 els.btnFetchPre.onclick = async () => {
   const qy = query(collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`), orderBy('when', 'desc'), limit(1));
   const snap = await getDocs(qy);
@@ -293,8 +288,6 @@ els.btnSaveMeal.onclick = async () => {
   els.btnSaveMeal.disabled = true; els.btnSaveMeal.textContent = "جاري الحفظ...";
   try {
     const timeObj = new Date();
-    
-    // حفظ دايت هدف الأم
     const target = Number(els.dailyCarbTarget.value);
     if(target > 0 && target !== state.child.dietGoal) {
       await setDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`), { dietGoal: target }, { merge: true });
@@ -319,7 +312,6 @@ els.btnSaveMeal.onclick = async () => {
 function setupEvents() {
   $('logoutBtn').onclick = () => signOut(auth);
   els.slotSelect.onchange = () => { state.slot = els.slotSelect.value; updateFactorsDisplay(); };
-  els.dateInput.onchange = () => { state.date = els.dateInput.value; els.todayDateLabel.textContent = state.date; loadTodayMeals(); };
   els.netCarbRule.onchange = () => { state.rule = els.netCarbRule.value; renderMealTable(); updateMealTotals(); };
   els.preBg.oninput = calculateBolus; els.iobValue.oninput = calculateBolus;
   els.trendArrow.onchange = calculateBolus;
