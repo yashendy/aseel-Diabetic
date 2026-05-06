@@ -17,7 +17,8 @@ let state = {
   CF: 50, Target: 100, CRs: { breakfast: 10, lunch: 10, dinner: 10, snack: 15 },
   rule: "fullFiber", globalFoods: [], mealItems: [], IOB: 0, finalDoseVal: 0,
   manualCarbDirty: false, eatenToday: 0, caloriesEatenToday: 0,
-  currentMealCarbs: 0, currentMealCalories: 0
+  currentMealCarbs: 0, currentMealCalories: 0,
+  currentBgUnit: "mg/dL" // لتتبع وحدة القياس الحالية وتحويلها
 };
 
 const els = {
@@ -39,7 +40,6 @@ const els = {
 
 function showLoader(v) { els.loader.classList.toggle('hidden', !v); }
 
-// تحويل أسماء الوجبات للعربية في الجدول
 function getSlotLabel(key) {
   const labels = { PRE_BREAKFAST: 'الفطار', PRE_LUNCH: 'الغداء', PRE_DINNER: 'العشاء', SNACK: 'سناك' };
   return labels[key] || key;
@@ -100,7 +100,11 @@ async function loadChildData() {
   state.rule = c.netCarbRule || "fullFiber";
   
   els.netCarbRule.value = state.rule;
+  
+  // ضبط الوحدة المبدئية وحفظها في الـ State للتحويل الذكي لاحقاً
   if(!els.preBg.value) els.preBgUnit.value = c.glucoseUnit || 'mg/dL';
+  state.currentBgUnit = els.preBgUnit.value;
+
   els.todayDateLabel.textContent = state.date;
   
   if(c.dietGoal) { els.dailyCarbTarget.value = c.dietGoal; }
@@ -276,7 +280,6 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   if(state.slot.includes('LUNCH')) currentCR = state.CRs.lunch || 10;
   if(state.slot.includes('DINNER')) currentCR = state.CRs.dinner || 10;
 
-  // توحيد الوحدات لضمان دقة الحساب (حل مشكلة الجرعة الخاطئة)
   const childUnit = state.child?.glucoseUnit || 'mg/dL';
   let bgInChildUnit = bg;
   if (bg > 0 && unit !== childUnit) {
@@ -325,7 +328,10 @@ async function autoFetchPreMeasurement() {
     
     if(found) {
       els.preBg.value = found.value; 
-      if(found.unit) els.preBgUnit.value = found.unit;
+      if(found.unit) {
+        els.preBgUnit.value = found.unit;
+        state.currentBgUnit = found.unit;
+      }
       els.measureSource.value = found.measureMethod === 'sensor' ? 'cgm' : 'bgm';
       els.measureSource.dispatchEvent(new Event('change'));
       calculateBolus(); 
@@ -343,7 +349,6 @@ async function autoFetchPreMeasurement() {
 els.btnFetchPre.onclick = autoFetchPreMeasurement;
 
 async function loadTodayMeals() {
-  // الاعتماد على ملف القياسات لجلب الوجبات القديمة والجديدة بانتظام
   const qy = query(collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`), where('date', '==', state.date));
   const snap = await getDocs(qy);
   state.eatenToday = 0; state.caloriesEatenToday = 0;
@@ -382,7 +387,6 @@ els.btnSaveMeal.onclick = async () => {
     if(tCal > 0 && tCal !== state.child.calorieGoal) updates.calorieGoal = tCal;
     if(Object.keys(updates).length > 0) await setDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`), updates, { merge: true });
 
-    // حفظ القياس مع الوجبة في ملف القياسات (عشان يظهر في اللوجبوك القديم والجديد)
     let payload = {
       date: state.date, time: `${hh}:${min}`, when: timeObj, slotKey: state.slot, 
       carbs: carbs, calories: state.currentMealCalories, 
@@ -409,18 +413,32 @@ els.btnSaveMeal.onclick = async () => {
 function setupEvents() {
   $('logoutBtn').onclick = () => signOut(auth);
   
-  // تحديث تلقائي عند تغيير التاريخ والوقت
   els.dateInput.onchange = () => { 
     state.date = els.dateInput.value; els.todayDateLabel.textContent = state.date; 
     loadTodayMeals(); autoFetchPreMeasurement(); 
   };
   els.timeInput.onchange = () => { state.time = els.timeInput.value; };
   
-  // تحديث تلقائي عند تغيير الوجبة
   els.slotSelect.onchange = () => { 
     state.slot = els.slotSelect.value; updateFactorsDisplay(); autoFetchPreMeasurement(); 
   };
   
+  // تحويل الوحدة بذكاء عند تغيير القائمة المنسدلة
+  els.preBgUnit.onchange = () => {
+    const newUnit = els.preBgUnit.value;
+    const bgVal = parseFloat(els.preBg.value);
+
+    if (!isNaN(bgVal) && state.currentBgUnit !== newUnit) {
+      if (newUnit === 'mmol/L' && state.currentBgUnit === 'mg/dL') {
+        els.preBg.value = (bgVal / 18.0182).toFixed(1);
+      } else if (newUnit === 'mg/dL' && state.currentBgUnit === 'mmol/L') {
+        els.preBg.value = Math.round(bgVal * 18.0182);
+      }
+    }
+    state.currentBgUnit = newUnit;
+    calculateBolus();
+  };
+
   els.netCarbRule.onchange = () => { state.rule = els.netCarbRule.value; renderMealTable(); updateMealTotals(); };
   els.preBg.oninput = calculateBolus; els.iobValue.oninput = calculateBolus;
   els.trendArrow.onchange = calculateBolus;
