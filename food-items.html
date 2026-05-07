@@ -148,7 +148,7 @@
             </div>
 
             <!-- الوسوم الطبية (الأنظمة والحساسيات) -->
-           <div class="section-card">
+         <div class="section-card">
               <h4>التصنيف الطبي (Smart Tags)</h4>
               <p class="hint">حددي الموانع ليقوم النظام بتحذير المرضى عند حساب الوجبات.</p>
 
@@ -156,12 +156,7 @@
               <div class="chips mb-10">
                 <button class="tag-btn hypo-tag" type="button" data-tag="#علاج_هبوط">🧃 مخصص لرفع الهبوط السريع</button>
               </div>
-              
-              <strong style="display:block; margin-bottom:6px; font-size:13px; color:#dc2626;">🚫 خالي من (مسببات الحساسية):</strong>
-              <div class="chips mb-10">
-                <button class="tag-btn" type="button" data-tag="#علاج_هبوط" style="border-color: #fca5a5; background: #fef2f2; color: #991b1b; font-weight: bold;">🧃 مخصص لرفع الهبوط السريع</button>
-              </div>
-              
+
               <strong style="display:block; margin-bottom:6px; font-size:13px; color:#dc2626;">🚫 خالي من (مسببات الحساسية):</strong>
               <div class="chips mb-10" id="allergy-tags">
                 <button class="tag-btn" type="button" data-tag="#خالي_من_الجلوتين">جلوتين</button>
@@ -169,6 +164,19 @@
                 <button class="tag-btn" type="button" data-tag="#خالي_من_المكسرات">مكسرات</button>
                 <button class="tag-btn" type="button" data-tag="#خالي_من_البيض">بيض</button>
               </div>
+
+              <strong style="display:block; margin-top:12px; margin-bottom:6px; font-size:13px; color:#16a34a;">✅ مناسب لأنظمة:</strong>
+              <div class="chips" id="diet-tags">
+                <button class="tag-btn" type="button" data-tag="#كيتو">كيتو</button>
+                <button class="tag-btn" type="button" data-tag="#نباتي">نباتي (Vegan)</button>
+                <button class="tag-btn" type="button" data-tag="#لو_كارب">لو كارب</button>
+              </div>
+              
+              <label class="field mt-10" style="margin-top: 16px;">
+                <span>وسوم إضافية (مفصولة بمسافة)</span>
+                <input id="hashTagsManual" type="text" placeholder="مثال: #عشاء #سريع #موز" />
+              </label>
+            </div>
 
               <strong style="display:block; margin-top:12px; margin-bottom:6px; font-size:13px; color:#16a34a;">✅ مناسب لأنظمة:</strong>
               <div class="chips" id="diet-tags">
