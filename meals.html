@@ -7,16 +7,10 @@
   <link rel="stylesheet" href="css/meals.css?v=2026.03.02">
   <link rel="icon" href="favicon.ico">
   <style>
-    /* تحسينات لخانة الجرعة النهائية لتبدو كالنص ولكن قابلة للتعديل */
-    .final-dose-input {
-      font-size: 42px; font-weight: 900; color: var(--danger);
-      width: 140px; text-align: center; background: transparent;
-      border: none; border-bottom: 3px dashed #fca5a5; outline: none;
-      font-family: inherit; transition: 0.3s;
-    }
-    .final-dose-input:focus { border-bottom-color: var(--danger); }
-    .result-box.safe .final-dose-input { color: var(--ok); border-bottom-color: #86efac; }
-    .result-box.safe .final-dose-input:focus { border-bottom-color: var(--ok); }
+    .final-dose-input { font-size: 32px; font-weight: 900; color: var(--danger); width: 100%; text-align: center; background: #fff; border: 2px solid #fca5a5; border-radius: 12px; outline: none; padding: 10px; }
+    .result-box.safe .final-dose-input { color: var(--ok); border-color: #86efac; }
+    .hypo-rescue-box { background: #fff1f2; border: 1px solid #fda4af; border-radius: 12px; padding: 15px; margin-top: 15px; display: none; }
+    .notes-area { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; margin-top: 10px; resize: vertical; }
   </style>
 </head>
 <body>
@@ -35,33 +29,30 @@
       <a href="#" class="nav-pill active">🍽️ الوجبات</a>
       <a href="reports.html" class="nav-pill" id="navReports">📈 التقارير</a>
     </nav>
-    <div class="topbar-left">
-      <button id="logoutBtn" class="btn-logout-outline">↪ خروج</button>
-    </div>
+    <div class="topbar-left"><button id="logoutBtn" class="btn-logout-outline">↪ خروج</button></div>
   </header>
 
   <div class="breadcrumbs no-print">
-    <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>حاسبة ومطبخ أسيل 🍽️</b>
+    <a href="parent.html">أطفالي</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>حاسبة ومطبخ أسيل 🍽️</b>
   </div>
 
   <div class="container">
-    
     <div class="diet-tracker">
       <div class="diet-header"><div class="diet-title">مؤشرات الاستهلاك اليومي 🥗</div></div>
       <div class="tracker-row">
-        <div class="tracker-info"><span>الكارب (g)</span><input type="number" id="dailyCarbTarget" class="tracker-input" placeholder="الحد الأقصى"></div>
+        <div class="tracker-info"><span>الكارب (g)</span><input type="number" id="dailyCarbTarget" class="tracker-input" placeholder="الحد"></div>
         <div class="progress-bg"><div class="progress-fill carb-fill" id="carbProgressBar"></div></div>
         <div class="diet-status" id="carbProgressText">إجمالي المستهلك اليوم: 0 جرام</div>
       </div>
       <div class="tracker-row mt-10">
-        <div class="tracker-info"><span>السعرات (kcal)</span><input type="number" id="dailyCalorieTarget" class="tracker-input" placeholder="الحد الأقصى"></div>
+        <div class="tracker-info"><span>السعرات (kcal)</span><input type="number" id="dailyCalorieTarget" class="tracker-input" placeholder="الحد"></div>
         <div class="progress-bg"><div class="progress-fill cal-fill" id="calProgressBar"></div></div>
         <div class="diet-status" id="calProgressText">إجمالي المستهلك اليوم: 0 kcal</div>
       </div>
     </div>
 
     <section class="card">
-      <div class="card-header"><h2>🧮 حاسبة الأنسولين الذكية</h2></div>
+      <div class="card-header"><h2>🧮 حاسبة الأنسولين والبروتوكول الطبي</h2></div>
       
       <div class="factors-bar">
         <span class="f-chip">🎯 الهدف: <span id="lblTarget">—</span></span>
@@ -76,7 +67,7 @@
 
       <div class="calc-row">
         <div class="field">
-          <label>وقت الوجبة</label>
+          <label>الوجبة</label>
           <select id="slotSelect">
             <option value="PRE_BREAKFAST">فطار</option>
             <option value="PRE_LUNCH">غدا</option>
@@ -95,129 +86,118 @@
 
       <div class="calc-row">
         <div class="field">
-          <label>قراءة السكر الحالية</label>
+          <label>قراءة السكر قبل الوجبة</label>
           <div class="input-group">
-            <button class="btn-fetch" id="btnFetchPre" title="سحب القراءة من السجل بنفس التاريخ والوجبة">🔄 جلب</button>
-            <input type="number" step="0.1" id="preBg" class="input" placeholder="مثال: 120">
-            <select id="preBgUnit" style="width:80px; padding:10px 4px;"><option value="mg/dL">mg/dL</option><option value="mmol/L">mmol/L</option></select>
+            <button class="btn-fetch" id="btnFetchPre" title="سحب البيانات من السجل">🔄 جلب</button>
+            <input type="number" step="0.1" id="preBg" class="input" placeholder="0">
+            <select id="preBgUnit" style="width:80px;"><option value="mg/dL">mg/dL</option><option value="mmol/L">mmol/L</option></select>
           </div>
         </div>
         <div class="field" id="trendContainer">
-          <label>سهم الحساس (الذكاء الاصطناعي سيعدل الجرعة)</label>
+          <label>سهم الحساس (للضبط الذكي)</label>
           <select id="trendArrow" class="input">
-            <option value="0">➔ ثابت (لا تعديل)</option>
-            <option value="15">↑ يرتفع ببطء (+15 mg/dL)</option>
-            <option value="30">⇈ يرتفع بسرعة (+30 mg/dL)</option>
-            <option value="-15">↓ ينخفض ببطء (-15 mg/dL)</option>
-            <option value="-30">⇊ ينخفض بسرعة (-30 mg/dL)</option>
+            <option value="0">➔ ثابت</option>
+            <option value="15">↑ بطيء (+15)</option>
+            <option value="30">⇈ سريع (+30)</option>
+            <option value="-15">↓ بطيء (-15)</option>
+            <option value="-30">⇊ سريع (-30)</option>
           </select>
         </div>
       </div>
 
       <div class="calc-row">
-        <div class="field" style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
-          <label style="color:#7c3aed;">إجمالي الكارب الصافي (g) 🍔 <br><span class="muted tiny">يأتي من الجدول بالأسفل، أو أدخله يدوياً</span></label>
-          <input type="number" step="0.5" id="manualCarbs" class="input" style="font-weight:bold; font-size:18px; color:#7c3aed;" placeholder="0">
+        <div class="field">
+          <label>جرعة الكارب (Carb Dose) 🍔</label>
+          <input type="number" step="0.1" id="doseCarbs" class="input" placeholder="0.0">
         </div>
         <div class="field">
-          <label>أنسولين نشط (IOB) للخصم 💉</label>
-          <input type="number" step="0.1" id="iobValue" class="input" placeholder="0">
+          <label>جرعة التصحيح (Correction) 💉</label>
+          <input type="number" step="0.1" id="doseCorrection" class="input" placeholder="0.0">
         </div>
       </div>
 
-      <div class="calc-row" style="display:none;">
-        <input id="doseCorrection" type="number">
-        <input id="doseCarbs" type="number">
+      <div class="calc-row">
+        <div class="field">
+          <label>أنسولين نشط للخصم (IOB) ⏳</label>
+          <input type="number" step="0.1" id="iobValue" class="input" placeholder="0.0">
+        </div>
+        <div class="field">
+          <label><b>إجمالي الأنسولين المطلوب 💉</b></label>
+          <input type="number" step="0.5" id="doseFinalInput" class="final-dose-input">
+        </div>
       </div>
 
-      <div class="result-box" id="resultBox">
-        <h3>الجرعة النهائية المطلوبة</h3>
-        <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin: 10px 0;">
-          <input type="number" step="0.5" id="doseFinalInput" class="final-dose-input" value="0.0" title="يمكنك تعديل الجرعة يدوياً قبل الحفظ">
-          <span style="font-size: 28px; font-weight: bold; color: inherit;">U</span>
+      <div class="field" style="margin-top:10px; background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1;">
+        <label style="color:#7c3aed;">إجمالي الكارب الصافي للوجبة (g) 🍔</label>
+        <input type="number" step="0.5" id="manualCarbs" class="input" style="font-weight:bold; font-size:18px; color:#7c3aed;" placeholder="0">
+      </div>
+
+      <div id="hypoRescueArea" class="hypo-rescue-box">
+        <strong style="color:#b91c1c;">🚨 بروتوكول الهبوط (قاعدة 15/15):</strong>
+        <p style="margin:5px 0; font-size:13px; color:#7f1d1d;">السكر منخفض! أعطِ الطفل 15 جرام كارب سريع فوراً.</p>
+        <div class="field">
+          <label>بماذا تم رفع السكر؟ (مثال: عصير تفاح)</label>
+          <input type="text" id="hypoTreatment" class="input" placeholder="اكتبي العلاج هنا...">
         </div>
-        <div class="dose-details" id="doseDetailsStr">كارب: 0 | تصحيح: 0 | خصم نشط: 0</div>
       </div>
 
       <div id="smartAlerts" class="smart-alert"></div>
+      
+      <div class="field mt-10">
+        <label>ملاحظات إضافية على الوجبة 📝</label>
+        <textarea id="mealNotes" class="notes-area" rows="2" placeholder="مثال: الطفل لم يكمل الوجبة، تمرين رياضي بعد الأكل..."></textarea>
+      </div>
     </section>
 
     <section class="card">
       <div class="card-header">
-        <h2>🍱 مطبخ أسيل (الأنظمة وبناء الوجبات)</h2>
-        <button id="btnOpenLibrary" class="btn alt sm">➕ أضف صنف من المكتبة</button>
+        <h2>🍱 مطبخ أسيل (بناء الوجبات)</h2>
+        <button id="btnOpenLibrary" class="btn alt sm">➕ المكتبة</button>
       </div>
-      
-      <div class="calc-row" style="margin-bottom:12px;">
-        <div class="field">
-          <label>قاعدة خصم الألياف من الكارب (الدايت)</label>
-          <select id="netCarbRule" class="input">
-            <option value="none">بدون خصم الألياف</option>
-            <option value="halfFiber">خصم نصف الألياف</option>
-            <option value="fullFiber" selected>خصم كامل الألياف</option>
-          </select>
-        </div>
-      </div>
-
       <div style="overflow-x:auto;">
         <table class="meal-table" id="mealTable">
-          <thead>
-            <tr><th>الصنف</th><th>الكمية</th><th>الوحدة</th><th>(Net) كارب</th><th>ألياف</th><th>بروتين</th><th>دهون</th><th>Calories</th><th>GI</th><th></th></tr>
-          </thead>
-          <tbody id="mealBody">
-            <tr><td colspan="10" class="muted" style="text-align:center;">لم يتم إضافة أي أصناف للوجبة بعد.</td></tr>
-          </tbody>
+          <thead><tr><th>الصنف</th><th>الكمية</th><th>الوحدة</th><th>(Net) كارب</th><th>ألياف</th><th>بروتين</th><th>دهون</th><th>Cal</th><th>GI</th><th></th></tr></thead>
+          <tbody id="mealBody"><tr><td colspan="10" class="muted" style="text-align:center; padding:20px;">الوجبة فارغة.</td></tr></tbody>
           <tfoot>
             <tr>
-              <td colspan="3" style="text-align:left; font-weight:bold;">إجمالي الوجبة الحالية:</td>
-              <td id="sumCarbsNet" style="font-weight:bold;color:#7c3aed; font-size:15px;">0 g</td>
-              <td id="sumFiber" class="muted">0 g</td>
-              <td id="sumProtein" class="muted">0 g</td>
-              <td id="sumFat" class="muted">0 g</td>
-              <td id="sumCalories" class="muted">0 kcal</td>
-              <td id="avgGI" class="muted">—</td>
-              <td></td>
+              <td colspan="3" style="text-align:left; font-weight:bold;">الإجمالي:</td>
+              <td id="sumCarbsNet" style="font-weight:bold;color:#7c3aed;">0 g</td>
+              <td id="sumFiber" class="muted">0 g</td><td id="sumProtein" class="muted">0 g</td><td id="sumFat" class="muted">0 g</td>
+              <td id="sumCalories" class="muted">0 kcal</td><td id="avgGI" class="muted">—</td><td></td>
             </tr>
           </tfoot>
         </table>
       </div>
-
       <div style="display:flex; gap:10px; margin-top:20px;">
         <button id="btnSaveMeal" class="btn primary">💾 اعتماد الجرعة وحفظ الوجبة</button>
-        <button id="btnClearMeal" class="btn gray" style="width:auto;">مسح الحاسبة</button>
+        <button id="btnClearMeal" class="btn gray" style="width:auto;">مسح</button>
       </div>
     </section>
 
     <section class="card">
-      <div class="card-header"><h2>📝 سجل وجبات اليوم (<span id="todayDateLabel"></span>)</h2></div>
+      <div class="card-header"><h2>📝 سجل وجبات اليوم</h2></div>
       <div style="overflow-x:auto;">
         <table class="meal-table">
-          <thead><tr><th>الوقت/الوجبة</th><th>الكارب</th><th>السعرات</th><th>جرعة الكارب</th><th>جرعة التصحيح</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
-          <tbody id="dailyMealsBody">
-            <tr><td colspan="7" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>
-          </tbody>
+          <thead><tr><th>الوجبة</th><th>كارب</th><th>سعرات</th><th>كارب-U</th><th>تصحيح-U</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
+          <tbody id="dailyMealsBody"></tbody>
         </table>
       </div>
     </section>
-
   </div>
 
   <div id="libModal" class="lib-modal">
     <div id="libOverlay" class="lib-overlay"></div>
     <div class="lib-panel">
-      <div class="lib-header">
-        <h4>🍎 مكتبة الطعام الشاملة</h4>
-        <button id="libClose" class="lib-close">✕</button>
-      </div>
+      <div class="lib-header"><h4>🍎 مكتبة الطعام</h4><button id="libClose" class="lib-close">✕</button></div>
       <div style="padding:16px;">
-        <input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف (مثال: أرز، تفاح، بيض)..." style="width:100%; margin-bottom:16px;" />
-        <div id="loadingLibrary" style="text-align:center; color:#64748b;">جاري جلب الأصناف...</div>
-        <div id="itemsGrid" style="display:flex; flex-direction:column; gap:10px; max-height:400px; overflow-y:auto; padding-bottom: 20px;"></div>
+        <input id="searchBox" class="input" type="search" placeholder="ابحث..." style="width:100%; margin-bottom:16px;" />
+        <div id="loadingLibrary" style="text-align:center;">جاري الجلب...</div>
+        <div id="itemsGrid" style="display:flex; flex-direction:column; gap:10px; max-height:400px; overflow-y:auto;"></div>
       </div>
     </div>
   </div>
 
   <div id="loader" class="loader"><div class="spinner"></div></div>
-  <script type="module" src="js/meals.js?v=2026.03.06"></script>
+  <script type="module" src="js/meals.js?v=2026.03.07"></script>
 </body>
 </html>
