@@ -9,7 +9,6 @@
 </head>
 <body>
 
-  <!-- شريط التنقل الموحد -->
   <header class="main-topbar no-print">
     <div class="topbar-right">
       <div class="top-avatar" id="topAvatar">أ</div>
@@ -29,14 +28,12 @@
     </div>
   </header>
 
-  <!-- مسار التنقل -->
   <div class="breadcrumbs no-print">
     <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>حاسبة ومطبخ أسيل 🍽️</b>
   </div>
 
   <div class="container">
     
-    <!-- مؤشرات الاستهلاك اليومي (كارب + سعرات) -->
     <div class="diet-tracker">
       <div class="diet-header">
         <div class="diet-title">مؤشرات الاستهلاك اليومي 🥗</div>
@@ -61,7 +58,6 @@
       </div>
     </div>
 
-    <!-- كابينة الحاسبة الذكية (في الصدارة) -->
     <section class="card">
       <div class="card-header"><h2>🧮 حاسبة الأنسولين الذكية</h2></div>
       
@@ -71,7 +67,6 @@
         <span class="f-chip">💉 CF: <span id="lblCF">—</span></span>
       </div>
 
-      <!-- حقول التاريخ والوقت الجديدة -->
       <div class="calc-row">
         <div class="field">
           <label>التاريخ</label>
@@ -134,6 +129,11 @@
         </div>
       </div>
 
+      <div class="calc-row" style="display:none;">
+        <input id="doseCorrection" type="number">
+        <input id="doseCarbs" type="number">
+      </div>
+
       <div class="result-box" id="resultBox">
         <h3>الجرعة النهائية المطلوبة</h3>
         <p class="final-dose" id="doseFinal">0.0 U</p>
@@ -143,7 +143,6 @@
       <div id="smartAlerts" class="smart-alert"></div>
     </section>
 
-    <!-- مطبخ أسيل الأصلي (أسفل الحاسبة) -->
     <section class="card">
       <div class="card-header">
         <h2>🍱 مطبخ أسيل (الأنظمة وبناء الوجبات)</h2>
@@ -186,18 +185,17 @@
 
       <div style="display:flex; gap:10px; margin-top:20px;">
         <button id="btnSaveMeal" class="btn primary">💾 اعتماد الجرعة وحفظ الوجبة</button>
-        <button id="btnClearMeal" class="btn gray" style="width:auto;">مسح</button>
+        <button id="btnClearMeal" class="btn gray" style="width:auto;">مسح الحاسبة</button>
       </div>
     </section>
 
-    <!-- سجل وجبات اليوم -->
     <section class="card">
       <div class="card-header"><h2>📝 سجل وجبات اليوم (<span id="todayDateLabel"></span>)</h2></div>
       <div style="overflow-x:auto;">
         <table class="meal-table">
-          <thead><tr><th>الوقت/الوجبة</th><th>الكارب</th><th>السعرات</th><th>جرعة الكارب</th><th>جرعة التصحيح</th><th>الجرعة الإجمالية</th></tr></thead>
+          <thead><tr><th>الوقت/الوجبة</th><th>الكارب</th><th>السعرات</th><th>جرعة الكارب</th><th>جرعة التصحيح</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
           <tbody id="dailyMealsBody">
-            <tr><td colspan="6" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>
+            <tr><td colspan="7" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>
           </tbody>
         </table>
       </div>
@@ -205,7 +203,6 @@
 
   </div>
 
-  <!-- مكتبة الطعام (Modal) -->
   <div id="libModal" class="lib-modal">
     <div id="libOverlay" class="lib-overlay"></div>
     <div class="lib-panel">
@@ -222,6 +219,6 @@
   </div>
 
   <div id="loader" class="loader"><div class="spinner"></div></div>
-  <script type="module" src="js/meals.js?v=2026.03.04"></script>
+  <script type="module" src="js/meals.js?v=2026.03.05"></script>
 </body>
 </html>
