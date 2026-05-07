@@ -472,6 +472,10 @@ window.editMeal = (slotKey) => { els.slotSelect.value = slotKey; els.slotSelect.
 // 9. دالة الحفظ (إرسال البيانات للفايربيز)
 // ========================================================
 
+// ========================================================
+// 9. دالة الحفظ (إرسال البيانات للفايربيز)
+// ========================================================
+
 els.btnSaveMeal.onclick = async () => {
   const carbs = parseFloat(els.manualCarbs.value) || 0;
   const bg = parseFloat(els.preBg.value);
@@ -499,7 +503,7 @@ els.btnSaveMeal.onclick = async () => {
     // تجهيز حزمة البيانات الجديدة للإرسال
     let payload = {
       date: state.date, time: `${hh}:${min}`, when: timeObj, slotKey: state.slot, 
-      carbs: carbs, calories: state.currentMealCalories, 
+      carbs: carbs, calories: state.currentMealCalories || 0, 
       carbDose: parseFloat(els.doseCarbs?.value) || (state.CRs[state.slot]? carbs/state.CRs[state.slot] : 0),
       correctionDose: parseFloat(els.doseCorrection?.value) || 0,
       totalDose: totalDose,
@@ -508,14 +512,26 @@ els.btnSaveMeal.onclick = async () => {
       createdAt: serverTimestamp()
     };
 
-    if(state.mealItems.length > 0) payload.mealItemsRef = state.mealItems.map(m=>({name:m.name, qty:m.mealQty, netCarb:m.carbs_g}));
+    // 🟢 التعديل هنا: الوصول لبيانات الكارب بشكل صحيح مع وضع 0 كقيمة افتراضية لمنع إرسال undefined
+    if(state.mealItems.length > 0) {
+        payload.mealItemsRef = state.mealItems.map(m => ({
+            name: m.name, 
+            qty: m.mealQty, 
+            netCarb: m.per100?.carbs_g || 0 
+        }));
+    }
+
     if (!isNaN(bg)) { payload.value = bg; payload.unit = els.preBgUnit.value; payload.measureMethod = els.measureSource.value === 'cgm' ? 'sensor' : 'blood'; }
 
     if (targetDocId) await setDoc(doc(measColl, targetDocId), payload, { merge: true });
     else await addDoc(measColl, payload);
 
     alert("تم حفظ واعتماد الجرعة بنجاح! ✅"); loadTodayMeals(); 
-  } catch(e) { console.error(e); alert("خطأ في الحفظ"); } 
+  } catch(e) { 
+      console.error(e); 
+      // 🟢 التعديل هنا: طباعة الخطأ البرمجي الفعلي في الرسالة لتسهيل اكتشاف المشاكل المشابهة مستقبلاً
+      alert("خطأ في الحفظ: " + e.message); 
+  } 
   finally { els.btnSaveMeal.disabled = false; els.btnSaveMeal.textContent = "💾 اعتماد الجرعة وحفظ الوجبة"; }
 };
 
