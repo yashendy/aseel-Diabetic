@@ -8,16 +8,14 @@
   <link rel="icon" href="favicon.ico">
   <style>
     /* تحسينات لخانة الجرعة النهائية لتبدو كالنص ولكن قابلة للتعديل */
-    .final-dose-input {
-      font-size: 42px; font-weight: 900; color: var(--danger);
-      width: 140px; text-align: center; background: transparent;
-      border: none; border-bottom: 3px dashed #fca5a5; outline: none;
-      font-family: inherit; transition: 0.3s;
-    }
-    .final-dose-input:focus { border-bottom-color: var(--danger); }
-    .result-box.safe .final-dose-input { color: var(--ok); border-bottom-color: #86efac; }
-    .result-box.safe .final-dose-input:focus { border-bottom-color: var(--ok); }
+    .final-dose-input { font-size: 32px; font-weight: 900; color: var(--danger); width: 100%; text-align: center; background: #fff; border: 2px solid #fca5a5; border-radius: 12px; outline: none; padding: 10px; }
+    .result-box.safe .final-dose-input { color: var(--ok); border-color: #86efac; }
+    
+    /* تنسيقات صندوق علاج الهبوط وحقل الملاحظات */
+    .hypo-rescue-box { background: #fff1f2; border: 1px solid #fda4af; border-radius: 12px; padding: 15px; margin-top: 15px; display: none; }
+    .notes-area { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; margin-top: 10px; resize: vertical; }
   </style>
+  
 </head>
 <body>
 
