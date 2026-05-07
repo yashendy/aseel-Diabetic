@@ -407,10 +407,6 @@ async function autoFetchPreMeasurement() {
 
 els.btnFetchPre.onclick = autoFetchPreMeasurement;
 
-els.btnFetchPre.onclick = autoFetchPreMeasurement;
-
-els.btnFetchPre.onclick = autoFetchPreMeasurement;
-
 // ========================================================
 // 8. دوال سجل وجبات اليوم (Table Bottom) والتعديل والحذف
 // ========================================================
