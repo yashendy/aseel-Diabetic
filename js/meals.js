@@ -167,8 +167,14 @@ async function fetchFoodLibrary() {
 function renderLibrary() {
   if(!els.itemsGrid) return;
   const q = els.searchBox.value.toLowerCase();
-  const list = state.globalFoods.filter(f => !q || (f.searchText || f.name).toLowerCase().includes(q));
-  if(!list.length) { els.itemsGrid.innerHTML = `<div style="text-align:center; padding:20px; color:#94a3b8;">لا توجد نتائج مطابقة لبحثك.</div>`; return; }
+  let list = state.globalFoods.filter(f => !q || (f.searchText || f.name).toLowerCase().includes(q));
+  
+  // الفلتر السحري: لو فاتحين المكتبة عشان الهبوط، اعرض أصناف الرفع فقط!
+  if (state.isRescueMode) {
+    list = list.filter(f => f.tags && f.tags.includes('#علاج_هبوط'));
+  }
+
+  if(!list.length) { els.itemsGrid.innerHTML = `<div style="text-align:center; padding:20px; color:#94a3b8;">${state.isRescueMode ? 'لا توجد أصناف مخصصة لعلاج الهبوط في المكتبة.' : 'لا توجد نتائج مطابقة لبحثك.'}</div>`; return; }
 
   els.itemsGrid.innerHTML = list.map(f => {
     const giStr = f.per100?.gi ? `<span class="gi-badge ${f.per100.gi > 70 ? 'high' : ''}">GI: ${f.per100.gi}</span>` : '';
