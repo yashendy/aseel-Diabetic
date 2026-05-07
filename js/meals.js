@@ -1,8 +1,14 @@
 // js/meals.js
+// ========================================================
+// 1. استدعاء مكتبات الفايربيز الأساسية
+// ========================================================
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { collection, doc, getDoc, setDoc, addDoc, getDocs, query, where, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
+// ========================================================
+// 2. دوال مساعدة (Utils) وتكوين حالة التطبيق (State)
+// ========================================================
 const $ = id => document.getElementById(id);
 const fmt = (n,d=1)=>Number.isFinite(n)?(+n).toFixed(d):"—";
 const todayStr = ()=> new Date().toISOString().slice(0,10);
@@ -11,6 +17,7 @@ const mgdl2mmol = mg => mg/18.0182;
 const mmol2mgdl = mmol => mmol*18.0182;
 const SAFE_PLACEHOLDER = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%22100%22%20style%3D%22background%3A%23f1f5f9%22%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%2394a3b8%22%20font-size%3D%2220%22%3E%F0%9F%8D%BD%EF%B8%8F%3C%2Ftext%3E%3C%2Fsvg%3E';
 
+// متغير state: يحتفظ بجميع البيانات والمعاملات المؤقتة التي تعمل عليها الصفحة حالياً
 let state = {
   childId: null, parentId: null, child: null, 
   date: todayStr(), time: currentTimeStr(), slot: "PRE_BREAKFAST",
@@ -20,6 +27,7 @@ let state = {
   currentMealCarbs: 0, currentMealCalories: 0, currentBgUnit: "mg/dL"
 };
 
+// كائن els: للوصول السريع لعناصر الـ HTML بدل كتابة getElementById كل مرة
 const els = {
   loader: $("loader"), chipCF: $("lblCF"), chipCR: $("lblCR"), chipTarget: $("lblTarget"),
   dateInput: $("dateInput"), timeInput: $("timeInput"), slotSelect: $("slotSelect"), 
@@ -41,8 +49,13 @@ const els = {
 function showLoader(v) { els.loader.classList.toggle('hidden', !v); }
 function getSlotLabel(key) { const l = { PRE_BREAKFAST: 'الفطار', PRE_LUNCH: 'الغداء', PRE_DINNER: 'العشاء', SNACK: 'سناك' }; return l[key] || key; }
 
+// ========================================================
+// 3. التحقق من الدخول وتهيئة الصفحة (Initialization)
+// ========================================================
 onAuthStateChanged(auth, async (u) => {
   if (!u) { location.href = 'index.html'; return; }
+  
+  // استقبال البيانات الممررة عبر الرابط (URL parameters)
   const qp = new URLSearchParams(location.search);
   state.childId = qp.get('child') || localStorage.getItem('selectedChildId');
   state.parentId = localStorage.getItem('selectedParentId') || u.uid;
@@ -56,14 +69,22 @@ onAuthStateChanged(auth, async (u) => {
   const passedBg = qp.get("bg");
   if (passedBg) { els.preBg.value = passedBg; if (qp.get("unit")) els.preBgUnit.value = qp.get("unit"); }
 
+  // تشغيل سلسلة جلب البيانات
   try {
-    await loadChildData(); setupEvents();
+    await loadChildData(); 
+    setupEvents();
     if(!qp.get("slot")) autoSelectMealSlot(); 
-    fetchFoodLibrary(); await loadTodayMeals();
+    fetchFoodLibrary(); 
+    await loadTodayMeals();
     if (passedBg) calculateBolus();
   } catch (e) { console.error(e); } finally { showLoader(false); }
 });
 
+// ========================================================
+// 4. دوال تحميل البيانات وعرض الإعدادات
+// ========================================================
+
+// جلب بيانات ومعاملات الطفل من الفايربيز وتعبئة شريط الـ Topbar والمعاملات
 async function loadChildData() {
   const snap = await getDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`));
   if (!snap.exists()) throw new Error('Child not found');
@@ -86,11 +107,13 @@ async function loadChildData() {
   state.currentBgUnit = els.preBgUnit.value;
   els.todayDateLabel.textContent = state.date;
   
+  // استعادة أهداف الدايت لو تم حفظها مسبقاً
   if(c.dietGoal) els.dailyCarbTarget.value = c.dietGoal;
   if(c.calorieGoal) els.dailyCalorieTarget.value = c.calorieGoal;
   updateFactorsDisplay();
 }
 
+// دالة تحديد وجبة (الفطار/الغداء/العشاء) أوتوماتيك بناءً على ساعة الجهاز
 function autoSelectMealSlot() {
   const h = parseInt(state.time.split(':')[0]);
   if(h >= 5 && h < 11) state.slot = 'PRE_BREAKFAST';
@@ -100,6 +123,7 @@ function autoSelectMealSlot() {
   els.slotSelect.value = state.slot; updateFactorsDisplay();
 }
 
+// دالة تغيير معامل الكارب (CR) ليطابق الوجبة المحددة
 function updateFactorsDisplay() {
   let currentCR = state.CRs.snack || 15;
   if(state.slot.includes('BREAKFAST')) currentCR = state.CRs.breakfast || 10;
@@ -109,6 +133,7 @@ function updateFactorsDisplay() {
   calculateBolus();
 }
 
+// دالة تحديث شريط تقدم استهلاك الكارب والسعرات الحرارية اليومية
 function updateDietProgress(mealCarbs = 0, mealCals = 0) {
   const targetCarb = Number(els.dailyCarbTarget.value); const totalCarb = state.eatenToday + mealCarbs;
   if(targetCarb > 0) {
@@ -125,6 +150,11 @@ function updateDietProgress(mealCarbs = 0, mealCals = 0) {
   } else { els.calProgressText.textContent = `إجمالي المستهلك اليوم: ${Math.round(totalCal)} kcal`; els.calProgressBar.style.width = '0%'; }
 }
 
+// ========================================================
+// 5. دوال مطبخ أسيل ومكتبة الأصناف (Food Library)
+// ========================================================
+
+// جلب مكتبة الأصناف العالمية المضافة من قبل الأدمن
 async function fetchFoodLibrary() {
   try {
     const snap = await getDocs(collection(db, "admin/global/foodItems"));
@@ -133,6 +163,7 @@ async function fetchFoodLibrary() {
   } catch (err) { els.loadingLibrary.textContent = "⚠️ خطأ في تحميل المكتبة."; }
 }
 
+// عرض نافذة البحث في المكتبة وتصفية النتائج
 function renderLibrary() {
   const q = els.searchBox.value.toLowerCase();
   const list = state.globalFoods.filter(f => !q || (f.searchText || f.name).toLowerCase().includes(q));
@@ -161,17 +192,21 @@ function renderLibrary() {
   });
 }
 
+// دالة إضافة الصنف المختار لجدول الوجبة الحالي
 function addItemToMeal(id) {
   const food = state.globalFoods.find(f => f.id === id); if(!food) return;
   state.mealItems.push({ uid: Date.now().toString(), ...food, mealQty: 1, selectedUnitIndex: 0, availableUnits: food.units?.length ? food.units : [{label: '100 جرام', grams: 100}] });
   state.manualCarbDirty = false; els.searchBox.value = ''; renderLibrary(); renderMealTable(); updateMealTotals();
 }
 
+// رسم جدول مكونات الوجبة وتحديثه عند المسح أو تغيير الكميات
 function renderMealTable() {
   if (!state.mealItems.length) { els.mealBody.innerHTML = `<tr><td colspan="10" class="muted" style="text-align:center; padding:20px;">لم يتم إضافة أصناف للوجبة بعد.</td></tr>`; return; }
   els.mealBody.innerHTML = state.mealItems.map((item, idx) => {
     const opts = item.availableUnits.map((u, i) => `<option value="${i}" ${item.selectedUnitIndex == i ? 'selected' : ''}>${u.label}</option>`).join('');
     const ratio = (item.mealQty * (item.availableUnits[item.selectedUnitIndex]?.grams || 100)) / 100;
+    
+    // دمج خصم الألياف من الكارب (حسب إعدادات الدايت)
     const fRule = state.rule === "fullFiber" ? 1 : state.rule === "halfFiber" ? 0.5 : 0;
     const netCarb = Math.max(0, (item.per100?.carbs_g||0)*ratio - (item.per100?.fiber_g||0)*ratio*fRule);
     return `
@@ -193,6 +228,7 @@ function renderMealTable() {
   document.querySelectorAll('.del-btn').forEach(b => b.onclick = e => { state.mealItems.splice(e.target.closest('tr').dataset.idx, 1); state.manualCarbDirty=false; renderMealTable(); updateMealTotals(); });
 }
 
+// دالة حساب الإجماليات لكل الوجبة (كارب نهائي، بروتين، دهون، متوسط GI) وإرسالها للحاسبة الذكية
 function updateMealTotals() {
   let sumNet=0, sumFib=0, sumFat=0, sumPro=0, sumCal=0, weightedGI=0, giSum=0;
   state.mealItems.forEach(item => {
@@ -207,13 +243,20 @@ function updateMealTotals() {
   els.sumCarbsNet.textContent = `${fmt(sumNet)} g`; els.sumFiber.textContent = `${fmt(sumFib)} g`;
   els.sumProtein.textContent = `${fmt(sumPro)} g`; els.sumFat.textContent = `${fmt(sumFat)} g`;
   els.sumCalories.textContent = `${fmt(sumCal,0)} kcal`; els.avgGI.textContent = giSum>0 ? Math.round(weightedGI/giSum) : '—';
+  
   state.currentMealCarbs = sumNet; state.currentMealCalories = sumCal;
   if(!state.manualCarbDirty) els.manualCarbs.value = fmt(sumNet, 1);
   updateDietProgress(state.currentMealCarbs, state.currentMealCalories);
+  
+  // إطلاق أمر إعادة حساب الجرعة بعد جمع القيم
   calculateBolus(sumFat, sumPro, giSum>0 ? Math.round(weightedGI/giSum) : 0, sumFib);
 }
 
-// --- العقل المدبر الجديد لحساب الجرعة (Bolus Engine) ---
+// ========================================================
+// 6. العقل المدبر لحاسبة الأنسولين (Smart Bolus Engine)
+// ========================================================
+
+// تقوم بدمج السكر، الكارب، IOB، ومعاملات الطفل لإنتاج الجرعة النهائية والتنبيهات
 function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   const bg = parseFloat(els.preBg.value);
   const carbs = parseFloat(els.manualCarbs.value) || 0;
@@ -225,16 +268,19 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   if(state.slot.includes('LUNCH')) currentCR = state.CRs.lunch || 10;
   if(state.slot.includes('DINNER')) currentCR = state.CRs.dinner || 10;
 
+  // توحيد قراءة السكر قبل الحساب
   const childUnit = state.child?.glucoseUnit || 'mg/dL';
   let bgInChildUnit = bg;
   if (bg > 0 && unit !== childUnit) bgInChildUnit = (childUnit === 'mmol/L') ? mgdl2mmol(bg) : mmol2mgdl(bg);
 
+  // تعديل السكر بناءً على سهم اتجاه الحساس
   let effectiveBg = bgInChildUnit;
   if(bg && els.measureSource.value === 'cgm') {
     const trend = Number(els.trendArrow.value);
     effectiveBg += (childUnit === 'mmol/L' ? trend/18.0 : trend);
   }
 
+  // حساب جرعة التصحيح وجرعة الكارب
   let corr = 0;
   let carbDose = currentCR > 0 ? (carbs / currentCR) : 0;
   let netDose = 0;
@@ -243,6 +289,7 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
 
   const lowLimit = state.child?.glucose_limits?.low || (childUnit === 'mmol/L' ? 3.9 : 70);
 
+  // تطبيق بروتوكول الهبوط أو التصحيح السلبي (الخصم)
   if (effectiveBg > 0) {
     if (effectiveBg < lowLimit) {
       isHypo = true; corr = 0; netDose = 0; // حماية الهبوط (تصفير الجرعة)
@@ -269,7 +316,7 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   els.smartAlerts.style.display = 'none';
   let alerts = "";
 
-  // 1. إنذار الهبوط الصريح (قاعدة الـ 15)
+  // إطلاق التنبيهات بناءً على النتائج ومكونات الأكل
   if (isHypo) {
     els.resultBox.className = 'result-box';
     alerts += `<div style="background:#fee2e2; border:1px solid #fca5a5; padding:12px; border-radius:8px; margin-bottom:10px;">
@@ -277,7 +324,6 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
                 <p style="margin:4px 0 0 0; color:#7f1d1d;">الطفل في حالة هبوط! تم تصفير الجرعة مؤقتاً. يُرجى إعطاء <b>15 جرام كارب سريع</b> (نصف كوب عصير)، والانتظار 15 دقيقة ثم إعادة القياس قبل إعطاء الأنسولين للوجبة.</p>
                </div>`;
   } 
-  // 2. إنذار التصحيح العكسي الآمن
   else if (isNegativeCorr) {
     alerts += `<strong>💡 تصحيح عكسي:</strong> السكر أقل من الهدف (${state.Target})، تم خصم (${Math.abs(corr).toFixed(1)} U) من جرعة الطعام للسماح للسكر بالارتفاع بأمان.<br>`;
   }
@@ -290,8 +336,14 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   if(alerts) { els.smartAlerts.innerHTML = alerts; els.smartAlerts.style.display = 'block'; }
 }
 
+// تصفير إشارة "التعديل اليدوي" للجرعة لتعود الحاسبة للعمل بشكل آلي
 const resetManualDose = () => { state.manualDoseDirty = false; calculateBolus(); };
 
+// ========================================================
+// 7. دوال جلب السجلات القديمة واسترداد البيانات (Data Retrieval)
+// ========================================================
+
+// البحث في قاعدة البيانات عن وجبة مسجلة مسبقاً بنفس التاريخ والوقت وملء الشاشة بها
 async function autoFetchPreMeasurement() {
   els.btnFetchPre.textContent = "⏳...";
   try {
@@ -333,6 +385,11 @@ async function autoFetchPreMeasurement() {
 
 els.btnFetchPre.onclick = autoFetchPreMeasurement;
 
+// ========================================================
+// 8. دوال سجل وجبات اليوم (Table Bottom) والتعديل والحذف
+// ========================================================
+
+// جلب كل وجبات اليوم وعرضها في الجدول أسفل الصفحة
 async function loadTodayMeals() {
   const qy = query(collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`), where('date', '==', state.date));
   const snap = await getDocs(qy);
@@ -366,13 +423,19 @@ async function loadTodayMeals() {
   updateDietProgress();
 }
 
+// دالة مكشوفة لواجهة المستخدم لحذف الوجبة المحددة نهائياً
 window.deleteMeal = async (docId) => {
   if (!confirm("هل أنت متأكد من حذف هذه الوجبة نهائياً؟")) return;
   try { showLoader(true); await deleteDoc(doc(db, `parents/${state.parentId}/children/${state.childId}/measurements`, docId)); alert("تم مسح الوجبة بنجاح 🗑️"); await loadTodayMeals(); autoFetchPreMeasurement(); } 
   catch (error) { console.error(error); alert("حدث خطأ أثناء مسح الوجبة."); } finally { showLoader(false); }
 };
 
+// دالة مكشوفة لواجهة المستخدم للانتقال لأعلى الصفحة وتحديد الوجبة المُراد تعديلها لاستردادها
 window.editMeal = (slotKey) => { els.slotSelect.value = slotKey; els.slotSelect.dispatchEvent(new Event('change')); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+// ========================================================
+// 9. دالة الحفظ (إرسال البيانات للفايربيز)
+// ========================================================
 
 els.btnSaveMeal.onclick = async () => {
   const carbs = parseFloat(els.manualCarbs.value) || 0;
@@ -384,21 +447,22 @@ els.btnSaveMeal.onclick = async () => {
     const [yyyy, mm, dd] = state.date.split('-'); const [hh, min] = state.time.split(':');
     const timeObj = new Date(yyyy, mm - 1, dd, hh, min);
     
+    // حفظ أهداف الدايت لو تم التعديل عليها
     let updates = {};
     const tCarb = Number(els.dailyCarbTarget.value); const tCal = Number(els.dailyCalorieTarget.value);
     if(tCarb > 0 && tCarb !== state.child.dietGoal) updates.dietGoal = tCarb;
     if(tCal > 0 && tCal !== state.child.calorieGoal) updates.calorieGoal = tCal;
     if(Object.keys(updates).length > 0) await setDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`), updates, { merge: true });
 
+    // البحث لمنع التكرار (استبدال الوجبة القديمة بنفس التوقيت إن وجدت)
     const measColl = collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`);
     const snap = await getDocs(query(measColl, where("date", "==", state.date)));
-    
     let targetDocId = null; let targetPayload = null;
     snap.forEach(doc => { const d = doc.data(); if(d.slotKey === state.slot) { targetDocId = doc.id; targetPayload = d; } });
 
-    // تسجيل الجرعة النهائية من الخانة القابلة للتعديل
     const totalDose = parseFloat(els.doseFinalInput.value) || 0;
 
+    // تجهيز حزمة البيانات للإرسال (Payload)
     let payload = {
       date: state.date, time: `${hh}:${min}`, when: timeObj, slotKey: state.slot, 
       carbs: carbs, calories: state.currentMealCalories, 
@@ -410,6 +474,7 @@ els.btnSaveMeal.onclick = async () => {
     if(state.mealItems.length > 0) payload.mealItemsRef = state.mealItems.map(m=>({name:m.name, qty:m.mealQty, netCarb:m.carbs_g}));
     if (!isNaN(bg)) { payload.value = bg; payload.unit = els.preBgUnit.value; payload.measureMethod = els.measureSource.value === 'cgm' ? 'sensor' : 'blood'; }
 
+    // الاستبدال أم الإضافة
     if (targetDocId) await setDoc(doc(measColl, targetDocId), payload, { merge: true });
     else await addDoc(measColl, payload);
 
@@ -418,6 +483,10 @@ els.btnSaveMeal.onclick = async () => {
   finally { els.btnSaveMeal.disabled = false; els.btnSaveMeal.textContent = "💾 اعتماد الجرعة وحفظ الوجبة"; }
 };
 
+// ========================================================
+// 10. إعداد وتفعيل مستمعي الأحداث (Event Listeners)
+// ========================================================
+
 function setupEvents() {
   $('logoutBtn').onclick = () => signOut(auth);
   
@@ -425,6 +494,7 @@ function setupEvents() {
   els.timeInput.onchange = () => { state.time = els.timeInput.value; };
   els.slotSelect.onchange = () => { state.slot = els.slotSelect.value; updateFactorsDisplay(); autoFetchPreMeasurement(); };
   
+  // تحويل الوحدة بذكاء لتفادي الأخطاء الطبية
   els.preBgUnit.onchange = () => {
     const newUnit = els.preBgUnit.value; const bgVal = parseFloat(els.preBg.value);
     if (!isNaN(bgVal) && state.currentBgUnit !== newUnit) {
@@ -451,6 +521,7 @@ function setupEvents() {
   els.libClose.onclick = () => els.libModal.classList.remove('open');
   els.libOverlay.onclick = () => els.libModal.classList.remove('open');
   els.searchBox.oninput = renderLibrary;
+  
   els.btnClearMeal.onclick = () => { 
     state.mealItems=[]; state.manualCarbDirty=false; resetManualDose();
     state.currentMealCarbs=0; state.currentMealCalories=0; 
