@@ -439,11 +439,15 @@ async function loadTodayMeals() {
     let html = '';
     validDocs.forEach(m => {
       state.eatenToday += Number(m.carbs||0); state.caloriesEatenToday += Number(m.calories||0);
+      
+      // تقريب السعرات لأقرب جزء من مائة لتجنب الكسور الطويلة
+      const formattedCalories = Number(m.calories || 0).toFixed(1);
+      
       html += `
         <tr>
           <td>${getSlotLabel(m.slotKey)}</td>
           <td>${m.carbs||0}g</td>
-          <td>${m.calories||0} kcal</td>
+          <td>${formattedCalories} kcal</td>
           <td>${m.carbDose||0}U</td>
           <td>${m.correctionDose||0}U</td>
           <td><strong style="color:var(--primary)">${m.totalDose||m.totalInsulin||0}U</strong></td>
