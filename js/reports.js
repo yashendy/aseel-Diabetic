@@ -199,8 +199,9 @@ function cellHTML(vals,u){
     const cls=classFor(v.val,u);
     html += `<div class="v ${cls}">${v.val}</div>`;
   }
-  if (v.carbs > 0) html += `<div class="badge-carb">🍔 ${v.carbs}g</div>`;
-  if (v.ins > 0 || (v.carbs > 0 && v.ins === 0)) html += `<div class="badge-ins">💉 ${v.ins}U</div>`;
+  // هنا استخدمنا round1 لتقريب الكارب والإنسولين لرقم عشري واحد
+  if (v.carbs > 0) html += `<div class="badge-carb">🍔 ${round1(v.carbs)}g</div>`;
+  if (v.ins > 0 || (v.carbs > 0 && v.ins === 0)) html += `<div class="badge-ins">💉 ${round1(v.ins)}U</div>`;
   html += `</div>`;
   return html;
 }
@@ -221,10 +222,12 @@ async function renderReport(){
 
   for(const d of days){
     const row=document.createElement('div'); row.className='grid-row';
+    
+    // هنا استخدمنا round1 لتقريب الإجماليات اليومية
     const totalCell = `
       <div class="cell-data" style="justify-content:center;">
-        ${d.dailyCarbs > 0 ? `<div class="badge-carb">${d.dailyCarbs}g</div>` : ''}
-        ${d.dailyInsulin > 0 ? `<div class="badge-ins">${d.dailyInsulin}U</div>` : ''}
+        ${d.dailyCarbs > 0 ? `<div class="badge-carb">${round1(d.dailyCarbs)}g</div>` : ''}
+        ${d.dailyInsulin > 0 ? `<div class="badge-ins">${round1(d.dailyInsulin)}U</div>` : ''}
         ${d.dailyCarbs===0 && d.dailyInsulin===0 ? '<span class="muted">—</span>' : ''}
       </div>`;
 
