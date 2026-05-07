@@ -1,7 +1,7 @@
 // js/meals.js
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { collection, doc, getDoc, setDoc, addDoc, getDocs, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { collection, doc, getDoc, setDoc, addDoc, getDocs, query, where, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
 const fmt = (n,d=1)=>Number.isFinite(n)?(+n).toFixed(d):"—";
@@ -18,7 +18,7 @@ let state = {
   rule: "fullFiber", globalFoods: [], mealItems: [], IOB: 0, finalDoseVal: 0,
   manualCarbDirty: false, eatenToday: 0, caloriesEatenToday: 0,
   currentMealCarbs: 0, currentMealCalories: 0,
-  currentBgUnit: "mg/dL" // لتتبع وحدة القياس الحالية وتحويلها
+  currentBgUnit: "mg/dL"
 };
 
 const els = {
@@ -26,7 +26,8 @@ const els = {
   dateInput: $("dateInput"), timeInput: $("timeInput"), slotSelect: $("slotSelect"), 
   preBg: $("preBg"), preBgUnit: $("preBgUnit"), btnFetchPre: $("btnFetchPre"), 
   measureSource: $("measureSource"), trendContainer: $("trendContainer"), trendArrow: $("trendArrow"),
-  netCarbRule: $("netCarbRule"), manualCarbs: $("manualCarbs"), iobValue: $("iobValue"), 
+  netCarbRule: $("netCarbRule"), doseCorrection: $("doseCorrection"), doseCarbs: $("doseCarbs"),
+  manualCarbs: $("manualCarbs"), iobValue: $("iobValue"), 
   smartAlerts: $("smartAlerts"), doseFinal: $("doseFinal"), doseDetailsStr: $("doseDetailsStr"), resultBox: $("resultBox"),
   btnClearMeal: $("btnClearMeal"), btnSaveMeal: $("btnSaveMeal"), btnOpenLibrary: $("btnOpenLibrary"),
   mealBody: $("mealBody"), sumFiber: $("sumFiber"), sumProtein: $("sumProtein"), sumFat: $("sumFat"),
@@ -101,7 +102,6 @@ async function loadChildData() {
   
   els.netCarbRule.value = state.rule;
   
-  // ضبط الوحدة المبدئية وحفظها في الـ State للتحويل الذكي لاحقاً
   if(!els.preBg.value) els.preBgUnit.value = c.glucoseUnit || 'mg/dL';
   state.currentBgUnit = els.preBgUnit.value;
 
@@ -268,7 +268,6 @@ function updateMealTotals() {
   calculateBolus(sumFat, sumPro, giSum>0 ? Math.round(weightedGI/giSum) : 0, sumFib);
 }
 
-// --- Smart Bolus Engine ---
 function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   const bg = parseFloat(els.preBg.value);
   const carbs = parseFloat(els.manualCarbs.value) || 0;
@@ -299,6 +298,9 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   let netDose = Math.max(0, (corr + carbDose) - iob);
   state.finalDoseVal = Math.round(netDose*2)/2; 
   
+  if(els.doseCarbs) els.doseCarbs.value = carbDose.toFixed(1);
+  if(els.doseCorrection) els.doseCorrection.value = corr.toFixed(1);
+
   els.doseFinal.textContent = state.finalDoseVal.toFixed(1) + " U";
   els.doseDetailsStr.textContent = `كارب: ${carbDose.toFixed(1)} | تصحيح: ${corr.toFixed(1)} | خصم نشط: -${iob.toFixed(1)}`;
   els.resultBox.className = (state.finalDoseVal > 0 && effectiveBg >= state.Target) ? 'result-box safe' : 'result-box';
@@ -327,19 +329,29 @@ async function autoFetchPreMeasurement() {
     });
     
     if(found) {
-      els.preBg.value = found.value; 
+      els.preBg.value = found.value || ""; 
       if(found.unit) {
         els.preBgUnit.value = found.unit;
         state.currentBgUnit = found.unit;
       }
       els.measureSource.value = found.measureMethod === 'sensor' ? 'cgm' : 'bgm';
       els.measureSource.dispatchEvent(new Event('change'));
+      
+      // جلب مكونات الوجبة المحفوظة إن وجدت
+      if (found.carbs) {
+        els.manualCarbs.value = found.carbs;
+        state.manualCarbDirty = true;
+      } else {
+        els.manualCarbs.value = "";
+      }
+
       calculateBolus(); 
       els.btnFetchPre.textContent = "✅ تم الجلب";
       setTimeout(() => els.btnFetchPre.textContent = "🔄 جلب", 2000);
     } else {
       els.preBg.value = "";
-      els.btnFetchPre.textContent = "❌ لا يوجد قياس";
+      els.manualCarbs.value = "";
+      els.btnFetchPre.textContent = "❌ جديد";
       setTimeout(() => els.btnFetchPre.textContent = "🔄 جلب", 2000);
       calculateBolus();
     }
@@ -353,22 +365,58 @@ async function loadTodayMeals() {
   const snap = await getDocs(qy);
   state.eatenToday = 0; state.caloriesEatenToday = 0;
   
-  const validDocs = snap.docs.map(d=>d.data()).filter(m => m.carbs > 0 || m.totalDose > 0);
+  const validDocs = snap.docs.map(d=>({id: d.id, ...d.data()})).filter(m => m.carbs > 0 || m.totalDose > 0);
 
   if(validDocs.length === 0) { 
-    els.dailyMealsBody.innerHTML = `<tr><td colspan="6" class="muted" style="text-align:center;">لا توجد وجبات أو قياسات مسجلة في هذا اليوم</td></tr>`; 
+    els.dailyMealsBody.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center;">لا توجد وجبات أو قياسات مسجلة في هذا اليوم</td></tr>`; 
   } else {
     validDocs.sort((a,b) => a.when.seconds - b.when.seconds);
     let html = '';
     validDocs.forEach(m => {
       state.eatenToday += Number(m.carbs||0); 
       state.caloriesEatenToday += Number(m.calories||0);
-      html += `<tr><td>${getSlotLabel(m.slotKey)}</td><td>${m.carbs||0}g</td><td>${m.calories||0} kcal</td><td>${m.carbDose||0}U</td><td>${m.correctionDose||0}U</td><td><strong style="color:var(--primary)">${m.totalDose||m.totalInsulin||0}U</strong></td></tr>`;
+      html += `
+        <tr>
+          <td>${getSlotLabel(m.slotKey)}</td>
+          <td>${m.carbs||0}g</td>
+          <td>${m.calories||0} kcal</td>
+          <td>${m.carbDose||0}U</td>
+          <td>${m.correctionDose||0}U</td>
+          <td><strong style="color:var(--primary)">${m.totalDose||m.totalInsulin||0}U</strong></td>
+          <td>
+            <button class="btn ghost sm" style="padding:4px; font-size:12px;" onclick="editMeal('${m.slotKey}')">✏️ تعديل</button>
+            <button class="btn danger sm" style="padding:4px; font-size:12px;" onclick="deleteMeal('${m.id}')">🗑️</button>
+          </td>
+        </tr>`;
     });
     els.dailyMealsBody.innerHTML = html;
   }
   updateDietProgress();
 }
+
+// دالة الحذف (مكشوفة للـ Window لتعمل مع الـ HTML)
+window.deleteMeal = async (docId) => {
+  if (!confirm("هل أنت متأكد من حذف هذه الوجبة نهائياً؟")) return;
+  try {
+    showLoader(true);
+    await deleteDoc(doc(db, `parents/${state.parentId}/children/${state.childId}/measurements`, docId));
+    alert("تم مسح الوجبة بنجاح 🗑️");
+    await loadTodayMeals();
+    autoFetchPreMeasurement(); // التحديث لتنظيف الحاسبة لو كانت هي الوجبة المحددة حالياً
+  } catch (error) {
+    console.error(error);
+    alert("حدث خطأ أثناء مسح الوجبة.");
+  } finally {
+    showLoader(false);
+  }
+};
+
+// دالة التعديل (مكشوفة للـ Window لتعمل مع الـ HTML)
+window.editMeal = (slotKey) => {
+  els.slotSelect.value = slotKey;
+  els.slotSelect.dispatchEvent(new Event('change')); // هيشغل autoFetchPreMeasurement لوحده
+  window.scrollTo({ top: 0, behavior: 'smooth' }); // يطلع لأول الصفحة عند الحاسبة
+};
 
 els.btnSaveMeal.onclick = async () => {
   const carbs = parseFloat(els.manualCarbs.value) || 0;
@@ -387,6 +435,20 @@ els.btnSaveMeal.onclick = async () => {
     if(tCal > 0 && tCal !== state.child.calorieGoal) updates.calorieGoal = tCal;
     if(Object.keys(updates).length > 0) await setDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`), updates, { merge: true });
 
+    // منع التكرار الذكي: البحث عن الوجبة واستبدالها بالكامل
+    const measColl = collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`);
+    const snap = await getDocs(query(measColl, where("date", "==", state.date)));
+    
+    let targetDocId = null;
+    let targetPayload = null;
+    snap.forEach(doc => {
+      const d = doc.data();
+      if(d.slotKey === state.slot) { // الشرط المانع للتكرار
+        targetDocId = doc.id;
+        targetPayload = d;
+      }
+    });
+
     let payload = {
       date: state.date, time: `${hh}:${min}`, when: timeObj, slotKey: state.slot, 
       carbs: carbs, calories: state.currentMealCalories, 
@@ -404,10 +466,18 @@ els.btnSaveMeal.onclick = async () => {
       payload.measureMethod = els.measureSource.value === 'cgm' ? 'sensor' : 'blood';
     }
 
-    await addDoc(collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`), payload);
+    if (targetDocId) {
+      // تعديل القديم
+      await setDoc(doc(measColl, targetDocId), payload, { merge: true });
+    } else {
+      // إضافة جديد
+      await addDoc(measColl, payload);
+    }
 
-    alert("تم اعتماد الجرعة وحفظ السجل بنجاح! ✅"); location.href = `measurements.html?child=${state.childId}`;
-  } catch(e) { console.error(e); alert("خطأ في الحفظ"); } finally { els.btnSaveMeal.disabled = false; els.btnSaveMeal.textContent = "💾 اعتماد الجرعة وحفظ الوجبة"; }
+    alert("تم حفظ واعتماد الجرعة بنجاح! ✅"); 
+    loadTodayMeals(); // تحديث الجدول بدون عمل Refresh كامل للصفحة لراحة المستخدم
+  } catch(e) { console.error(e); alert("خطأ في الحفظ"); } 
+  finally { els.btnSaveMeal.disabled = false; els.btnSaveMeal.textContent = "💾 اعتماد الجرعة وحفظ الوجبة"; }
 };
 
 function setupEvents() {
@@ -423,7 +493,6 @@ function setupEvents() {
     state.slot = els.slotSelect.value; updateFactorsDisplay(); autoFetchPreMeasurement(); 
   };
   
-  // تحويل الوحدة بذكاء عند تغيير القائمة المنسدلة
   els.preBgUnit.onchange = () => {
     const newUnit = els.preBgUnit.value;
     const bgVal = parseFloat(els.preBg.value);
@@ -451,5 +520,9 @@ function setupEvents() {
   els.libClose.onclick = () => els.libModal.classList.remove('open');
   els.libOverlay.onclick = () => els.libModal.classList.remove('open');
   els.searchBox.oninput = renderLibrary;
-  els.btnClearMeal.onclick = () => { state.mealItems=[]; state.manualCarbDirty=false; state.currentMealCarbs=0; state.currentMealCalories=0; renderMealTable(); updateMealTotals(); els.manualCarbs.value=''; calculateBolus(); };
+  els.btnClearMeal.onclick = () => { 
+    state.mealItems=[]; state.manualCarbDirty=false; 
+    state.currentMealCarbs=0; state.currentMealCalories=0; 
+    renderMealTable(); updateMealTotals(); els.manualCarbs.value=''; calculateBolus(); 
+  };
 }
