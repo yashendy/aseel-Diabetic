@@ -284,6 +284,7 @@ function updateMealTotals() {
 
 // تقوم بدمج السكر، الكارب، IOB، ومعاملات الطفل لإنتاج الجرعة النهائية والتنبيهات
 // --- العقل المدبر لحساب الجرعات (Smart Bolus Engine) ---
+// --- العقل المدبر لحساب الجرعات (Smart Bolus Engine) ---
 function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   if (state.manualDoseDirty) return; // منع التحديث التلقائي لو الأم بتكتب الجرعة بإيدها
 
@@ -325,12 +326,23 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
 
   state.finalDoseVal = isHypo ? 0 : Math.round(netDose*2)/2; 
   if(els.doseCarbs) els.doseCarbs.value = fmt(carbDose);
-  if(els.doseCorrection) els.doseCorrection.value = fmt(corr);
+
+  // تحديث حقل التصحيح وإخفاؤه لو السكر طبيعي أو هبوط
+  if(els.doseCorrection) {
+    els.doseCorrection.value = fmt(corr);
+    els.doseCorrection.parentElement.style.display = (corr > 0) ? 'flex' : 'none';
+  }
 
   if(els.doseFinalInput) {
     els.doseFinalInput.value = fmt(state.finalDoseVal);
-    // تلوين الحقل حسب الأمان
-    els.doseFinalInput.parentElement.parentElement.className = (state.finalDoseVal > 0 && effectiveBg >= state.Target && !isHypo) ? 'result-box safe' : 'result-box';
+    // تلوين الحقل للون الأخضر لو الجرعة آمنة والسكر في الهدف
+    if (state.finalDoseVal > 0 && effectiveBg >= state.Target && !isHypo) {
+        els.doseFinalInput.style.borderColor = '#86efac';
+        els.doseFinalInput.style.color = 'var(--ok)';
+    } else {
+        els.doseFinalInput.style.borderColor = '#fca5a5';
+        els.doseFinalInput.style.color = 'var(--danger)';
+    }
   }
 
   if(els.hypoRescueArea) els.hypoRescueArea.style.display = isHypo ? 'block' : 'none';
