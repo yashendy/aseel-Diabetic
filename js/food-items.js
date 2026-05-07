@@ -239,9 +239,9 @@ function render() {
       : `<div style="height:140px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; border-radius:8px; margin-bottom:12px; color:#94a3b8; font-size:14px; border: 1px dashed #cbd5e1;">🍽️ بدون صورة</div>`;
 
     return `
-<article class="food-card">
+      <article class="food-card">
         ${x.per100?.gi > 0 ? `<div class="gi-badge">GI: ${x.per100.gi}</div>` : ''}
-        ${x.tags && x.tags.includes('#علاج_هبوط') ? `<div class="gi-badge" style="background:#fef2f2; color:#b91c1c; border:1px solid #fca5a5; right:auto; left:8px;">🧃 صنف رفع</div>` : ''}
+        ${(x.tags && x.tags.includes('#علاج_هبوط')) ? `<div class="gi-badge" style="background:#fef2f2; color:#b91c1c; border:1px solid #fca5a5; right:auto; left:8px;">🧃 صنف رفع</div>` : ''}
         ${imageElement}
         <h3>${x.name}</h3>
         <div class="cat">${x.category} | ${x.per100?.cal_kcal || 0} kcal</div>
