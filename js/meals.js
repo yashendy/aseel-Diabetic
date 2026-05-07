@@ -193,6 +193,8 @@ function renderLibrary() {
   });
 }
 
+// دالة إضافة الصنف المختار لجدول الوجبة الحالي
+
 function addItemToMeal(id) {
   const food = state.globalFoods.find(f => f.id === id); 
   if(!food) return;
@@ -221,12 +223,7 @@ function addItemToMeal(id) {
   els.libModal.classList.remove('open');
 }
 
-// دالة إضافة الصنف المختار لجدول الوجبة الحالي
-function addItemToMeal(id) {
-  const food = state.globalFoods.find(f => f.id === id); if(!food) return;
-  state.mealItems.push({ uid: Date.now().toString(), ...food, mealQty: 1, selectedUnitIndex: 0, availableUnits: food.units?.length ? food.units : [{label: '100 جرام', grams: 100}] });
-  state.manualCarbDirty = false; els.searchBox.value = ''; renderLibrary(); renderMealTable(); updateMealTotals();
-}
+
 
 // رسم جدول مكونات الوجبة وتحديثه عند المسح أو تغيير الكميات
 function renderMealTable() {
@@ -351,8 +348,6 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
 // دالة تصفير "التعديل اليدوي" لتعود الحاسبة للعمل بشكل آلي عند تغيير أي معطيات
 const resetManualDose = () => { state.manualDoseDirty = false; calculateBolus(); };
 
-// تصفير إشارة "التعديل اليدوي" للجرعة لتعود الحاسبة للعمل بشكل آلي
-const resetManualDose = () => { state.manualDoseDirty = false; calculateBolus(); };
 
 // ========================================================
 // 7. دوال جلب السجلات القديمة واسترداد البيانات (Data Retrieval)
@@ -540,7 +535,8 @@ function setupEvents() {
   els.dailyCarbTarget.oninput = () => updateDietProgress(state.currentMealCarbs, state.currentMealCalories);
   els.dailyCalorieTarget.oninput = () => updateDietProgress(state.currentMealCarbs, state.currentMealCalories);
   
-  els.btnOpenLibrary.onclick = () => els.libModal.classList.add('open');
+ els.btnOpenLibrary.onclick = () => { state.isRescueMode = false; els.libModal.classList.add('open'); };
+  els.btnRescueLib.onclick = () => { state.isRescueMode = true; els.libModal.classList.add('open'); };
   els.libClose.onclick = () => els.libModal.classList.remove('open');
   els.libOverlay.onclick = () => els.libModal.classList.remove('open');
   els.searchBox.oninput = renderLibrary;
