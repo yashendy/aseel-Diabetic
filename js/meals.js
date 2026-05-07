@@ -23,11 +23,10 @@ let state = {
   date: todayStr(), time: currentTimeStr(), slot: "PRE_BREAKFAST",
   CF: 50, Target: 100, CRs: { breakfast: 10, lunch: 10, dinner: 10, snack: 15 },
   rule: "fullFiber", globalFoods: [], mealItems: [], IOB: 0, finalDoseVal: 0,
-  manualCarbDirty: false, manualDoseDirty: false, eatenToday: 0, caloriesEatenToday: 0,
-  currentMealCarbs: 0, currentMealCalories: 0, currentBgUnit: "mg/dL"
+  manualCarbDirty: false, manualDoseDirty: false, isRescueMode: false,
+  eatenToday: 0, caloriesEatenToday: 0, currentMealCarbs: 0, currentMealCalories: 0, currentBgUnit: "mg/dL"
 };
 
-// كائن els: للوصول السريع لعناصر الـ HTML بدل كتابة getElementById كل مرة
 const els = {
   loader: $("loader"), chipCF: $("lblCF"), chipCR: $("lblCR"), chipTarget: $("lblTarget"),
   dateInput: $("dateInput"), timeInput: $("timeInput"), slotSelect: $("slotSelect"), 
@@ -36,6 +35,7 @@ const els = {
   netCarbRule: $("netCarbRule"), doseCorrection: $("doseCorrection"), doseCarbs: $("doseCarbs"),
   manualCarbs: $("manualCarbs"), iobValue: $("iobValue"), 
   smartAlerts: $("smartAlerts"), doseFinalInput: $("doseFinalInput"), doseDetailsStr: $("doseDetailsStr"), resultBox: $("resultBox"),
+  hypoRescueArea: $("hypoRescueArea"), hypoTreatment: $("hypoTreatment"), btnRescueLib: $("btnRescueLib"), mealNotes: $("mealNotes"),
   btnClearMeal: $("btnClearMeal"), btnSaveMeal: $("btnSaveMeal"), btnOpenLibrary: $("btnOpenLibrary"),
   mealBody: $("mealBody"), sumFiber: $("sumFiber"), sumProtein: $("sumProtein"), sumFat: $("sumFat"),
   sumCarbsNet: $("sumCarbsNet"), sumCalories: $("sumCalories"), avgGI: $("avgGI"),
@@ -165,9 +165,10 @@ async function fetchFoodLibrary() {
 
 // عرض نافذة البحث في المكتبة وتصفية النتائج
 function renderLibrary() {
+  if(!els.itemsGrid) return;
   const q = els.searchBox.value.toLowerCase();
   const list = state.globalFoods.filter(f => !q || (f.searchText || f.name).toLowerCase().includes(q));
-  if(!list.length) { els.itemsGrid.innerHTML = `<div style="text-align:center; padding:20px; color:#94a3b8;">لا توجد نتائج.</div>`; return; }
+  if(!list.length) { els.itemsGrid.innerHTML = `<div style="text-align:center; padding:20px; color:#94a3b8;">لا توجد نتائج مطابقة لبحثك.</div>`; return; }
 
   els.itemsGrid.innerHTML = list.map(f => {
     const giStr = f.per100?.gi ? `<span class="gi-badge ${f.per100.gi > 70 ? 'high' : ''}">GI: ${f.per100.gi}</span>` : '';
@@ -183,13 +184,41 @@ function renderLibrary() {
             <div class="m-box"><span class="m-val" style="color:#f59e0b">${f.per100?.cal_kcal||0}</span><span class="m-lbl">kcal</span></div>
           </div>
         </div>
-        <button class="btn primary sm add-btn">إضافة</button>
+        <button class="btn primary sm add-btn">${state.isRescueMode ? 'اختيار للرفع' : 'إضافة'}</button>
       </div>`;
   }).join('');
 
   document.querySelectorAll('.food-lib-item .add-btn').forEach(btn => {
-    btn.onclick = () => { addItemToMeal(btn.closest('.food-lib-item').dataset.id); els.libModal.classList.remove('open'); };
+    btn.onclick = () => { addItemToMeal(btn.closest('.food-lib-item').dataset.id); };
   });
+}
+
+function addItemToMeal(id) {
+  const food = state.globalFoods.find(f => f.id === id); 
+  if(!food) return;
+
+  // لو وضع معالجة الهبوط شغال، نحسب الكمية ونقفل المكتبة
+  if (state.isRescueMode) {
+    let carbsPer100 = food.per100?.carbs_g || 1;
+    if(carbsPer100 === 0) carbsPer100 = 1; // حماية من القسمة على صفر
+    let neededGrams = (15 / carbsPer100) * 100;
+    let roundedGrams = Math.round(neededGrams);
+    
+    if(els.hypoTreatment) {
+      els.hypoTreatment.value = `تم الرفع بـ ${roundedGrams} جرام/مل من ${food.name} 🧃`;
+    }
+    
+    els.libModal.classList.remove('open');
+    state.isRescueMode = false;
+    return;
+  }
+
+  // لو وضع الوجبة العادي
+  state.mealItems.push({ uid: Date.now().toString(), ...food, mealQty: 1, selectedUnitIndex: 0, availableUnits: food.units?.length ? food.units : [{label: '100 جرام', grams: 100}] });
+  state.manualCarbDirty = false; 
+  if(els.searchBox) els.searchBox.value = ''; 
+  renderLibrary(); renderMealTable(); updateMealTotals();
+  els.libModal.classList.remove('open');
 }
 
 // دالة إضافة الصنف المختار لجدول الوجبة الحالي
@@ -257,45 +286,40 @@ function updateMealTotals() {
 // ========================================================
 
 // تقوم بدمج السكر، الكارب، IOB، ومعاملات الطفل لإنتاج الجرعة النهائية والتنبيهات
+// --- العقل المدبر لحساب الجرعات (Smart Bolus Engine) ---
 function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
-  const bg = parseFloat(els.preBg.value);
-  const carbs = parseFloat(els.manualCarbs.value) || 0;
-  const iob = parseFloat(els.iobValue.value) || 0;
-  const unit = els.preBgUnit.value;
+  if (state.manualDoseDirty) return; // منع التحديث التلقائي لو الأم بتكتب الجرعة بإيدها
+
+  const bg = parseFloat(els.preBg?.value) || 0;
+  const carbs = parseFloat(els.manualCarbs?.value) || 0;
+  const iob = parseFloat(els.iobValue?.value) || 0;
+  const unit = els.preBgUnit?.value || "mg/dL";
   
   let currentCR = state.CRs.snack || 15;
   if(state.slot.includes('BREAKFAST')) currentCR = state.CRs.breakfast || 10;
   if(state.slot.includes('LUNCH')) currentCR = state.CRs.lunch || 10;
   if(state.slot.includes('DINNER')) currentCR = state.CRs.dinner || 10;
 
-  // توحيد قراءة السكر قبل الحساب
   const childUnit = state.child?.glucoseUnit || 'mg/dL';
   let bgInChildUnit = bg;
   if (bg > 0 && unit !== childUnit) bgInChildUnit = (childUnit === 'mmol/L') ? mgdl2mmol(bg) : mmol2mgdl(bg);
 
-  // تعديل السكر بناءً على سهم اتجاه الحساس
   let effectiveBg = bgInChildUnit;
-  if(bg && els.measureSource.value === 'cgm') {
+  if(bg && els.measureSource?.value === 'cgm' && els.trendArrow) {
     const trend = Number(els.trendArrow.value);
     effectiveBg += (childUnit === 'mmol/L' ? trend/18.0 : trend);
   }
 
-  // حساب جرعة التصحيح وجرعة الكارب
-  let corr = 0;
-  let carbDose = currentCR > 0 ? (carbs / currentCR) : 0;
-  let netDose = 0;
-  let isHypo = false;
-  let isNegativeCorr = false;
+  let corr = 0, carbDose = currentCR > 0 ? (carbs / currentCR) : 0, netDose = 0;
+  let isHypo = false, isNegativeCorr = false;
+  const lowLimit = childUnit === 'mmol/L' ? 3.9 : 70;
 
-  const lowLimit = state.child?.glucose_limits?.low || (childUnit === 'mmol/L' ? 3.9 : 70);
-
-  // تطبيق بروتوكول الهبوط أو التصحيح السلبي (الخصم)
   if (effectiveBg > 0) {
     if (effectiveBg < lowLimit) {
-      isHypo = true; corr = 0; netDose = 0; // حماية الهبوط (تصفير الجرعة)
+      isHypo = true; corr = 0; netDose = 0; // حماية الهبوط: تصفير الجرعة تماماً
     } else {
       if (state.CF > 0) corr = (effectiveBg - state.Target) / state.CF;
-      if (corr < 0) isNegativeCorr = true; // تصحيح عكسي (الخصم)
+      if (corr < 0) isNegativeCorr = true; // تفعيل الخصم لو السكر أقل من الهدف
       netDose = Math.max(0, (corr + carbDose) - iob);
     }
   } else {
@@ -303,38 +327,29 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   }
 
   state.finalDoseVal = isHypo ? 0 : Math.round(netDose*2)/2; 
-  if(els.doseCarbs) els.doseCarbs.value = carbDose.toFixed(1);
-  if(els.doseCorrection) els.doseCorrection.value = corr.toFixed(1);
+  if(els.doseCarbs) els.doseCarbs.value = fmt(carbDose);
+  if(els.doseCorrection) els.doseCorrection.value = fmt(corr);
 
-  // تحديث حقل الإدخال إذا لم تقم الأم بتعديله يدوياً
-  if(els.doseFinalInput && !state.manualDoseDirty) els.doseFinalInput.value = state.finalDoseVal.toFixed(1);
-  if(state.manualDoseDirty) state.finalDoseVal = parseFloat(els.doseFinalInput.value) || 0;
-
-  els.doseDetailsStr.textContent = `كارب: ${carbDose.toFixed(1)} | تصحيح: ${corr.toFixed(1)} | خصم نشط: -${iob.toFixed(1)}`;
-  els.resultBox.className = (state.finalDoseVal > 0 && effectiveBg >= state.Target) ? 'result-box safe' : 'result-box';
-
-  els.smartAlerts.style.display = 'none';
-  let alerts = "";
-
-  // إطلاق التنبيهات بناءً على النتائج ومكونات الأكل
-  if (isHypo) {
-    els.resultBox.className = 'result-box';
-    alerts += `<div style="background:#fee2e2; border:1px solid #fca5a5; padding:12px; border-radius:8px; margin-bottom:10px;">
-                <strong style="color:#b91c1c; font-size:16px;">🚨 تنبيه هبوط (قاعدة الـ 15):</strong>
-                <p style="margin:4px 0 0 0; color:#7f1d1d;">الطفل في حالة هبوط! تم تصفير الجرعة مؤقتاً. يُرجى إعطاء <b>15 جرام كارب سريع</b> (نصف كوب عصير)، والانتظار 15 دقيقة ثم إعادة القياس قبل إعطاء الأنسولين للوجبة.</p>
-               </div>`;
-  } 
-  else if (isNegativeCorr) {
-    alerts += `<strong>💡 تصحيح عكسي:</strong> السكر أقل من الهدف (${state.Target})، تم خصم (${Math.abs(corr).toFixed(1)} U) من جرعة الطعام للسماح للسكر بالارتفاع بأمان.<br>`;
+  if(els.doseFinalInput) {
+    els.doseFinalInput.value = fmt(state.finalDoseVal);
+    // تلوين الحقل حسب الأمان
+    els.doseFinalInput.parentElement.parentElement.className = (state.finalDoseVal > 0 && effectiveBg >= state.Target && !isHypo) ? 'result-box safe' : 'result-box';
   }
 
-  if (els.measureSource.value === 'cgm' && Number(els.trendArrow.value) < 0 && !isHypo) alerts += `<strong>⬇️ سهم هبوط:</strong> الذكاء الاصطناعي خفض الجرعة لمنع الهبوط المتوقع.<br>`;
-  if (fat > 30 || pro > 40) alerts += `<strong>🍕 تأثير البيتزا (وجبة دسمة):</strong> قد تحتاج لتقسيم الجرعة (Split Bolus) لتجنب الارتفاع المتأخر.<br>`;
-  if (avgGI >= 70 && !isHypo) alerts += `<strong>📈 مؤشر جلايسيمي مرتفع:</strong> يُفضل حقن الأنسولين قبل الأكل بـ 15 دقيقة.<br>`;
-  if (fiber >= 10 && avgGI < 70) alerts += `<strong>🌾 وجبة ممتازة:</strong> الألياف ستساعد في استقرار السكر.<br>`;
-  
-  if(alerts) { els.smartAlerts.innerHTML = alerts; els.smartAlerts.style.display = 'block'; }
+  if(els.hypoRescueArea) els.hypoRescueArea.style.display = isHypo ? 'block' : 'none';
+
+  if(els.smartAlerts) {
+    els.smartAlerts.style.display = 'none'; let alerts = "";
+    if (isNegativeCorr) alerts += `<strong>💡 تصحيح عكسي:</strong> السكر أقل من الهدف، تم خصم (${Math.abs(corr).toFixed(1)} U) من الأكل للسماح للسكر بالارتفاع بأمان.<br>`;
+    if (els.measureSource?.value === 'cgm' && Number(els.trendArrow?.value) < 0 && !isHypo) alerts += `<strong>⬇️ سهم هبوط:</strong> تم خفض الجرعة لمنع الهبوط المتوقع.<br>`;
+    if (fat > 30 || pro > 40) alerts += `<strong>🍕 وجبة دسمة:</strong> قد تحتاجين لتقسيم الجرعة لتجنب الارتفاع المتأخر.<br>`;
+    if (avgGI >= 70 && !isHypo) alerts += `<strong>📈 مؤشر جلايسيمي مرتفع:</strong> يُفضل حقن الأنسولين قبل الأكل.<br>`;
+    if (alerts) { els.smartAlerts.innerHTML = alerts; els.smartAlerts.style.display = 'block'; }
+  }
 }
+
+// دالة تصفير "التعديل اليدوي" لتعود الحاسبة للعمل بشكل آلي عند تغيير أي معطيات
+const resetManualDose = () => { state.manualDoseDirty = false; calculateBolus(); };
 
 // تصفير إشارة "التعديل اليدوي" للجرعة لتعود الحاسبة للعمل بشكل آلي
 const resetManualDose = () => { state.manualDoseDirty = false; calculateBolus(); };
@@ -371,17 +386,28 @@ async function autoFetchPreMeasurement() {
         state.manualDoseDirty = true;
       }
 
+      // استرداد الملاحظات وعلاج الهبوط
+      if(els.hypoTreatment) els.hypoTreatment.value = found.hypoTreatment || "";
+      if(els.mealNotes) els.mealNotes.value = found.notes || "";
+
       calculateBolus(); 
       els.btnFetchPre.textContent = "✅ تم الجلب";
       setTimeout(() => els.btnFetchPre.textContent = "🔄 جلب", 2000);
     } else {
-      els.preBg.value = ""; els.manualCarbs.value = ""; resetManualDose();
+      els.preBg.value = ""; els.manualCarbs.value = ""; 
+      if(els.hypoTreatment) els.hypoTreatment.value = ""; 
+      if(els.mealNotes) els.mealNotes.value = "";
+      resetManualDose();
       els.btnFetchPre.textContent = "❌ جديد";
       setTimeout(() => els.btnFetchPre.textContent = "🔄 جلب", 2000);
       calculateBolus();
     }
   } catch(e) { console.error(e); els.btnFetchPre.textContent = "🔄 جلب"; }
 }
+
+els.btnFetchPre.onclick = autoFetchPreMeasurement;
+
+els.btnFetchPre.onclick = autoFetchPreMeasurement;
 
 els.btnFetchPre.onclick = autoFetchPreMeasurement;
 
@@ -447,34 +473,35 @@ els.btnSaveMeal.onclick = async () => {
     const [yyyy, mm, dd] = state.date.split('-'); const [hh, min] = state.time.split(':');
     const timeObj = new Date(yyyy, mm - 1, dd, hh, min);
     
-    // حفظ أهداف الدايت لو تم التعديل عليها
     let updates = {};
     const tCarb = Number(els.dailyCarbTarget.value); const tCal = Number(els.dailyCalorieTarget.value);
     if(tCarb > 0 && tCarb !== state.child.dietGoal) updates.dietGoal = tCarb;
     if(tCal > 0 && tCal !== state.child.calorieGoal) updates.calorieGoal = tCal;
     if(Object.keys(updates).length > 0) await setDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`), updates, { merge: true });
 
-    // البحث لمنع التكرار (استبدال الوجبة القديمة بنفس التوقيت إن وجدت)
     const measColl = collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`);
     const snap = await getDocs(query(measColl, where("date", "==", state.date)));
+    
     let targetDocId = null; let targetPayload = null;
     snap.forEach(doc => { const d = doc.data(); if(d.slotKey === state.slot) { targetDocId = doc.id; targetPayload = d; } });
 
     const totalDose = parseFloat(els.doseFinalInput.value) || 0;
 
-    // تجهيز حزمة البيانات للإرسال (Payload)
+    // تجهيز حزمة البيانات الجديدة للإرسال
     let payload = {
       date: state.date, time: `${hh}:${min}`, when: timeObj, slotKey: state.slot, 
       carbs: carbs, calories: state.currentMealCalories, 
       carbDose: parseFloat(els.doseCarbs?.value) || (state.CRs[state.slot]? carbs/state.CRs[state.slot] : 0),
       correctionDose: parseFloat(els.doseCorrection?.value) || 0,
-      totalDose: totalDose, createdAt: serverTimestamp()
+      totalDose: totalDose,
+      hypoTreatment: els.hypoTreatment?.value || "",
+      notes: els.mealNotes?.value || "",
+      createdAt: serverTimestamp()
     };
 
     if(state.mealItems.length > 0) payload.mealItemsRef = state.mealItems.map(m=>({name:m.name, qty:m.mealQty, netCarb:m.carbs_g}));
     if (!isNaN(bg)) { payload.value = bg; payload.unit = els.preBgUnit.value; payload.measureMethod = els.measureSource.value === 'cgm' ? 'sensor' : 'blood'; }
 
-    // الاستبدال أم الإضافة
     if (targetDocId) await setDoc(doc(measColl, targetDocId), payload, { merge: true });
     else await addDoc(measColl, payload);
 
