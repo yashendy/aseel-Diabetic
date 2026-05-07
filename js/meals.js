@@ -222,4 +222,238 @@ function calculateBolus(fat = 0, pro = 0, avgGI = 0, fiber = 0) {
   
   let currentCR = state.CRs.snack || 15;
   if(state.slot.includes('BREAKFAST')) currentCR = state.CRs.breakfast || 10;
-  if(state.slot
+  if(state.slot.includes('LUNCH')) currentCR = state.CRs.lunch || 10;
+  if(state.slot.includes('DINNER')) currentCR = state.CRs.dinner || 10;
+
+  const childUnit = state.child?.glucoseUnit || 'mg/dL';
+  let bgInChildUnit = bg;
+  if (bg > 0 && unit !== childUnit) bgInChildUnit = (childUnit === 'mmol/L') ? mgdl2mmol(bg) : mmol2mgdl(bg);
+
+  let effectiveBg = bgInChildUnit;
+  if(bg && els.measureSource.value === 'cgm') {
+    const trend = Number(els.trendArrow.value);
+    effectiveBg += (childUnit === 'mmol/L' ? trend/18.0 : trend);
+  }
+
+  let corr = 0;
+  let carbDose = currentCR > 0 ? (carbs / currentCR) : 0;
+  let netDose = 0;
+  let isHypo = false;
+  let isNegativeCorr = false;
+
+  const lowLimit = state.child?.glucose_limits?.low || (childUnit === 'mmol/L' ? 3.9 : 70);
+
+  if (effectiveBg > 0) {
+    if (effectiveBg < lowLimit) {
+      isHypo = true; corr = 0; netDose = 0; // حماية الهبوط (تصفير الجرعة)
+    } else {
+      if (state.CF > 0) corr = (effectiveBg - state.Target) / state.CF;
+      if (corr < 0) isNegativeCorr = true; // تصحيح عكسي (الخصم)
+      netDose = Math.max(0, (corr + carbDose) - iob);
+    }
+  } else {
+    netDose = Math.max(0, carbDose - iob);
+  }
+
+  state.finalDoseVal = isHypo ? 0 : Math.round(netDose*2)/2; 
+  if(els.doseCarbs) els.doseCarbs.value = carbDose.toFixed(1);
+  if(els.doseCorrection) els.doseCorrection.value = corr.toFixed(1);
+
+  // تحديث حقل الإدخال إذا لم تقم الأم بتعديله يدوياً
+  if(els.doseFinalInput && !state.manualDoseDirty) els.doseFinalInput.value = state.finalDoseVal.toFixed(1);
+  if(state.manualDoseDirty) state.finalDoseVal = parseFloat(els.doseFinalInput.value) || 0;
+
+  els.doseDetailsStr.textContent = `كارب: ${carbDose.toFixed(1)} | تصحيح: ${corr.toFixed(1)} | خصم نشط: -${iob.toFixed(1)}`;
+  els.resultBox.className = (state.finalDoseVal > 0 && effectiveBg >= state.Target) ? 'result-box safe' : 'result-box';
+
+  els.smartAlerts.style.display = 'none';
+  let alerts = "";
+
+  // 1. إنذار الهبوط الصريح (قاعدة الـ 15)
+  if (isHypo) {
+    els.resultBox.className = 'result-box';
+    alerts += `<div style="background:#fee2e2; border:1px solid #fca5a5; padding:12px; border-radius:8px; margin-bottom:10px;">
+                <strong style="color:#b91c1c; font-size:16px;">🚨 تنبيه هبوط (قاعدة الـ 15):</strong>
+                <p style="margin:4px 0 0 0; color:#7f1d1d;">الطفل في حالة هبوط! تم تصفير الجرعة مؤقتاً. يُرجى إعطاء <b>15 جرام كارب سريع</b> (نصف كوب عصير)، والانتظار 15 دقيقة ثم إعادة القياس قبل إعطاء الأنسولين للوجبة.</p>
+               </div>`;
+  } 
+  // 2. إنذار التصحيح العكسي الآمن
+  else if (isNegativeCorr) {
+    alerts += `<strong>💡 تصحيح عكسي:</strong> السكر أقل من الهدف (${state.Target})، تم خصم (${Math.abs(corr).toFixed(1)} U) من جرعة الطعام للسماح للسكر بالارتفاع بأمان.<br>`;
+  }
+
+  if (els.measureSource.value === 'cgm' && Number(els.trendArrow.value) < 0 && !isHypo) alerts += `<strong>⬇️ سهم هبوط:</strong> الذكاء الاصطناعي خفض الجرعة لمنع الهبوط المتوقع.<br>`;
+  if (fat > 30 || pro > 40) alerts += `<strong>🍕 تأثير البيتزا (وجبة دسمة):</strong> قد تحتاج لتقسيم الجرعة (Split Bolus) لتجنب الارتفاع المتأخر.<br>`;
+  if (avgGI >= 70 && !isHypo) alerts += `<strong>📈 مؤشر جلايسيمي مرتفع:</strong> يُفضل حقن الأنسولين قبل الأكل بـ 15 دقيقة.<br>`;
+  if (fiber >= 10 && avgGI < 70) alerts += `<strong>🌾 وجبة ممتازة:</strong> الألياف ستساعد في استقرار السكر.<br>`;
+  
+  if(alerts) { els.smartAlerts.innerHTML = alerts; els.smartAlerts.style.display = 'block'; }
+}
+
+const resetManualDose = () => { state.manualDoseDirty = false; calculateBolus(); };
+
+async function autoFetchPreMeasurement() {
+  els.btnFetchPre.textContent = "⏳...";
+  try {
+    const qy = query(collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`), where('date', '==', state.date));
+    const snap = await getDocs(qy);
+    let found = null;
+    snap.forEach(doc => {
+      const d = doc.data();
+      if(d.slotKey === state.slot) { if(!found || d.when.seconds > found.when.seconds) found = d; }
+    });
+    
+    if(found) {
+      els.preBg.value = found.value || ""; 
+      if(found.unit) { els.preBgUnit.value = found.unit; state.currentBgUnit = found.unit; }
+      els.measureSource.value = found.measureMethod === 'sensor' ? 'cgm' : 'bgm';
+      els.measureSource.dispatchEvent(new Event('change'));
+      
+      if (found.carbs) { els.manualCarbs.value = found.carbs; state.manualCarbDirty = true; } 
+      else { els.manualCarbs.value = ""; }
+
+      // استرداد الجرعة الكلية المعدلة إن وجدت
+      if (found.totalDose !== undefined) {
+        els.doseFinalInput.value = found.totalDose;
+        state.finalDoseVal = found.totalDose;
+        state.manualDoseDirty = true;
+      }
+
+      calculateBolus(); 
+      els.btnFetchPre.textContent = "✅ تم الجلب";
+      setTimeout(() => els.btnFetchPre.textContent = "🔄 جلب", 2000);
+    } else {
+      els.preBg.value = ""; els.manualCarbs.value = ""; resetManualDose();
+      els.btnFetchPre.textContent = "❌ جديد";
+      setTimeout(() => els.btnFetchPre.textContent = "🔄 جلب", 2000);
+      calculateBolus();
+    }
+  } catch(e) { console.error(e); els.btnFetchPre.textContent = "🔄 جلب"; }
+}
+
+els.btnFetchPre.onclick = autoFetchPreMeasurement;
+
+async function loadTodayMeals() {
+  const qy = query(collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`), where('date', '==', state.date));
+  const snap = await getDocs(qy);
+  state.eatenToday = 0; state.caloriesEatenToday = 0;
+  
+  const validDocs = snap.docs.map(d=>({id: d.id, ...d.data()})).filter(m => m.carbs > 0 || m.totalDose > 0);
+
+  if(validDocs.length === 0) { 
+    els.dailyMealsBody.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center;">لا توجد وجبات أو قياسات مسجلة في هذا اليوم</td></tr>`; 
+  } else {
+    validDocs.sort((a,b) => a.when.seconds - b.when.seconds);
+    let html = '';
+    validDocs.forEach(m => {
+      state.eatenToday += Number(m.carbs||0); state.caloriesEatenToday += Number(m.calories||0);
+      html += `
+        <tr>
+          <td>${getSlotLabel(m.slotKey)}</td>
+          <td>${m.carbs||0}g</td>
+          <td>${m.calories||0} kcal</td>
+          <td>${m.carbDose||0}U</td>
+          <td>${m.correctionDose||0}U</td>
+          <td><strong style="color:var(--primary)">${m.totalDose||m.totalInsulin||0}U</strong></td>
+          <td>
+            <button class="btn ghost sm" style="padding:4px; font-size:12px;" onclick="editMeal('${m.slotKey}')">✏️ تعديل</button>
+            <button class="btn danger sm" style="padding:4px; font-size:12px;" onclick="deleteMeal('${m.id}')">🗑️</button>
+          </td>
+        </tr>`;
+    });
+    els.dailyMealsBody.innerHTML = html;
+  }
+  updateDietProgress();
+}
+
+window.deleteMeal = async (docId) => {
+  if (!confirm("هل أنت متأكد من حذف هذه الوجبة نهائياً؟")) return;
+  try { showLoader(true); await deleteDoc(doc(db, `parents/${state.parentId}/children/${state.childId}/measurements`, docId)); alert("تم مسح الوجبة بنجاح 🗑️"); await loadTodayMeals(); autoFetchPreMeasurement(); } 
+  catch (error) { console.error(error); alert("حدث خطأ أثناء مسح الوجبة."); } finally { showLoader(false); }
+};
+
+window.editMeal = (slotKey) => { els.slotSelect.value = slotKey; els.slotSelect.dispatchEvent(new Event('change')); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+els.btnSaveMeal.onclick = async () => {
+  const carbs = parseFloat(els.manualCarbs.value) || 0;
+  const bg = parseFloat(els.preBg.value);
+  if(!carbs && isNaN(bg)) { alert("أدخل الكارب أو قراءة السكر للحفظ."); return; }
+  
+  els.btnSaveMeal.disabled = true; els.btnSaveMeal.textContent = "جاري الحفظ...";
+  try {
+    const [yyyy, mm, dd] = state.date.split('-'); const [hh, min] = state.time.split(':');
+    const timeObj = new Date(yyyy, mm - 1, dd, hh, min);
+    
+    let updates = {};
+    const tCarb = Number(els.dailyCarbTarget.value); const tCal = Number(els.dailyCalorieTarget.value);
+    if(tCarb > 0 && tCarb !== state.child.dietGoal) updates.dietGoal = tCarb;
+    if(tCal > 0 && tCal !== state.child.calorieGoal) updates.calorieGoal = tCal;
+    if(Object.keys(updates).length > 0) await setDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`), updates, { merge: true });
+
+    const measColl = collection(db, `parents/${state.parentId}/children/${state.childId}/measurements`);
+    const snap = await getDocs(query(measColl, where("date", "==", state.date)));
+    
+    let targetDocId = null; let targetPayload = null;
+    snap.forEach(doc => { const d = doc.data(); if(d.slotKey === state.slot) { targetDocId = doc.id; targetPayload = d; } });
+
+    // تسجيل الجرعة النهائية من الخانة القابلة للتعديل
+    const totalDose = parseFloat(els.doseFinalInput.value) || 0;
+
+    let payload = {
+      date: state.date, time: `${hh}:${min}`, when: timeObj, slotKey: state.slot, 
+      carbs: carbs, calories: state.currentMealCalories, 
+      carbDose: parseFloat(els.doseCarbs?.value) || (state.CRs[state.slot]? carbs/state.CRs[state.slot] : 0),
+      correctionDose: parseFloat(els.doseCorrection?.value) || 0,
+      totalDose: totalDose, createdAt: serverTimestamp()
+    };
+
+    if(state.mealItems.length > 0) payload.mealItemsRef = state.mealItems.map(m=>({name:m.name, qty:m.mealQty, netCarb:m.carbs_g}));
+    if (!isNaN(bg)) { payload.value = bg; payload.unit = els.preBgUnit.value; payload.measureMethod = els.measureSource.value === 'cgm' ? 'sensor' : 'blood'; }
+
+    if (targetDocId) await setDoc(doc(measColl, targetDocId), payload, { merge: true });
+    else await addDoc(measColl, payload);
+
+    alert("تم حفظ واعتماد الجرعة بنجاح! ✅"); loadTodayMeals(); 
+  } catch(e) { console.error(e); alert("خطأ في الحفظ"); } 
+  finally { els.btnSaveMeal.disabled = false; els.btnSaveMeal.textContent = "💾 اعتماد الجرعة وحفظ الوجبة"; }
+};
+
+function setupEvents() {
+  $('logoutBtn').onclick = () => signOut(auth);
+  
+  els.dateInput.onchange = () => { state.date = els.dateInput.value; els.todayDateLabel.textContent = state.date; loadTodayMeals(); autoFetchPreMeasurement(); };
+  els.timeInput.onchange = () => { state.time = els.timeInput.value; };
+  els.slotSelect.onchange = () => { state.slot = els.slotSelect.value; updateFactorsDisplay(); autoFetchPreMeasurement(); };
+  
+  els.preBgUnit.onchange = () => {
+    const newUnit = els.preBgUnit.value; const bgVal = parseFloat(els.preBg.value);
+    if (!isNaN(bgVal) && state.currentBgUnit !== newUnit) {
+      if (newUnit === 'mmol/L' && state.currentBgUnit === 'mg/dL') els.preBg.value = (bgVal / 18.0182).toFixed(1);
+      else if (newUnit === 'mg/dL' && state.currentBgUnit === 'mmol/L') els.preBg.value = Math.round(bgVal * 18.0182);
+    }
+    state.currentBgUnit = newUnit; calculateBolus();
+  };
+
+  els.netCarbRule.onchange = () => { state.rule = els.netCarbRule.value; renderMealTable(); updateMealTotals(); };
+  
+  els.preBg.oninput = resetManualDose; 
+  els.iobValue.oninput = resetManualDose;
+  els.trendArrow.onchange = resetManualDose;
+  els.manualCarbs.oninput = () => { state.manualCarbDirty = true; resetManualDose(); };
+  els.measureSource.onchange = () => { els.trendContainer.classList.toggle('hidden', els.measureSource.value !== 'cgm'); resetManualDose(); };
+  
+  els.doseFinalInput.oninput = () => { state.manualDoseDirty = true; state.finalDoseVal = parseFloat(els.doseFinalInput.value) || 0; };
+  
+  els.dailyCarbTarget.oninput = () => updateDietProgress(state.currentMealCarbs, state.currentMealCalories);
+  els.dailyCalorieTarget.oninput = () => updateDietProgress(state.currentMealCarbs, state.currentMealCalories);
+  
+  els.btnOpenLibrary.onclick = () => els.libModal.classList.add('open');
+  els.libClose.onclick = () => els.libModal.classList.remove('open');
+  els.libOverlay.onclick = () => els.libModal.classList.remove('open');
+  els.searchBox.oninput = renderLibrary;
+  els.btnClearMeal.onclick = () => { 
+    state.mealItems=[]; state.manualCarbDirty=false; resetManualDose();
+    state.currentMealCarbs=0; state.currentMealCalories=0; 
+    renderMealTable(); updateMealTotals(); els.manualCarbs.value=''; 
+  };
+}
