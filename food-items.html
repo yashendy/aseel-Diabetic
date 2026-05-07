@@ -8,6 +8,15 @@
   <!-- استدعاء ملف التنسيق الخاص بالصفحة -->
   <link rel="stylesheet" href="./css/food-items.css" />
   <link rel="icon" href="favicon.ico" />
+  <link rel="stylesheet" href="./css/food-items.css" />
+  <link rel="icon" href="favicon.ico" />
+  
+  <style>
+    /* تنسيق زرار الهبوط عشان لونه يتغير لما نختاره */
+    .hypo-tag { border-color: #fca5a5; background: #fef2f2; color: #991b1b; font-weight: bold; transition: 0.2s; }
+    .hypo-tag.active { background: #dc2626 !important; color: #fff !important; border-color: #991b1b !important; }
+  </style>
+
 </head>
 <body>
 
@@ -144,6 +153,11 @@
               <p class="hint">حددي الموانع ليقوم النظام بتحذير المرضى عند حساب الوجبات.</p>
 
               <strong style="display:block; margin-bottom:6px; font-size:13px; color:#b91c1c;">🚨 الطوارئ وعلاج الهبوط:</strong>
+              <div class="chips mb-10">
+                <button class="tag-btn hypo-tag" type="button" data-tag="#علاج_هبوط">🧃 مخصص لرفع الهبوط السريع</button>
+              </div>
+              
+              <strong style="display:block; margin-bottom:6px; font-size:13px; color:#dc2626;">🚫 خالي من (مسببات الحساسية):</strong>
               <div class="chips mb-10">
                 <button class="tag-btn" type="button" data-tag="#علاج_هبوط" style="border-color: #fca5a5; background: #fef2f2; color: #991b1b; font-weight: bold;">🧃 مخصص لرفع الهبوط السريع</button>
               </div>
