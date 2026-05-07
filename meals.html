@@ -1,187 +1,223 @@
-// js/meals.js
-import { auth, db } from './firebase-config.js';
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { collection, doc, getDoc, setDoc, addDoc, getDocs, query, where, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>حاسبة الوجبات ومطبخ أسيل</title>
+  <link rel="stylesheet" href="css/meals.css?v=2026.03.02">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    /* تحسينات لخانة الجرعة النهائية لتبدو كالنص ولكن قابلة للتعديل */
+    .final-dose-input {
+      font-size: 42px; font-weight: 900; color: var(--danger);
+      width: 140px; text-align: center; background: transparent;
+      border: none; border-bottom: 3px dashed #fca5a5; outline: none;
+      font-family: inherit; transition: 0.3s;
+    }
+    .final-dose-input:focus { border-bottom-color: var(--danger); }
+    .result-box.safe .final-dose-input { color: var(--ok); border-bottom-color: #86efac; }
+    .result-box.safe .final-dose-input:focus { border-bottom-color: var(--ok); }
+  </style>
+</head>
+<body>
 
-const $ = id => document.getElementById(id);
-const fmt = (n,d=1)=>Number.isFinite(n)?(+n).toFixed(d):"—";
-const todayStr = ()=> new Date().toISOString().slice(0,10);
-const currentTimeStr = ()=> new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-const mgdl2mmol = mg => mg/18.0182;
-const mmol2mgdl = mmol => mmol*18.0182;
-const SAFE_PLACEHOLDER = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%22100%22%20style%3D%22background%3A%23f1f5f9%22%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%2394a3b8%22%20font-size%3D%2220%22%3E%F0%9F%8D%BD%EF%B8%8F%3C%2Ftext%3E%3C%2Fsvg%3E';
+  <header class="main-topbar no-print">
+    <div class="topbar-right">
+      <div class="top-avatar" id="topAvatar">أ</div>
+      <div class="top-info">
+        <h3 id="topChildName">جاري التحميل...</h3>
+        <span id="topChildMeta" class="muted tiny">—</span>
+      </div>
+    </div>
+    <nav class="topbar-nav">
+      <a href="child.html" class="nav-pill" id="navHome">🏠 الرئيسية</a>
+      <a href="measurements.html" class="nav-pill" id="navMeas">📊 القياسات</a>
+      <a href="#" class="nav-pill active">🍽️ الوجبات</a>
+      <a href="reports.html" class="nav-pill" id="navReports">📈 التقارير</a>
+    </nav>
+    <div class="topbar-left">
+      <button id="logoutBtn" class="btn-logout-outline">↪ خروج</button>
+    </div>
+  </header>
 
-let state = {
-  childId: null, parentId: null, child: null, 
-  date: todayStr(), time: currentTimeStr(), slot: "PRE_BREAKFAST",
-  CF: 50, Target: 100, CRs: { breakfast: 10, lunch: 10, dinner: 10, snack: 15 },
-  rule: "fullFiber", globalFoods: [], mealItems: [], IOB: 0, finalDoseVal: 0,
-  manualCarbDirty: false, manualDoseDirty: false, eatenToday: 0, caloriesEatenToday: 0,
-  currentMealCarbs: 0, currentMealCalories: 0, currentBgUnit: "mg/dL"
-};
+  <div class="breadcrumbs no-print">
+    <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>حاسبة ومطبخ أسيل 🍽️</b>
+  </div>
 
-const els = {
-  loader: $("loader"), chipCF: $("lblCF"), chipCR: $("lblCR"), chipTarget: $("lblTarget"),
-  dateInput: $("dateInput"), timeInput: $("timeInput"), slotSelect: $("slotSelect"), 
-  preBg: $("preBg"), preBgUnit: $("preBgUnit"), btnFetchPre: $("btnFetchPre"), 
-  measureSource: $("measureSource"), trendContainer: $("trendContainer"), trendArrow: $("trendArrow"),
-  netCarbRule: $("netCarbRule"), doseCorrection: $("doseCorrection"), doseCarbs: $("doseCarbs"),
-  manualCarbs: $("manualCarbs"), iobValue: $("iobValue"), 
-  smartAlerts: $("smartAlerts"), doseFinalInput: $("doseFinalInput"), doseDetailsStr: $("doseDetailsStr"), resultBox: $("resultBox"),
-  btnClearMeal: $("btnClearMeal"), btnSaveMeal: $("btnSaveMeal"), btnOpenLibrary: $("btnOpenLibrary"),
-  mealBody: $("mealBody"), sumFiber: $("sumFiber"), sumProtein: $("sumProtein"), sumFat: $("sumFat"),
-  sumCarbsNet: $("sumCarbsNet"), sumCalories: $("sumCalories"), avgGI: $("avgGI"),
-  libModal: $("libModal"), libOverlay: $("libOverlay"), libClose: $("libClose"),
-  searchBox: $("searchBox"), itemsGrid: $("itemsGrid"), loadingLibrary: $("loadingLibrary"),
-  dailyCarbTarget: $("dailyCarbTarget"), carbProgressBar: $("carbProgressBar"), carbProgressText: $("carbProgressText"),
-  dailyCalorieTarget: $("dailyCalorieTarget"), calProgressBar: $("calProgressBar"), calProgressText: $("calProgressText"),
-  todayDateLabel: $("todayDateLabel"), dailyMealsBody: $("dailyMealsBody")
-};
+  <div class="container">
+    
+    <div class="diet-tracker">
+      <div class="diet-header"><div class="diet-title">مؤشرات الاستهلاك اليومي 🥗</div></div>
+      <div class="tracker-row">
+        <div class="tracker-info"><span>الكارب (g)</span><input type="number" id="dailyCarbTarget" class="tracker-input" placeholder="الحد الأقصى"></div>
+        <div class="progress-bg"><div class="progress-fill carb-fill" id="carbProgressBar"></div></div>
+        <div class="diet-status" id="carbProgressText">إجمالي المستهلك اليوم: 0 جرام</div>
+      </div>
+      <div class="tracker-row mt-10">
+        <div class="tracker-info"><span>السعرات (kcal)</span><input type="number" id="dailyCalorieTarget" class="tracker-input" placeholder="الحد الأقصى"></div>
+        <div class="progress-bg"><div class="progress-fill cal-fill" id="calProgressBar"></div></div>
+        <div class="diet-status" id="calProgressText">إجمالي المستهلك اليوم: 0 kcal</div>
+      </div>
+    </div>
 
-function showLoader(v) { els.loader.classList.toggle('hidden', !v); }
-function getSlotLabel(key) { const l = { PRE_BREAKFAST: 'الفطار', PRE_LUNCH: 'الغداء', PRE_DINNER: 'العشاء', SNACK: 'سناك' }; return l[key] || key; }
+    <section class="card">
+      <div class="card-header"><h2>🧮 حاسبة الأنسولين الذكية</h2></div>
+      
+      <div class="factors-bar">
+        <span class="f-chip">🎯 الهدف: <span id="lblTarget">—</span></span>
+        <span class="f-chip">🍔 CR: <span id="lblCR">—</span></span>
+        <span class="f-chip">💉 CF: <span id="lblCF">—</span></span>
+      </div>
 
-onAuthStateChanged(auth, async (u) => {
-  if (!u) { location.href = 'index.html'; return; }
-  const qp = new URLSearchParams(location.search);
-  state.childId = qp.get('child') || localStorage.getItem('selectedChildId');
-  state.parentId = localStorage.getItem('selectedParentId') || u.uid;
-  if (!state.childId) { location.href = 'parent.html'; return; }
+      <div class="calc-row">
+        <div class="field"><label>التاريخ</label><input type="date" id="dateInput" class="input"></div>
+        <div class="field"><label>الوقت</label><input type="time" id="timeInput" class="input"></div>
+      </div>
 
-  state.date = qp.get("date") || state.date;
-  state.time = qp.get("time") || state.time;
-  state.slot = qp.get("slot") || state.slot;
-  els.dateInput.value = state.date; els.timeInput.value = state.time; els.slotSelect.value = state.slot;
+      <div class="calc-row">
+        <div class="field">
+          <label>وقت الوجبة</label>
+          <select id="slotSelect">
+            <option value="PRE_BREAKFAST">فطار</option>
+            <option value="PRE_LUNCH">غدا</option>
+            <option value="PRE_DINNER">عشا</option>
+            <option value="SNACK">سناك</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>نوع القياس</label>
+          <select id="measureSource">
+            <option value="bgm">وخز الإصبع (BGM)</option>
+            <option value="cgm" selected>حساس سكر (CGM)</option>
+          </select>
+        </div>
+      </div>
 
-  const passedBg = qp.get("bg");
-  if (passedBg) { els.preBg.value = passedBg; if (qp.get("unit")) els.preBgUnit.value = qp.get("unit"); }
-
-  try {
-    await loadChildData(); setupEvents();
-    if(!qp.get("slot")) autoSelectMealSlot(); 
-    fetchFoodLibrary(); await loadTodayMeals();
-    if (passedBg) calculateBolus();
-  } catch (e) { console.error(e); } finally { showLoader(false); }
-});
-
-async function loadChildData() {
-  const snap = await getDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`));
-  if (!snap.exists()) throw new Error('Child not found');
-  const c = snap.data(); state.child = { id: snap.id, ...c };
-
-  const name = c.name || 'الطفل';
-  $('topAvatar').textContent = name.charAt(0); $('topChildName').textContent = name;
-  $('topChildMeta').textContent = `${c.gender === 'female' ? 'أنثى' : 'ذكر'} • ${c.glucoseUnit || 'mg/dL'}`;
-  $('breadChildName').textContent = name; $('breadChildName').href = `child.html?child=${state.childId}`;
-  $('navHome').href = `child.html?child=${state.childId}`; $('navMeas').href = `measurements.html?child=${state.childId}`;
-  $('navReports').href = `reports.html?child=${state.childId}`;
-
-  state.CF = Number(c.cf || c.correctionFactor) || 50;
-  if(c.cr) state.CRs = c.cr;
-  if(c.glucose_limits) state.Target = Number(c.glucose_limits.target) || (c.glucoseUnit === 'mmol/L' ? 5.5 : 100);
-  state.rule = c.netCarbRule || "fullFiber";
-  
-  els.netCarbRule.value = state.rule;
-  if(!els.preBg.value) els.preBgUnit.value = c.glucoseUnit || 'mg/dL';
-  state.currentBgUnit = els.preBgUnit.value;
-  els.todayDateLabel.textContent = state.date;
-  
-  if(c.dietGoal) els.dailyCarbTarget.value = c.dietGoal;
-  if(c.calorieGoal) els.dailyCalorieTarget.value = c.calorieGoal;
-  updateFactorsDisplay();
-}
-
-function autoSelectMealSlot() {
-  const h = parseInt(state.time.split(':')[0]);
-  if(h >= 5 && h < 11) state.slot = 'PRE_BREAKFAST';
-  else if(h >= 11 && h < 16) state.slot = 'PRE_LUNCH';
-  else if(h >= 16 && h < 22) state.slot = 'PRE_DINNER';
-  else state.slot = 'SNACK';
-  els.slotSelect.value = state.slot; updateFactorsDisplay();
-}
-
-function updateFactorsDisplay() {
-  let currentCR = state.CRs.snack || 15;
-  if(state.slot.includes('BREAKFAST')) currentCR = state.CRs.breakfast || 10;
-  if(state.slot.includes('LUNCH')) currentCR = state.CRs.lunch || 10;
-  if(state.slot.includes('DINNER')) currentCR = state.CRs.dinner || 10;
-  els.chipCF.textContent = state.CF; els.chipCR.textContent = currentCR; els.chipTarget.textContent = state.Target;
-  calculateBolus();
-}
-
-function updateDietProgress(mealCarbs = 0, mealCals = 0) {
-  const targetCarb = Number(els.dailyCarbTarget.value); const totalCarb = state.eatenToday + mealCarbs;
-  if(targetCarb > 0) {
-    els.carbProgressText.textContent = `${Math.round(totalCarb)} / ${targetCarb} جرام`;
-    const pct = Math.min(100, (totalCarb / targetCarb) * 100);
-    els.carbProgressBar.style.width = pct + '%'; els.carbProgressBar.className = `progress-fill carb-fill ${pct > 100 ? 'danger' : pct > 85 ? 'warn' : ''}`;
-  } else { els.carbProgressText.textContent = `إجمالي المستهلك اليوم: ${Math.round(totalCarb)} جرام`; els.carbProgressBar.style.width = '0%'; }
-
-  const targetCal = Number(els.dailyCalorieTarget.value); const totalCal = state.caloriesEatenToday + mealCals;
-  if(targetCal > 0) {
-    els.calProgressText.textContent = `${Math.round(totalCal)} / ${targetCal} kcal`;
-    const pct = Math.min(100, (totalCal / targetCal) * 100);
-    els.calProgressBar.style.width = pct + '%'; els.calProgressBar.className = `progress-fill cal-fill ${pct > 100 ? 'danger' : pct > 85 ? 'warn' : ''}`;
-  } else { els.calProgressText.textContent = `إجمالي المستهلك اليوم: ${Math.round(totalCal)} kcal`; els.calProgressBar.style.width = '0%'; }
-}
-
-async function fetchFoodLibrary() {
-  try {
-    const snap = await getDocs(collection(db, "admin/global/foodItems"));
-    state.globalFoods = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => f.isActive !== false);
-    renderLibrary(); els.loadingLibrary.style.display = 'none';
-  } catch (err) { els.loadingLibrary.textContent = "⚠️ خطأ في تحميل المكتبة."; }
-}
-
-function renderLibrary() {
-  const q = els.searchBox.value.toLowerCase();
-  const list = state.globalFoods.filter(f => !q || (f.searchText || f.name).toLowerCase().includes(q));
-  if(!list.length) { els.itemsGrid.innerHTML = `<div style="text-align:center; padding:20px; color:#94a3b8;">لا توجد نتائج.</div>`; return; }
-
-  els.itemsGrid.innerHTML = list.map(f => {
-    const giStr = f.per100?.gi ? `<span class="gi-badge ${f.per100.gi > 70 ? 'high' : ''}">GI: ${f.per100.gi}</span>` : '';
-    return `
-      <div class="food-lib-item" data-id="${f.id}">
-        <div class="food-img-col"><img src="${f.image?.url || SAFE_PLACEHOLDER}" onerror="this.src='${SAFE_PLACEHOLDER}';">${giStr}</div>
-        <div class="details">
-          <div class="food-title">${f.name}</div>
-          <div class="macros-grid">
-            <div class="m-box"><span class="m-val">${f.per100?.carbs_g||0}g</span><span class="m-lbl">كارب</span></div>
-            <div class="m-box"><span class="m-val">${f.per100?.protein_g||0}g</span><span class="m-lbl">بروتين</span></div>
-            <div class="m-box"><span class="m-val">${f.per100?.fat_g||0}g</span><span class="m-lbl">دهون</span></div>
-            <div class="m-box"><span class="m-val" style="color:#f59e0b">${f.per100?.cal_kcal||0}</span><span class="m-lbl">kcal</span></div>
+      <div class="calc-row">
+        <div class="field">
+          <label>قراءة السكر الحالية</label>
+          <div class="input-group">
+            <button class="btn-fetch" id="btnFetchPre" title="سحب القراءة من السجل بنفس التاريخ والوجبة">🔄 جلب</button>
+            <input type="number" step="0.1" id="preBg" class="input" placeholder="مثال: 120">
+            <select id="preBgUnit" style="width:80px; padding:10px 4px;"><option value="mg/dL">mg/dL</option><option value="mmol/L">mmol/L</option></select>
           </div>
         </div>
-        <button class="btn primary sm add-btn">إضافة</button>
-      </div>`;
-  }).join('');
+        <div class="field" id="trendContainer">
+          <label>سهم الحساس (الذكاء الاصطناعي سيعدل الجرعة)</label>
+          <select id="trendArrow" class="input">
+            <option value="0">➔ ثابت (لا تعديل)</option>
+            <option value="15">↑ يرتفع ببطء (+15 mg/dL)</option>
+            <option value="30">⇈ يرتفع بسرعة (+30 mg/dL)</option>
+            <option value="-15">↓ ينخفض ببطء (-15 mg/dL)</option>
+            <option value="-30">⇊ ينخفض بسرعة (-30 mg/dL)</option>
+          </select>
+        </div>
+      </div>
 
-  document.querySelectorAll('.food-lib-item .add-btn').forEach(btn => {
-    btn.onclick = () => { addItemToMeal(btn.closest('.food-lib-item').dataset.id); els.libModal.classList.remove('open'); };
-  });
-}
+      <div class="calc-row">
+        <div class="field" style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+          <label style="color:#7c3aed;">إجمالي الكارب الصافي (g) 🍔 <br><span class="muted tiny">يأتي من الجدول بالأسفل، أو أدخله يدوياً</span></label>
+          <input type="number" step="0.5" id="manualCarbs" class="input" style="font-weight:bold; font-size:18px; color:#7c3aed;" placeholder="0">
+        </div>
+        <div class="field">
+          <label>أنسولين نشط (IOB) للخصم 💉</label>
+          <input type="number" step="0.1" id="iobValue" class="input" placeholder="0">
+        </div>
+      </div>
 
-function addItemToMeal(id) {
-  const food = state.globalFoods.find(f => f.id === id); if(!food) return;
-  state.mealItems.push({ uid: Date.now().toString(), ...food, mealQty: 1, selectedUnitIndex: 0, availableUnits: food.units?.length ? food.units : [{label: '100 جرام', grams: 100}] });
-  state.manualCarbDirty = false; els.searchBox.value = ''; renderLibrary(); renderMealTable(); updateMealTotals();
-}
+      <div class="calc-row" style="display:none;">
+        <input id="doseCorrection" type="number">
+        <input id="doseCarbs" type="number">
+      </div>
 
-function renderMealTable() {
-  if (!state.mealItems.length) { els.mealBody.innerHTML = `<tr><td colspan="10" class="muted" style="text-align:center; padding:20px;">لم يتم إضافة أصناف للوجبة بعد.</td></tr>`; return; }
-  els.mealBody.innerHTML = state.mealItems.map((item, idx) => {
-    const opts = item.availableUnits.map((u, i) => `<option value="${i}" ${item.selectedUnitIndex == i ? 'selected' : ''}>${u.label}</option>`).join('');
-    const ratio = (item.mealQty * (item.availableUnits[item.selectedUnitIndex]?.grams || 100)) / 100;
-    const fRule = state.rule === "fullFiber" ? 1 : state.rule === "halfFiber" ? 0.5 : 0;
-    const netCarb = Math.max(0, (item.per100?.carbs_g||0)*ratio - (item.per100?.fiber_g||0)*ratio*fRule);
-    return `
-      <tr data-idx="${idx}">
-        <td style="font-weight:bold;">${item.name} ${item.per100?.gi > 70 ? '<span style="font-size:10px; background:#fee2e2; color:#ef4444; padding:2px 4px; border-radius:4px;">عالي GI</span>' : ''}</td>
-        <td><input type="number" step="0.5" class="qty-input input" value="${item.mealQty}" style="width:60px; padding:4px;"></td>
-        <td><select class="unit-select input" style="width:100px; padding:4px;">${opts}</select></td>
-        <td style="color:#7c3aed; font-weight:bold;">${fmt(netCarb)}</td>
-        <td class="muted">${fmt((item.per100?.fiber_g||0)*ratio)}</td>
-        <td class="muted">${fmt((item.per100?.protein_g||0)*ratio)}</td>
-        <td class="muted">${fmt((item.per100?.fat_g||0)*ratio)}</td>
-        <td class="muted">${fmt((item.per100?.cal_kcal||0)*ratio)}</td>
-        <td class="muted">${item.per100?.gi || '—'}</td>
+      <div class="result-box" id="resultBox">
+        <h3>الجرعة النهائية المطلوبة</h3>
+        <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin: 10px 0;">
+          <input type="number" step="0.5" id="doseFinalInput" class="final-dose-input" value="0.0" title="يمكنك تعديل الجرعة يدوياً قبل الحفظ">
+          <span style="font-size: 28px; font-weight: bold; color: inherit;">U</span>
+        </div>
+        <div class="dose-details" id="doseDetailsStr">كارب: 0 | تصحيح: 0 | خصم نشط: 0</div>
+      </div>
+
+      <div id="smartAlerts" class="smart-alert"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>🍱 مطبخ أسيل (الأنظمة وبناء الوجبات)</h2>
+        <button id="btnOpenLibrary" class="btn alt sm">➕ أضف صنف من المكتبة</button>
+      </div>
+      
+      <div class="calc-row" style="margin-bottom:12px;">
+        <div class="field">
+          <label>قاعدة خصم الألياف من الكارب (الدايت)</label>
+          <select id="netCarbRule" class="input">
+            <option value="none">بدون خصم الألياف</option>
+            <option value="halfFiber">خصم نصف الألياف</option>
+            <option value="fullFiber" selected>خصم كامل الألياف</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="meal-table" id="mealTable">
+          <thead>
+            <tr><th>الصنف</th><th>الكمية</th><th>الوحدة</th><th>(Net) كارب</th><th>ألياف</th><th>بروتين</th><th>دهون</th><th>Calories</th><th>GI</th><th></th></tr>
+          </thead>
+          <tbody id="mealBody">
+            <tr><td colspan="10" class="muted" style="text-align:center;">لم يتم إضافة أي أصناف للوجبة بعد.</td></tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" style="text-align:left; font-weight:bold;">إجمالي الوجبة الحالية:</td>
+              <td id="sumCarbsNet" style="font-weight:bold;color:#7c3aed; font-size:15px;">0 g</td>
+              <td id="sumFiber" class="muted">0 g</td>
+              <td id="sumProtein" class="muted">0 g</td>
+              <td id="sumFat" class="muted">0 g</td>
+              <td id="sumCalories" class="muted">0 kcal</td>
+              <td id="avgGI" class="muted">—</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button id="btnSaveMeal" class="btn primary">💾 اعتماد الجرعة وحفظ الوجبة</button>
+        <button id="btnClearMeal" class="btn gray" style="width:auto;">مسح الحاسبة</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>📝 سجل وجبات اليوم (<span id="todayDateLabel"></span>)</h2></div>
+      <div style="overflow-x:auto;">
+        <table class="meal-table">
+          <thead><tr><th>الوقت/الوجبة</th><th>الكارب</th><th>السعرات</th><th>جرعة الكارب</th><th>جرعة التصحيح</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
+          <tbody id="dailyMealsBody">
+            <tr><td colspan="7" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <div id="libModal" class="lib-modal">
+    <div id="libOverlay" class="lib-overlay"></div>
+    <div class="lib-panel">
+      <div class="lib-header">
+        <h4>🍎 مكتبة الطعام الشاملة</h4>
+        <button id="libClose" class="lib-close">✕</button>
+      </div>
+      <div style="padding:16px;">
+        <input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف (مثال: أرز، تفاح، بيض)..." style="width:100%; margin-bottom:16px;" />
+        <div id="loadingLibrary" style="text-align:center; color:#64748b;">جاري جلب الأصناف...</div>
+        <div id="itemsGrid" style="display:flex; flex-direction:column; gap:10px; max-height:400px; overflow-y:auto; padding-bottom: 20px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loader" class="loader"><div class="spinner"></div></div>
+  <script type="module" src="js/meals.js?v=2026.03.06"></script>
+</body>
+</html>
