@@ -8,7 +8,7 @@
   <link rel="icon" href="favicon.png" />
 </head>
 <body>
-
+ 
   <div class="container edit-container">
     <div class="card no-print header-action-card">
       <div>
@@ -17,7 +17,7 @@
       </div>
       <button id="btnSave" class="btn primary btn-lg">💾 حفظ الإعدادات</button>
     </div>
-
+ 
     <div class="main-layout">
       <!-- ================= العمود الأول (البيانات والنمو) ================= -->
       <div class="col-left">
@@ -35,7 +35,7 @@
             </div>
             <div class="field"><label>تاريخ تشخيص السكري</label><input id="f_diagnosis_date" type="date" /></div>
           </div>
-
+ 
           <div class="field" style="margin-top: 15px;">
             <label>أمراض مصاحبة (Co-morbidities)</label>
             <div class="checkbox-group">
@@ -45,7 +45,7 @@
             </div>
           </div>
         </section>
-
+ 
         <!-- 2. المقاييس الحيوية (النمو) -->
         <section class="card">
           <h3 class="section-title">📈 المقاييس الحيوية (النمو)</h3>
@@ -63,7 +63,7 @@
             </div>
           </div>
         </section>
-
+ 
         <!-- 3. النظام الغذائي والحساسيات -->
         <section class="card">
           <h3 class="section-title">🍎 النظام الغذائي والحساسيات</h3>
@@ -80,12 +80,12 @@
             <label><input type="checkbox" class="diet-flag" value="low_carb"> قليل الكارب</label>
           </div>
         </section>
-
+ 
       </div>
-
+ 
       <!-- ================= العمود الثاني (الأرقام الطبية) ================= -->
       <div class="col-right">
-
+ 
         <!-- 4. مستويات السكر المستهدفة (التصميم الهرمي) -->
         <section class="card">
           <h3 class="section-title">🎯 مستويات السكر (Target & Limits)</h3>
@@ -123,7 +123,7 @@
             </div>
           </div>
         </section>
-
+ 
         <!-- 5. معاملات الأنسولين -->
         <section class="card">
           <h3 class="section-title">⚖️ الأنسولين والمعاملات (CR & CF)</h3>
@@ -139,7 +139,7 @@
               <span class="suffix">وحدة تخفض السكر بمقدار</span>
             </div>
           </div>
-
+ 
           <label class="lbl-bold">معامل الكارب لكل وجبة (CR):</label>
           <div class="cr-grid mt-10">
             <div class="cr-box"><span>🌅 فطار</span><input id="cr_b" type="number" step="0.1" placeholder="CR" /></div>
@@ -147,8 +147,19 @@
             <div class="cr-box"><span>🌙 عشاء</span><input id="cr_d" type="number" step="0.1" placeholder="CR" /></div>
             <div class="cr-box"><span>🍎 سناك</span><input id="cr_s" type="number" step="0.1" placeholder="CR" /></div>
           </div>
+ 
+          <label class="lbl-bold mt-10">⚙️ ضبط الأمان والحساب (يُفضّل أن يحددها الطبيب):</label>
+          <div class="grid2 mt-10">
+            <div class="field"><label>أصغر تدرج في القلم/المضخة (وحدة)</label>
+              <select id="f_step"><option value="0.1">0.1</option><option value="0.5" selected>0.5</option><option value="1">1</option></select></div>
+            <div class="field"><label>الحد الأقصى لجرعة واحدة (وحدة)</label><input id="f_maxdose" type="number" step="0.5" min="0" placeholder="اختياري — مثال: 8" /></div>
+            <div class="field"><label>مدة مفعول الأنسولين DIA (ساعة)</label><input id="f_dia" type="number" step="0.5" min="2" max="8" placeholder="الافتراضي 4" /></div>
+            <div class="field"><label>كارب علاج الهبوط (جرام)</label><input id="f_hypocarbs" type="number" step="1" min="5" placeholder="الافتراضي 15" /></div>
+            <div class="field"><label>طريقة حساب الكارب الصافي</label>
+              <select id="f_netrule"><option value="fullFiber" selected>خصم كل الألياف</option><option value="halfFiber">خصم نصف الألياف</option><option value="none">بدون خصم</option></select></div>
+          </div>
         </section>
-
+ 
         <!-- 6. خريطة الحقن التفاعلية -->
         <section class="card map-card">
           <h3 class="section-title">🧍‍♀️ خريطة أماكن الحقن التفاعلية</h3>
@@ -176,13 +187,13 @@
             </svg>
           </div>
         </section>
-
+ 
       </div>
     </div>
   </div>
-
+ 
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
-
+ 
   <script type="module" src="js/child-edit.js?v=5"></script>
   <script type="module" src="js/header.js"></script>
 </body>
