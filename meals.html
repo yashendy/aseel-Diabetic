@@ -18,7 +18,7 @@
   
 </head>
 <body>
-
+ 
   <header class="main-topbar no-print">
     <div class="topbar-right">
       <div class="top-avatar" id="topAvatar">أ</div>
@@ -37,11 +37,11 @@
       <button id="logoutBtn" class="btn-logout-outline">↪ خروج</button>
     </div>
   </header>
-
+ 
   <div class="breadcrumbs no-print">
     <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>حاسبة ومطبخ أسيل 🍽️</b>
   </div>
-
+ 
   <div class="container">
     
     <div class="diet-tracker">
@@ -57,7 +57,7 @@
         <div class="diet-status" id="calProgressText">إجمالي المستهلك اليوم: 0 kcal</div>
       </div>
     </div>
-
+ 
     <section class="card">
       <div class="card-header"><h2>🧮 حاسبة الأنسولين الذكية</h2></div>
       
@@ -66,12 +66,12 @@
         <span class="f-chip">🍔 CR: <span id="lblCR">—</span></span>
         <span class="f-chip">💉 CF: <span id="lblCF">—</span></span>
       </div>
-
+ 
       <div class="calc-row">
         <div class="field"><label>التاريخ</label><input type="date" id="dateInput" class="input"></div>
         <div class="field"><label>الوقت</label><input type="time" id="timeInput" class="input"></div>
       </div>
-
+ 
       <div class="calc-row">
         <div class="field">
           <label>وقت الوجبة</label>
@@ -90,7 +90,7 @@
           </select>
         </div>
       </div>
-
+ 
       <div class="calc-row">
         <div class="field">
           <label>قراءة السكر الحالية</label>
@@ -111,7 +111,7 @@
           </select>
         </div>
       </div>
-
+ 
       <div class="calc-row">
         <div class="field" style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
           <label style="color:#7c3aed;">إجمالي الكارب الصافي (g) 🍔 <br><span class="muted tiny">يأتي من الجدول بالأسفل، أو أدخله يدوياً</span></label>
@@ -122,7 +122,7 @@
           <input type="number" step="0.1" id="iobValue" class="input" placeholder="0">
         </div>
       </div>
-
+ 
       <div class="calc-row" style="margin-top: 15px;">
         <div class="field">
           <label>جرعة الكارب (Carb Dose) 🍔</label>
@@ -133,7 +133,7 @@
           <input type="number" step="0.1" id="doseCorrection" class="input" placeholder="0.0">
         </div>
       </div>
-
+ 
       <div class="calc-row">
         <div class="field" style="justify-content: center; align-items: center; text-align: center;">
           <div class="result-box" id="resultBox" style="width: 100%; margin:0; padding:10px; display:none;"></div>
@@ -144,10 +144,10 @@
           <input type="number" step="0.5" id="doseFinalInput" class="final-dose-input">
         </div>
       </div>
-
+ 
       <div id="hypoRescueArea" class="hypo-rescue-box">
         <strong style="color:#b91c1c;">🚨 بروتوكول الهبوط (قاعدة 15/15):</strong>
-        <p style="margin:5px 0 10px 0; font-size:13px; color:#7f1d1d;">الطفل في حالة هبوط! الجرعة صُفرت. إما أن تكتبي العلاج يدوياً، أو دعِي المنصة تحسب لك الكمية المناسبة من المكتبة لرفع السكر بـ 15 جرام كارب.</p>
+        <p id="hypoRescueText" style="margin:5px 0 10px 0; font-size:13px; color:#7f1d1d;">الطفل في حالة هبوط! الجرعة صُفرت. إما أن تكتبي العلاج يدوياً، أو دعِي المنصة تحسب لك الكمية المناسبة من المكتبة لرفع السكر بـ 15 جرام كارب.</p>
         
         <button id="btnRescueLib" class="btn alt sm" style="margin-bottom:10px; background:#fecaca; color:#991b1b; border-color:#fca5a5; width:100%;">🧃 اختيار صنف للرفع من المكتبة وحساب الكمية</button>
         
@@ -156,17 +156,16 @@
           <input type="text" id="hypoTreatment" class="input" placeholder="مثال: تم إعطاء نصف كوب عصير تفاح...">
         </div>
       </div>
-
+ 
       <div id="smartAlerts" class="smart-alert"></div>
       
       <div class="field mt-10">
         <label>ملاحظات إضافية على الوجبة 📝</label>
         <textarea id="mealNotes" class="notes-area" rows="2" placeholder="مثال: الطفل لم يكمل الوجبة، تمرين رياضي بعد الأكل..."></textarea>
       </div>
-
-      <div id="smartAlerts" class="smart-alert"></div>
+ 
     </section>
-
+ 
     <section class="card">
       <div class="card-header">
         <h2>🍱 مطبخ أسيل (الأنظمة وبناء الوجبات)</h2>
@@ -183,7 +182,7 @@
           </select>
         </div>
       </div>
-
+ 
       <div style="overflow-x:auto;">
         <table class="meal-table" id="mealTable">
           <thead>
@@ -206,13 +205,13 @@
           </tfoot>
         </table>
       </div>
-
+ 
       <div style="display:flex; gap:10px; margin-top:20px;">
         <button id="btnSaveMeal" class="btn primary">💾 اعتماد الجرعة وحفظ الوجبة</button>
         <button id="btnClearMeal" class="btn gray" style="width:auto;">مسح الحاسبة</button>
       </div>
     </section>
-
+ 
     <section class="card">
       <div class="card-header"><h2>📝 سجل وجبات اليوم (<span id="todayDateLabel"></span>)</h2></div>
       <div style="overflow-x:auto;">
@@ -224,9 +223,9 @@
         </table>
       </div>
     </section>
-
+ 
   </div>
-
+ 
   <div id="libModal" class="lib-modal">
     <div id="libOverlay" class="lib-overlay"></div>
     <div class="lib-panel">
@@ -241,7 +240,7 @@
       </div>
     </div>
   </div>
-
+ 
   <div id="loader" class="loader"><div class="spinner"></div></div>
   <script type="module" src="js/meals.js?v=2026.03.06"></script>
 </body>
