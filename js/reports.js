@@ -4,11 +4,11 @@ import {
   collection, doc, getDoc, getDocs, query, where
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-
+ 
 const $=id=>document.getElementById(id);
 const round1=n=>Math.round((+n||0)*10)/10;
 const mgdl2mmol=v=>v/18.0182, mmol2mgdl=v=>v*18.0182;
-
+ 
 const SLOT_ORDER = ["WAKE","FASTING","PRE_BREAKFAST","POST_BREAKFAST","PRE_LUNCH","POST_LUNCH","PRE_DINNER","POST_DINNER","SNACK","BEDTIME","DURING_SLEEP"];
 const SLOT_LABEL = {
   FASTING:'صائم', PRE_BREAKFAST:'ق.الفطار', POST_BREAKFAST:'ب.الفطار',
@@ -19,15 +19,16 @@ const SLOT_LABEL = {
 function formatDate(d){return d.toLocaleDateString('ar-EG',{weekday:'short', day:'2-digit', month:'numeric'})}
 function toast(m){const t=$('toast'); t.textContent=m; t.style.display='block'; clearTimeout(t._t); t._t=setTimeout(()=>t.style.display='none',2200);}
 function showLoader(v){ const l=$('appLoader'); if(l) l.style.display = v ? 'flex' : 'none'; }
-
+ 
 let currentUser, childId=new URLSearchParams(location.search).get('child')||localStorage.getItem('selectedChildId');
 let childRef, child;
 let unitSel, fromDate, toDate, reportGrid, emptyGrid, pie, cmpElems, aiTable;
-
+ 
 let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
 let sysUnit = 'mg/dL';
+let reportDays = [];
 let parentIdForQuery = null; // تخزين رقم الأب لاستخدامه لاحقاً
-
+ 
 onAuthStateChanged(auth, async (u)=>{
   if(!u) return;
   currentUser=u;
@@ -46,7 +47,7 @@ onAuthStateChanged(auth, async (u)=>{
       backBtn.onclick = () => location.href = `child.html?child=${childId}`;
     }
   }
-
+ 
   wire(); 
   showLoader(true);
   try {
@@ -58,7 +59,7 @@ onAuthStateChanged(auth, async (u)=>{
   } catch(e) { console.error(e); }
   finally { showLoader(false); }
 });
-
+ 
 function wire(){
   unitSel=$('unitSel'); fromDate=$('fromDate'); toDate=$('toDate');
   reportGrid=$('reportGrid'); emptyGrid=$('emptyGrid'); aiTable=$('aiTable');
@@ -73,16 +74,29 @@ function wire(){
   $('applyBtn').onclick = renderReport;
   $('cmpRun').onclick = runCompare;
   unitSel.onchange = () => { fillThresholdChips(); renderReport(); };
-
+ 
   $('quickRange').onchange = (e) => {
     if(e.target.value === 'custom') return;
     setQuickRange(e.target.value);
     renderReport();
   };
-
+ 
   $('measureType').onchange = renderReport;
+ 
+  // فتح نافذة تفاصيل القياس عند الضغط على أي خلية
+  ensureModal();
+  reportGrid.addEventListener('click', e => {
+    const c = e.target.closest('.grid-cell.clickable'); if(!c) return;
+    openDetail(c.dataset.day, c.dataset.slot);
+  });
+  reportGrid.addEventListener('keydown', e => {
+    if(e.key!=='Enter' && e.key!==' ') return;
+    const c = e.target.closest('.grid-cell.clickable'); if(!c) return;
+    e.preventDefault(); openDetail(c.dataset.day, c.dataset.slot);
+  });
 }
-
+ 
+const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 function setQuickRange(range) {
   const to = new Date();
   const from = new Date();
@@ -91,25 +105,25 @@ function setQuickRange(range) {
   else if (range === '1m') from.setMonth(from.getMonth() - 1);
   else if (range === '3m') from.setMonth(from.getMonth() - 3);
   
-  $('toDate').value = to.toISOString().slice(0, 10);
-  $('fromDate').value = from.toISOString().slice(0, 10);
+  $('toDate').value = isoLocal(to);
+  $('fromDate').value = isoLocal(from);
   
   cmpElems.AFrom.value = $('fromDate').value; 
   cmpElems.ATo.value = $('toDate').value;
   const diffTime = Math.abs(to - from);
   const prevTo = new Date(from); prevTo.setDate(prevTo.getDate() - 1);
   const prevFrom = new Date(prevTo.getTime() - diffTime);
-  cmpElems.BFrom.value = prevFrom.toISOString().slice(0, 10);
-  cmpElems.BTo.value = prevTo.toISOString().slice(0, 10);
+  cmpElems.BFrom.value = isoLocal(prevFrom);
+  cmpElems.BTo.value = isoLocal(prevTo);
 }
-
+ 
 async function loadChild(parentId){
   childRef=doc(db,'parents',parentId,'children',childId);
   const snap=await getDoc(childRef);
   if(!snap.exists()) { throw new Error('child-not-found'); }
   child=snap.data();
   sysUnit = child.glucoseUnit || 'mg/dL';
-
+ 
   if(child.glucose_limits) {
     sysLimits.low = Number(child.glucose_limits.low) || (sysUnit==='mmol/L'? 3.9 : 70);
     sysLimits.high = Number(child.glucose_limits.high) || (sysUnit==='mmol/L'? 10.0 : 180);
@@ -117,7 +131,7 @@ async function loadChild(parentId){
     sysLimits.critHigh = Number(child.glucose_limits.critical_high) || (sysUnit==='mmol/L'? 13.9 : 250);
   }
 }
-
+ 
 function limitsInUnit(targetUnit){
   if (targetUnit === sysUnit) return { ...sysLimits };
   if (targetUnit === 'mmol/L' && sysUnit === 'mg/dL') {
@@ -128,7 +142,7 @@ function limitsInUnit(targetUnit){
   }
   return { ...sysLimits };
 }
-
+ 
 function fillThresholdChips(){
   const u = unitSel.value;
   const L = limitsInUnit(u);
@@ -138,7 +152,7 @@ function fillThresholdChips(){
     <span class="chip">ارتفاع حرج: <b>${L.critHigh} ${u}</b></span>
   `;
 }
-
+ 
 function classFor(val,u){
   if(val == null) return '';
   const L=limitsInUnit(u);
@@ -148,7 +162,7 @@ function classFor(val,u){
   if(val < L.low) return 'sev';          
   return 'ok';                           
 }
-
+ 
 async function fetchRange(fromISO,toISO){
   const col=collection(childRef,'measurements');
   const qy=query(col, where('date','>=',fromISO), where('date','<=',toISO));
@@ -171,17 +185,19 @@ async function fetchRange(fromISO,toISO){
       val: Number.isFinite(+v) ? round1(+v) : null,
       carbs: x.carbs || 0,
       ins: x.totalInsulin || x.correctionDose || x.totalDose || 0,
-      notes: x.notes||''
+      notes: x.notes||'',
+      id: s.id,
+      raw: x
     });
   });
   return arr.sort((a,b)=> a.when - b.when);
 }
-
+ 
 function groupByDaySlot(list){
   const days={};
   for(const r of list){
     const key=r.date;
-    days[key] = days[key] || {date:new Date(key), slots:{}, dailyCarbs:0, dailyInsulin:0};
+    days[key] = days[key] || {key, date:new Date(key+'T00:00:00'), slots:{}, dailyCarbs:0, dailyInsulin:0};
     days[key].slots[r.slot]=days[key].slots[r.slot]||[];
     days[key].slots[r.slot].push(r);
     
@@ -190,7 +206,7 @@ function groupByDaySlot(list){
   }
   return Object.values(days).sort((a,b)=>a.date-b.date);
 }
-
+ 
 function cellHTML(vals,u){
   if(!vals || !vals.length) return '';
   const v = vals[vals.length-1];
@@ -202,16 +218,25 @@ function cellHTML(vals,u){
   // هنا استخدمنا round1 لتقريب الكارب والإنسولين لرقم عشري واحد
   if (v.carbs > 0) html += `<div class="badge-carb">🍔 ${round1(v.carbs)}g</div>`;
   if (v.ins > 0 || (v.carbs > 0 && v.ins === 0)) html += `<div class="badge-ins">💉 ${round1(v.ins)}U</div>`;
+  if (vals.length > 1) html += `<div class="badge-more">+${vals.length-1} قياس</div>`;
   html += `</div>`;
   return html;
 }
-
+ 
+// غلاف الخلية: لو فيها بيانات تصبح قابلة للضغط لفتح التفاصيل
+function cellWrap(d,k,unit){
+  const vals = d.slots[k];
+  if(!vals || !vals.length) return `<div class="grid-cell"></div>`;
+  return `<div class="grid-cell clickable" tabindex="0" role="button" data-day="${d.key}" data-slot="${k}" title="اضغط لعرض التفاصيل">${cellHTML(vals,unit)}</div>`;
+}
+ 
 async function renderReport(){
   showLoader(true);
   const unit=unitSel.value, from=fromDate.value, to=toDate.value;
   const data=await fetchRange(from,to);
   const days=groupByDaySlot(data);
-
+  reportDays = days;
+ 
   const body= $('reportGrid'); body.innerHTML='';
   if(!days.length){
     $('emptyGrid').classList.remove('hidden');
@@ -219,7 +244,7 @@ async function renderReport(){
     showLoader(false); return;
   }
   $('emptyGrid').classList.add('hidden');
-
+ 
   for(const d of days){
     const row=document.createElement('div'); row.className='grid-row';
     
@@ -230,27 +255,27 @@ async function renderReport(){
         ${d.dailyInsulin > 0 ? `<div class="badge-ins">${round1(d.dailyInsulin)}U</div>` : ''}
         ${d.dailyCarbs===0 && d.dailyInsulin===0 ? '<span class="muted">—</span>' : ''}
       </div>`;
-
+ 
     row.innerHTML = `
       <div class="grid-cell" style="font-weight:bold; color:#475569;">${formatDate(d.date)}</div>
       <div class="grid-cell col-total">${totalCell}</div>
       ` +
       ['FASTING','PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK','BEDTIME','DURING_SLEEP']
-      .map(k=>`<div class="grid-cell">${cellHTML(d.slots[k],unit)}</div>`).join('');
+      .map(k=>cellWrap(d,k,unit)).join('');
     body.appendChild(row);
   }
-
+ 
   updateStats(data);
   const parts=calcParts(data,unit); drawPie(parts);
   buildAI(data,unit);
   showLoader(false);
 }
-
+ 
 function updateStats(list){
   const validList = list.filter(x => x.val !== null);
   const unit=unitSel.value, L=limitsInUnit(unit);
   const avgCard = $('statAvg').parentElement; 
-
+ 
   if(!validList.length){ 
     $('statTIR').textContent='0%'; $('statLow').textContent='0%'; $('statHigh').textContent='0%'; $('statAvg').textContent='—'; $('statSD').textContent='—'; $('statCrit').textContent='0'; 
     avgCard.className = 'card'; avgCard.style.backgroundColor = ''; return; 
@@ -270,13 +295,13 @@ function updateStats(list){
   $('statCrit').textContent=String(crit);
   $('statAvg').textContent=`${round1(mean)} ${unit}`;
   $('statSD').textContent=round1(sd);
-
+ 
   avgCard.className = 'card';
   if (mean < L.low) { avgCard.classList.add('low'); avgCard.style.backgroundColor = ''; } 
   else if (mean > L.high) { avgCard.classList.add('high'); avgCard.style.backgroundColor = ''; } 
   else { avgCard.style.backgroundColor = '#dcfce7'; }
 }
-
+ 
 function calcParts(list,unit){
   const validList = list.filter(x => x.val !== null);
   const L=limitsInUnit(unit), n=validList.length||1;
@@ -285,7 +310,7 @@ function calcParts(list,unit){
   const tar=validList.filter(x=>x.val>L.high).length/n*100;
   return {TIR:Math.round(tir), TBR:Math.round(tbr), TAR:Math.round(tar)};
 }
-
+ 
 function drawPie({TIR,TBR,TAR}){
   const ctx=$('pieTIR').getContext('2d');
   if(pie) pie.destroy();
@@ -294,7 +319,7 @@ function drawPie({TIR,TBR,TAR}){
     options:{plugins:{legend:{position:'bottom'}}, cutout:'70%'}
   });
 }
-
+ 
 function rowCmp(label,a,b,fmt='%'){
   const diff = (a-b);
   const cls = diff>=0 ? (label==='انخفاض'||label==='ارتفاع'?'diff-down':'diff-up') : (label==='انخفاض'||label==='ارتفاع'?'diff-up':'diff-down');
@@ -317,7 +342,7 @@ async function runCompare(){
   const meanA=vA.reduce((a,x)=>a+x.val,0)/nA, meanB=vB.reduce((a,x)=>a+x.val,0)/nB;
   const sdA=Math.sqrt(vA.reduce((a,x)=>a+Math.pow(x.val-meanA,2),0)/nA);
   const sdB=Math.sqrt(vB.reduce((a,x)=>a+Math.pow(x.val-meanB,2),0)/nB);
-
+ 
   $('cmpTable').innerHTML = `
     <div>المؤشر</div><div>الحالية</div><div>السابقة</div><div>الفرق</div>
     ${rowCmp('داخل النطاق',pa.TIR,pb.TIR,'%')}
@@ -329,71 +354,71 @@ async function runCompare(){
   `;
   showLoader(false);
 }
-
+ 
 function buildAI(list,unit){
   const L=limitsInUnit(unit);
   const patt=[];
   const valid = list.filter(x=>x.val!==null);
-
+ 
   if(valid.length === 0) {
     $('aiTable').innerHTML = `<div style="grid-column:1/-1; padding:15px; text-align:center; color:#64748b;">لا توجد بيانات كافية للتحليل.</div>`;
     return;
   }
-
+ 
   const SLOT_NAMES = { FASTING:'صائم', WAKE:'استيقاظ', PRE_BREAKFAST:'ق. الفطار', POST_BREAKFAST:'ب. الفطار', PRE_LUNCH:'ق. الغداء', POST_LUNCH:'ب. الغداء', PRE_DINNER:'ق. العشاء', POST_DINNER:'ب. العشاء', SNACK:'سناك', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم' };
-
+ 
   const total = valid.length;
   const pctTBR = Math.round((valid.filter(x => x.val < L.low).length / total) * 100);
   const pctTAR = Math.round((valid.filter(x => x.val > L.high).length / total) * 100);
   const pctTIR = Math.round((valid.filter(x => x.val >= L.low && x.val <= L.high).length / total) * 100);
-
+ 
   if (pctTBR > 15) patt.push({ name: 'كثرة الهبوطات (TBR)', desc: `نسبة الهبوط (${pctTBR}%) تتخطى الحد المسموح (15%).`, rec: 'تقليل الجرعات أو مراجعة النشاط البدني.', conf: 'حرج 🚨', color: '#dc2626' });
   if (pctTAR > 25) patt.push({ name: 'كثرة الارتفاعات (TAR)', desc: `نسبة الارتفاع (${pctTAR}%) تتخطى الحد المسموح (25%).`, rec: 'قد يحتاج المريض لتعديل المعاملات (CR/CF).', conf: 'عالي 🔴', color: '#b45309' });
   if (pctTIR < 60 && pctTBR <= 15 && pctTAR <= 25) patt.push({ name: 'ضعف السيطرة (TIR)', desc: `نسبة البقاء في النطاق (${pctTIR}%) أقل من 60%.`, rec: 'مراجعة شاملة للخطة وجرعات الإنسولين.', conf: 'متوسط 🟡', color: '#d97706' });
-
+ 
   const vals = valid.map(x => x.val);
   const mean = vals.reduce((a, b) => a + b, 0) / total;
   const variance = vals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / total;
   const cv = (Math.sqrt(variance) / mean) * 100;
-
+ 
   if (cv > 36) {
     patt.push({ name: 'تذبذب عالي (Glycemic Variability)', desc: `السكر يتأرجح بشدة (CV: ${Math.round(cv)}%).`, rec: 'التركيز على استقرار القراءات قبل محاولة خفض المتوسط.', conf: 'عالي 🔴', color: '#b45309' });
   }
-
+ 
   let reboundCount = 0; let weakCFCount = 0;
   for(let i=0; i < valid.length - 1; i++) {
     const curr = valid[i]; const next = valid[i+1];
     const diffHours = (next.when - curr.when) / (1000 * 60 * 60);
-
+ 
     if (curr.val < L.low && next.val > L.high && diffHours <= 6) reboundCount++;
     if (curr.val > L.high && curr.ins > 0 && next.val > L.high && diffHours <= 4) weakCFCount++;
   }
-
+ 
   if (reboundCount >= 2) patt.push({ name: 'إفراط علاج الهبوط', desc: `تم رصد ارتداد عكسي بعد الهبوط ${reboundCount} مرات.`, rec: 'توعية بقاعدة الـ 15 لتجنب الإفراط في إعطاء السكريات.', conf: 'حرج 🚨', color: '#dc2626' });
   if (weakCFCount >= 3) patt.push({ name: 'ضعف معامل التصحيح', desc: `جرعات التصحيح لا تخفض السكر للمعدل الطبيعي.`, rec: 'قد يحتاج الـ CF للتقليل لزيادة قوة الجرعة.', conf: 'متوسط 🟡', color: '#d97706' });
-
+ 
   const slotsData = {};
   valid.forEach(m => {
     if(!slotsData[m.slot]) slotsData[m.slot] = [];
     slotsData[m.slot].push(m.val);
   });
-
+ 
   for(let s in slotsData) {
     const sVals = slotsData[s];
     if(sVals.length >= 3) {
       const highPct = sVals.filter(v => v > L.high).length / sVals.length;
       const lowPct = sVals.filter(v => v < L.low).length / sVals.length;
       const slotName = SLOT_NAMES[s] || s;
-
+ 
       if(highPct >= 0.5) patt.push({ name: `ارتفاع متكرر (${slotName})`, desc: `السكر يرتفع بنسبة >50% في هذه الفترة.`, rec: 'راجع الجرعة المرتبطة بها.', conf: 'متوسط 🟡', color: '#d97706' });
       if(lowPct >= 0.4) patt.push({ name: `هبوط متكرر (${slotName})`, desc: `نمط هبوط متكرر في هذه الفترة.`, rec: 'تقليل الجرعة لتجنب المخاطر.', conf: 'حرج 🚨', color: '#dc2626' });
     }
   }
-
+ 
   if(!patt.length) patt.push({name:'✅ استقرار ممتاز', desc:'المؤشرات الحيوية ضمن الحدود المطلوبة.', rec:'استمر على نفس الخطة الرائعة!', conf:'ممتاز 🟢', color: '#16a34a'});
-
+ 
   const uniquePatt = Array.from(new Set(patt.map(p => JSON.stringify(p)))).map(str => JSON.parse(str));
-
+ 
   aiTable.innerHTML = `
     <div style="font-weight:bold; background:#f1f5f9; padding:8px; border-radius: 0 8px 0 0;">النمط</div>
     <div style="font-weight:bold; background:#f1f5f9; padding:8px;">الوصف</div>
@@ -406,7 +431,7 @@ function buildAI(list,unit){
     <div style="font-size:13px; font-weight:bold; color:${p.color}">${p.conf}</div>
   `).join('');
 }
-
+ 
 async function exportCSV(){
   showLoader(true);
   try {
@@ -419,7 +444,7 @@ async function exportCSV(){
       const val = d.val !== null ? d.val : '';
       csv += `${d.date},${time},${period},${val},${unitSel.value},${d.carbs||0},${d.ins||0},"${d.notes||''}"\n`;
     });
-
+ 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -429,7 +454,7 @@ async function exportCSV(){
   } catch(e) { console.error(e); alert('خطأ في تصدير CSV'); }
   showLoader(false);
 }
-
+ 
 async function exportXLSX(){
   showLoader(true);
   try {
@@ -444,7 +469,7 @@ async function exportXLSX(){
       "إنسولين (U)": d.ins || 0,
       "ملاحظات": d.notes || ''
     }));
-
+ 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "اللوجبوك");
@@ -453,9 +478,149 @@ async function exportXLSX(){
   } catch(e) { console.error(e); alert('حدث خطأ.'); }
   showLoader(false);
 }
-
+ 
 function exportPdf(){
   const node=document.querySelector('.container'); 
   const opt={ margin: 10, filename:`report-${fromDate.value}_${toDate.value}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas:{ scale:2, useCORS: true }, jsPDF:{ unit: 'mm', format: 'a4', orientation:'landscape' } };
   window.html2pdf().from(node).set(opt).save();
 }
+ 
+ 
+// ============================================================
+// نافذة تفاصيل القياس: القراءة + الأصناف + التصحيح + علاج الهبوط
+// ============================================================
+// <<MD-START
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SLOT_FULL = {
+  FASTING:'صائم', WAKE:'استيقاظ', PRE_BREAKFAST:'قبل الفطار', POST_BREAKFAST:'بعد الفطار',
+  PRE_LUNCH:'قبل الغداء', POST_LUNCH:'بعد الغداء', PRE_DINNER:'قبل العشاء', POST_DINNER:'بعد العشاء',
+  SNACK:'سناك', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم'
+};
+const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+ 
+function stateText(val, unit){
+  const L = limitsInUnit(unit);
+  if (val >= L.critHigh) return 'ارتفاع حرج';
+  if (val > L.high) return 'ارتفاع';
+  if (val <= L.critLow) return 'هبوط حرج';
+  if (val < L.low) return 'هبوط';
+  return 'في النطاق';
+}
+ 
+function kv(icon, label, value, cls=''){
+  return `<div class="md-kv ${cls}"><span>${icon} ${label}</span><b>${value}</b></div>`;
+}
+ 
+function measurementCardHTML(v, unit){
+  const x = v.raw || {};
+  const time = x.time || (v.when ? v.when.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '');
+  const method = x.measureMethod === 'sensor' ? '📡 حساس' : x.measureMethod === 'blood' ? '🩸 وخز' : '';
+ 
+  // ---- القراءة ----
+  let html = `<div class="md-card"><div class="md-card-head"><span class="md-time">🕒 ${esc(time)}</span><span class="md-method">${method}</span></div>`;
+  if (v.val !== null) {
+    html += `<div class="md-bg-row"><span class="md-bg ${classFor(v.val, unit)}">${esc(v.val)} <small>${esc(unit)}</small></span><span class="md-state">${stateText(v.val, unit)}</span></div>`;
+  }
+ 
+  // ---- علاج الهبوط ----
+  if (x.hypoTreatment) html += `<div class="md-box md-hypo"><b>🧃 علاج الهبوط</b><div>${esc(x.hypoTreatment)}</div></div>`;
+ 
+  // ---- الجرعات (أكل / تصحيح / إجمالي) ----
+  const carbDose = num(x.carbDose), corr = num(x.correctionDose), earlier = num(x.earlierCorrectionDose);
+  const total = num(x.totalDose ?? x.totalInsulin), iob = num(x.iobUsed);
+  const isMeal = !!(x.mealSaved || num(x.carbs) > 0 || carbDose > 0);
+  let doses = '';
+  if (isMeal) {
+    if (carbDose > 0) doses += kv('🍽️', 'جرعة الأكل', `${round1(carbDose)} U`);
+    if (corr > 0) doses += kv('💧', 'جرعة تصحيح', `${round1(corr)} U`, 'is-corr');
+  } else if (corr > 0) {
+    doses += kv('💧', 'جرعة تصحيح', `${round1(corr)} U`, 'is-corr');
+  }
+  if (earlier > 0) doses += kv('💧', 'تصحيح سابق (قبل الوجبة)', `${round1(earlier)} U`, 'is-corr');
+  if (iob > 0) doses += kv('⏳', 'أنسولين نشط تم خصمه', `${round1(iob)} U`);
+  if (total > 0) doses += kv('⚡', 'إجمالي الجرعة', `${round1(total)} U`, 'is-total');
+  if (x.doseOverridden && x.suggestedDose != null && Math.abs(num(x.totalDose) - num(x.suggestedDose)) > 1e-9) {
+    doses += kv('✏️', 'عُدّلت يدوياً — المقترح كان', `${round1(num(x.suggestedDose))} U`, 'is-warn');
+  }
+  if (doses) html += `<div class="md-box">${doses}</div>`;
+ 
+  // ---- الأصناف المختارة ----
+  const items = Array.isArray(x.mealItemsRef) ? x.mealItemsRef : [];
+  if (items.length) {
+    html += `<div class="md-box"><b>🍔 الأصناف المختارة</b><table class="md-table"><thead><tr><th>الصنف</th><th>الكمية</th><th>كارب صافي</th></tr></thead><tbody>` +
+      items.map(it => {
+        const q = [it.qty, it.unit].filter(z => z !== undefined && z !== null && z !== '').join(' ');
+        const net = it.netCarb_g != null ? `${round1(it.netCarb_g)}g` : '—';   // السجلات القديمة لا تحفظ الكارب الصافي الفعلي
+        return `<tr><td>${esc(it.name)}</td><td>${esc(q)}</td><td>${net}</td></tr>`;
+      }).join('') + `</tbody></table></div>`;
+  }
+  if (num(x.carbs) > 0 || num(x.calories) > 0) {
+    let chips = '';
+    if (num(x.carbs) > 0) chips += `<span class="md-chip">كارب ${round1(num(x.carbs))}g</span>`;
+    if (num(x.calories) > 0) chips += `<span class="md-chip">${Math.round(num(x.calories))} kcal</span>`;
+    if (num(x.protein) > 0) chips += `<span class="md-chip">بروتين ${round1(num(x.protein))}g</span>`;
+    if (num(x.fat) > 0) chips += `<span class="md-chip">دهون ${round1(num(x.fat))}g</span>`;
+    if (num(x.fiber) > 0) chips += `<span class="md-chip">ألياف ${round1(num(x.fiber))}g</span>`;
+    html += `<div class="md-chips">${chips}</div>`;
+    if (!items.length) html += `<div class="md-muted">الكارب مُدخل يدوياً بدون أصناف من المكتبة.</div>`;
+  }
+ 
+  // ---- لا توجد تفاصيل ----
+  if (!doses && !items.length && !x.hypoTreatment && !(num(x.carbs) > 0)) {
+    html += `<div class="md-muted">لا توجد وجبة أو جرعة أو علاج مسجل لهذا القياس.</div>`;
+  }
+ 
+  if (x.notes) html += `<div class="md-notes">📝 ${esc(x.notes)}</div>`;
+  return html + `</div>`;
+}
+ 
+function detailHTML(day, slot, unit){
+  const list = (day && day.slots[slot]) || [];
+  return {
+    title: SLOT_FULL[slot] || esc(slot),
+    sub: `${formatDate(day.date)}${list.length > 1 ? ` — ${list.length} قياسات` : ''}`,
+    body: list.map(v => measurementCardHTML(v, unit)).join('')
+  };
+}
+// <<MD-END
+ 
+function ensureModal(){
+  let m = $('mDetailModal'); if (m) return m;
+  m = document.createElement('div');
+  m.id = 'mDetailModal'; m.className = 'md-overlay hidden';
+  m.innerHTML = `
+    <div class="md-sheet" role="dialog" aria-modal="true" aria-labelledby="mdTitle">
+      <div class="md-head">
+        <div><div id="mdTitle" class="md-title"></div><div id="mdSub" class="md-sub"></div></div>
+        <button type="button" class="md-close" aria-label="إغلاق">✕</button>
+      </div>
+      <div id="mdBody" class="md-body"></div>
+    </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if (e.target === m || e.target.closest('.md-close')) closeDetail(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+  return m;
+}
+ 
+let _lastFocus = null;
+function openDetail(dayKey, slot){
+  const day = reportDays.find(d => d.key === dayKey);
+  if (!day || !day.slots[slot]) return;
+  const m = ensureModal();
+  const d = detailHTML(day, slot, unitSel.value);
+  $('mdTitle').textContent = d.title;
+  $('mdSub').textContent = d.sub;
+  $('mdBody').innerHTML = d.body;
+  _lastFocus = document.activeElement;
+  m.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  m.querySelector('.md-close').focus();
+}
+ 
+function closeDetail(){
+  const m = $('mDetailModal'); if (!m || m.classList.contains('hidden')) return;
+  m.classList.add('hidden');
+  document.body.style.overflow = '';
+  if (_lastFocus && _lastFocus.focus) _lastFocus.focus();
+}
+ 
