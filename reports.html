@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>التقرير وسجل المتابعة</title>
   <link rel="icon" href="favicon.ico" />
-  <link rel="stylesheet" href="css/reports.css?v=2"/>
+  <link rel="stylesheet" href="css/reports.css?v=3"/>
 </head>
 <body>
   <!-- شريط التنقل الموحد -->
@@ -19,9 +19,9 @@
       <button id="backBtn" class="btn" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s;">🏠 رجوع</button>
     </div>
   </header>
-
+ 
   <div id="appLoader" class="loader"><span class="spinner"></span><span>يجري التحميل...</span></div>
-
+ 
   <div class="container">
     <section class="filters">
       <!-- صف الفلاتر الأول: الفترات السريعة وأنواع القياس -->
@@ -56,7 +56,7 @@
         
         <button id="applyBtn" class="btn">تحديث التقرير</button>
       </div>
-
+ 
       <!-- صف الفلاتر الثاني: أزرار التصدير والطباعة -->
       <div class="row">
         <div class="grow"></div>
@@ -68,7 +68,7 @@
       </div>
       <div class="chips" id="thresholdChips"></div>
     </section>
-
+ 
     <!-- باقي الصفحة كما هي تماماً -->
     <section class="summary">
       <div class="cards">
@@ -81,7 +81,7 @@
       </div>
       <div class="pie-box" style="width: 150px; height: 150px; margin: auto;"><canvas id="pieTIR"></canvas></div>
     </section>
-
+ 
     <section class="grid-wrap">
       <div class="grid-head">
         <div class="r">التاريخ</div>
@@ -95,7 +95,7 @@
       <div id="reportGrid" class="grid-body"></div>
       <div id="emptyGrid" class="empty hidden">لا توجد بيانات مسجلة في هذه الفترة</div>
     </section>
-
+ 
     <section class="compare">
       <h3>مقارنة فترة حالية مقابل سابقة</h3>
       <div class="row">
@@ -105,20 +105,20 @@
       </div>
       <div id="cmpTable" class="cmp-table"></div>
     </section>
-
+ 
     <section class="ai">
       <h3>التحليلات الذكية والأنماط (AI) 🧠</h3>
       <div id="aiTable" class="ai-table"></div>
     </section>
   </div>
-
+ 
   <div id="toast" class="toast" style="display:none"></div>
-
+ 
   <!-- استدعاء المكتبات الضرورية للتصدير والرسومات -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
   
-  <script type="module" src="js/reports.js?v=4"></script>
+  <script type="module" src="js/reports.js?v=5"></script>
 </body>
 </html>
