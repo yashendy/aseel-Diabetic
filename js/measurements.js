@@ -1,146 +1,139 @@
 // js/measurements.js
 import { auth, db } from './firebase-config.js';
-import { collection, doc, getDoc, addDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, addDoc, deleteDoc, onSnapshot, query, where, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-
+import {
+  esc, round, localDateStr, localTimeStr, whenFromParts, toDateObj, convert, roundToStep, SLOT_ORDER,
+  getTherapy, glucoseState, glucoseFields, calcIOB, extractDoseEntries
+} from './dose-engine.js';
+ 
 const $ = id => document.getElementById(id);
-const pad = n => String(n).padStart(2,'0');
-const todayISO = () => new Date().toISOString().slice(0,10);
-const nowTime = () => { const d=new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-function toast(msg) { const t=$('toast'); if(t){ t.textContent=msg; t.classList.remove('hidden'); t.style.display='block'; clearTimeout(t._t); t._t=setTimeout(()=>{t.classList.add('hidden'); t.style.display='none';}, 2500); } }
-
+const pad = n => String(n).padStart(2, '0');
+function toast(msg) { const t = $('toast'); if (t) { t.textContent = msg; t.classList.remove('hidden'); t.style.display = 'block'; clearTimeout(t._t); t._t = setTimeout(() => { t.classList.add('hidden'); t.style.display = 'none'; }, 2500); } }
+ 
 const params = new URLSearchParams(location.search);
 const childId = params.get('child') || localStorage.getItem('selectedChildId');
-
+ 
 let currentUser = null;
-let childData = {};
-let todayMeasurements = []; 
-
-// إعدادات النظام للطفل
-let sysUnit = 'mg/dL';
-let sysTarget = 100, sysCF = 50, sysCR = { breakfast: 10, lunch: 10, dinner: 10, snack: 15 };
-let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
-
+let parentId = null;
+let therapy = getTherapy({});
+let todayMeasurements = [];
+let unsubscribe = null;     // إلغاء المستمع القديم عند تغيير اليوم
+let currentIOB = 0;         // الأنسولين النشط وقت القراءة المحددة
+ 
 const SLOT_NAMES = { FASTING: 'صائم', PRE_BREAKFAST: 'قبل الفطار', POST_BREAKFAST: 'بعد الفطار', PRE_LUNCH: 'قبل الغدا', POST_LUNCH: 'بعد الغدا', PRE_DINNER: 'قبل العشا', POST_DINNER: 'بعد العشا', SNACK: 'سناك', BEDTIME: 'قبل النوم', EXERCISE: 'رياضة', OTHER: 'أخرى' };
-const SLOT_ORDER = { FASTING:10, PRE_BREAKFAST:20, POST_BREAKFAST:25, PRE_LUNCH:30, POST_LUNCH:35, PRE_DINNER:40, POST_DINNER:45, SNACK:50, EXERCISE:60, BEDTIME:90, OTHER:200 };
-
+ 
+const measRef = () => collection(db, "parents", parentId, "children", childId, "measurements");
+ 
 onAuthStateChanged(auth, async (user) => {
   if (!user) { location.replace('index.html'); return; }
   currentUser = user;
-  if(!childId) { location.href="parent.html"; return; }
-
-  if($('dayPicker')) $('dayPicker').value = todayISO();
-  if($('timePicker')) $('timePicker').value = nowTime();
+  parentId = localStorage.getItem('selectedParentId') || user.uid;
+  if (!childId) { location.href = "parent.html"; return; }
+ 
+  if ($('dayPicker')) $('dayPicker').value = localDateStr();
+  if ($('timePicker')) $('timePicker').value = localTimeStr();
   autoSelectSlot();
-
+ 
   await loadChildSettings();
-  initUnitSmartSwitch(); 
-  listenToTodayMeasurements();
+  initUnitSmartSwitch();
+  listenToDayMeasurements();
   setupEventListeners();
+  refreshIOB();
 });
-
+ 
 async function loadChildSettings() {
   try {
-    const snap = await getDoc(doc(db, "parents", currentUser.uid, "children", childId));
+    const snap = await getDoc(doc(db, "parents", parentId, "children", childId));
     if (!snap.exists()) return;
-    childData = snap.data();
-
-    if($('childName')) $('childName').textContent = childData.name || 'الطفل';
-    sysUnit = childData.glucoseUnit || 'mg/dL';
-
-    if(childData.cf) sysCF = Number(childData.cf);
-    if(childData.cr) sysCR = childData.cr;
-    if(childData.glucose_limits) {
-      sysTarget = Number(childData.glucose_limits.target) || (sysUnit==='mmol/L'? 5.5 : 100);
-      sysLimits.low = Number(childData.glucose_limits.low) || (sysUnit==='mmol/L'? 3.9 : 70);
-      sysLimits.high = Number(childData.glucose_limits.high) || (sysUnit==='mmol/L'? 10.0 : 180);
-      sysLimits.critLow = Number(childData.glucose_limits.critical_low) || (sysUnit==='mmol/L'? 3.0 : 54);
-      sysLimits.critHigh = Number(childData.glucose_limits.critical_high) || (sysUnit==='mmol/L'? 13.9 : 250);
+    const c = snap.data();
+    therapy = getTherapy(c);
+ 
+    if ($('childName')) $('childName').textContent = c.name || 'الطفل';
+    if ($('unitSel')) $('unitSel').value = therapy.unit;
+    if ($('therapyChips')) {
+      $('therapyChips').innerHTML =
+        `<span class="chip">🎯 الهدف: ${esc(therapy.target ?? '—')}</span><span class="chip">💉 CF: ${esc(therapy.CF ?? '—')}</span><span class="chip">📊 ${esc(therapy.unit)}</span>` +
+        (therapy.missing.length ? `<span class="chip" style="background:#fef2f2;color:#991b1b;">⚠️ ناقص: ${esc(therapy.missing.join('، '))}</span>` : '');
     }
-
-    if($('unitSel')) $('unitSel').value = sysUnit;
-    if($('therapyChips')) {
-      $('therapyChips').innerHTML = `<span class="chip">🎯 الهدف: ${sysTarget}</span><span class="chip">💉 CF: ${sysCF}</span><span class="chip">📊 ${sysUnit}</span>`;
-    }
-    if($('backToChild')) $('backToChild').onclick = () => location.href = `child.html?child=${childId}`;
-
-  } catch(e) { console.error(e); }
+    if ($('backToChild')) $('backToChild').onclick = () => location.href = `child.html?child=${childId}`;
+  } catch (e) { console.error(e); }
 }
-
+ 
 function autoSelectSlot() {
   const h = new Date().getHours();
   let slot = 'OTHER';
-  if(h >= 5 && h < 11) slot = 'PRE_BREAKFAST';
-  else if(h >= 11 && h < 16) slot = 'PRE_LUNCH';
-  else if(h >= 16 && h < 22) slot = 'PRE_DINNER';
-  else if(h >= 22 || h < 5) slot = 'BEDTIME';
-  if($('slotKey')) $('slotKey').value = slot;
+  if (h >= 5 && h < 11) slot = 'PRE_BREAKFAST';
+  else if (h >= 11 && h < 16) slot = 'PRE_LUNCH';
+  else if (h >= 16 && h < 22) slot = 'PRE_DINNER';
+  else if (h >= 22 || h < 5) slot = 'BEDTIME';
+  if ($('slotKey')) $('slotKey').value = slot;
 }
-
+ 
 function initUnitSmartSwitch() {
-  const unitSel = $('unitSel');
-  const readingInput = $('reading');
-  if(!unitSel || !readingInput) return;
-
+  const unitSel = $('unitSel'); const readingInput = $('reading');
+  if (!unitSel || !readingInput) return;
   let previousUnit = unitSel.value;
   unitSel.addEventListener('change', (e) => {
     const newUnit = e.target.value;
     readingInput.placeholder = newUnit === 'mmol/L' ? 'مثال: 6.5' : 'مثال: 120';
-    if (readingInput.value) {
-      let val = parseFloat(readingInput.value);
-      if (!isNaN(val)) {
-        if (newUnit === 'mmol/L' && previousUnit === 'mg/dL') readingInput.value = (val / 18.0182).toFixed(1);
-        else if (newUnit === 'mg/dL' && previousUnit === 'mmol/L') readingInput.value = Math.round(val * 18.0182);
-      }
+    const val = parseFloat(readingInput.value);
+    if (!isNaN(val) && previousUnit !== newUnit) {
+      const v = convert(val, previousUnit, newUnit);
+      readingInput.value = newUnit === 'mmol/L' ? v.toFixed(1) : Math.round(v);
     }
     previousUnit = newUnit;
-    calculateSmartAlert(); 
+    calculateSmartAlert();
   });
 }
-
-function normalizeGlucose(val, fromUnit) {
-  if (fromUnit === sysUnit) return val;
-  if (fromUnit === 'mmol/L' && sysUnit === 'mg/dL') return val * 18.0182;
-  if (fromUnit === 'mg/dL' && sysUnit === 'mmol/L') return val / 18.0182;
-  return val;
+ 
+// ---------- IOB وقت القراءة المحددة ----------
+async function refreshIOB() {
+  try {
+    const at = whenFromParts($('dayPicker').value, $('timePicker').value);
+    const since = new Date(at.getTime() - therapy.diaHours * 3600e3);
+    const snap = await getDocs(query(measRef(), where('when', '>=', since), where('when', '<', at)));
+    currentIOB = calcIOB(extractDoseEntries(snap.docs.map(d => d.data())), at, therapy.diaHours);
+  } catch (e) { console.error(e); currentIOB = 0; }
+  calculateSmartAlert();
 }
-
+ 
 function calculateSmartAlert() {
   const rawVal = parseFloat($('reading').value);
   const selectedUnit = $('unitSel').value;
   const panel = $('actionsPanel');
-  
-  if(!rawVal || rawVal <= 0) { panel.classList.add('hidden'); return; }
-
-  const val = normalizeGlucose(rawVal, selectedUnit);
+  if (!rawVal || rawVal <= 0) { panel.classList.add('hidden'); return; }
+ 
+  const val = convert(rawVal, selectedUnit, therapy.unit);
   panel.classList.remove('hidden');
-  
+ 
   const alertBox = $('smartAlert');
   const corrRow = $('corrRow'); const hypoRow = $('hypoRow'); const corrInput = $('corrDoseInput');
-  alertBox.className = 'alert'; 
-
-  const slot = $('slotKey').value;
-  let currentCR = sysCR.snack || 15;
-  if(slot.includes('BREAKFAST')) currentCR = sysCR.breakfast || 10;
-  if(slot.includes('LUNCH')) currentCR = sysCR.lunch || 10;
-  if(slot.includes('DINNER')) currentCR = sysCR.dinner || 10;
-
-  if (val <= sysLimits.critLow || val < sysLimits.low) {
-    alertBox.classList.add(val <= sysLimits.critLow ? 'danger' : 'warn');
-    const raisePerGram = sysCF / currentCR; 
-    let neededCarbs = 15;
-    if(raisePerGram > 0 && sysTarget > val) neededCarbs = Math.round((sysTarget - val) / raisePerGram);
-    alertBox.innerHTML = `<div>🧃</div><div><b>هبوط!</b> يحتاج الطفل <b>${neededCarbs}g</b> كارب للوصول للهدف.</div>`;
+  alertBox.className = 'alert';
+  const L = therapy.limits;
+ 
+  if (val < L.low) {
+    // علاج الهبوط: كمية ثابتة يحددها الطبيب (الافتراضي 15 جم) ثم إعادة القياس
+    alertBox.classList.add(val <= L.critLow ? 'danger' : 'warn');
+    alertBox.innerHTML = `<div>🧃</div><div><b>هبوط!</b> أعطي <b>${therapy.hypoCarbs}g</b> كارب سريع وأعيدي القياس بعد 15 دقيقة. لا تعطي أنسولين الآن.</div>`;
     hypoRow.classList.remove('hidden'); corrRow.classList.add('hidden'); corrInput.value = '';
-
-  } else if (val >= sysLimits.critHigh || val > sysLimits.high) {
-    alertBox.classList.add(val >= sysLimits.critHigh ? 'danger' : 'warn');
-    let dose = 0;
-    if(sysCF > 0 && val > sysTarget) dose = Math.round(((val - sysTarget) / sysCF) * 2) / 2;
-    alertBox.innerHTML = `<div>💉</div><div><b>ارتفاع!</b> الجرعة المقترحة للتصحيح هي: <b>${dose}U</b>.</div>`;
-    corrRow.classList.remove('hidden'); hypoRow.classList.add('hidden');
-    if(!$('corrDoseInput').dataset.dirty) corrInput.value = dose > 0 ? dose : '';
-
+ 
+  } else if (val > L.high) {
+    alertBox.classList.add(val >= L.critHigh ? 'danger' : 'warn');
+    if (!therapy.CF || !therapy.target) {
+      alertBox.innerHTML = `<div>⚠️</div><div><b>ارتفاع!</b> لا يمكن اقتراح جرعة تصحيح لأن الإعدادات ناقصة (${esc(therapy.missing.join('، '))}). راجعي الطبيب وأكملي إعدادات الطفل.</div>`;
+      corrRow.classList.remove('hidden'); hypoRow.classList.add('hidden');
+    } else {
+      let dose = roundToStep(Math.max(0, (val - therapy.target) / therapy.CF - currentIOB), therapy.step);
+      let capNote = '';
+      if (therapy.maxDose && dose > therapy.maxDose) { dose = therapy.maxDose; capNote = ` (تم تحديدها بالحد الأقصى ${therapy.maxDose}U)`; }
+      const iobNote = currentIOB > 0 ? ` بعد خصم أنسولين نشط ${round(currentIOB, 2)}U` : '';
+      const ket = val >= L.critHigh ? '<br>🧪 اتبعي تعليمات الطبيب بشأن فحص الكيتونات.' : '';
+      alertBox.innerHTML = `<div>💉</div><div><b>ارتفاع!</b> الجرعة المقترحة للتصحيح: <b>${dose}U</b>${iobNote}${capNote}.${ket}</div>`;
+      corrRow.classList.remove('hidden'); hypoRow.classList.add('hidden');
+      if (!corrInput.dataset.dirty) corrInput.value = dose > 0 ? dose : '';
+    }
+ 
   } else {
     alertBox.classList.add('ok');
     alertBox.innerHTML = `<div>🎉</div><div><b>طبيعي!</b> استمر على هذا الأداء الممتاز.</div>`;
@@ -148,136 +141,146 @@ function calculateSmartAlert() {
     corrInput.value = ''; $('hypoTreatment').value = '';
   }
 }
-
-function getGlucoseStateCSS(val) {
-  if(val <= sysLimits.critLow) return { dot: 'danger', bg: 'bg-danger', text: 'هبوط حرج' };
-  if(val < sysLimits.low) return { dot: 'warn', bg: 'bg-warn', text: 'هبوط' };
-  if(val >= sysLimits.critHigh) return { dot: 'danger', bg: 'bg-danger', text: 'ارتفاع حرج' };
-  if(val > sysLimits.high) return { dot: 'warn', bg: 'bg-warn', text: 'ارتفاع' };
-  return { dot: 'ok', bg: 'bg-ok', text: 'في النطاق' };
-}
-
+ 
 async function saveMeasurement() {
   const rawVal = parseFloat($('reading').value);
   const selectedUnit = $('unitSel').value;
-  if(!rawVal) { toast("يرجى إدخال قراءة صحيحة"); return; }
-
-  const day = $('dayPicker').value;
-  const time = $('timePicker').value;
+  if (!rawVal) { toast("يرجى إدخال قراءة صحيحة"); return; }
+ 
+  const day = $('dayPicker').value; const time = $('timePicker').value;
   const slotKey = $('slotKey').value;
   const notes = $('mNotes').value.trim();
   const corrDose = parseFloat($('corrDoseInput').value) || 0;
   const hypoTreat = $('hypoTreatment').value.trim();
-
-  const dateTimeObj = new Date(`${day}T${time}`);
-  const normalizedValue = normalizeGlucose(rawVal, selectedUnit);
-
+ 
+  if (therapy.maxDose && corrDose > therapy.maxDose) {
+    alert(`⛔ جرعة التصحيح (${corrDose}U) أعلى من الحد الأقصى المحدد للطفل (${therapy.maxDose}U).`);
+    return;
+  }
+  const norm = convert(rawVal, selectedUnit, therapy.unit);
+  if (corrDose > 0 && norm < therapy.limits.low && !confirm("⚠️ السكر منخفض! هل أنت متأكدة من تسجيل جرعة أنسولين؟")) return;
+ 
   const payload = {
-    value: rawVal, unit: selectedUnit, normalizedValue: normalizedValue,
-    date: day, time: time, when: dateTimeObj, 
-    slotKey: slotKey, slotOrder: SLOT_ORDER[slotKey] || 200,
-    state: getGlucoseStateCSS(normalizedValue).text,
+    ...glucoseFields(rawVal, selectedUnit, therapy),
+    date: day, time, when: whenFromParts(day, time),
+    slotKey, slotOrder: SLOT_ORDER[slotKey] || 200,
     correctionDose: corrDose > 0 ? corrDose : null,
+    iobUsed: currentIOB > 0 ? currentIOB : null,
+    cfUsed: therapy.CF, targetUsed: therapy.target,
     hypoTreatment: hypoTreat || null, notes: notes || null,
     createdAt: serverTimestamp()
   };
-
+ 
   try {
-    await addDoc(collection(db, "parents", currentUser.uid, "children", childId, "measurements"), payload);
+    await addDoc(measRef(), payload);
     toast("تم الحفظ بنجاح! ✔️");
     $('reading').value = ''; $('mNotes').value = '';
     $('corrDoseInput').value = ''; $('corrDoseInput').dataset.dirty = "";
     $('hypoTreatment').value = ''; $('actionsPanel').classList.add('hidden');
-  } catch(e) { alert("حدث خطأ أثناء الحفظ"); console.error(e); }
+    refreshIOB();
+  } catch (e) { alert("حدث خطأ أثناء الحفظ"); console.error(e); }
 }
-
-function listenToTodayMeasurements() {
-  const measRef = collection(db, "parents", currentUser.uid, "children", childId, "measurements");
-  onSnapshot(query(measRef, orderBy('when', 'desc')), (snapshot) => {
-    const allMeas = [];
-    snapshot.forEach(doc => allMeas.push({ id: doc.id, ...doc.data() }));
-    const selectedDay = $('dayPicker').value;
-    todayMeasurements = allMeas.filter(m => m.date === selectedDay || (m.when && m.when.toDate().toISOString().slice(0,10) === selectedDay));
+ 
+// مستمع لليوم المحدد فقط (بدل كل التاريخ) مع إلغاء المستمع السابق
+function listenToDayMeasurements() {
+  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+  const day = $('dayPicker').value;
+  const start = whenFromParts(day, '00:00');
+  const end = new Date(start.getTime() + 24 * 3600e3);
+  const q = query(measRef(), where('when', '>=', start), where('when', '<', end), orderBy('when', 'desc'));
+  unsubscribe = onSnapshot(q, (snapshot) => {
+    todayMeasurements = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     renderTimeline(todayMeasurements);
-  });
+  }, (err) => { console.error(err); toast('تعذر تحميل القياسات'); });
 }
-
+ 
 function renderTimeline(dataArray) {
   const grid = $('timelineGrid'); const empty = $('empty');
   const searchQuery = $('searchBox').value.toLowerCase();
-
+ 
   let filtered = dataArray;
-  if(searchQuery) filtered = filtered.filter(m => (m.notes||'').toLowerCase().includes(searchQuery) || (m.hypoTreatment||'').toLowerCase().includes(searchQuery) || (SLOT_NAMES[m.slotKey]||'').toLowerCase().includes(searchQuery));
-
+  if (searchQuery) filtered = filtered.filter(m => (m.notes || '').toLowerCase().includes(searchQuery) || (m.hypoTreatment || '').toLowerCase().includes(searchQuery) || (SLOT_NAMES[m.slotKey] || '').toLowerCase().includes(searchQuery));
+ 
   grid.innerHTML = '';
-  if(filtered.length === 0) { grid.classList.add('hidden'); empty.classList.remove('hidden'); return; }
+  if (filtered.length === 0) { grid.classList.add('hidden'); empty.classList.remove('hidden'); return; }
   grid.classList.remove('hidden'); empty.classList.add('hidden');
-
+ 
   filtered.forEach(m => {
-    const mUnit = m.unit || sysUnit;
-    const normalizedVal = m.normalizedValue || normalizeGlucose(m.value, mUnit);
-    const css = getGlucoseStateCSS(normalizedVal);
+    const mUnit = m.unit || therapy.unit;
+    const normalizedVal = m.normalizedValue ?? convert(Number(m.value), mUnit, therapy.unit);
+    const css = glucoseState(normalizedVal, therapy.limits);
     const slotName = SLOT_NAMES[m.slotKey] || m.slotKey;
-    const mTime = m.time || (m.when?.toDate ? pad(m.when.toDate().getHours()) + ':' + pad(m.when.toDate().getMinutes()) : '');
-
+    const dt = toDateObj(m.when);
+    const mTime = m.time || (dt ? pad(dt.getHours()) + ':' + pad(dt.getMinutes()) : '');
+ 
     let detailsHTML = '';
     if (m.correctionDose || m.hypoTreatment || m.carbs || m.mealDose || m.totalDose) {
       detailsHTML = `<div class="tl-details mt-10">`;
-      if(m.hypoTreatment) detailsHTML += `<div class="tl-detail-item"><span>🧃 علاج هبوط</span><b style="color:#b45309;">${m.hypoTreatment}</b></div>`;
-      if(m.correctionDose) detailsHTML += `<div class="tl-detail-item"><span>💧 تصحيح</span><b style="color:#ef4444;">${m.correctionDose} U</b></div>`;
-      if(m.carbs) detailsHTML += `<div class="tl-detail-item"><span>🍔 كارب وجبة</span><b>${m.carbs}g</b></div>`;
-      if(m.mealDose) detailsHTML += `<div class="tl-detail-item"><span>💉 جرعة أكل</span><b>${m.mealDose} U</b></div>`;
-      if(m.totalDose) detailsHTML += `<div class="tl-detail-item" style="border-right:2px solid #cbd5e1; padding-right:10px;"><span>⚡ الإجمالي</span><b style="color:#2563eb;">${m.totalDose} U</b></div>`;
+      if (m.hypoTreatment) detailsHTML += `<div class="tl-detail-item"><span>🧃 علاج هبوط</span><b style="color:#b45309;">${esc(m.hypoTreatment)}</b></div>`;
+      if (m.correctionDose) detailsHTML += `<div class="tl-detail-item"><span>💧 تصحيح</span><b style="color:#ef4444;">${esc(m.correctionDose)} U</b></div>`;
+      if (m.carbs) detailsHTML += `<div class="tl-detail-item"><span>🍔 كارب وجبة</span><b>${esc(m.carbs)}g</b></div>`;
+      if (m.mealDose) detailsHTML += `<div class="tl-detail-item"><span>💉 جرعة أكل</span><b>${esc(m.mealDose)} U</b></div>`;
+      if (m.totalDose) detailsHTML += `<div class="tl-detail-item" style="border-right:2px solid #cbd5e1; padding-right:10px;"><span>⚡ الإجمالي</span><b style="color:#2563eb;">${esc(m.totalDose)} U</b></div>`;
       detailsHTML += `</div>`;
     }
-
+ 
     const card = document.createElement('div'); card.className = 'tl-item';
     card.innerHTML = `
       <div class="tl-dot ${css.dot}"></div>
       <div class="tl-card">
-        <div class="tl-head"><div><span class="tl-time">🕒 ${mTime}</span> | <span class="tl-slot">${slotName}</span></div><button class="icon-btn del-btn" data-id="${m.id}">🗑️</button></div>
-        <div class="tl-body"><div class="tl-bg ${css.bg}">${m.value} <span style="font-size:14px;">${mUnit}</span></div><div style="font-size:13px; font-weight:bold;">${css.text}</div></div>
-        ${detailsHTML} ${m.notes ? `<div class="tl-notes">📝 ${m.notes}</div>` : ''}
+        <div class="tl-head"><div><span class="tl-time">🕒 ${esc(mTime)}</span> | <span class="tl-slot">${esc(slotName)}</span></div><button class="icon-btn del-btn" data-id="${esc(m.id)}" data-meal="${(m.carbs > 0 || m.totalDose > 0) ? '1' : ''}">🗑️</button></div>
+        <div class="tl-body"><div class="tl-bg ${css.bg}">${esc(m.value)} <span style="font-size:14px;">${esc(mUnit)}</span></div><div style="font-size:13px; font-weight:bold;">${css.text}</div></div>
+        ${detailsHTML} ${m.notes ? `<div class="tl-notes">📝 ${esc(m.notes)}</div>` : ''}
       </div>`;
     grid.appendChild(card);
   });
-
-  document.querySelectorAll('.del-btn').forEach(btn => {
-    btn.onclick = async () => { if(confirm('تأكيد الحذف؟')) { await deleteDoc(doc(db, "parents", currentUser.uid, "children", childId, "measurements", btn.dataset.id)); toast('تم الحذف'); } };
+ 
+  grid.querySelectorAll('.del-btn').forEach(btn => {
+    btn.onclick = async () => {
+      const msg = btn.dataset.meal ? 'هذا السجل يحتوي وجبة وجرعة أنسولين، وسيُحذف كله معهم. تأكيد الحذف؟' : 'تأكيد الحذف؟';
+      if (confirm(msg)) {
+        await deleteDoc(doc(db, "parents", parentId, "children", childId, "measurements", btn.dataset.id));
+        toast('تم الحذف'); refreshIOB();
+      }
+    };
   });
 }
-
+ 
 function sendToMeals() {
-  const val = $('reading').value; const unit = $('unitSel').value; const slot = $('slotKey').value; const date = $('dayPicker').value;
-  location.href = `meals.html?child=${childId}&bg=${val || ''}&unit=${unit}&slot=${slot}&date=${date}`;
+  const val = $('reading').value; const unit = $('unitSel').value; const slot = $('slotKey').value; const date = $('dayPicker').value; const time = $('timePicker').value;
+  location.href = `meals.html?child=${encodeURIComponent(childId)}&bg=${encodeURIComponent(val || '')}&unit=${encodeURIComponent(unit)}&slot=${encodeURIComponent(slot)}&date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`;
 }
-
-// --- استعادة ميزة التصدير (Export) ---
+ 
+// --- التصدير ---
 function getExportData() {
   return todayMeasurements.map(m => {
-    const time = m.time || (m.when?.toDate ? pad(m.when.toDate().getHours()) + ':' + pad(m.when.toDate().getMinutes()) : '');
-    return [ time, SLOT_NAMES[m.slotKey] || m.slotKey, `${m.value} ${m.unit}`, m.state, m.correctionDose || 0, m.carbs || 0, m.totalDose || 0, m.hypoTreatment || '', m.notes || '' ];
+    const dt = toDateObj(m.when);
+    const time = m.time || (dt ? pad(dt.getHours()) + ':' + pad(dt.getMinutes()) : '');
+    return [time, SLOT_NAMES[m.slotKey] || m.slotKey, `${m.value} ${m.unit}`, m.state, m.correctionDose || 0, m.carbs || 0, m.totalDose || 0, m.hypoTreatment || '', m.notes || ''];
   });
 }
-
+// حماية CSV: اقتباس الحقول + منع حقن الصيغ في Excel
+const csvCell = c => { let s = String(c ?? ''); if (/^[=+\-@]/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
+ 
 function exportCSV() {
   const rows = [['الوقت', 'النوع', 'القيمة', 'الحالة', 'تصحيح (U)', 'كارب (g)', 'إجمالي الأنسولين', 'علاج الهبوط', 'ملاحظات'], ...getExportData()];
-  const csv = rows.map(r => r.join(',')).join('\n');
+  const csv = rows.map(r => r.map(csvCell).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = `سجل_${$('dayPicker').value}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-
+ 
 async function exportXLSX() {
-  if(!window.XLSX) {
-    await new Promise((res,rej)=>{const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; s.onload=res; s.onerror=rej; document.head.appendChild(s);});
+  if (!window.XLSX) {
+    await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
   }
   const rows = [['الوقت', 'النوع', 'القيمة', 'الحالة', 'تصحيح (U)', 'كارب (g)', 'إجمالي الأنسولين', 'علاج الهبوط', 'ملاحظات'], ...getExportData()];
   const ws = window.XLSX.utils.aoa_to_sheet(rows);
   const wb = window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb, ws, "القياسات");
   window.XLSX.writeFile(wb, `سجل_${$('dayPicker').value}.xlsx`);
 }
-
+ 
 function setupEventListeners() {
   $('reading').addEventListener('input', calculateSmartAlert);
   $('slotKey').addEventListener('change', calculateSmartAlert);
@@ -285,10 +288,9 @@ function setupEventListeners() {
   $('toMealsBtn').addEventListener('click', sendToMeals);
   $('corrDoseInput').addEventListener('input', () => $('corrDoseInput').dataset.dirty = "true");
   document.querySelectorAll('.chip-btn').forEach(btn => btn.addEventListener('click', () => $('hypoTreatment').value = btn.dataset.val));
-  $('dayPicker').addEventListener('change', () => listenToTodayMeasurements());
+  $('dayPicker').addEventListener('change', () => { listenToDayMeasurements(); refreshIOB(); });
+  $('timePicker').addEventListener('change', refreshIOB);
   $('searchBox').addEventListener('input', () => renderTimeline(todayMeasurements));
-  
-  // زراير التصدير
   $('exportCsvBtn').addEventListener('click', exportCSV);
   $('exportXlsxBtn').addEventListener('click', exportXLSX);
 }
