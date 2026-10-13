@@ -9,6 +9,7 @@ import {
   esc, round, localDateStr, localTimeStr, whenFromParts, toDateObj, convert, mealOfSlot, SLOT_ORDER,
   getTherapy, calcBolus, calcIOB, extractDoseEntries, isMealDoc, glucoseFields
 } from './dose-engine.js';
+import { normAr } from './food-utils.js';
  
 // ========================================================
 // 2. أدوات وحالة الصفحة
@@ -21,6 +22,7 @@ let state = {
   childId: null, parentId: null, child: null, therapy: null,
   date: localDateStr(), time: localTimeStr(), slot: "PRE_BREAKFAST",
   rule: "fullFiber", globalFoods: [], mealItems: [],
+  favorites: new Set(), mostUsedIds: [], libTab: "all",
   finalDoseVal: 0, lastCalc: null, mealStats: { fat: 0, pro: 0, avgGI: 0, fiber: 0 },
   iobDirty: false, iobAuto: 0, iobCount: 0,
   manualCarbDirty: false, manualDoseDirty: false, isRescueMode: false,
@@ -125,6 +127,30 @@ async function loadChildData() {
     therapyWarn.innerHTML = `⚠️ <b>إعدادات الجرعة ناقصة:</b> ${esc(miss.join('، '))}. الحاسبة لن تقترح جرعة للبيانات الناقصة حتى تكتمل من <a href="child-edit.html?id=${encodeURIComponent(state.childId)}">إعدادات الطفل</a>.`;
   }
   updateFactorsDisplay();
+
+  // تحميل المفضلة للأطعمة
+  const savedFavs = c.favoriteFoodIds || JSON.parse(localStorage.getItem(`fav_foods_${state.childId}`) || '[]');
+  state.favorites = new Set(savedFavs);
+  if ($('favCount')) $('favCount').textContent = state.favorites.size;
+  loadMostUsedFoods();
+}
+
+async function loadMostUsedFoods() {
+  try {
+    const snap = await getDocs(query(measColl(), limit(40)));
+    const counts = {};
+    snap.docs.forEach(d => {
+      const items = d.data().mealItemsRef || [];
+      items.forEach(it => {
+        if (it.foodId) {
+          counts[it.foodId] = (counts[it.foodId] || 0) + 1;
+        }
+      });
+    });
+    state.mostUsedIds = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  } catch (err) {
+    console.warn("تعذر جلب الأصناف الأكثر استخداماً:", err);
+  }
 }
  
 function autoSelectMealSlot() {
@@ -202,17 +228,43 @@ async function fetchFoodLibrary() {
  
 function renderLibrary() {
   if (!els.itemsGrid) return;
-  const q = els.searchBox.value.toLowerCase();
-  let list = state.globalFoods.filter(f => !q || String(f.searchText || f.name || '').toLowerCase().includes(q));
-  if (state.isRescueMode) list = list.filter(f => f.tags && f.tags.includes('#علاج_هبوط'));
- 
-  if (!list.length) { els.itemsGrid.innerHTML = `<div style="text-align:center; padding:20px; color:#94a3b8;">${state.isRescueMode ? 'لا توجد أصناف مخصصة لعلاج الهبوط في المكتبة.' : 'لا توجد نتائج مطابقة لبحثك.'}</div>`; return; }
- 
+  const rawQ = els.searchBox ? els.searchBox.value : '';
+  const words = normAr(rawQ).split(' ').filter(Boolean);
+
+  let list = state.globalFoods.filter(f => {
+    if (!f._norm) {
+      f._norm = normAr(`${f.name || ''} ${f.category || ''} ${(f.tags || []).join(' ')} ${(f.units || []).map(u => u.label).join(' ')}`);
+    }
+    return !words.length || words.every(w => f._norm.includes(w));
+  });
+
+  if (state.isRescueMode) {
+    list = list.filter(f => f.tags && f.tags.includes('#علاج_هبوط'));
+  } else if (state.libTab === 'favorites') {
+    list = list.filter(f => state.favorites.has(f.id));
+  } else if (state.libTab === 'most-used') {
+    const mostUsedSet = new Set(state.mostUsedIds);
+    list = list.filter(f => mostUsedSet.has(f.id));
+    list.sort((a, b) => state.mostUsedIds.indexOf(a.id) - state.mostUsedIds.indexOf(b.id));
+  }
+
+  if (!list.length) {
+    let emptyMsg = 'لا توجد نتائج مطابقة لبحثك.';
+    if (state.isRescueMode) emptyMsg = 'لا توجد أصناف مخصصة لعلاج الهبوط في المكتبة.';
+    else if (state.libTab === 'favorites') emptyMsg = 'لا توجد أصناف في المفضلة بعد. اضغطي على النجمة ⭐ بجانب أي صنف لإضافته للمفضلة!';
+    else if (state.libTab === 'most-used') emptyMsg = 'لم يتم تسجيل وجبات سابقة بعد لاستنتاج الأصناف الأكثر استخداماً.';
+    els.itemsGrid.innerHTML = `<div style="text-align:center; padding:30px 20px; color:#94a3b8; font-size:14px;">${emptyMsg}</div>`;
+    return;
+  }
+
   els.itemsGrid.innerHTML = list.map(f => {
     const giStr = f.per100?.gi ? `<span class="gi-badge ${f.per100.gi > 70 ? 'high' : ''}">GI: ${esc(f.per100.gi)}</span>` : '';
+    const isFav = state.favorites.has(f.id);
+    const imgUrl = f.image?.thumb || f.image?.url || f.imageUrl || SAFE_PLACEHOLDER;
     return `
       <div class="food-lib-item" data-id="${esc(f.id)}">
-        <div class="food-img-col"><img src="${esc(f.image?.url || SAFE_PLACEHOLDER)}" onerror="this.src='${SAFE_PLACEHOLDER}';">${giStr}</div>
+        <button class="fav-btn ${isFav ? 'is-fav' : ''}" type="button" data-act="toggle-fav" title="${isFav ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}">${isFav ? '★' : '☆'}</button>
+        <div class="food-img-col"><img src="${esc(imgUrl)}" onerror="this.src='${SAFE_PLACEHOLDER}';" alt="${esc(f.name)}" loading="lazy">${giStr}</div>
         <div class="details">
           <div class="food-title">${esc(f.name)}</div>
           <div class="macros-grid">
@@ -222,13 +274,28 @@ function renderLibrary() {
             <div class="m-box"><span class="m-val" style="color:#f59e0b">${esc(f.per100?.cal_kcal || 0)}</span><span class="m-lbl">kcal</span></div>
           </div>
         </div>
-        <button class="btn primary sm add-btn">${state.isRescueMode ? 'اختيار للرفع' : 'إضافة'}</button>
+        <button class="btn primary sm add-btn" data-act="add">${state.isRescueMode ? 'اختيار للرفع' : 'إضافة'}</button>
       </div>`;
   }).join('');
- 
-  document.querySelectorAll('.food-lib-item .add-btn').forEach(btn => {
-    btn.onclick = () => addItemToMeal(btn.closest('.food-lib-item').dataset.id);
-  });
+}
+
+async function toggleFavorite(foodId) {
+  if (state.favorites.has(foodId)) {
+    state.favorites.delete(foodId);
+  } else {
+    state.favorites.add(foodId);
+  }
+  const arr = [...state.favorites];
+  localStorage.setItem(`fav_foods_${state.childId}`, JSON.stringify(arr));
+  if ($('favCount')) $('favCount').textContent = arr.length;
+  renderLibrary();
+  try {
+    if (state.childId && state.parentId) {
+      await setDoc(doc(db, `parents/${state.parentId}/children/${state.childId}`), { favoriteFoodIds: arr }, { merge: true });
+    }
+  } catch (err) {
+    console.warn('Sync favorite failed:', err);
+  }
 }
  
 function addItemToMeal(id) {
@@ -586,14 +653,87 @@ function setupEvents() {
   els.libClose.onclick = () => { state.isRescueMode = false; els.libModal.classList.remove('open'); };
   els.libOverlay.onclick = () => { state.isRescueMode = false; els.libModal.classList.remove('open'); };
   els.searchBox.oninput = renderLibrary;
- 
+
+  // تبويبات مكتبة الطعام (الكل / المفضلة / الأكثر استخداماً)
+  const libTabs = $('libTabs');
+  if (libTabs) {
+    libTabs.onclick = e => {
+      const tabBtn = e.target.closest('.lib-tab[data-tab]');
+      if (!tabBtn) return;
+      libTabs.querySelectorAll('.lib-tab[data-tab]').forEach(b => b.classList.remove('active'));
+      tabBtn.classList.add('active');
+      state.libTab = tabBtn.dataset.tab;
+      renderLibrary();
+    };
+  }
+
+  // أحداث بطاقات الأطعمة (إضافة صنف أو تبديل المفضلة)
+  if (els.itemsGrid) {
+    els.itemsGrid.onclick = async e => {
+      const btn = e.target.closest('button[data-act]');
+      if (!btn) return;
+      const card = btn.closest('.food-lib-item');
+      if (!card) return;
+      const id = card.dataset.id;
+      if (btn.dataset.act === 'add') {
+        addItemToMeal(id);
+      } else if (btn.dataset.act === 'toggle-fav') {
+        await toggleFavorite(id);
+      }
+    };
+  }
+
+  // نافذة طلب إضافة صنف جديد من الأسرة للأدمن
+  const btnOpenReq = $('btnOpenRequestModal');
+  const reqDlg = $('foodRequestDialog');
+  const reqForm = $('foodRequestForm');
+  if (btnOpenReq && reqDlg) {
+    btnOpenReq.onclick = () => {
+      reqForm.reset();
+      reqDlg.showModal();
+    };
+    if ($('closeReqDialog')) $('closeReqDialog').onclick = () => reqDlg.close();
+    if ($('cancelReqBtn')) $('cancelReqBtn').onclick = () => reqDlg.close();
+
+    reqForm.onsubmit = async e => {
+      e.preventDefault();
+      const submitBtn = $('submitReqBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'جاري الإرسال...';
+      try {
+        const payload = {
+          name: $('reqFoodName').value.trim(),
+          category: $('reqFoodCategory').value,
+          notes: $('reqFoodNotes').value.trim(),
+          per100: {
+            carbs_g: $('reqFoodCarbs').value ? Number($('reqFoodCarbs').value) : null
+          },
+          status: 'pending',
+          requestedByUid: auth.currentUser?.uid || 'parent',
+          requestedByName: auth.currentUser?.displayName || auth.currentUser?.email || state.child?.name || 'ولي أمر',
+          childId: state.childId || null,
+          createdAt: serverTimestamp()
+        };
+        await addDoc(collection(db, 'admin', 'global', 'foodRequests'), payload);
+        alert('تم إرسال طلب الصنف للأدمن بنجاح! ✅\nسيقوم فريق الإدارة بمراجعته وإضافته للمكتبة.');
+        reqDlg.close();
+      } catch (err) {
+        console.error(err);
+        alert('تعذر إرسال الطلب: ' + err.message);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'إرسال الطلب للأدمن';
+      }
+    };
+  }
+
   els.btnClearMeal.onclick = () => {
     state.mealItems = []; state.manualCarbDirty = false; state.manualDoseDirty = false;
     state.currentMealCarbs = 0; state.currentMealCalories = 0;
     renderMealTable(); updateMealTotals(); els.manualCarbs.value = '';
     resetManualDose();
   };
- 
+
   // أزرار جدول وجبات اليوم (تعديل/حذف) بدون onclick مضمّن
   els.dailyMealsBody.addEventListener('click', e => {
     const btn = e.target.closest('button[data-act]'); if (!btn) return;
