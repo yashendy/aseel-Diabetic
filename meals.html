@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>حاسبة الوجبات ومطبخ أسيل</title>
-  <link rel="stylesheet" href="css/meals.css?v=2026.03.02">
+  <link rel="stylesheet" href="css/meals.css?v=2026.10.13">
   <link rel="icon" href="favicon.ico">
   <style>
     /* تحسينات لخانة الجرعة النهائية لتبدو كالنص ولكن قابلة للتعديل */
@@ -234,14 +234,67 @@
         <button id="libClose" class="lib-close">✕</button>
       </div>
       <div style="padding:16px;">
-        <input id="searchBox" class="input" type="search" placeholder="ابحث عن صنف (مثال: أرز، تفاح، بيض)..." style="width:100%; margin-bottom:16px;" />
+        <!-- تبويبات التصفية -->
+        <div class="lib-tabs" id="libTabs">
+          <button class="lib-tab active" data-tab="all" type="button">🍽️ الكل</button>
+          <button class="lib-tab" data-tab="favorites" type="button">⭐ المفضلة <span id="favCount" class="tab-badge">0</span></button>
+          <button class="lib-tab" data-tab="most-used" type="button">🕒 الأكثر استخداماً</button>
+          <button id="btnOpenRequestModal" class="lib-tab req-tab" type="button">➕ طلب صنف</button>
+        </div>
+
+        <input id="searchBox" class="input" type="search" placeholder="ابحث بالاسم أو الفئة أو الوسوم (يتجاهل الهمزات)..." style="width:100%; margin-bottom:12px;" />
         <div id="loadingLibrary" style="text-align:center; color:#64748b;">جاري جلب الأصناف...</div>
         <div id="itemsGrid" style="display:flex; flex-direction:column; gap:10px; max-height:400px; overflow-y:auto; padding-bottom: 20px;"></div>
       </div>
     </div>
   </div>
- 
+
+  <!-- نافذة طلب إضافة صنف جديد من الأسرة -->
+  <dialog id="foodRequestDialog" class="dialog" style="max-width:480px; border-radius:16px; border:none; padding:0; box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+    <form id="foodRequestForm" method="dialog" style="padding:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">
+        <h3 style="margin:0; font-size:17px; color:var(--primary);">📩 طلب إضافة صنف جديد للمكتبة</h3>
+        <button type="button" id="closeReqDialog" style="background:none; border:none; font-size:18px; cursor:pointer; color:#64748b;">✕</button>
+      </div>
+      <p style="font-size:12px; color:#64748b; margin-top:0; margin-bottom:14px;">اكتبي اسم الصنف المطلوب وسيقوم فريق الإدارة بمراجعته وتوثيق قيمه الغذائية وإضافته للمكتبة.</p>
+
+      <div class="field" style="margin-bottom:12px;">
+        <label style="font-size:13px; font-weight:bold;">اسم الصنف <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="reqFoodName" class="input" required placeholder="مثال: بسكويت شوفان محدد، عصير معين..." />
+      </div>
+
+      <div class="field" style="margin-bottom:12px;">
+        <label style="font-size:13px; font-weight:bold;">الفئة التقريبية</label>
+        <select id="reqFoodCategory" class="input">
+          <option value="النشويات">النشويات</option>
+          <option value="الفاكهة">الفاكهة</option>
+          <option value="الخضروات">الخضروات</option>
+          <option value="منتجات الحليب">منتجات الحليب</option>
+          <option value="منتجات اللحوم">منتجات اللحوم</option>
+          <option value="المشروبات">المشروبات</option>
+          <option value="الحلويات">الحلويات</option>
+          <option value="أخرى" selected>سناك وأخرى</option>
+        </select>
+      </div>
+
+      <div class="field" style="margin-bottom:12px;">
+        <label style="font-size:13px; font-weight:bold;">الكارب لكل 100 جم (إن كُتب على العبوة - اختياري)</label>
+        <input type="number" step="0.1" min="0" max="100" id="reqFoodCarbs" class="input" placeholder="مثال: 22.5" />
+      </div>
+
+      <div class="field" style="margin-bottom:16px;">
+        <label style="font-size:13px; font-weight:bold;">ملاحظات أو حجم العبوة</label>
+        <textarea id="reqFoodNotes" class="input" rows="2" placeholder="مثال: العبوة 200 مل، أو صورة الملصق توضح 15 كارب للحبة..."></textarea>
+      </div>
+
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button type="button" id="cancelReqBtn" class="btn gray sm">إلغاء</button>
+        <button type="submit" id="submitReqBtn" class="btn primary sm" style="width:auto;">إرسال الطلب للأدمن</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="loader" class="loader"><div class="spinner"></div></div>
-  <script type="module" src="js/meals.js?v=2026.03.06"></script>
+  <script type="module" src="js/meals.js?v=2026.10.13"></script>
 </body>
 </html>
