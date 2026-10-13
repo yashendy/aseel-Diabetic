@@ -4,23 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>إدارة مكتبة الطعام | لوحة الأدمن</title>
-  
-  <!-- استدعاء ملف التنسيق الخاص بالصفحة -->
-  <link rel="stylesheet" href="./css/food-items.css" />
+  <link rel="stylesheet" href="./css/food-items.css?v=2" />
   <link rel="icon" href="favicon.ico" />
-  <link rel="stylesheet" href="./css/food-items.css" />
-  <link rel="icon" href="favicon.ico" />
-  
-  <style>
-    /* تنسيق زرار الهبوط عشان لونه يتغير لما نختاره */
-    .hypo-tag { border-color: #fca5a5; background: #fef2f2; color: #991b1b; font-weight: bold; transition: 0.2s; }
-    .hypo-tag.active { background: #dc2626 !important; color: #fff !important; border-color: #991b1b !important; }
-  </style>
-
 </head>
 <body>
 
-  <!-- شريط التنقل الخاص بالأدمن -->
+  <!-- شريط التنقل -->
   <header class="admin-topbar">
     <div class="brand-area">
       <span class="icon">👑</span>
@@ -31,9 +20,9 @@
     </div>
     <nav class="admin-nav">
       <a href="admin.html" class="nav-btn">الرئيسية</a>
-      <a href="admin-users.html" class="nav-btn">المستخدمين</a>
+      <a href="admin-doctors.html" class="nav-btn">الأطباء</a>
       <a href="food-items.html" class="nav-btn active">مكتبة الطعام</a>
-      <a href="admin-approvals.html" class="nav-btn">طلبات الأطباء</a>
+      <a href="admin-import.html" class="nav-btn">استيراد</a>
     </nav>
     <div class="admin-profile">
       <span id="admin-name">جاري التحميل...</span>
@@ -42,86 +31,123 @@
   </header>
 
   <main class="page">
-    <!-- شريط الفلاتر والإحصائيات -->
+
+    <!-- إحصائيات -->
+    <section id="stats" class="stats"></section>
+
+    <!-- طلبات الأسر لإضافة أصناف -->
+    <section id="req-panel" class="card req-panel hidden">
+      <h3>📩 طلبات إضافة أصناف <span id="req-count" class="count-pill">0</span></h3>
+      <div id="req-list"></div>
+    </section>
+
+    <!-- الفلاتر -->
     <section class="filters card">
-      <div class="row end">
-        <div class="search-box" style="flex: 1; min-width: 250px; position: relative;">
-          <input id="search" type="search" placeholder="ابحث بالاسم، الفئة، أو الوسوم..." style="width: 100%;" />
+      <div class="row">
+        <div class="search-box grow">
+          <input id="search" type="search" placeholder="ابحث بالاسم أو الفئة أو الوسوم (البحث يتجاهل الهمزات والتشكيل)..." />
         </div>
-        <select id="filter-category" class="input" style="width: auto; min-width: 150px;">
+        <select id="filter-category" class="input auto-w">
           <option value="">كل الفئات</option>
-          <option>النشويات</option>
-          <option>منتجات الألبان</option>
-          <option>الفاكهة</option>
-          <option>الخضروات</option>
-          <option>البروتينات</option>
-          <option>الدهون</option>
-          <option>حلويات ومشروبات</option>
-          <option>أخرى</option>
         </select>
-        <button id="btn-add" class="btn primary">➕ إضافة صنف جديد</button>
+        <select id="filter-status" class="input auto-w">
+          <option value="active">النشطة</option>
+          <option value="unverified">غير موثّقة</option>
+          <option value="hypo">أصناف رفع الهبوط</option>
+          <option value="recipe">وصفات مركبة</option>
+          <option value="archived">المؤرشفة</option>
+          <option value="all">الكل</option>
+        </select>
+        <select id="sort-by" class="input auto-w">
+          <option value="updated">الأحدث تعديلاً</option>
+          <option value="name">الاسم (أ-ي)</option>
+          <option value="carbs-desc">الكارب (الأعلى)</option>
+          <option value="carbs-asc">الكارب (الأقل)</option>
+        </select>
+      </div>
+      <div class="row mt-10">
+        <button id="btn-add" class="btn primary">➕ صنف جديد</button>
+        <button id="btn-add-recipe" class="btn ghost">🍲 وصفة مركبة</button>
+        <button id="btn-import" class="btn ghost">📥 استيراد CSV</button>
+        <button id="btn-export" class="btn ghost">📤 تصدير CSV</button>
+        <button id="btn-select-mode" class="btn ghost">☑️ تحديد متعدد</button>
+        <span id="result-count" class="muted grow-end"></span>
       </div>
     </section>
 
-    <!-- شبكة الأصناف -->
+    <!-- شريط الإجراءات الجماعية -->
+    <section id="bulk-bar" class="card bulk-bar hidden">
+      <strong><span id="bulk-count">0</span> محدد</strong>
+      <button id="bulk-verify" class="btn ghost sm">✅ توثيق</button>
+      <button id="bulk-archive" class="btn ghost sm">🗄️ أرشفة</button>
+      <button id="bulk-restore" class="btn ghost sm">♻️ استرجاع</button>
+      <button id="bulk-all" class="btn outline sm">تحديد كل المعروض</button>
+      <button id="bulk-none" class="btn outline sm">إلغاء التحديد</button>
+    </section>
+
+    <!-- الأصناف -->
     <section id="cards" class="grid"></section>
+    <div id="empty-state" class="empty hidden">لا توجد أصناف مطابقة.</div>
+    <div class="center"><button id="btn-more" class="btn ghost hidden">عرض المزيد</button></div>
   </main>
 
-  <!-- نافذة إضافة/تعديل صنف (The Master Chef) -->
+  <!-- ============ نافذة إضافة/تعديل صنف ============ -->
   <dialog id="edit-dialog" class="dialog">
-    <form id="edit-form" method="dialog">
+    <form id="edit-form" method="dialog" novalidate>
       <div class="dialog-header">
         <h3 id="dlg-title">إضافة صنف جديد</h3>
         <button id="dlg-close" class="icon-btn" type="button" title="إغلاق">✕</button>
       </div>
-
       <input id="item-id" type="hidden" />
 
       <div class="dialog-body">
-        
+        <div id="val-box" class="val-box hidden"></div>
+
         <div class="grid-2">
           <!-- العمود الأول -->
           <div class="col">
-            <!-- الأساسيات والصورة -->
             <div class="section-card">
               <h4>البيانات الأساسية</h4>
               <label class="field"><span>اسم الصنف</span><input id="name" type="text" required placeholder="مثال: تفاح أخضر" /></label>
-              <label class="field"><span>الفئة</span>
-                <select id="category" required>
-                  <option>النشويات</option>
-                  <option>منتجات الألبان</option>
-                  <option>الفاكهة</option>
-                  <option>الخضروات</option>
-                  <option>البروتينات</option>
-                  <option>الدهون</option>
-                  <option>حلويات ومشروبات</option>
-                  <option>أخرى</option>
-                </select>
-              </label>
-              
-              <!-- منطقة رفع أو ربط الصورة المحدثة -->
-              <div class="image-upload-area" style="margin-top: 16px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px dashed #cbd5e1;">
+              <label class="field"><span>الفئة</span><select id="category"></select></label>
+              <label class="field"><span>مصدر القيم الغذائية</span><select id="source"></select></label>
+              <label class="check-line"><input id="verified" type="checkbox" /> <span>✅ تمت مراجعة القيم مع مصدر موثوق (ملصق العبوة / مرجع / الطبيب)</span></label>
+              <label class="check-line"><input id="is-recipe" type="checkbox" /> <span>🍲 وصفة مركبة (تُحسب القيم من المكونات)</span></label>
+            </div>
+
+            <!-- وصفة مركبة -->
+            <div id="recipe-card" class="section-card hidden">
+              <h4>مكونات الوصفة</h4>
+              <div class="row">
+                <input id="rc-search" class="grow" type="search" placeholder="ابحثي عن مكوّن من المكتبة..." />
+              </div>
+              <div id="rc-results" class="rc-results"></div>
+              <div id="rc-list" class="rc-list"></div>
+              <label class="field mt-10"><span>الوزن بعد الطهي (جم) — اختياري، يحسّن الدقة</span><input id="rc-cooked" type="number" step="1" min="1" placeholder="مثال: 600" /></label>
+              <div id="rc-summary" class="hint"></div>
+            </div>
+
+            <div class="section-card">
+              <h4>الصورة</h4>
+              <div class="image-upload-area">
                 <input id="imageFile" type="file" accept="image/*" hidden />
-                <button id="btn-pick" class="btn ghost outline sm" type="button" style="width:100%; margin-bottom:10px;">📸 اختر صورة من الجهاز (تتطلب ترقية)</button>
-                
-                <label class="field" style="margin-bottom:0;">
-                  <span style="font-size:12px; color:#64748b;">أو ضع رابط صورة خارجي (مجاني وموصى به):</span>
-                  <input id="imageUrl" type="url" placeholder="https://..." dir="ltr" style="text-align:left; margin-top:4px;" />
+                <button id="btn-pick" class="btn ghost outline sm full" type="button">📸 اختيار صورة من الجهاز (تُصغَّر وتُحفظ مجاناً)</button>
+                <label class="field"><span class="hint-s">أو رابط صورة خارجي:</span>
+                  <input id="imageUrl" type="url" placeholder="https://..." dir="ltr" class="ltr" />
                 </label>
-                
-                <div class="preview"><img id="imagePreview" style="display:none; max-height:120px; margin-top:10px; border-radius:8px;" /></div>
-                <div id="upload-bar" class="progress hidden"><div id="upload-bar-fill"></div></div>
+                <div class="preview">
+                  <img id="imagePreview" alt="" class="hidden" />
+                  <button id="btn-remove-thumb" class="btn danger sm hidden" type="button">إزالة الصورة المصغرة</button>
+                </div>
               </div>
             </div>
 
-            <!-- المقاييس -->
             <div class="section-card">
               <h4>المقاييس والأحجام (Portions)</h4>
               <div id="units-list" class="units"></div>
               <button id="btn-add-unit" class="btn ghost outline sm mt-10" type="button">+ إضافة مقدار يدوي</button>
-              
-              <div class="quick-chips mt-10" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
-                <span style="display:block; font-size:11px; color:#64748b; margin-bottom:6px;">مقادير سريعة جاهزة:</span>
+              <div class="quick-chips">
+                <span class="hint-s">مقادير جاهزة (تقريبية — اضبطي الوزن الفعلي للصنف):</span>
                 <div class="chips">
                   <span class="chip-sm" data-unit="cup|كوب|240">كوب (240g)</span>
                   <span class="chip-sm" data-unit="tbsp|ملعقة كبيرة|15">ملعقة كبيرة (15g)</span>
@@ -134,76 +160,92 @@
 
           <!-- العمود الثاني -->
           <div class="col">
-            <!-- القيم الغذائية -->
             <div class="section-card">
               <h4>القيم الغذائية (لكل 100 جرام)</h4>
               <div class="macros-grid">
-                <label class="field alert-field"><span>كارب (g) 🍔</span><input id="carbs_g" type="number" step="0.1" required></label>
-                <label class="field"><span>ألياف (g) 🌾</span><input id="fiber_g" type="number" step="0.1" required></label>
-                <label class="field"><span>بروتين (g) 🥩</span><input id="protein_g" type="number" step="0.1" required></label>
-                <label class="field"><span>دهون (g) 🥑</span><input id="fat_g" type="number" step="0.1" required></label>
-                <label class="field"><span>سعرات (kcal) 🔥</span><input id="cal_kcal" type="number" step="1"></label>
-                <label class="field"><span>مؤشر جلايسيمي (GI) 📈</span><input id="gi" type="number" step="1" placeholder="اختياري"></label>
+                <label class="field alert-field"><span>كارب (g) 🍔</span><input id="carbs_g" type="number" step="0.1" min="0" max="100" inputmode="decimal"></label>
+                <label class="field"><span>ألياف (g) 🌾</span><input id="fiber_g" type="number" step="0.1" min="0" max="100" inputmode="decimal"></label>
+                <label class="field"><span>بروتين (g) 🥩</span><input id="protein_g" type="number" step="0.1" min="0" max="100" inputmode="decimal"></label>
+                <label class="field"><span>دهون (g) 🥑</span><input id="fat_g" type="number" step="0.1" min="0" max="100" inputmode="decimal"></label>
+                <label class="field"><span>سعرات (kcal) 🔥</span><input id="cal_kcal" type="number" step="1" min="0" max="900" inputmode="decimal" placeholder="اتركيه فارغاً ليُحسب"></label>
+                <label class="field"><span>مؤشر جلايسيمي (GI) 📈</span><input id="gi" type="number" step="1" min="1" max="110" inputmode="decimal" placeholder="اختياري"></label>
               </div>
+              <button id="btn-calc-kcal" class="btn ghost outline sm" type="button">🔥 احسب السعرات من الماكروز</button>
+              <div id="calc-info" class="calc-info"></div>
             </div>
 
-            <!-- الوسوم الطبية (الأنظمة والحساسيات) -->
-         <div class="section-card">
+            <div class="section-card">
               <h4>التصنيف الطبي (Smart Tags)</h4>
-              <p class="hint">حددي الموانع ليقوم النظام بتحذير المرضى عند حساب الوجبات.</p>
+              <p class="hint">الوسوم تظهر للأسر وتؤثر على حاسبة الوجبات.</p>
 
-              <strong style="display:block; margin-bottom:6px; font-size:13px; color:#b91c1c;">🚨 الطوارئ وعلاج الهبوط:</strong>
+              <strong class="tag-title danger-c">🚨 الطوارئ وعلاج الهبوط:</strong>
               <div class="chips mb-10">
                 <button class="tag-btn hypo-tag" type="button" data-tag="#علاج_هبوط">🧃 مخصص لرفع الهبوط السريع</button>
               </div>
+              <div id="hypo-helper" class="hypo-helper hidden"></div>
 
-              <strong style="display:block; margin-bottom:6px; font-size:13px; color:#dc2626;">🚫 خالي من (مسببات الحساسية):</strong>
-              <div class="chips mb-10" id="allergy-tags">
-                <button class="tag-btn" type="button" data-tag="#خالي_من_الجلوتين">جلوتين</button>
-                <button class="tag-btn" type="button" data-tag="#خالي_من_الألبان">ألبان</button>
-                <button class="tag-btn" type="button" data-tag="#خالي_من_المكسرات">مكسرات</button>
-                <button class="tag-btn" type="button" data-tag="#خالي_من_البيض">بيض</button>
-              </div>
+              <strong class="tag-title danger-c">⚠️ يحتوي على (مسببات الحساسية):</strong>
+              <div class="chips mb-10" id="allergen-tags"></div>
 
-              <strong style="display:block; margin-top:12px; margin-bottom:6px; font-size:13px; color:#16a34a;">✅ مناسب لأنظمة:</strong>
+              <strong class="tag-title ok-c">✅ مناسب لأنظمة:</strong>
               <div class="chips" id="diet-tags">
                 <button class="tag-btn" type="button" data-tag="#كيتو">كيتو</button>
                 <button class="tag-btn" type="button" data-tag="#نباتي">نباتي (Vegan)</button>
                 <button class="tag-btn" type="button" data-tag="#لو_كارب">لو كارب</button>
               </div>
-              
-              <label class="field mt-10" style="margin-top: 16px;">
-                <span>وسوم إضافية (مفصولة بمسافة)</span>
-                <input id="hashTagsManual" type="text" placeholder="مثال: #عشاء #سريع #موز" />
-              </label>
-            </div>
 
-              <strong style="display:block; margin-top:12px; margin-bottom:6px; font-size:13px; color:#16a34a;">✅ مناسب لأنظمة:</strong>
-              <div class="chips" id="diet-tags">
-                <button class="tag-btn" type="button" data-tag="#كيتو">كيتو</button>
-                <button class="tag-btn" type="button" data-tag="#نباتي">نباتي (Vegan)</button>
-                <button class="tag-btn" type="button" data-tag="#لو_كارب">لو كارب</button>
-              </div>
-              
-              <label class="field mt-10" style="margin-top: 16px;">
-                <span>وسوم إضافية (مفصولة بمسافة)</span>
+              <label class="field mt-10"><span>وسوم إضافية (مفصولة بمسافة)</span>
                 <input id="hashTagsManual" type="text" placeholder="مثال: #عشاء #سريع #موز" />
               </label>
             </div>
           </div>
         </div>
-
       </div>
+
       <div class="dialog-footer">
-        <button id="btn-delete" class="btn danger" type="button" style="display:none;">حذف الصنف</button>
-        <div style="flex:1"></div>
+        <button id="btn-delete" class="btn danger hidden" type="button">🗑️ حذف نهائي</button>
+        <button id="btn-archive" class="btn ghost hidden" type="button">🗄️ أرشفة</button>
+        <button id="btn-history" class="btn ghost hidden" type="button">📜 السجل</button>
+        <div class="grow"></div>
         <button class="btn ghost" type="button" id="btn-cancel">إلغاء</button>
         <button id="btn-save" class="btn primary" type="submit">💾 حفظ الصنف في المكتبة</button>
       </div>
     </form>
   </dialog>
 
-  <!-- استدعاء ملف الجافاسكريبت كـ Module -->
-  <script type="module" src="./js/food-items.js"></script>
+  <!-- ============ سجل التعديلات ============ -->
+  <dialog id="hist-dialog" class="dialog small">
+    <div class="dialog-header">
+      <h3 id="hist-title">سجل التعديلات</h3>
+      <button id="hist-close" class="icon-btn" type="button" title="إغلاق">✕</button>
+    </div>
+    <div id="hist-body" class="dialog-body"></div>
+  </dialog>
+
+  <!-- ============ استيراد CSV ============ -->
+  <dialog id="imp-dialog" class="dialog">
+    <div class="dialog-header">
+      <h3>📥 استيراد أصناف من CSV</h3>
+      <button id="imp-close" class="icon-btn" type="button" title="إغلاق">✕</button>
+    </div>
+    <div class="dialog-body">
+      <p class="hint">الأعمدة: name, category, carbs_g, fiber_g, protein_g, fat_g, cal_kcal, gi, units (مثال: كوب:240|حبة:150), source, allergens, tags. الأصناف المستوردة تُحفظ <b>غير موثّقة</b> حتى تراجعيها.</p>
+      <div class="row">
+        <input id="imp-file" type="file" accept=".csv,text/csv" />
+        <button id="imp-template" class="btn ghost sm" type="button">⬇️ تحميل قالب</button>
+      </div>
+      <label class="check-line mt-10"><input id="imp-skipdup" type="checkbox" checked /> <span>تخطّي الأصناف المكررة بالاسم</span></label>
+      <div id="imp-summary" class="hint mt-10"></div>
+      <div class="table-wrap"><table id="imp-table" class="imp-table"></table></div>
+    </div>
+    <div class="dialog-footer">
+      <div class="grow"></div>
+      <button class="btn ghost" type="button" id="imp-cancel">إغلاق</button>
+      <button id="imp-run" class="btn primary" type="button" disabled>استيراد الصالح</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+  <script type="module" src="./js/food-items.js?v=2"></script>
 </body>
 </html>
