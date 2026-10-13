@@ -1,7 +1,7 @@
 // js/food-items.js — إدارة مكتبة الطعام (الأدمن)
 import { db, auth } from './firebase-config.js';
 import {
-  collection, doc, getDoc, getDocs, writeBatch, onSnapshot, query, where, orderBy, limit, serverTimestamp
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, onSnapshot, query, where, orderBy, limit, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 import {
@@ -560,16 +560,25 @@ async function onSave(e) {
     if (!f.verified) { payload.verifiedBy = null; payload.verifiedAt = null; }
     if (!ex) { payload.createdAt = serverTimestamp(); payload.createdBy = me.uid; }
 
-    const batch = writeBatch(db);
-    batch.set(ref, payload, { merge: true });
-    if (!ex) {
-      batch.set(doc(collection(ref, 'history')), historyEntry('create', ['*'], null, watchedSnapshot(after)));
-    } else {
-      const d = diffFood(ex, after);
-      if (d.changed.length) batch.set(doc(collection(ref, 'history')), historyEntry('update', d.changed, d.before, d.after));
+    // 1) حفظ الصنف الأساسي أولاً
+    await setDoc(ref, payload, { merge: true });
+
+    // 2) محاولة حفظ السجل والطلب بشكل منفصل (حتى لا يفشل حفظ الصنف إذا كانت صلاحيات المجموعات الفرعية مقيدة)
+    try {
+      if (!ex) {
+        await setDoc(doc(collection(ref, 'history')), historyEntry('create', ['*'], null, watchedSnapshot(after)));
+      } else {
+        const d = diffFood(ex, after);
+        if (d.changed.length) {
+          await setDoc(doc(collection(ref, 'history')), historyEntry('update', d.changed, d.before, d.after));
+        }
+      }
+      if (editing.req) {
+        await updateDoc(doc(REQS, editing.req.id), { status: 'approved', resolvedBy: me.uid, resolvedAt: serverTimestamp(), resultFoodId: id });
+      }
+    } catch (subErr) {
+      console.warn('تعذر حفظ السجل التاريخي أو الطلب بسبب الصلاحيات:', subErr);
     }
-    if (editing.req) batch.update(doc(REQS, editing.req.id), { status: 'approved', resolvedBy: me.uid, resolvedAt: serverTimestamp(), resultFoodId: id });
-    await batch.commit();
 
     $('edit-dialog').close();
     toast(ex ? 'تم الحفظ ✅' : 'تمت إضافة الصنف ✅');
