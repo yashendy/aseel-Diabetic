@@ -91,3 +91,27 @@ body {
 
 .loader { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 9999; font-weight: bold; color: var(--primary); }
 .hidden { display: none !important; }
+
+/* شريط التنقل الموحد للأدمن */
+.admin-nav { display: flex; gap: 8px; align-items: center; }
+.nav-btn { padding: 8px 14px; border-radius: 8px; text-decoration: none; color: var(--muted); font-weight: bold; font-size: 14px; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+.nav-btn:hover { background: var(--bg2); color: var(--text); }
+.nav-btn.active { background: rgba(59, 130, 246, 0.15); color: var(--primary); }
+
+/* أزرار الفلترة السريعة للأطفال */
+.filter-chips { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.chip-btn { background: var(--input-bg); border: 1px solid var(--card-border); color: var(--muted); padding: 6px 14px; border-radius: 999px; font-size: 12px; cursor: pointer; font-weight: bold; transition: 0.2s; font-family: inherit; }
+.chip-btn:hover { color: var(--text); border-color: var(--primary); }
+.chip-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* أزرار الإجراءات المصغرة */
+.btn-sm { height: 28px; padding: 0 10px; font-size: 11px; border-radius: 6px; border: 1px solid transparent; font-weight: bold; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s; }
+.btn-danger-outline { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+.btn-danger-outline:hover { background: var(--danger); color: #fff; }
+.btn-warn-outline { background: transparent; border: 1px solid var(--warn); color: var(--warn); }
+.btn-warn-outline:hover { background: var(--warn); color: #fff; }
+.btn-success-outline { background: transparent; border: 1px solid var(--success); color: var(--success); }
+.btn-success-outline:hover { background: var(--success); color: #fff; }
+
+/* شارة التنبيهات */
+.req-badge { background: var(--danger); color: #fff; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: bold; }

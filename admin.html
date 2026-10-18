@@ -15,6 +15,11 @@
       <span class="icon">👑</span>
       <h2>غرفة التحكم الاستراتيجية</h2>
     </div>
+    <nav class="admin-nav">
+      <a href="admin.html" class="nav-btn active">الرئيسية</a>
+      <a href="food-items.html" class="nav-btn">مكتبة الطعام <span id="navReqBadge" class="req-badge hidden">0</span></a>
+      <a href="admin-import.html" class="nav-btn">استيراد USDA</a>
+    </nav>
     <div class="admin-info">
       <button id="themeToggle" class="icon-btn" title="تبديل الإضاءة">🌞</button>
       <span id="adminName" style="font-weight: bold; color: var(--muted);">—</span>
@@ -33,15 +38,22 @@
       <div class="card">
         <div class="card-title">👶 إجمالي الأطفال المسجلين</div>
         <div class="card-value" id="childrenCount">0</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:6px;">
+          مسندين لأطباء: <b id="assignedChildrenCount" style="color:var(--success);">0</b>
+        </div>
       </div>
-      <!-- الروابط محدثة بالمسميات الصحيحة -->
       <a href="food-items.html" class="card" style="border-color: var(--primary);">
         <div class="card-title">📘 إدارة مكتبة الطعام</div>
-        <div class="card-value" style="font-size: 16px; margin-top: 10px;">إضافة وتعديل الأصناف ➔</div>
+        <div class="card-value" style="font-size: 18px; display:flex; align-items:center; justify-content:space-between; margin-top:6px;">
+          <span id="foodItemsCount">-- صنف</span>
+          <span id="pendingReqBadge" class="badge warn hidden" style="font-size:11px;">📩 <b id="pendingReqCount">0</b> طلب جديد</span>
+        </div>
+        <div style="font-size: 13px; margin-top: 10px; color:var(--primary);">مراجعة وتوثيق الأصناف ➔</div>
       </a>
       <a href="admin-import.html" class="card" style="border-color: var(--success);">
         <div class="card-title">🗂️ استيراد بيانات USDA</div>
-        <div class="card-value" style="font-size: 16px; margin-top: 10px;">سحب الأصناف عالمياً ➔</div>
+        <div class="card-value" style="font-size: 18px; margin-top: 6px;">تغذية عالمية</div>
+        <div style="font-size: 13px; margin-top: 10px; color:var(--success);">سحب الأصناف ➔</div>
       </a>
     </section>
 
@@ -92,19 +104,27 @@
         </div>
       </div>
 
+      <!-- فلاتر سريعة لجدول الأطفال -->
+      <div class="filter-chips" id="childrenFilterChips">
+        <button type="button" class="chip-btn active" data-filter="all">الكل (<span id="countAll">0</span>)</button>
+        <button type="button" class="chip-btn" data-filter="unassigned">⚠️ بدون طبيب (<span id="countUnassigned">0</span>)</button>
+        <button type="button" class="chip-btn" data-filter="assigned">✅ مسندين لطبيب (<span id="countAssigned">0</span>)</button>
+        <button type="button" class="chip-btn" data-filter="noconsent">🔒 بدون تصريح (<span id="countNoConsent">0</span>)</button>
+      </div>
+
       <div class="lists-wrap">
-        <!-- جدول الأطفال (بدون ID وبشكل أنيق) -->
+        <!-- جدول الأطفال (مع خيار فك الارتباط وبشكل أنيق) -->
         <div class="list-card">
           <div class="list-title">👶 الأطفال (<span id="childrenHint">0</span>)</div>
           <table class="tbl">
             <thead>
-              <tr><th>الطفل المريض</th><th>حالة الموافقة</th><th style="text-align: center;">تحديد</th></tr>
+              <tr><th>الطفل المريض</th><th>الطبيب والتصريح</th><th style="text-align: center;">تحديد</th></tr>
             </thead>
             <tbody id="childrenTbody"></tbody>
           </table>
         </div>
 
-        <!-- جدول الأطباء (الاسم والمركز) -->
+        <!-- جدول الأطباء (الاسم والمركز وعدد المرضى وإلغاء الاعتماد) -->
         <div class="list-card">
           <div class="list-title">👨‍⚕️ الأطباء المعتمدين (<span id="doctorsHint">0</span>)</div>
           <table class="tbl">
