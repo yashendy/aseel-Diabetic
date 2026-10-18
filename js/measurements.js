@@ -9,7 +9,7 @@ import {
  
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
-function toast(msg) { const t = $('toast'); if (t) { t.textContent = msg; t.classList.remove('hidden'); t.style.display = 'block'; clearTimeout(t._t); t._t = setTimeout(() => { t.classList.add('hidden'); t.style.display = 'none'; }, 2500); } }
+function toast(msg, duration = 2500) { const t = $('toast'); if (t) { t.innerHTML = msg; t.classList.remove('hidden'); t.style.display = 'block'; clearTimeout(t._t); t._t = setTimeout(() => { t.classList.add('hidden'); t.style.display = 'none'; }, duration); } }
  
 const params = new URLSearchParams(location.search);
 const childId = params.get('child') || localStorage.getItem('selectedChildId');
@@ -173,7 +173,13 @@ async function saveMeasurement() {
  
   try {
     await addDoc(measRef(), payload);
-    toast("تم الحفظ بنجاح! ✔️");
+    const isPreMeal = ['PRE_BREAKFAST', 'PRE_LUNCH', 'PRE_DINNER', 'SNACK', 'FASTING'].includes(slotKey);
+    if (isPreMeal) {
+      const mealUrl = `meals.html?child=${encodeURIComponent(childId)}&bg=${encodeURIComponent(rawVal)}&unit=${encodeURIComponent(selectedUnit)}&slot=${encodeURIComponent(slotKey)}&date=${encodeURIComponent(day)}&time=${encodeURIComponent(time)}`;
+      toast(`تم الحفظ بنجاح! ✔️ <a href="${mealUrl}" style="color:#60a5fa; text-decoration:underline; font-weight:bold; margin-right:8px;">🍽️ تسجيل وجبة بهذه القراءة ➔</a>`, 6000);
+    } else {
+      toast("تم الحفظ بنجاح! ✔️");
+    }
     $('reading').value = ''; $('mNotes').value = '';
     $('corrDoseInput').value = ''; $('corrDoseInput').dataset.dirty = "";
     $('hypoTreatment').value = ''; $('actionsPanel').classList.add('hidden');
@@ -223,14 +229,41 @@ function renderTimeline(dataArray) {
       if (m.totalDose) detailsHTML += `<div class="tl-detail-item" style="border-right:2px solid #cbd5e1; padding-right:10px;"><span>⚡ الإجمالي</span><b style="color:#2563eb;">${esc(m.totalDose)} U</b></div>`;
       detailsHTML += `</div>`;
     }
- 
+
+    // مقارنة ما بعد الوجبة بما قبل الوجبة إن وُجدت
+    let diffBadgeHTML = '';
+    if (m.slotKey && m.slotKey.startsWith('POST_')) {
+      const preSlotMap = { POST_BREAKFAST: ['PRE_BREAKFAST', 'FASTING'], POST_LUNCH: ['PRE_LUNCH'], POST_DINNER: ['PRE_DINNER'] };
+      const targets = preSlotMap[m.slotKey] || [];
+      const preDoc = dataArray.find(x => x.id !== m.id && targets.includes(x.slotKey));
+      if (preDoc) {
+        const preNorm = preDoc.normalizedValue ?? convert(Number(preDoc.value), preDoc.unit || therapy.unit, therapy.unit);
+        const diff = round(normalizedVal - preNorm, 1);
+        const diffSign = diff > 0 ? `+${diff}` : `${diff}`;
+        const diffColor = (diff > 50) ? '#ea580c' : (diff < 0) ? '#10b981' : '#166534';
+        diffBadgeHTML = `<div class="tl-diff-badge" style="margin-top:6px;"><span>📊 الفارق عن قبل الأكل:</span><b style="color:${diffColor};">${diffSign} ${therapy.unit}</b></div>`;
+      }
+    }
+
+    // أزرار الإجراءات السريعة (ربط الوجبات بالقياسات)
+    let actionsHTML = '';
+    const dayVal = m.date || $('dayPicker').value;
+    if (m.carbs > 0 || m.totalDose > 0) {
+      actionsHTML = `<div class="tl-action-bar"><a href="meals.html?child=${encodeURIComponent(childId)}&slot=${encodeURIComponent(m.slotKey)}&date=${encodeURIComponent(dayVal)}" class="tl-action-link edit-meal">🍽️ عرض / تعديل تفاصيل الوجبة</a></div>`;
+    } else if (['PRE_BREAKFAST', 'PRE_LUNCH', 'PRE_DINNER', 'SNACK', 'FASTING'].includes(m.slotKey)) {
+      actionsHTML = `<div class="tl-action-bar"><a href="meals.html?child=${encodeURIComponent(childId)}&bg=${encodeURIComponent(m.value)}&unit=${encodeURIComponent(mUnit)}&slot=${encodeURIComponent(m.slotKey)}&date=${encodeURIComponent(dayVal)}&time=${encodeURIComponent(mTime)}" class="tl-action-link to-meal">🍱 تسجيل وجبة بهذه القراءة ➔</a></div>`;
+    }
+
     const card = document.createElement('div'); card.className = 'tl-item';
     card.innerHTML = `
       <div class="tl-dot ${css.dot}"></div>
       <div class="tl-card">
         <div class="tl-head"><div><span class="tl-time">🕒 ${esc(mTime)}</span> | <span class="tl-slot">${esc(slotName)}</span></div><button class="icon-btn del-btn" data-id="${esc(m.id)}" data-meal="${(m.carbs > 0 || m.totalDose > 0) ? '1' : ''}">🗑️</button></div>
         <div class="tl-body"><div class="tl-bg ${css.bg}">${esc(m.value)} <span style="font-size:14px;">${esc(mUnit)}</span></div><div style="font-size:13px; font-weight:bold;">${css.text}</div></div>
-        ${detailsHTML} ${m.notes ? `<div class="tl-notes">📝 ${esc(m.notes)}</div>` : ''}
+        ${diffBadgeHTML}
+        ${detailsHTML}
+        ${m.notes ? `<div class="tl-notes">📝 ${esc(m.notes)}</div>` : ''}
+        ${actionsHTML}
       </div>`;
     grid.appendChild(card);
   });
