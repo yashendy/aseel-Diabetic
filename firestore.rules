@@ -39,6 +39,11 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // دعم استعلامات المجموعات الفرعية للأطفال (Collection Group Queries)
+    match /{path=**}/children/{childId} {
+      allow read, write: if request.auth != null;
+    }
+
     // 5. الأطباء وأكواد الربط (Doctors & Link Codes)
     match /doctors/{doctorId}/{document=**} {
       allow read, write: if request.auth != null;

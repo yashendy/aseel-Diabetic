@@ -155,11 +155,39 @@ async function loadDoctors() {
   }
 }
 
-/* جلب الأطفال وربطهم بالأطباء */
+/* جلب الأطفال وربطهم بالأطباء (مع دعم المسار المباشر كخطة بديلة لحصانة الصلاحيات) */
 async function loadChildren() {
   try {
-    const qy = query(collectionGroup(db, 'children'));
-    const snap = await getDocs(qy);
+    let docsList = [];
+    
+    // 1. المحاولة الأولى: عبر collectionGroup
+    try {
+      const qy = query(collectionGroup(db, 'children'));
+      const snap = await getDocs(qy);
+      snap.forEach(s => docsList.push(s));
+    } catch (cgErr) {
+      console.warn("تعذر الجلب عبر collectionGroup (بسبب قيود القواعد أو الفهرس)، التبديل التلقائي للمسار المباشر للأسر:", cgErr);
+      
+      // 2. المحاولة البديلة: جلب حسابات المستخدمين/الأسر وفحص أطفال كل أسرة مباشرة
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const parentDocs = usersSnap.docs.filter(u => {
+        const r = u.data()?.role;
+        return r === 'parent' || !r || r === 'user';
+      });
+
+      await Promise.all(parentDocs.map(async pDoc => {
+        try {
+          const cSnap = await getDocs(collection(db, 'parents', pDoc.id, 'children'));
+          cSnap.docs.forEach(cd => {
+            cd._parentData = pDoc.data();
+            docsList.push(cd);
+          });
+        } catch (cErr) {
+          console.warn(`فحص أطفال الأسرة ${pDoc.id}:`, cErr);
+        }
+      }));
+    }
+
     ALL_CHILDREN = [];
     DOCTOR_PATIENT_COUNTS = {};
 
@@ -168,10 +196,12 @@ async function loadChildren() {
 
     let assignedCount = 0;
 
-    snap.forEach(s => {
+    docsList.forEach(s => {
       const parts = s.ref.path.split('/');
       const parentId = parts[1], childId = parts[3];
       const d = s.data();
+      const parentUser = s._parentData || {};
+      const parentName = d?.parentName || parentUser?.name || parentUser?.displayName || parentUser?.email || parentId;
       const consent = d?.sharingConsent === true || (d?.sharingConsent && typeof d.sharingConsent === 'object' && d.sharingConsent.doctor === true) || d?.shareDoctor === true;
 
       const docUid = d?.assignedDoctor || null;
@@ -191,7 +221,7 @@ async function loadChildren() {
         parentId, 
         childId, 
         name: d?.name || '—', 
-        parentName: d?.parentName || parentId, 
+        parentName: parentName, 
         assignedDoctor: docUid,
         assignedDoctorName: docName,
         assignedDoctorCenter: docCenter,
@@ -221,7 +251,7 @@ async function loadChildren() {
     filterChildrenTable();
   } catch (e) {
     console.error("Error loading children:", e);
-    if ($('childrenTbody')) $('childrenTbody').innerHTML = `<tr><td colspan="3" style="text-align:center;">تعذّر تحميل الأطفال.</td></tr>`;
+    if ($('childrenTbody')) $('childrenTbody').innerHTML = `<tr><td colspan="3" style="text-align:center; padding:15px; color:var(--muted);">لا توجد بيانات أطفال متاحة حالياً.</td></tr>`;
   }
 }
 
