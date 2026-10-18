@@ -72,4 +72,13 @@ body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background:
 
 .empty { padding: 40px; color: var(--muted); text-align: center; background: #fff; border-radius: 14px; border: 1px dashed #cbd5e1; }
 .hidden { display: none !important; }
-.toast { position: fixed; inset-inline: 0; bottom: 20px; margin-inline: auto; background: #111827; color: #fff; padding: 10px 20px; border-radius: 999px; width: max-content; box-shadow: var(--shadow); z-index: 100; }
+.toast { position: fixed; inset-inline: 0; bottom: 20px; margin-inline: auto; background: #111827; color: #fff; padding: 12px 24px; border-radius: 999px; width: max-content; max-width: 90%; box-shadow: var(--shadow); z-index: 100; font-size: 14px; text-align: center; }
+
+/* روابط الإجراءات السريعة في الخط الزمني */
+.tl-action-bar { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.tl-action-link { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: bold; text-decoration: none; transition: 0.2s; }
+.tl-action-link.to-meal { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.tl-action-link.to-meal:hover { background: #dcfce7; }
+.tl-action-link.edit-meal { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.tl-action-link.edit-meal:hover { background: #dbeafe; }
+.tl-diff-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; }
