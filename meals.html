@@ -44,6 +44,19 @@
  
   <div class="container">
     
+    <!-- كارت تذكير قياس ما بعد الوجبة -->
+    <div id="postMealReminderBanner" class="post-meal-banner hidden">
+      <div class="pm-icon">⏰</div>
+      <div class="pm-content">
+        <h4 id="pmTitle">موعد قياس ما بعد الوجبة: <span id="pmTime">--:--</span></h4>
+        <p id="pmDesc">تذكير: يُقاس السكر بعد ساعتين من بدء الوجبة للتأكد من ملاءمة جرعة الأنسولين وتجنب أي ارتفاع أو هبوط.</p>
+      </div>
+      <div class="pm-actions">
+        <a id="pmActionBtn" href="#" class="btn primary sm" style="white-space:nowrap;">📊 تسجيل القياس الآن</a>
+        <button id="pmDismissBtn" type="button" class="btn gray sm">✕ إغلاق</button>
+      </div>
+    </div>
+
     <div class="diet-tracker">
       <div class="diet-header"><div class="diet-title">مؤشرات الاستهلاك اليومي 🥗</div></div>
       <div class="tracker-row">
@@ -216,9 +229,9 @@
       <div class="card-header"><h2>📝 سجل وجبات اليوم (<span id="todayDateLabel"></span>)</h2></div>
       <div style="overflow-x:auto;">
         <table class="meal-table">
-          <thead><tr><th>الوجبة</th><th>كارب</th><th>سعرات</th><th>كارب-U</th><th>تصحيح-U</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>الوجبة</th><th>كارب</th><th>سعرات</th><th>كارب-U</th><th>تصحيح-U</th><th>الإجمالي</th><th>متابعة السكر (+2h)</th><th>إجراءات</th></tr></thead>
           <tbody id="dailyMealsBody">
-            <tr><td colspan="7" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>
+            <tr><td colspan="8" class="muted" style="text-align:center;">لا توجد وجبات مسجلة اليوم</td></tr>
           </tbody>
         </table>
       </div>
