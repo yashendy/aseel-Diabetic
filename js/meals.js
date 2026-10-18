@@ -7,7 +7,7 @@ import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/
 import { collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteField, getDocs, query, where, orderBy, limit, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {
   esc, round, localDateStr, localTimeStr, whenFromParts, toDateObj, convert, mealOfSlot, SLOT_ORDER,
-  getTherapy, calcBolus, calcIOB, extractDoseEntries, isMealDoc, glucoseFields
+  getTherapy, calcBolus, calcIOB, extractDoseEntries, isMealDoc, glucoseFields, roundToStep
 } from './dose-engine.js';
 import { normAr } from './food-utils.js';
  
@@ -39,8 +39,9 @@ let state = {
   childId: null, parentId: null, child: null, therapy: null,
   date: localDateStr(), time: localTimeStr(), slot: "PRE_BREAKFAST",
   rule: "fullFiber", globalFoods: [], mealItems: [],
-  favorites: new Set(), mostUsedIds: [], libTab: "all",
+  favorites: new Set(), mostUsedIds: [], presetMeals: [], libTab: "all",
   finalDoseVal: 0, lastCalc: null, mealStats: { fat: 0, pro: 0, avgGI: 0, fiber: 0 },
+  splitBolus: { enabled: false, ratio: 60, now: 0, later: 0, delayHours: 2 },
   iobDirty: false, iobAuto: 0, iobCount: 0,
   manualCarbDirty: false, manualDoseDirty: false, isRescueMode: false,
   eatenToday: 0, caloriesEatenToday: 0, currentMealCarbs: 0, currentMealCalories: 0, currentBgUnit: "mg/dL"
@@ -64,7 +65,17 @@ const els = {
   dailyCalorieTarget: $("dailyCalorieTarget"), calProgressBar: $("calProgressBar"), calProgressText: $("calProgressText"),
   todayDateLabel: $("todayDateLabel"), dailyMealsBody: $("dailyMealsBody"),
   postMealReminderBanner: $("postMealReminderBanner"), pmTime: $("pmTime"),
-  pmActionBtn: $("pmActionBtn"), pmDismissBtn: $("pmDismissBtn")
+  pmActionBtn: $("pmActionBtn"), pmDismissBtn: $("pmDismissBtn"), pmSplitAlert: $("pmSplitAlert"),
+  splitBolusBox: $("splitBolusBox"), enableSplitBolus: $("enableSplitBolus"),
+  splitDetailsArea: $("splitDetailsArea"), splitNowVal: $("splitNowVal"),
+  splitLaterVal: $("splitLaterVal"), splitDelayHours: $("splitDelayHours"),
+  btnOpenTareModal: $("btnOpenTareModal"), tareDialog: $("tareDialog"),
+  tareGrossInput: $("tareGrossInput"), tareDishInput: $("tareDishInput"),
+  tareNetResult: $("tareNetResult"), copyTareBtn: $("copyTareBtn"), closeTareBtn: $("closeTareBtn"),
+  btnSavePresetMeal: $("btnSavePresetMeal"), savePresetDialog: $("savePresetDialog"),
+  savePresetForm: $("savePresetForm"), presetMealNameInput: $("presetMealNameInput"),
+  presetItemsSummary: $("presetItemsSummary"), closeSavePresetBtn: $("closeSavePresetBtn"),
+  cancelSavePresetBtn: $("cancelSavePresetBtn"), presetsCount: $("presetsCount")
 };
  
 // عناصر إضافية تُنشأ برمجياً (بدون الحاجة لتعديل HTML)
@@ -152,6 +163,95 @@ async function loadChildData() {
   state.favorites = new Set(savedFavs);
   if ($('favCount')) $('favCount').textContent = state.favorites.size;
   loadMostUsedFoods();
+  loadPresetMeals();
+}
+
+const presetColl = () => collection(db, 'parents', state.parentId, 'children', state.childId, 'presetMeals');
+
+async function loadPresetMeals() {
+  try {
+    const snap = await getDocs(presetColl());
+    state.presetMeals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    localStorage.setItem(`preset_meals_${state.childId}`, JSON.stringify(state.presetMeals));
+  } catch (err) {
+    console.warn("تعذر جلب الوجبات الجاهزة من السيرفر، استخدام الذاكرة المحلية:", err);
+    state.presetMeals = JSON.parse(localStorage.getItem(`preset_meals_${state.childId}`) || '[]');
+  }
+  if (els.presetsCount) els.presetsCount.textContent = state.presetMeals.length;
+}
+
+async function saveCurrentAsPreset(name) {
+  if (!state.mealItems.length) {
+    alert("يرجى إضافة أصناف للوجبة أولاً قبل حفظها كوصفة!");
+    return;
+  }
+  const cleanItems = state.mealItems.map(it => {
+    const m = itemMacros(it);
+    return {
+      id: it.id || null,
+      name: it.name,
+      mealQty: it.mealQty,
+      selectedUnitIndex: it.selectedUnitIndex || 0,
+      availableUnits: it.availableUnits || [{ label: '100 جرام', grams: 100 }],
+      per100: it.per100 || {},
+      macros: { net: m.net, kcal: m.kcal, protein: m.protein, fat: m.fat, fiber: m.fiber, gi: m.gi }
+    };
+  });
+
+  const payload = {
+    name: name.trim(),
+    items: cleanItems,
+    totalCarbs: round(state.currentMealCarbs, 1),
+    totalCalories: round(state.currentMealCalories, 0),
+    createdAt: serverTimestamp()
+  };
+
+  try {
+    const docRef = await addDoc(presetColl(), payload);
+    state.presetMeals.unshift({ id: docRef.id, ...payload });
+    localStorage.setItem(`preset_meals_${state.childId}`, JSON.stringify(state.presetMeals));
+    if (els.presetsCount) els.presetsCount.textContent = state.presetMeals.length;
+    alert(`تم حفظ الوجبة "${name}" بنجاح في وجباتك الجاهزة! ⭐`);
+  } catch (err) {
+    console.error(err);
+    alert("تعذر حفظ الوجبة الجاهزة: " + err.message);
+  }
+}
+
+function applyPresetMeal(presetId) {
+  const preset = state.presetMeals.find(p => p.id === presetId);
+  if (!preset) return;
+
+  state.mealItems = preset.items.map(it => ({
+    uid: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 4),
+    id: it.id,
+    name: it.name,
+    mealQty: it.mealQty,
+    selectedUnitIndex: it.selectedUnitIndex || 0,
+    availableUnits: it.availableUnits || [{ label: '100 جرام', grams: 100 }],
+    per100: it.per100 || {}
+  }));
+
+  state.manualCarbDirty = false;
+  state.manualDoseDirty = false;
+  renderMealTable();
+  updateMealTotals();
+  if (els.libModal) els.libModal.classList.remove('open');
+  alert(`تم تطبيق مكونات وجبة "${preset.name}" بنجاح في الحاسبة! 🍱`);
+}
+
+async function deletePresetMeal(presetId) {
+  if (!confirm("هل أنت متأكد من حذف هذه الوجبة الجاهزة؟")) return;
+  try {
+    await deleteDoc(doc(presetColl(), presetId));
+    state.presetMeals = state.presetMeals.filter(p => p.id !== presetId);
+    localStorage.setItem(`preset_meals_${state.childId}`, JSON.stringify(state.presetMeals));
+    if (els.presetsCount) els.presetsCount.textContent = state.presetMeals.length;
+    renderLibrary();
+  } catch (err) {
+    console.error(err);
+    alert("تعذر حذف الوجبة: " + err.message);
+  }
 }
 
 async function loadMostUsedFoods() {
@@ -259,6 +359,37 @@ function renderLibrary() {
 
   if (state.isRescueMode) {
     list = list.filter(f => f.tags && f.tags.includes('#علاج_هبوط'));
+  } else if (state.libTab === 'presets') {
+    if (!state.presetMeals.length) {
+      els.itemsGrid.innerHTML = `<div style="text-align:center; padding:30px 20px; color:#94a3b8; font-size:14px;">لا توجد وجبات محفوظة بعد.<br><br>ركبي أي وجبة في الجدول واضغطي على زر "⭐ حفظ كوصفة / وجبة جاهزة" لتظهر هنا!</div>`;
+      return;
+    }
+    const q = words.join(' ');
+    let pList = state.presetMeals;
+    if (q) pList = pList.filter(p => normAr(p.name).includes(q));
+    if (!pList.length) {
+      els.itemsGrid.innerHTML = `<div style="text-align:center; padding:30px 20px; color:#94a3b8; font-size:14px;">لا توجد وجبة جاهزة مطابقة لبحثك.</div>`;
+      return;
+    }
+    els.itemsGrid.innerHTML = pList.map(p => {
+      const summary = p.items.map(i => `${esc(i.name)} (${i.mealQty} ${i.availableUnits?.[i.selectedUnitIndex]?.label || 'حصة'})`).join(' • ');
+      return `
+        <div class="preset-card" data-id="${esc(p.id)}">
+          <div class="preset-head">
+            <span class="preset-title">🍱 ${esc(p.name)}</span>
+            <div class="preset-macros">
+              <span style="color:#7c3aed;">كارب: ${fmt(p.totalCarbs)}g</span>
+              <span style="color:#f59e0b;">سعرات: ${fmt(p.totalCalories, 0)} kcal</span>
+            </div>
+          </div>
+          <div class="preset-summary">${summary}</div>
+          <div class="preset-actions">
+            <button class="btn danger sm" type="button" data-act="del-preset" data-id="${esc(p.id)}">🗑️ حذف</button>
+            <button class="btn primary sm" type="button" data-act="apply-preset" data-id="${esc(p.id)}">➕ تطبيق هذه الوجبة</button>
+          </div>
+        </div>`;
+    }).join('');
+    return;
   } else if (state.libTab === 'favorites') {
     list = list.filter(f => state.favorites.has(f.id));
   } else if (state.libTab === 'most-used') {
@@ -462,9 +593,40 @@ function calculateBolus() {
 
     els.smartAlerts.style.display = html ? 'block' : 'none';
     els.smartAlerts.innerHTML = html;
+
+    // تفعيل أو إظهار خيار تجزئة الجرعة للوجبات الدسمة (Dual-Wave)
+    const isHighFatPro = (fpu >= 1.5 || fat >= 20 || pro >= 30) && state.finalDoseVal > 0 && !r.blocked && !r.isHypo;
+    if (els.splitBolusBox) {
+      if (isHighFatPro || state.splitBolus.enabled) {
+        els.splitBolusBox.classList.remove('hidden');
+        updateSplitBolusCalculations();
+      } else {
+        els.splitBolusBox.classList.add('hidden');
+      }
+    }
   }
 }
- 
+
+function updateSplitBolusCalculations() {
+  const total = Number(state.finalDoseVal) || 0;
+  if (!state.splitBolus.enabled || total <= 0) {
+    if (els.splitDetailsArea) els.splitDetailsArea.classList.add('hidden');
+    return;
+  }
+  if (els.splitDetailsArea) els.splitDetailsArea.classList.remove('hidden');
+
+  const ratio = state.splitBolus.ratio || 60;
+  const nowRaw = total * (ratio / 100);
+  const now = roundToStep(nowRaw, state.therapy?.step || 0.5);
+  const later = roundToStep(Math.max(0, total - now), state.therapy?.step || 0.5);
+
+  state.splitBolus.now = now;
+  state.splitBolus.later = later;
+
+  if (els.splitNowVal) els.splitNowVal.textContent = fmt(now);
+  if (els.splitLaterVal) els.splitLaterVal.textContent = fmt(later);
+}
+
 const resetManualDose = () => { state.manualDoseDirty = false; calculateBolus(); };
  
 // ========================================================
@@ -513,6 +675,8 @@ async function loadTodayMeals() {
 
   const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   const validDocs = allDocs.filter(m => m.carbs > 0 || m.totalDose > 0);
+  state.allDocs = allDocs;
+  state.validDocs = validDocs;
   if (validDocs.length === 0) {
     els.dailyMealsBody.innerHTML = `<tr><td colspan="8" class="muted" style="text-align:center;">لا توجد وجبات أو قياسات مسجلة في هذا اليوم</td></tr>`;
   } else {
@@ -723,10 +887,20 @@ els.btnSaveMeal.onclick = async () => {
       payload.measureMethod = els.measureSource.value === 'cgm' ? 'sensor' : 'blood';
     }
  
+    if (state.splitBolus?.enabled && state.splitBolus.later > 0) {
+      payload.splitBolus = {
+        enabled: true,
+        ratio: state.splitBolus.ratio,
+        now: state.splitBolus.now,
+        later: state.splitBolus.later,
+        delayHours: state.splitBolus.delayHours || 2
+      };
+    }
+
     if (target) await setDoc(doc(measColl(), target.id), { ...payload, updatedAt: serverTimestamp() }, { merge: true });
     else await addDoc(measColl(), { ...payload, createdAt: serverTimestamp() });
 
-    showPostMealReminder(state.time, state.slot, state.date);
+    showPostMealReminder(state.time, state.slot, state.date, payload.splitBolus);
     await loadTodayMeals(); loadIOB();
   } catch (e) {
     console.error(e);
@@ -734,13 +908,21 @@ els.btnSaveMeal.onclick = async () => {
   } finally { els.btnSaveMeal.disabled = false; els.btnSaveMeal.textContent = "💾 اعتماد الجرعة وحفظ الوجبة"; }
 };
 
-function showPostMealReminder(timeStr, slotKey, dateStr) {
+function showPostMealReminder(timeStr, slotKey, dateStr, splitInfo = null) {
   if (!els.postMealReminderBanner) return;
   const postTime = addHoursToTimeStr(timeStr, 2);
   const postSlot = PRE_TO_POST_SLOT[slotKey] || 'OTHER';
   if (els.pmTime) els.pmTime.textContent = postTime;
   if (els.pmActionBtn) {
     els.pmActionBtn.href = `measurements.html?child=${encodeURIComponent(state.childId)}&slot=${encodeURIComponent(postSlot)}&date=${encodeURIComponent(dateStr)}&time=${encodeURIComponent(postTime)}`;
+  }
+  if (els.pmSplitAlert) {
+    if (splitInfo && splitInfo.enabled && splitInfo.later > 0) {
+      els.pmSplitAlert.style.display = 'block';
+      els.pmSplitAlert.innerHTML = `🍕 <b>تذكير جرعة مؤجلة (Dual-Wave):</b> الجرعة الثانية المطلوبة هي <b>${splitInfo.later} U</b> تؤخذ بعد ساعتين مع فحص السكر للتأكد.`;
+    } else {
+      els.pmSplitAlert.style.display = 'none';
+    }
   }
   els.postMealReminderBanner.classList.remove('hidden');
   els.postMealReminderBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -804,20 +986,109 @@ function setupEvents() {
     };
   }
 
-  // أحداث بطاقات الأطعمة (إضافة صنف أو تبديل المفضلة)
+  // أحداث بطاقات الأطعمة والوجبات الجاهزة
   if (els.itemsGrid) {
     els.itemsGrid.onclick = async e => {
       const btn = e.target.closest('button[data-act]');
       if (!btn) return;
-      const card = btn.closest('.food-lib-item');
+      const card = btn.closest('.food-lib-item') || btn.closest('.preset-card');
       if (!card) return;
       const id = card.dataset.id;
       if (btn.dataset.act === 'add') {
         addItemToMeal(id);
       } else if (btn.dataset.act === 'toggle-fav') {
         await toggleFavorite(id);
+      } else if (btn.dataset.act === 'apply-preset') {
+        applyPresetMeal(id);
+      } else if (btn.dataset.act === 'del-preset') {
+        await deletePresetMeal(id);
       }
     };
+  }
+
+  // أحداث تجزئة الجرعة للوجبات الدسمة (Dual-Wave)
+  if (els.enableSplitBolus) {
+    els.enableSplitBolus.onchange = () => {
+      state.splitBolus.enabled = els.enableSplitBolus.checked;
+      updateSplitBolusCalculations();
+    };
+  }
+  document.querySelectorAll('.sb-ratio-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.sb-ratio-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.splitBolus.ratio = Number(btn.dataset.ratio) || 60;
+      updateSplitBolusCalculations();
+    };
+  });
+
+  // أحداث حاسبة تصفير الميزان وطرح وزن الطبق (Tare)
+  if (els.btnOpenTareModal && els.tareDialog) {
+    els.btnOpenTareModal.onclick = () => {
+      if (els.tareGrossInput) els.tareGrossInput.value = '';
+      if (els.tareDishInput) els.tareDishInput.value = '';
+      if (els.tareNetResult) els.tareNetResult.textContent = '0';
+      els.tareDialog.showModal();
+    };
+    if (els.closeTareBtn) els.closeTareBtn.onclick = () => els.tareDialog.close();
+
+    const calcNetTare = () => {
+      const gross = parseFloat(els.tareGrossInput?.value) || 0;
+      const dish = parseFloat(els.tareDishInput?.value) || 0;
+      const net = Math.max(0, gross - dish);
+      if (els.tareNetResult) els.tareNetResult.textContent = round(net, 1);
+    };
+    if (els.tareGrossInput) els.tareGrossInput.oninput = calcNetTare;
+    if (els.tareDishInput) els.tareDishInput.oninput = calcNetTare;
+
+    if (els.copyTareBtn) {
+      els.copyTareBtn.onclick = () => {
+        const netVal = parseFloat(els.tareNetResult?.textContent) || 0;
+        if (netVal <= 0) {
+          alert('الوزن الصافي صفر!');
+          return;
+        }
+        if (state.mealItems.length > 0) {
+          const lastIdx = state.mealItems.length - 1;
+          state.mealItems[lastIdx].mealQty = round(netVal / 100, 2);
+          renderMealTable();
+          updateMealTotals();
+          alert(`تم تعيين الوزن الصافي (${netVal} جم) للصنف الأخير بالجدول! ✔️`);
+        } else {
+          navigator.clipboard?.writeText(String(netVal));
+          alert(`تم نسخ الوزن الصافي (${netVal} جم) للحافظة! ✔️`);
+        }
+        els.tareDialog.close();
+      };
+    }
+  }
+
+  // أحداث حفظ الوجبة الحالية كوصفة مجهزة مسبقاً (Presets)
+  if (els.btnSavePresetMeal && els.savePresetDialog) {
+    els.btnSavePresetMeal.onclick = () => {
+      if (!state.mealItems.length) {
+        alert("يرجى إضافة أصناف للوجبة أولاً قبل حفظها كوصفة!");
+        return;
+      }
+      if (els.presetMealNameInput) els.presetMealNameInput.value = '';
+      const summaryText = state.mealItems.map(i => `${i.name} (${i.mealQty} ${i.availableUnits?.[i.selectedUnitIndex]?.label || 'حصة'})`).join(' • ');
+      if (els.presetItemsSummary) {
+        els.presetItemsSummary.innerHTML = `<b>الأصناف:</b> ${esc(summaryText)}<br><div style="margin-top:4px; color:#475569;"><b>الكارب:</b> ${fmt(state.currentMealCarbs)}g • <b>السعرات:</b> ${fmt(state.currentMealCalories, 0)} kcal</div>`;
+      }
+      els.savePresetDialog.showModal();
+    };
+    if (els.closeSavePresetBtn) els.closeSavePresetBtn.onclick = () => els.savePresetDialog.close();
+    if (els.cancelSavePresetBtn) els.cancelSavePresetBtn.onclick = () => els.savePresetDialog.close();
+
+    if (els.savePresetForm) {
+      els.savePresetForm.onsubmit = async e => {
+        e.preventDefault();
+        const name = els.presetMealNameInput?.value.trim();
+        if (!name) return;
+        await saveCurrentAsPreset(name);
+        els.savePresetDialog.close();
+      };
+    }
   }
 
   // نافذة طلب إضافة صنف جديد من الأسرة للأدمن
@@ -880,4 +1151,94 @@ function setupEvents() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   });
+
+  const btnExportDaily = $('btnExportDailyMeals');
+  if (btnExportDaily) btnExportDaily.onclick = exportDailyMealsCSV;
+  const btnPrintDaily = $('btnPrintDailyMeals');
+  if (btnPrintDaily) btnPrintDaily.onclick = () => window.print();
+}
+
+function exportDailyMealsCSV() {
+  if (!state.validDocs || !state.validDocs.length) {
+    alert("لا توجد وجبات مسجلة في هذا اليوم لتصديرها.");
+    return;
+  }
+  const headers = [
+    "تاريخ",
+    "وقت الوجبة",
+    "الوجبة",
+    "الكارب (جم)",
+    "السعرات (kcal)",
+    "جرعة الكارب (وحدة)",
+    "جرعة التصحيح (وحدة)",
+    "إجمالي الأنسولين (وحدة)",
+    "السكر قبل الوجبة",
+    "السكر بعد الوجبة (+2h)",
+    "تقييم الاستجابة",
+    "مكونات الوجبة وملاحظاتها"
+  ];
+
+  const cell = str => `"${String(str || '').replace(/"/g, '""')}"`;
+
+  const rows = state.validDocs.map(m => {
+    const postSlotKey = PRE_TO_POST_SLOT[m.slotKey] || 'OTHER';
+    const mDateObj = toDateObj(m.when);
+    let postDoc = (state.allDocs || []).find(d => d.id !== m.id && d.slotKey === postSlotKey);
+    if (!postDoc && mDateObj) {
+      const mEpoch = mDateObj.getTime();
+      postDoc = (state.allDocs || []).find(d => {
+        if (d.id === m.id) return false;
+        const dEpoch = (toDateObj(d.when) || 0).getTime();
+        const diffMins = (dEpoch - mEpoch) / 60000;
+        return diffMins >= 75 && diffMins <= 210;
+      });
+    }
+
+    let preBgStr = (m.value !== undefined && m.value !== null && m.value !== '') ? `${m.value} ${m.unit || state.therapy.unit}` : '—';
+    let postBgStr = (postDoc && postDoc.value !== undefined && postDoc.value !== null && postDoc.value !== '') ? `${postDoc.value} ${postDoc.unit || state.therapy.unit}` : '—';
+
+    let evaluation = 'لم يُسجل بعد';
+    if (postDoc && postDoc.value !== undefined && postDoc.value !== null && postDoc.value !== '') {
+      const postVal = Number(postDoc.value);
+      const postNorm = postDoc.normalizedValue ?? convert(postVal, postDoc.unit || state.therapy.unit, state.therapy.unit);
+      const L = state.therapy.limits;
+      if (postNorm < L.low) evaluation = 'هبوط (جرعة زائدة)';
+      else if (postNorm > L.high) evaluation = 'ارتفاع (مراجعة معامل الكارب)';
+      else evaluation = 'في الهدف (ممتاز)';
+    }
+
+    let itemsStr = '';
+    if (Array.isArray(m.items) && m.items.length) {
+      itemsStr = m.items.map(it => `${it.name} (${it.mealQty || 1} ${it.availableUnits?.[it.selectedUnitIndex]?.label || it.unitLabel || 'حصة'})`).join(' + ');
+    } else if (m.notes) {
+      itemsStr = m.notes;
+    }
+
+    return [
+      cell(state.date),
+      cell(m.time || '—'),
+      cell(getSlotLabel(m.slotKey)),
+      cell(m.carbs || 0),
+      cell(Number(m.calories || 0).toFixed(0)),
+      cell(m.carbDose || 0),
+      cell(m.correctionDose || 0),
+      cell(m.totalDose || m.totalInsulin || 0),
+      cell(preBgStr),
+      cell(postBgStr),
+      cell(evaluation),
+      cell(itemsStr)
+    ].join(',');
+  });
+
+  const csvContent = '\uFEFF' + [headers.map(h => `"${h}"`).join(','), ...rows].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const childName = (state.child?.name || 'child').replace(/[\s\/\\?%*:|"<>]/g, '_');
+  a.href = url;
+  a.download = `وجبات_${childName}_${state.date}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

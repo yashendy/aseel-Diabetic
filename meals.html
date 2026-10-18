@@ -44,16 +44,51 @@
  
   <div class="container">
     
-    <!-- كارت تذكير قياس ما بعد الوجبة -->
+    <!-- كارت تذكير قياس ما بعد الوجبة والخط الزمني -->
     <div id="postMealReminderBanner" class="post-meal-banner hidden">
-      <div class="pm-icon">⏰</div>
-      <div class="pm-content">
-        <h4 id="pmTitle">موعد قياس ما بعد الوجبة: <span id="pmTime">--:--</span></h4>
-        <p id="pmDesc">تذكير: يُقاس السكر بعد ساعتين من بدء الوجبة للتأكد من ملاءمة جرعة الأنسولين وتجنب أي ارتفاع أو هبوط.</p>
+      <div class="pm-top" style="display:flex; align-items:center; gap:16px; width:100%;">
+        <div class="pm-icon">⏰</div>
+        <div class="pm-content" style="flex:1;">
+          <h4 id="pmTitle">موعد قياس ما بعد الوجبة: <span id="pmTime">--:--</span></h4>
+          <p id="pmDesc">تذكير: يُقاس السكر بعد ساعتين من بدء الوجبة للتأكد من ملاءمة جرعة الأنسولين وتجنب أي ارتفاع أو هبوط.</p>
+          <div id="pmSplitAlert" class="pm-split-note" style="display:none; margin-top:6px; font-size:12px; font-weight:bold; color:#b45309;"></div>
+        </div>
+        <div class="pm-actions">
+          <a id="pmActionBtn" href="#" class="btn primary sm" style="white-space:nowrap;">📊 تسجيل القياس الآن</a>
+          <button id="pmDismissBtn" type="button" class="btn gray sm">✕ إغلاق</button>
+        </div>
       </div>
-      <div class="pm-actions">
-        <a id="pmActionBtn" href="#" class="btn primary sm" style="white-space:nowrap;">📊 تسجيل القياس الآن</a>
-        <button id="pmDismissBtn" type="button" class="btn gray sm">✕ إغلاق</button>
+
+      <!-- الخط الزمني لامتصاص الوجبة ومفعول الأنسولين -->
+      <div class="meal-action-timeline">
+        <div class="mat-title">⏱️ المسار الزمني المتوقع لامتصاص الوجبة والأنسولين:</div>
+        <div class="mat-steps">
+          <div class="mat-step">
+            <span class="mat-dot blue"></span>
+            <b>+15 دقيقة</b>
+            <small>بداية مفعول الأنسولين</small>
+          </div>
+          <div class="mat-step">
+            <span class="mat-dot orange"></span>
+            <b>+45-60 دقيقة</b>
+            <small>ذروة امتصاص الكارب</small>
+          </div>
+          <div class="mat-step">
+            <span class="mat-dot purple"></span>
+            <b>+90 دقيقة</b>
+            <small>ذروة مفعول الأنسولين</small>
+          </div>
+          <div class="mat-step highlight">
+            <span class="mat-dot green"></span>
+            <b id="matCheckTime">+120 دقيقة (ساعتان)</b>
+            <small>🎯 موعد قياس السكر للتأكد</small>
+          </div>
+          <div class="mat-step">
+            <span class="mat-dot gray"></span>
+            <b>+4 ساعات</b>
+            <small>انتهاء مفعول الأنسولين</small>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -170,6 +205,47 @@
         </div>
       </div>
  
+      <!-- لوحة الجرعة الممتدة / المقسمة للوجبات الدسمة Dual-Wave Bolus -->
+      <div id="splitBolusBox" class="split-bolus-box hidden">
+        <div class="sb-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:22px;">🍕</span>
+            <div>
+              <strong style="color:#92400e; font-size:14px;">اقتراح تجزئة الجرعة (Dual-Wave / Split Bolus)</strong>
+              <div class="muted tiny">لوجبات الدهون والبروتين العالي، يُفضل تقسيم الجرعة لتفادي هبوط مبكر أو ارتفاع متأخر.</div>
+            </div>
+          </div>
+          <label class="switch-lbl">
+            <input type="checkbox" id="enableSplitBolus">
+            <span>تفعيل التقسيم</span>
+          </label>
+        </div>
+
+        <div id="splitDetailsArea" class="sb-body hidden">
+          <div class="sb-slider-row">
+            <span style="font-size:12px; font-weight:bold; color:#475569;">نسبة التقسيم:</span>
+            <div class="sb-ratio-btns">
+              <button type="button" class="sb-ratio-btn active" data-ratio="60">60% فورية / 40% مؤجلة</button>
+              <button type="button" class="sb-ratio-btn" data-ratio="70">70% فورية / 30% مؤجلة</button>
+              <button type="button" class="sb-ratio-btn" data-ratio="50">50% فورية / 50% مؤجلة</button>
+            </div>
+          </div>
+
+          <div class="sb-cards">
+            <div class="sb-card now">
+              <div class="sb-card-title">💉 الجرعة الفورية (الآن)</div>
+              <div class="sb-card-val"><span id="splitNowVal">0.0</span> U</div>
+              <div class="sb-card-sub">تُحقن قبل تناول الطعام مباشرة للكارب</div>
+            </div>
+            <div class="sb-card later">
+              <div class="sb-card-title">⏳ الجرعة المؤجلة (بعد ساعتين)</div>
+              <div class="sb-card-val"><span id="splitLaterVal">0.0</span> U</div>
+              <div class="sb-card-sub">تُحقن بعد <span id="splitDelayHours">ساعتين</span> للدهون والبروتين</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="smartAlerts" class="smart-alert"></div>
       
       <div class="field mt-10">
@@ -182,7 +258,10 @@
     <section class="card">
       <div class="card-header">
         <h2>🍱 مطبخ أسيل (الأنظمة وبناء الوجبات)</h2>
-        <button id="btnOpenLibrary" class="btn alt sm">➕ أضف صنف من المكتبة</button>
+        <div style="display:flex; gap:8px;">
+          <button id="btnOpenTareModal" class="btn alt sm" type="button" title="حاسبة وزن الطبق والميزان">⚖️ الميزان (Tare)</button>
+          <button id="btnOpenLibrary" class="btn alt sm">➕ أضف صنف من المكتبة</button>
+        </div>
       </div>
       
       <div class="calc-row" style="margin-bottom:12px;">
@@ -219,14 +298,21 @@
         </table>
       </div>
  
-      <div style="display:flex; gap:10px; margin-top:20px;">
-        <button id="btnSaveMeal" class="btn primary">💾 اعتماد الجرعة وحفظ الوجبة</button>
+      <div style="display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;">
+        <button id="btnSaveMeal" class="btn primary" style="flex:2;">💾 اعتماد الجرعة وحفظ الوجبة</button>
+        <button id="btnSavePresetMeal" class="btn alt sm" type="button" style="flex:1;">⭐ حفظ كوصفة / وجبة جاهزة</button>
         <button id="btnClearMeal" class="btn gray" style="width:auto;">مسح الحاسبة</button>
       </div>
     </section>
  
     <section class="card">
-      <div class="card-header"><h2>📝 سجل وجبات اليوم (<span id="todayDateLabel"></span>)</h2></div>
+      <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <h2 style="margin:0;">📝 سجل وجبات اليوم (<span id="todayDateLabel"></span>)</h2>
+        <div style="display:flex; gap:8px;">
+          <button id="btnExportDailyMeals" class="btn alt sm" type="button" title="تصدير سجل وجبات اليوم لملف Excel">📤 تصدير Excel (CSV)</button>
+          <button id="btnPrintDailyMeals" class="btn gray sm" type="button" title="طباعة تقرير الوجبات">🖨️ طباعة</button>
+        </div>
+      </div>
       <div style="overflow-x:auto;">
         <table class="meal-table">
           <thead><tr><th>الوجبة</th><th>كارب</th><th>سعرات</th><th>كارب-U</th><th>تصحيح-U</th><th>الإجمالي</th><th>متابعة السكر (+2h)</th><th>إجراءات</th></tr></thead>
@@ -250,6 +336,7 @@
         <!-- تبويبات التصفية -->
         <div class="lib-tabs" id="libTabs">
           <button class="lib-tab active" data-tab="all" type="button">🍽️ الكل</button>
+          <button class="lib-tab" data-tab="presets" type="button">🍱 وجباتي الجاهزة <span id="presetsCount" class="tab-badge">0</span></button>
           <button class="lib-tab" data-tab="favorites" type="button">⭐ المفضلة <span id="favCount" class="tab-badge">0</span></button>
           <button class="lib-tab" data-tab="most-used" type="button">🕒 الأكثر استخداماً</button>
           <button id="btnOpenRequestModal" class="lib-tab req-tab" type="button">➕ طلب صنف</button>
@@ -307,6 +394,59 @@
     </form>
   </dialog>
 
+  <!-- نافذة حاسبة ميزان المطبخ وطرح وزن الطبق (Tare) -->
+  <dialog id="tareDialog" class="dialog" style="max-width:380px; border-radius:16px; border:none; padding:0; box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+    <div style="padding:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:8px;">
+        <h3 style="margin:0; font-size:16px; color:var(--primary);">⚖️ حاسبة تصفير الميزان (Tare)</h3>
+        <button type="button" id="closeTareBtn" style="background:none; border:none; font-size:18px; cursor:pointer; color:#64748b;">✕</button>
+      </div>
+      <p style="font-size:12px; color:#64748b; margin-top:0;">اطرحي وزن الطبق أو الإناء من الوزن الكلي لحساب وزن الطعام الصافي بدقة.</p>
+
+      <div class="field" style="margin-bottom:12px;">
+        <label style="font-size:13px; font-weight:bold;">الوزن الكلي (الطبق مع الطعام) بالجرام</label>
+        <input type="number" id="tareGrossInput" class="input" placeholder="مثال: 320" />
+      </div>
+
+      <div class="field" style="margin-bottom:12px;">
+        <label style="font-size:13px; font-weight:bold;">وزن الطبق فارغاً بالجرام (Tare)</label>
+        <input type="number" id="tareDishInput" class="input" placeholder="مثال: 120" />
+      </div>
+
+      <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:10px; padding:12px; text-align:center; margin-bottom:15px;">
+        <div style="font-size:12px; color:#166534;">الوزن الصافي للطعام:</div>
+        <div style="font-size:26px; font-weight:bold; color:#15803d;"><span id="tareNetResult">0</span> جم</div>
+      </div>
+
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button type="button" id="copyTareBtn" class="btn primary sm" style="width:100%;">استخدام هذا الوزن في الحاسبة</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- نافذة حفظ الوجبة الحالية كوصفة مجهزة مسبقاً -->
+  <dialog id="savePresetDialog" class="dialog" style="max-width:440px; border-radius:16px; border:none; padding:0; box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+    <form id="savePresetForm" method="dialog" style="padding:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:8px;">
+        <h3 style="margin:0; font-size:16px; color:var(--primary);">⭐ حفظ كوصفة / وجبة جاهزة متكررة</h3>
+        <button type="button" id="closeSavePresetBtn" style="background:none; border:none; font-size:18px; cursor:pointer; color:#64748b;">✕</button>
+      </div>
+      <p style="font-size:12px; color:#64748b; margin-top:0;">احفظي تركيبة هذه الوجبة بأصنافها وأوزانها لتتمكني من استدعائها بنقرة واحدة في الأيام القادمة.</p>
+
+      <div class="field" style="margin-bottom:14px;">
+        <label style="font-size:13px; font-weight:bold;">اسم الوجبة <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="presetMealNameInput" class="input" required placeholder="مثال: فطار الروضة، كشري منزلي، سناك مسائي..." />
+      </div>
+
+      <div id="presetItemsSummary" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px; font-size:12px; margin-bottom:16px; max-height:120px; overflow-y:auto;">
+      </div>
+
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button type="button" id="cancelSavePresetBtn" class="btn gray sm">إلغاء</button>
+        <button type="submit" id="confirmSavePresetBtn" class="btn primary sm">💾 حفظ الوجبة</button>
+      </div>
+    </form>
+  </dialog>
   <div id="loader" class="loader"><div class="spinner"></div></div>
   <script type="module" src="js/meals.js?v=2026.10.13"></script>
 </body>
