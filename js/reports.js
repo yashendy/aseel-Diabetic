@@ -1,13 +1,23 @@
 // js/reports.js
 import { auth, db } from './firebase-config.js';
 import {
-  collection, doc, getDoc, getDocs, query, where
+  collection, doc, getDoc, getDocs, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
  
 const $=id=>document.getElementById(id);
+const setText=(el,v)=>{if(el)el.textContent=(v==null||v==='')?'—':v;};
 const round1=n=>Math.round((+n||0)*10)/10;
 const mgdl2mmol=v=>v/18.0182, mmol2mgdl=v=>v*18.0182;
+
+function calcAge(bd) {
+  if (!bd) return '-';
+  const b = new Date(bd), t = new Date();
+  let a = t.getFullYear() - b.getFullYear();
+  const m = t.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && t.getDate() < b.getDate())) a--;
+  return a;
+}
  
 const SLOT_ORDER = ["WAKE","FASTING","PRE_BREAKFAST","POST_BREAKFAST","PRE_LUNCH","POST_LUNCH","PRE_DINNER","POST_DINNER","SNACK","BEDTIME","DURING_SLEEP"];
 const SLOT_LABEL = {
@@ -22,12 +32,13 @@ function showLoader(v){ const l=$('appLoader'); if(l) l.style.display = v ? 'fle
  
 let currentUser, childId=new URLSearchParams(location.search).get('child')||localStorage.getItem('selectedChildId');
 let childRef, child;
-let unitSel, fromDate, toDate, reportGrid, emptyGrid, pie, cmpElems, aiTable;
+let unitSel, fromDate, toDate, reportGrid, emptyGrid, pie, cmpElems, aiTable, modalDayChart;
  
 let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
 let sysUnit = 'mg/dL';
 let reportDays = [];
 let parentIdForQuery = null; // تخزين رقم الأب لاستخدامه لاحقاً
+let lastLabHba1cVal = null;
  
 onAuthStateChanged(auth, async (u)=>{
   if(!u) return;
@@ -47,6 +58,8 @@ onAuthStateChanged(auth, async (u)=>{
       backBtn.onclick = () => location.href = `child.html?child=${childId}`;
     }
   }
+
+  $('logoutBtn')?.addEventListener('click', () => signOut(auth).catch(() => {}));
  
   wire(); 
   showLoader(true);
@@ -129,6 +142,49 @@ async function loadChild(parentId){
     sysLimits.high = Number(child.glucose_limits.high) || (sysUnit==='mmol/L'? 10.0 : 180);
     sysLimits.critLow = Number(child.glucose_limits.critical_low) || (sysUnit==='mmol/L'? 3.0 : 54);
     sysLimits.critHigh = Number(child.glucose_limits.critical_high) || (sysUnit==='mmol/L'? 13.9 : 250);
+  }
+
+  // تحديث بيانات الشريط العلوي ومسار التنقل
+  const qParams = childId ? `?child=${encodeURIComponent(childId)}${parentIdForQuery !== currentUser?.uid ? `&parentId=${encodeURIComponent(parentIdForQuery)}` : ''}` : '';
+  $('navHome')?.setAttribute('href', `child.html${qParams}`);
+  $('navMeas')?.setAttribute('href', `measurements.html${qParams}`);
+  $('navMeals')?.setAttribute('href', `meals.html${qParams}`);
+  $('navLabs')?.setAttribute('href', `labs.html${qParams}`);
+  $('navVisits')?.setAttribute('href', `visits.html${qParams}`);
+  $('breadChildName')?.setAttribute('href', `child.html${qParams}`);
+  setText($('breadChildName'), child.name || 'الطفل');
+  setText($('topChildName'), child.name || 'الطفل');
+  if ($('topAvatar')) $('topAvatar').textContent = (child.name || 'أ').trim().charAt(0);
+
+  const age = calcAge(child.birthDate);
+  const genderStr = child.gender === 'female' ? 'أنثى' : (child.gender === 'male' ? 'ذكر' : '');
+  const regimenStr = child.regimen === 'pump' ? 'مضخة إنسولين' : 'حقن يومية (MDI)';
+  const metaParts = [];
+  if (age !== '-') metaParts.push(`العمر: ${age} سنة`);
+  if (genderStr) metaParts.push(genderStr);
+  if (regimenStr) metaParts.push(regimenStr);
+  setText($('topChildMeta'), metaParts.join(' • ') || '—');
+
+  // جلب آخر تحليل مخبري مسجل للـ HbA1c لمقارنته مع الـ GMI
+  try {
+    const labQ = query(collection(db, `parents/${parentId}/children/${childId}/labs`), orderBy('when', 'desc'), limit(1));
+    const labSnap = await getDocs(labQ);
+    if (!labSnap.empty) {
+      const lastLab = labSnap.docs[0].data();
+      if (lastLab?.hba1c?.value != null && !Number.isNaN(Number(lastLab.hba1c.value))) {
+        lastLabHba1cVal = Number(lastLab.hba1c.value);
+        const when = lastLab.when?.toDate ? lastLab.when.toDate() : (lastLab.date ? new Date(lastLab.date) : null);
+        const dateStr = when ? when.toLocaleDateString('ar-EG', { month: 'short', year: 'numeric' }) : '';
+        setText($('statLastLab'), `${lastLabHba1cVal.toFixed(1)}% ${dateStr ? `(${dateStr})` : ''}`);
+      } else {
+        setText($('statLastLab'), '—');
+      }
+    } else {
+      setText($('statLastLab'), 'لا توجد تحاليل');
+    }
+  } catch (err) {
+    console.warn('Could not fetch last lab:', err);
+    setText($('statLastLab'), '—');
   }
 }
  
@@ -240,7 +296,7 @@ async function renderReport(){
   const body= $('reportGrid'); body.innerHTML='';
   if(!days.length){
     $('emptyGrid').classList.remove('hidden');
-    updateStats([]); drawPie({TIR:0,TBR:0,TAR:0}); buildAI([],unit); 
+    updateStats([]); drawPie({TIR:0,TBR:0,TAR:0}); drawModalDayProfile([], unit); buildAI([],unit); 
     showLoader(false); return;
   }
   $('emptyGrid').classList.add('hidden');
@@ -267,59 +323,269 @@ async function renderReport(){
  
   updateStats(data);
   const parts=calcParts(data,unit); drawPie(parts);
+  drawModalDayProfile(data, unit);
   buildAI(data,unit);
   showLoader(false);
 }
  
 function updateStats(list){
-  const validList = list.filter(x => x.val !== null);
-  const unit=unitSel.value, L=limitsInUnit(unit);
-  const avgCard = $('statAvg').parentElement; 
- 
-  if(!validList.length){ 
-    $('statTIR').textContent='0%'; $('statLow').textContent='0%'; $('statHigh').textContent='0%'; $('statAvg').textContent='—'; $('statSD').textContent='—'; $('statCrit').textContent='0'; 
-    avgCard.className = 'card'; avgCard.style.backgroundColor = ''; return; 
+  const validList = list.filter(x => x.val !== null && Number.isFinite(+x.val));
+  const unit = unitSel.value, L = limitsInUnit(unit);
+
+  if (!validList.length) {
+    setText($('statTIR'), '0%');
+    setText($('statLow'), '0%');
+    setText($('statLowL1'), '0%');
+    setText($('statCritLow'), '0%');
+    setText($('statHigh'), '0%');
+    setText($('statHighL1'), '0%');
+    setText($('statCritHigh'), '0%');
+    setText($('statGMI'), '—');
+    setText($('statCV'), '—');
+    setText($('statSD'), '—');
+    setText($('statAvg'), '—');
+    setText($('statCount'), '0');
+    return;
   }
-  
-  const n=validList.length;
-  const lows=validList.filter(x=>x.val<L.low).length;
-  const highs=validList.filter(x=>x.val>L.high).length;
-  const crit=validList.filter(x=>x.val>=L.critHigh || x.val<=L.critLow).length;
-  const TIR = validList.filter(x=>x.val>=L.low && x.val<=L.high).length;
-  const mean=validList.reduce((a,x)=>a+x.val,0)/n;
-  const sd=Math.sqrt(validList.reduce((a,x)=>a+Math.pow(x.val-mean,2),0)/n);
-  
-  $('statTIR').textContent=`${Math.round(TIR/n*100)}%`;
-  $('statLow').textContent=`${Math.round(lows/n*100)}%`;
-  $('statHigh').textContent=`${Math.round(highs/n*100)}%`;
-  $('statCrit').textContent=String(crit);
-  $('statAvg').textContent=`${round1(mean)} ${unit}`;
-  $('statSD').textContent=round1(sd);
- 
-  avgCard.className = 'card';
-  if (mean < L.low) { avgCard.classList.add('low'); avgCard.style.backgroundColor = ''; } 
-  else if (mean > L.high) { avgCard.classList.add('high'); avgCard.style.backgroundColor = ''; } 
-  else { avgCard.style.backgroundColor = '#dcfce7'; }
+
+  const n = validList.length;
+  // التصنيف الدقيق وفق معايير ADA / ISPAD الدولية
+  // الهبوط الحرج المستوى 2 (< 54 mg/dL / < 3.0 mmol/L)
+  const critLows = validList.filter(x => x.val < L.critLow).length;
+  // الهبوط الخفيف المستوى 1 (54-69 mg/dL / 3.0-3.8 mmol/L)
+  const mildLows = validList.filter(x => x.val >= L.critLow && x.val < L.low).length;
+  const totalLows = critLows + mildLows;
+
+  // داخل النطاق المستهدف TIR (70-180 mg/dL / 3.9-10.0 mmol/L)
+  const inRange = validList.filter(x => x.val >= L.low && x.val <= L.high).length;
+
+  // الارتفاع الخفيف المستوى 1 (181-250 mg/dL / 10.1-13.8 mmol/L)
+  const mildHighs = validList.filter(x => x.val > L.high && x.val <= L.critHigh).length;
+  // الارتفاع الحرج المستوى 2 (> 250 mg/dL / > 13.9 mmol/L)
+  const critHighs = validList.filter(x => x.val > L.critHigh).length;
+  const totalHighs = mildHighs + critHighs;
+
+  const tirPct = Math.round((inRange / n) * 100);
+  const tbrPct = Math.round((totalLows / n) * 100);
+  const tbrL1Pct = round1((mildLows / n) * 100);
+  const tbrL2Pct = round1((critLows / n) * 100);
+  const tarPct = Math.round((totalHighs / n) * 100);
+  const tarL1Pct = round1((mildHighs / n) * 100);
+  const tarL2Pct = round1((critHighs / n) * 100);
+
+  const mean = validList.reduce((a, x) => a + x.val, 0) / n;
+  const sd = Math.sqrt(validList.reduce((a, x) => a + Math.pow(x.val - mean, 2), 0) / n);
+  const cv = mean > 0 ? (sd / mean) * 100 : 0;
+
+  // معادلة Bergenstal et al. (2018) لحساب GMI التراكمي التقديري:
+  // GMI (%) = 3.31 + 0.02392 * [Mean Glucose in mg/dL]
+  const meanMgdl = unit === 'mmol/L' ? mmol2mgdl(mean) : mean;
+  const gmi = 3.31 + (0.02392 * meanMgdl);
+
+  // تحديث واجهة المستخدم والشارات
+  setText($('statTIR'), `${tirPct}%`);
+  const tirBadge = $('statTIRBadge');
+  if (tirBadge) {
+    tirBadge.className = `target-badge ${tirPct >= 70 ? 'ok' : (tirPct >= 50 ? 'warn' : 'bad')}`;
+    tirBadge.textContent = `الهدف: > 70% (${tirPct >= 70 ? 'متحقق ✅' : 'يحتاج تحسين ⚠️'})`;
+  }
+
+  setText($('statLow'), `${tbrPct}%`);
+  setText($('statLowL1'), `${tbrL1Pct}%`);
+  setText($('statCritLow'), `${tbrL2Pct}%`);
+  const tbrBadge = $('statTBRBadge');
+  if (tbrBadge) {
+    tbrBadge.className = `target-badge ${tbrPct < 4 ? 'ok' : (tbrPct <= 9 ? 'warn' : 'bad')}`;
+    tbrBadge.textContent = `الهدف: < 4% (${tbrPct < 4 ? 'آمن 🟢' : 'انتبه ⚠️'})`;
+  }
+
+  setText($('statHigh'), `${tarPct}%`);
+  setText($('statHighL1'), `${tarL1Pct}%`);
+  setText($('statCritHigh'), `${tarL2Pct}%`);
+  const tarBadge = $('statTARBadge');
+  if (tarBadge) {
+    tarBadge.className = `target-badge ${tarPct < 25 ? 'ok' : (tarPct <= 35 ? 'warn' : 'bad')}`;
+    tarBadge.textContent = `الهدف: < 25% (${tarPct < 25 ? 'ممتاز 🟢' : 'مرتفع ⚠️'})`;
+  }
+
+  setText($('statGMI'), `${gmi.toFixed(1)}%`);
+  setText($('statCV'), `${round1(cv)}%`);
+  const cvBadge = $('statCVBadge');
+  if (cvBadge) {
+    cvBadge.className = `target-badge ${cv <= 36 ? 'ok' : 'warn'}`;
+    cvBadge.textContent = `الهدف: ≤ 36% (${cv <= 36 ? 'مستقر 🟢' : 'تذبذب عالي ⚠️'})`;
+  }
+
+  setText($('statSD'), `${round1(sd)} ${unit}`);
+  setText($('statAvg'), `${round1(mean)} ${unit}`);
+  setText($('statCount'), String(n));
 }
- 
+
 function calcParts(list,unit){
-  const validList = list.filter(x => x.val !== null);
-  const L=limitsInUnit(unit), n=validList.length||1;
-  const tbr=validList.filter(x=>x.val<L.low).length/n*100;
-  const tir=validList.filter(x=>x.val>=L.low && x.val<=L.high).length/n*100;
-  const tar=validList.filter(x=>x.val>L.high).length/n*100;
-  return {TIR:Math.round(tir), TBR:Math.round(tbr), TAR:Math.round(tar)};
+  const validList = list.filter(x => x.val !== null && Number.isFinite(+x.val));
+  const L = limitsInUnit(unit), n = validList.length || 1;
+  const tbr = (validList.filter(x => x.val < L.low).length / n) * 100;
+  const tir = (validList.filter(x => x.val >= L.low && x.val <= L.high).length / n) * 100;
+  const tar = (validList.filter(x => x.val > L.high).length / n) * 100;
+  return { TIR: Math.round(tir), TBR: Math.round(tbr), TAR: Math.round(tar) };
 }
- 
+
 function drawPie({TIR,TBR,TAR}){
-  const ctx=$('pieTIR').getContext('2d');
-  if(pie) pie.destroy();
-  pie=new Chart(ctx,{type:'doughnut',
-    data:{labels:['داخل النطاق','انخفـــــاض','ارتـــــــفاع'], datasets:[{data:[TIR,TBR,TAR], backgroundColor:['#16a34a','#ef4444','#f59e0b']}]},
-    options:{plugins:{legend:{position:'bottom'}}, cutout:'70%'}
+  const canvas = $('pieTIR');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (pie) pie.destroy();
+  pie = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['داخل النطاق (TIR)', 'انخفـــــاض (TBR)', 'ارتـــــــفاع (TAR)'],
+      datasets: [{
+        data: [TIR, TBR, TAR],
+        backgroundColor: ['#16a34a', '#ef4444', '#f59e0b'],
+        borderWidth: 2,
+        borderColor: '#ffffff'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
+      },
+      cutout: '70%'
+    }
   });
 }
- 
+
+function drawModalDayProfile(list, unit) {
+  const canvas = $('modalDayCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (modalDayChart) {
+    modalDayChart.destroy();
+    modalDayChart = null;
+  }
+
+  const validList = list.filter(x => x.val !== null && Number.isFinite(+x.val) && x.when);
+  const L = limitsInUnit(unit);
+
+  if (!validList.length) {
+    modalDayChart = new Chart(ctx, {
+      type: 'scatter',
+      data: { datasets: [] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: 'لا توجد بيانات مسجلة لعرض منحنى اليوم النمطي' }
+        }
+      }
+    });
+    return;
+  }
+
+  const colors = validList.map(item => {
+    const v = item.val;
+    if (v < L.critLow || v > L.critHigh) return '#dc2626';
+    if (v < L.low) return '#3b82f6';
+    if (v > L.high) return '#f59e0b';
+    return '#10b981';
+  });
+
+  const scatterPoints = validList.map(item => {
+    const d = item.when instanceof Date ? item.when : new Date(item.when);
+    const decHour = d.getHours() + (d.getMinutes() / 60);
+    return {
+      x: round1(decHour),
+      y: item.val,
+      when: d,
+      slot: item.slot,
+      carbs: item.carbs,
+      ins: item.ins
+    };
+  });
+
+  modalDayChart = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: `الحد الأدنى (${L.low} ${unit})`,
+          data: [{ x: 0, y: L.low }, { x: 24, y: L.low }],
+          type: 'line',
+          borderColor: '#10b981',
+          borderWidth: 1.5,
+          borderDash: [5, 5],
+          pointRadius: 0,
+          fill: false
+        },
+        {
+          label: `الحد الأعلى (${L.high} ${unit})`,
+          data: [{ x: 0, y: L.high }, { x: 24, y: L.high }],
+          type: 'line',
+          borderColor: '#10b981',
+          borderWidth: 1.5,
+          borderDash: [5, 5],
+          pointRadius: 0,
+          fill: '-1',
+          backgroundColor: 'rgba(16, 185, 129, 0.08)'
+        },
+        {
+          label: 'قراءات السكر',
+          data: scatterPoints,
+          pointBackgroundColor: colors,
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 1,
+          pointRadius: 4.5,
+          pointHoverRadius: 7
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          type: 'linear',
+          min: 0,
+          max: 24,
+          title: { display: true, text: 'ساعات اليوم (24h)', font: { family: 'inherit', size: 11, weight: 'bold' } },
+          ticks: {
+            stepSize: 3,
+            callback: (val) => `${String(Math.floor(val)).padStart(2, '0')}:00`
+          },
+          grid: { color: '#f1f5f9' }
+        },
+        y: {
+          min: 0,
+          suggestedMax: unit === 'mmol/L' ? 18 : 300,
+          title: { display: true, text: `مستوى السكر (${unit})`, font: { family: 'inherit', size: 11, weight: 'bold' } },
+          grid: { color: '#f1f5f9' }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          rtl: true,
+          callbacks: {
+            label: (context) => {
+              const raw = context.raw;
+              if (!raw || !raw.when) return '';
+              const timeStr = raw.when.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+              const dateStr = raw.when.toLocaleDateString('ar-EG', { month: 'numeric', day: 'numeric' });
+              let res = `${dateStr} (${timeStr}): ${raw.y} ${unit}`;
+              if (raw.carbs > 0) res += ` • كارب: ${round1(raw.carbs)}g`;
+              if (raw.ins > 0) res += ` • إنسولين: ${round1(raw.ins)}U`;
+              return res;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
 function rowCmp(label,a,b,fmt='%'){
   const diff = (a-b);
   const cls = diff>=0 ? (label==='انخفاض'||label==='ارتفاع'?'diff-down':'diff-up') : (label==='انخفاض'||label==='ارتفاع'?'diff-up':'diff-down');

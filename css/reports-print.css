@@ -71,3 +71,35 @@ body {
 @media print {
   .print-loader { display: none !important; }
 }
+
+/* مؤشرات AGP السريرية في الطباعة المعيارية */
+.agp-metrics-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+  font-size: 11px;
+}
+.agp-metrics-table th, .agp-metrics-table td {
+  border: 1px solid #d1d5db;
+  padding: 4px 8px;
+  text-align: center;
+}
+.agp-metrics-table th {
+  background: #f1f5f9;
+  font-weight: 700;
+  color: #1e293b;
+}
+.agp-metrics-table .highlight-green { background: #dcfce7; color: #166534; font-weight: bold; }
+.agp-metrics-table .highlight-red { background: #fee2e2; color: #991b1b; font-weight: bold; }
+.agp-metrics-table .highlight-amber { background: #fef3c7; color: #92400e; font-weight: bold; }
+.agp-metrics-table .highlight-blue { background: #eff6ff; color: #1e40af; font-weight: bold; }
+
+.doctor-sign-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+  padding-top: 10px;
+  border-top: 1.5px dashed #94a3b8;
+  font-size: 11px;
+  page-break-inside: avoid;
+}

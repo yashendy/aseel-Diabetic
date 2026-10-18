@@ -8,17 +8,33 @@
   <link rel="stylesheet" href="css/reports.css?v=3"/>
 </head>
 <body>
-  <!-- شريط التنقل الموحد -->
-  <header class="topbar no-print" style="background: #1e3a8a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-    <div style="display: flex; align-items: center; gap: 10px;">
-      <span style="font-size: 24px;">📊</span>
-      <h2 style="margin: 0; font-size: 18px;">اللوجبوك والتقارير الذكية (Logbook)</h2>
+  <!-- 1. شريط التنقل الموحد -->
+  <header class="main-topbar no-print">
+    <div class="topbar-right">
+      <div class="top-avatar" id="topAvatar">أ</div>
+      <div class="top-info">
+        <h3 id="topChildName">جاري التحميل...</h3>
+        <span id="topChildMeta" class="muted tiny">—</span>
+      </div>
     </div>
-    <div>
-      <!-- زرار الرجوع الذكي -->
-      <button id="backBtn" class="btn" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s;">🏠 رجوع</button>
+    <nav class="topbar-nav">
+      <a href="child.html" class="nav-pill" id="navHome">🏠 الرئيسية</a>
+      <a href="measurements.html" class="nav-pill" id="navMeas">📊 القياسات</a>
+      <a href="meals.html" class="nav-pill" id="navMeals">🍽️ الوجبات</a>
+      <a href="#" class="nav-pill active">📈 التقارير</a>
+      <a href="labs.html" class="nav-pill" id="navLabs">🔬 التحاليل</a>
+      <a href="visits.html" class="nav-pill" id="navVisits">🩺 الزيارات</a>
+    </nav>
+    <div class="topbar-left">
+      <button id="backBtn" class="btn" style="background:#3b82f6; color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold;">🏠 رجوع</button>
+      <button id="logoutBtn" class="btn-logout-outline" style="margin-inline-start:8px;">↪ خروج</button>
     </div>
   </header>
+
+  <!-- 2. مسار التنقل (Breadcrumbs) -->
+  <div class="breadcrumbs no-print">
+    <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>اللوجبوك والتحليلات السريرية 📊</b>
+  </div>
  
   <div id="appLoader" class="loader"><span class="spinner"></span><span>يجري التحميل...</span></div>
  
@@ -60,7 +76,7 @@
       <!-- صف الفلاتر الثاني: أزرار التصدير والطباعة -->
       <div class="row">
         <div class="grow"></div>
-        <button id="openPrint" class="btn btn--ghost">🖨️ طباعة التقرير</button>
+        <button id="openPrint" class="btn btn--ghost">🖨️ طباعة تقرير AGP</button>
         <button id="openPrintBlank" class="btn btn--ghost">📝 طباعة سجل فارغ</button>
         <button id="exportCsv" class="btn btn--ghost">⬇️ CSV</button>
         <button id="exportXlsx" class="btn btn--ghost">⬇️ Excel</button>
@@ -69,17 +85,101 @@
       <div class="chips" id="thresholdChips"></div>
     </section>
  
-    <!-- باقي الصفحة كما هي تماماً -->
-    <section class="summary">
-      <div class="cards">
-        <div class="card"><span class="k">داخل النطاق (TIR)</span><b id="statTIR">—</b></div>
-        <div class="card low"><span class="k">انخفاض (TBR)</span><b id="statLow">—</b></div>
-        <div class="card high"><span class="k">ارتفاع (TAR)</span><b id="statHigh">—</b></div>
-        <div class="card"><span class="k">المتوسط</span><b id="statAvg">—</b></div>
-        <div class="card"><span class="k">SD</span><b id="statSD">—</b></div>
-        <div class="card crit"><span class="k">حرِج</span><b id="statCrit">—</b></div>
+    <!-- 3. لوحة المؤشرات السريرية المعيارية (ADA / ISPAD Standards) -->
+    <section class="clinical-summary">
+      <div class="clinical-grid">
+        <!-- TIR داخل النطاق -->
+        <div class="metric-card tir-card">
+          <div class="mc-head">
+            <span class="mc-title">🎯 داخل النطاق (TIR)</span>
+            <span id="statTIRBadge" class="target-badge ok">الهدف: > 70%</span>
+          </div>
+          <div class="mc-val"><b id="statTIR">—</b></div>
+          <div class="mc-sub">70 - 180 mg/dL</div>
+        </div>
+
+        <!-- TBR الهبوط بمستويين -->
+        <div class="metric-card tbr-card">
+          <div class="mc-head">
+            <span class="mc-title">⬇️ انخفاض (TBR)</span>
+            <span id="statTBRBadge" class="target-badge warn">الهدف: < 4%</span>
+          </div>
+          <div class="mc-val"><b id="statLow">—</b></div>
+          <div class="mc-breakdown">
+            <span>خفيف (54–69): <b id="statLowL1">0%</b></span>
+            <span class="danger-txt">حرج (&lt;54): <b id="statCritLow">0%</b></span>
+          </div>
+        </div>
+
+        <!-- TAR الارتفاع بمستويين -->
+        <div class="metric-card tar-card">
+          <div class="mc-head">
+            <span class="mc-title">⬆️ ارتفاع (TAR)</span>
+            <span id="statTARBadge" class="target-badge warn">الهدف: < 25%</span>
+          </div>
+          <div class="mc-val"><b id="statHigh">—</b></div>
+          <div class="mc-breakdown">
+            <span>مرتفع (181–250): <b id="statHighL1">0%</b></span>
+            <span class="danger-txt">حرج (&gt;250): <b id="statCritHigh">0%</b></span>
+          </div>
+        </div>
+
+        <!-- GMI التراكمي التقديري -->
+        <div class="metric-card gmi-card">
+          <div class="mc-head">
+            <span class="mc-title">🧪 التراكمي التقديري (GMI)</span>
+            <span class="target-badge info">معادلة Bergenstal</span>
+          </div>
+          <div class="mc-val"><b id="statGMI">—</b></div>
+          <div class="mc-sub" id="statLastLabBox">آخر تحليل مخبري: <b id="statLastLab">—</b></div>
+        </div>
+
+        <!-- CV% معامل التباين والاستقرار -->
+        <div class="metric-card cv-card">
+          <div class="mc-head">
+            <span class="mc-title">⚡ التباين والتذبذب (CV%)</span>
+            <span id="statCVBadge" class="target-badge info">الهدف: ≤ 36%</span>
+          </div>
+          <div class="mc-val"><b id="statCV">—</b></div>
+          <div class="mc-sub">SD: <b id="statSD">—</b></div>
+        </div>
+
+        <!-- متوسط السكر والإجمالي -->
+        <div class="metric-card avg-card">
+          <div class="mc-head">
+            <span class="mc-title">📊 متوسط السكر</span>
+            <span class="muted tiny">عدد: <b id="statCount">0</b></span>
+          </div>
+          <div class="mc-val"><b id="statAvg">—</b></div>
+          <div class="mc-sub">إجمالي القراءات الصالحة</div>
+        </div>
       </div>
-      <div class="pie-box" style="width: 150px; height: 150px; margin: auto;"><canvas id="pieTIR"></canvas></div>
+
+      <div class="pie-box" style="width: 170px; height: 170px; margin: auto;">
+        <canvas id="pieTIR"></canvas>
+      </div>
+    </section>
+
+    <!-- 4. منحنى اليوم النمطي الموحد (24-Hour Modal Day Profile) -->
+    <section class="modal-day-section card" style="background:#fff; border-radius:14px; box-shadow:var(--shadow); padding:16px; margin:16px 0;">
+      <div class="md-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px; border-bottom:1px solid #eef2f7; padding-bottom:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:24px;">📈</span>
+          <div>
+            <h3 style="margin:0; font-size:16px; color:#1e293b;">منحنى الـ 24 ساعة الموحد (24-Hour Modal Day Profile)</h3>
+            <span class="muted tiny">توزيع كافة قراءات الفترة على مدار ساعات اليوم لاكتشاف أوقات الارتفاع أو الهبوط المتكررة</span>
+          </div>
+        </div>
+        <div class="md-legend" style="display:flex; gap:10px; font-size:12px;">
+          <span style="display:inline-flex; align-items:center; gap:4px;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#10b981;"></span> في النطاق</span>
+          <span style="display:inline-flex; align-items:center; gap:4px;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#3b82f6;"></span> منخفض</span>
+          <span style="display:inline-flex; align-items:center; gap:4px;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#f59e0b;"></span> مرتفع</span>
+          <span style="display:inline-flex; align-items:center; gap:4px;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#dc2626;"></span> حرج</span>
+        </div>
+      </div>
+      <div style="position:relative; height:220px; width:100%;">
+        <canvas id="modalDayCanvas"></canvas>
+      </div>
     </section>
  
     <section class="grid-wrap">
