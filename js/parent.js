@@ -21,6 +21,8 @@ function calcAge(bd) {
   return a;
 }
 function avatarColor(i) { const c = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ec4899']; return c[i % c.length]; }
+function pad(n) { return String(n).padStart(2, '0'); }
+function todayStr() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 
 $('logoutBtn').onclick = async () => {
   await signOut(auth);
@@ -86,7 +88,8 @@ async function loadKids() {
       return { id: d.id, ...data, _limits: limits, _cf: cf, _crStr: crStr, _unit: unit };
     });
 
-    // جلب آخر قراءة لكل طفل
+    // جلب آخر قراءة وتأكيد القاعدي لكل طفل
+    const tStr = todayStr();
     await Promise.all(kids.map(async k => {
       try {
         const mSnap = await getDocs(query(collection(db, `parents/${currentUser.uid}/children/${k.id}/measurements`), orderBy('when', 'desc'), limit(1)));
@@ -98,6 +101,25 @@ async function loadKids() {
           k._lastGlucoseUnit = d.unit || k._unit;
         }
       } catch (e) {}
+
+      try {
+        const bCache = localStorage.getItem(`basal_${k.id}_${tStr}`);
+        let bData = null;
+        if (bCache) {
+          try {
+            const parsed = JSON.parse(bCache);
+            if (parsed.taken && parsed.date === tStr) bData = parsed;
+          } catch(e){}
+        }
+        if (!bData) {
+          const bSnap = await getDoc(doc(db, `parents/${currentUser.uid}/children/${k.id}/basalLogs/${tStr}`));
+          if (bSnap.exists() && bSnap.data().taken) {
+            bData = bSnap.data();
+            localStorage.setItem(`basal_${k.id}_${tStr}`, JSON.stringify(bData));
+          }
+        }
+        k._basalStatus = bData;
+      } catch(e){}
     }));
 
     filtered = kids;
@@ -133,6 +155,10 @@ function render() {
     const gs = getGlucoseStatus(k._lastGlucoseDisplay, k._lastGlucoseNorm, k);
     const glucoseHtml = gs ? `<div class="glucose-box ${gs.cls}">آخر قراءة: ${gs.text}</div>` : `<div class="glucose-box" style="background:#f1f5f9; color:#64748b">لا توجد قراءات حديثة</div>`;
 
+    const basalHtml = k._basalStatus && k._basalStatus.taken
+      ? `<div class="basal-pill done" title="تم تسجيل أخذ جرعة القاعدي اليوم">💉 القاعدي اليوم: تم (${k._basalStatus.dose}U في ${k._basalStatus.time || '—'}) ✓</div>`
+      : `<div class="basal-pill pending" title="لم يتم تسجيل جرعة القاعدي اليوم بعد">⏳ القاعدي اليوم: لم يُسجّل بعد</div>`;
+
     const card = document.createElement('div');
     card.className = 'kid-card';
     card.innerHTML = `
@@ -146,6 +172,7 @@ function render() {
       </div>
       
       ${glucoseHtml}
+      ${basalHtml}
 
       <div class="kc-factors">
         <span class="factor-chip" title="معامل الكارب (فطار/غدا/عشا)">CR: 🍔 <b>${k._crStr}</b></span>
@@ -155,7 +182,8 @@ function render() {
 
       <div class="kc-actions">
         <a class="btn primary" href="child.html?child=${k.id}">فتح الملف 📂</a>
-        <button class="btn secondary open-ai" data-id="${k.id}">المساعد 🤖</button>
+        <a class="btn secondary" href="child.html?child=${k.id}&openEmergency=1" title="عرض وطباعة بطاقة الطوارئ والمدرسة">🪪 كارت الطوارئ</a>
+        <button class="btn ghost open-ai" data-id="${k.id}">المساعد 🤖</button>
       </div>
     `;
 

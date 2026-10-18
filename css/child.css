@@ -256,3 +256,535 @@ body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 .hidden { display: none !important; }
+
+/* ========================================================= */
+/* المسار الأول: بطاقة الطوارئ، متتبع القاعدي، ورادار الجلوكوز */
+/* ========================================================= */
+
+/* 1. زر بطاقة الطوارئ في شريط الطفل */
+.btn-emergency-pill {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1.5px solid #fca5a5;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(220, 38, 38, 0.1);
+}
+.btn-emergency-pill:hover {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+  transform: translateY(-1px);
+}
+
+/* 2. كارت متتبع الأنسولين القاعدي (Basal Tracker) */
+.basal-tracker-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-right: 6px solid #8b5cf6;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s ease;
+}
+.basal-tracker-card:hover {
+  box-shadow: 0 8px 16px -4px rgba(139, 92, 246, 0.1);
+}
+.btc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.btc-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btc-icon {
+  font-size: 28px;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+.btc-title h3 {
+  margin: 0 0 4px 0;
+  font-size: 17px;
+  color: #1e1b4b;
+}
+.btc-title p {
+  margin: 0;
+  font-size: 13px;
+}
+.basal-status-badge {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.basal-status-badge.pending {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  animation: pulse-soft 2s infinite;
+}
+.basal-status-badge.done {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+.btc-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.btc-details {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.btc-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 8px 14px;
+  border-radius: 10px;
+  min-width: 110px;
+}
+.btc-item .lbl {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.btc-item strong {
+  font-size: 15px;
+  color: #0f172a;
+}
+.btn-confirm-basal {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.25);
+}
+.btn-confirm-basal:hover {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(139, 92, 246, 0.35);
+}
+
+.basal-logged-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: 8px 14px;
+  border-radius: 12px;
+  color: #15803d;
+  font-weight: 600;
+  font-size: 14px;
+}
+.btn-undo-basal {
+  background: transparent;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: 0.2s;
+}
+.btn-undo-basal:hover {
+  background: #fef2f2;
+}
+
+/* نموذج تسجيل الجرعة السريع */
+.basal-confirm-form {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed #cbd5e1;
+  background: #faf5ff;
+  border-radius: 12px;
+  padding: 16px;
+}
+.bcf-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.bcf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 140px;
+}
+.bcf-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+.bcf-field input {
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+.bcf-field input:focus {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+.bcf-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 3. كارت رادار الجلوكوز (Radar Card) */
+.radar-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-right: 6px solid #3b82f6;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+}
+.radar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.radar-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.radar-icon {
+  font-size: 26px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+.radar-title h3 {
+  margin: 0 0 4px 0;
+  font-size: 17px;
+  color: #1e3a8a;
+}
+.radar-title p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* 4. حوار بطاقة الطوارئ والمدرسة (Emergency Dialog) */
+.emergency-dialog {
+  border: none;
+  border-radius: 20px;
+  padding: 0;
+  max-width: 760px;
+  width: 95%;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  background: transparent;
+  font-family: inherit;
+}
+.emergency-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+}
+.em-dialog-content {
+  background: #ffffff;
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.em-card-badge {
+  padding: 24px;
+  background: #ffffff;
+}
+.em-card-header {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #ffffff;
+  padding: 16px 20px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.em-cross {
+  font-size: 32px;
+  background: rgba(255, 255, 255, 0.2);
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.em-title-box {
+  flex: 1;
+}
+.em-title-box h2 {
+  margin: 0 0 2px 0;
+  font-size: 20px;
+  color: #ffffff;
+}
+.em-sub {
+  font-size: 12px;
+  opacity: 0.9;
+  letter-spacing: 0.5px;
+}
+.em-flag {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.em-section {
+  margin-bottom: 18px;
+}
+.em-section-title {
+  margin: 0 0 10px 0;
+  font-size: 15px;
+  color: #1e293b;
+  font-weight: 700;
+}
+.em-pulse {
+  color: #b91c1c;
+}
+
+.em-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  background: #f8fafc;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+.em-info-item .em-lbl {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 3px;
+}
+.em-info-item .em-val {
+  font-size: 14px;
+  color: #0f172a;
+}
+.em-danger-text {
+  color: #dc2626 !important;
+  font-weight: 700;
+}
+
+.em-contacts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.em-contact-card {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.em-contact-card.em-ambulance {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.em-contact-card .c-title {
+  font-size: 11px;
+  color: #64748b;
+}
+.em-contact-card strong {
+  font-size: 15px;
+  color: #0f172a;
+}
+.em-call-btn {
+  display: inline-block;
+  padding: 6px 10px;
+  background: #16a34a;
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 8px;
+  text-align: center;
+  margin-top: 4px;
+  transition: 0.2s;
+}
+.em-call-btn:hover {
+  background: #15803d;
+}
+.em-call-btn.danger {
+  background: #dc2626;
+}
+.em-call-btn.danger:hover {
+  background: #b91c1c;
+}
+
+.em-regimen-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.em-rchip {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #1e40af;
+}
+.em-rchip span {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+.em-rchip strong {
+  font-size: 13px;
+  color: #1e3a8a;
+}
+
+.em-protocol-box {
+  background: #fffbeb;
+  border: 1.5px solid #fde68a;
+  border-radius: 12px;
+  padding: 16px;
+}
+.em-steps-list {
+  margin: 0;
+  padding-right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #78350f;
+}
+.em-steps-list li span {
+  display: block;
+  font-weight: 600;
+  color: #92400e;
+  margin-top: 2px;
+}
+.em-danger-rule {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #991b1b !important;
+  font-weight: 600;
+  margin-top: 6px;
+  list-style-type: none;
+}
+
+.em-dialog-actions {
+  background: #f8fafc;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* ================= الطباعة المدرسية ================= */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #emergencyCardDialog,
+  #emergencyCardDialog * {
+    visibility: visible;
+  }
+  #emergencyCardDialog {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    background: #ffffff;
+    display: block !important;
+  }
+  .em-dialog-actions,
+  .no-print {
+    display: none !important;
+  }
+  .em-card-badge {
+    border: 2px solid #dc2626 !important;
+    border-radius: 12px;
+    padding: 16px;
+    margin: 0 auto;
+    page-break-inside: avoid;
+  }
+  .em-card-header {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+

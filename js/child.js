@@ -2,7 +2,7 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, getDocs, query, where, orderBy, limit, doc, getDoc, onSnapshot
+  collection, getDocs, query, where, orderBy, limit, doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 /* ---- childId ---- */
@@ -88,19 +88,33 @@ function currentMeal(){
   return { key: 'snack', label: 'سناك' };
 }
 
+function timeAgo(date) {
+  if (!date) return '';
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'الآن';
+  if (diffMins < 60) return `منذ ${diffMins} دقيقة`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `منذ ${diffHours} ساعة`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `منذ ${diffDays} يوم`;
+}
+
 function glucoseState(v, child){
   if(v == null) return null;
+  const unit = child.glucoseUnit || 'mg/dL';
   const limits = child.glucose_limits || {};
-  const critLow  = limits.critical_low ?? 54;
-  const low      = limits.low ?? 70;
-  const high     = limits.high ?? 180;
-  const critHigh = limits.critical_high ?? 250;
+  const critLow  = Number(limits.critical_low) || (unit === 'mmol/L' ? 3.0 : 54);
+  const low      = Number(limits.low) || (unit === 'mmol/L' ? 3.9 : 70);
+  const high     = Number(limits.high) || (unit === 'mmol/L' ? 10.0 : 180);
+  const critHigh = Number(limits.critical_high) || (unit === 'mmol/L' ? 13.9 : 250);
 
-  if(v <= critLow)  return { cls: 'crit-low',  label: 'حرج منخفض', color: '#dc2626' };
-  if(v >= critHigh) return { cls: 'crit-high', label: 'حرج مرتفع', color: '#dc2626' };
-  if(v < low)       return { cls: 'low',       label: 'منخفض',     color: '#3b82f6' };
-  if(v > high)      return { cls: 'high',      label: 'مرتفع',     color: '#f59e0b' };
-  return            { cls: 'ok',        label: 'في النطاق', color: '#10b981' };
+  if(v <= critLow)  return { cls: 'crit-low',  label: 'حرج منخفض 🚨', color: '#dc2626' };
+  if(v >= critHigh) return { cls: 'crit-high', label: 'حرج مرتفع 🚨', color: '#dc2626' };
+  if(v < low)       return { cls: 'low',       label: 'منخفض ↓',     color: '#3b82f6' };
+  if(v > high)      return { cls: 'high',      label: 'مرتفع ↑',     color: '#f59e0b' };
+  return            { cls: 'ok',        label: 'في النطاق ✅', color: '#10b981' };
 }
 
 function pointColors(readings, child){
@@ -111,74 +125,96 @@ async function renderGlucoseSparkline(uid, child){
   const container = $('glucoseSparkContainer');
   if(!container) return;
 
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate()-7);
-
   const ref  = collection(db,`parents/${uid}/children/${childId}/measurements`);
   const snap = await getDocs(query(ref, orderBy('when','desc'), limit(50)));
 
   if(snap.empty){
-    container.innerHTML = '<p style="color:#94a3b8;font-size:13px;padding:8px 0">لا توجد قراءات بعد</p>';
+    container.innerHTML = '<p style="color:#94a3b8;font-size:13px;padding:12px 0;text-align:center">لا توجد قراءات مسجلة بعد. ابدأ بتسجيل أول قراءة اليوم!</p>';
     return;
   }
 
+  const unit = child.glucoseUnit || 'mg/dL';
+  const isMmol = unit === 'mmol/L';
+
   const points = snap.docs.map(d=>{
     const data = d.data();
-    const val  = data.value_mmol ?? (data.value && data.unit==='mmol/L' ? data.value
-                 : data.value_mgdl ? +(data.value_mgdl/18).toFixed(1) : null);
-    const when = data.when?.toDate ? data.when.toDate() : new Date(data.when);
+    let val = null;
+    if (isMmol) {
+      if (data.value_mmol != null) val = Number(data.value_mmol);
+      else if (data.unit === 'mmol/L' && data.value != null) val = Number(data.value);
+      else if (data.value_mgdl != null) val = +(Number(data.value_mgdl) / 18).toFixed(1);
+      else if (data.value != null) val = +(Number(data.value) / 18).toFixed(1);
+    } else {
+      if (data.value_mgdl != null) val = Math.round(Number(data.value_mgdl));
+      else if (data.unit === 'mg/dL' && data.value != null) val = Math.round(Number(data.value));
+      else if (data.value_mmol != null) val = Math.round(Number(data.value_mmol) * 18);
+      else if (data.value != null) val = Math.round(Number(data.value) * 18);
+    }
+    const when = data.when?.toDate ? data.when.toDate() : (data.when ? new Date(data.when) : null);
     return { val, when, slotKey: data.slotKey, state: data.state };
-  }).filter(p=>p.val!=null).reverse();
+  }).filter(p=>p.val != null && !isNaN(p.val) && p.when).reverse();
 
-  if(!points.length){ container.innerHTML = '<p style="color:#94a3b8;font-size:13px">لا توجد قراءات صالحة</p>'; return; }
+  if(!points.length){
+    container.innerHTML = '<p style="color:#94a3b8;font-size:13px;padding:8px 0;text-align:center">لا توجد قراءات صالحة للعرض</p>';
+    return;
+  }
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayPoints = points.filter(p => p.when >= startOfToday);
 
   const last = points[points.length-1];
   const gs   = glucoseState(last.val, child);
-  const unit = child.glucoseUnit || 'mg/dL';
+  const timeAgoText = timeAgo(last.when);
 
   const vals   = points.map(p=>p.val);
-  const avg    = (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);
-  const minVal = Math.min(...vals).toFixed(1);
-  const maxVal = Math.max(...vals).toFixed(1);
+  const minVal = isMmol ? Math.min(...vals).toFixed(1) : Math.min(...vals);
+  const maxVal = isMmol ? Math.max(...vals).toFixed(1) : Math.max(...vals);
   
   const limits = child.glucose_limits || {};
-  const low    = limits.low ?? 70;
-  const high   = limits.high ?? 180;
-  
-  const inRange = vals.filter(v=>v>=low && v<=high).length;
-  const tir    = Math.round(inRange/vals.length*100);
+  const low    = Number(limits.low) || (isMmol ? 3.9 : 70);
+  const high   = Number(limits.high) || (isMmol ? 10.0 : 180);
+
+  const todayVals = todayPoints.map(p => p.val);
+  const todayAvg = todayVals.length
+    ? (isMmol ? (todayVals.reduce((a,b)=>a+b,0)/todayVals.length).toFixed(1) : Math.round(todayVals.reduce((a,b)=>a+b,0)/todayVals.length))
+    : (isMmol ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : Math.round(vals.reduce((a,b)=>a+b,0)/vals.length));
+
+  const relevantPoints = todayPoints.length ? todayPoints : points;
+  const inRange = relevantPoints.filter(p=>p.val>=low && p.val<=high).length;
+  const tir = Math.round(inRange / relevantPoints.length * 100);
 
   container.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:13px;font-weight:600;color:#0f172a">📊 منحنى الجلوكوز — آخر 7 أيام</span>
-        <span style="background:${gs?.color??'#10b981'}22;color:${gs?.color??'#10b981'};border:1px solid ${gs?.color??'#10b981'}44;
-              padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600">
-          ${last.val} ${unit} — ${gs?.label??''}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:14px;font-weight:700;color:#0f172a">📊 تحليل الجلوكوز الحي</span>
+        <span style="background:${gs?.color??'#10b981'}22;color:${gs?.color??'#10b981'};border:1px solid ${gs?.color??'#10b981'}55;
+              padding:3px 12px;border-radius:999px;font-size:13px;font-weight:700">
+          آخر قراءة: ${last.val} ${unit} (${gs?.label??''}) • ${timeAgoText}
         </span>
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center">
-        <div style="font-size:16px;font-weight:700;color:#0f172a">${avg}</div>
-        <div style="font-size:11px;color:#64748b">متوسط</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px">
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#0f172a">${todayAvg}</div>
+        <div style="font-size:11px;color:#64748b">${todayVals.length ? 'متوسط اليوم' : 'المتوسط العام'} (${unit})</div>
       </div>
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:8px;text-align:center">
-        <div style="font-size:16px;font-weight:700;color:#1e40af">${minVal}</div>
-        <div style="font-size:11px;color:#64748b">الأدنى</div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#15803d">${tir}%</div>
+        <div style="font-size:11px;color:#64748b">داخل النطاق (TIR)</div>
       </div>
-      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:8px;text-align:center">
-        <div style="font-size:16px;font-weight:700;color:#92400e">${maxVal}</div>
-        <div style="font-size:11px;color:#64748b">الأعلى</div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#1e40af">${minVal}</div>
+        <div style="font-size:11px;color:#64748b">الأدنى (${unit})</div>
       </div>
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px;text-align:center">
-        <div style="font-size:16px;font-weight:700;color:#065f46">${tir}%</div>
-        <div style="font-size:11px;color:#64748b">في النطاق</div>
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#9a3412">${maxVal}</div>
+        <div style="font-size:11px;color:#64748b">الأعلى (${unit})</div>
       </div>
     </div>
 
-    <div style="position:relative;height:100px">
+    <div style="position:relative;height:120px;width:100%">
       <canvas id="glucoseSparkCanvas"></canvas>
     </div>
   `;
@@ -192,20 +228,24 @@ async function renderGlucoseSparkline(uid, child){
     return `${pad(d.getDate())}/${pad(d.getMonth()+1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   });
 
-  new Chart(ctx,{
+  if (window._glucoseChart) {
+    try { window._glucoseChart.destroy(); } catch(e){}
+  }
+
+  window._glucoseChart = new Chart(ctx,{
     type:'line',
     data:{
       labels,
       datasets:[{
         data: vals,
-        borderColor:'#6366f1',
-        borderWidth:1.5,
+        borderColor:'#3b82f6',
+        borderWidth:2,
         pointBackgroundColor: colors,
         pointBorderColor: colors,
         pointRadius: vals.length>30 ? 2 : 4,
         pointHoverRadius:6,
-        tension:0.35,
-        fill:{target:'origin',above:'rgba(99,102,241,0.05)'}
+        tension:0.3,
+        fill:{target:'origin',above:'rgba(59,130,246,0.06)'}
       }]
     },
     options:{
@@ -214,8 +254,8 @@ async function renderGlucoseSparkline(uid, child){
       scales:{
         x:{ display:false },
         y:{
-          min: Math.max(0, Math.min(...vals)-1),
-          max: Math.max(...vals)+1,
+          min: Math.max(0, isMmol ? Math.min(...vals) - 0.5 : Math.min(...vals) - 10),
+          max: isMmol ? Math.max(...vals) + 0.5 : Math.max(...vals) + 15,
           ticks:{font:{size:10},color:'#94a3b8'},
           grid:{color:'#f1f5f9'},
           border:{display:false}
@@ -223,6 +263,226 @@ async function renderGlucoseSparkline(uid, child){
       }
     }
   });
+}
+
+// ---------------- متابعة الأنسولين القاعدي اليومي (Basal Tracker) ----------------
+async function initBasalTracker(uid, child) {
+  const basalCard = $('basalCard');
+  if (!basalCard) return;
+
+  const basalName = child.insulin?.basal || child.basalType || 'الأنسولين القاعدي';
+  const basalDose = child.basalDose || child.insulin?.basalDose || null;
+  const basalTime = child.basalTime || child.insulin?.basalTime || 'مساءً';
+
+  setText($('basalTypeName'), basalName);
+  setText($('basalDoseRec'), basalDose ? `${basalDose} وحدة` : 'حسب الوصفة');
+  setText($('basalTimeRec'), basalTime || 'مساءً');
+
+  const today = todayStr();
+  const cacheKey = `basal_${childId}_${today}`;
+  let loggedData = null;
+
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed.taken && parsed.date === today) loggedData = parsed;
+    }
+  } catch(e){}
+
+  if (!loggedData) {
+    try {
+      const snap = await getDoc(doc(db, `parents/${uid}/children/${childId}/basalLogs/${today}`));
+      if (snap.exists() && snap.data().taken) {
+        loggedData = snap.data();
+        localStorage.setItem(cacheKey, JSON.stringify(loggedData));
+      }
+    } catch(e) {
+      console.warn('Could not read basal log:', e);
+    }
+  }
+
+  function renderBasalState(data) {
+    const badge = $('basalStatusBadge');
+    const btnConfirm = $('btnConfirmBasal');
+    const loggedInfo = $('basalLoggedInfo');
+    const loggedText = $('basalLoggedText');
+    const form = $('basalConfirmForm');
+
+    if (data && data.taken) {
+      if (badge) {
+        badge.className = 'basal-status-badge done';
+        badge.textContent = '✅ تم أخذ جرعة اليوم';
+      }
+      if (btnConfirm) btnConfirm.classList.add('hidden');
+      if (loggedInfo) loggedInfo.classList.remove('hidden');
+      if (loggedText) loggedText.textContent = `✅ تم التسجيل: ${data.dose} وحدة (${data.time || '—'})`;
+      if (form) form.classList.add('hidden');
+    } else {
+      if (badge) {
+        badge.className = 'basal-status-badge pending';
+        badge.textContent = '⏳ لم تُسجّل جرعة اليوم بعد';
+      }
+      if (btnConfirm) btnConfirm.classList.remove('hidden');
+      if (loggedInfo) loggedInfo.classList.add('hidden');
+      if (form) form.classList.add('hidden');
+    }
+  }
+
+  renderBasalState(loggedData);
+
+  // زر فتح النموذج
+  $('btnConfirmBasal')?.addEventListener('click', () => {
+    const form = $('basalConfirmForm');
+    if (!form) return;
+    form.classList.toggle('hidden');
+    if (!form.classList.contains('hidden')) {
+      const now = new Date();
+      if ($('basalTimeInput')) $('basalTimeInput').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      if ($('basalDoseInput') && !$('basalDoseInput').value) {
+        $('basalDoseInput').value = basalDose || 10;
+      }
+      $('basalDoseInput')?.focus();
+    }
+  });
+
+  // زر إلغاء النموذج
+  $('btnCancelBasalDose')?.addEventListener('click', () => {
+    $('basalConfirmForm')?.classList.add('hidden');
+  });
+
+  // زر حفظ وتأكيد الجرعة
+  $('btnSaveBasalDose')?.addEventListener('click', async () => {
+    const doseVal = parseFloat($('basalDoseInput')?.value);
+    const timeVal = $('basalTimeInput')?.value || `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`;
+    if (!doseVal || doseVal <= 0) {
+      alert('يرجى إدخال عدد وحدات الجرعة بشكل صحيح');
+      return;
+    }
+
+    loader(true);
+    try {
+      const payload = {
+        taken: true,
+        date: today,
+        dose: doseVal,
+        time: timeVal,
+        insulin: basalName,
+        recordedAt: serverTimestamp()
+      };
+      await setDoc(doc(db, `parents/${uid}/children/${childId}/basalLogs/${today}`), payload, { merge: true });
+      localStorage.setItem(cacheKey, JSON.stringify(payload));
+      loggedData = payload;
+      renderBasalState(loggedData);
+    } catch(err) {
+      console.error(err);
+      alert('تعذر حفظ جرعة القاعدي، يرجى المحاولة مرة أخرى.');
+    } finally {
+      loader(false);
+    }
+  });
+
+  // زر التراجع
+  $('btnUndoBasal')?.addEventListener('click', async () => {
+    if (!confirm('هل أنت متأكد من إلغاء تأكيد جرعة القاعدي لليوم؟')) return;
+    loader(true);
+    try {
+      await setDoc(doc(db, `parents/${uid}/children/${childId}/basalLogs/${today}`), { taken: false }, { merge: true });
+      localStorage.removeItem(cacheKey);
+      loggedData = null;
+      renderBasalState(null);
+    } catch(err) {
+      console.error(err);
+      alert('تعذر إلغاء التسجيل.');
+    } finally {
+      loader(false);
+    }
+  });
+}
+
+// ---------------- بطاقة الطوارئ والمدرسة ----------------
+function initEmergencyCard(user, child) {
+  const dialog = $('emergencyCardDialog');
+  const btnOpen = $('btnEmergencyCard');
+  const btnClose = $('btnCloseEmergencyCard');
+  const btnPrint = $('btnPrintEmergencyCard');
+
+  if (!dialog) return;
+
+  const name = child.identity?.name || child.name || 'الطفل';
+  const gender = child.identity?.gender || child.gender || '-';
+  const dob = child.identity?.dob || child.birthDate || null;
+  const ageStr = `${gender === 'female' ? 'أنثى' : (gender === 'male' ? 'ذكر' : gender)} • ${calcAge(dob)} سنة`;
+  const unit = child.glucoseUnit || 'mg/dL';
+  const limits = child.glucose_limits || {};
+  const min = limits.low ?? (unit === 'mmol/L' ? 3.9 : 70);
+  const max = limits.high ?? (unit === 'mmol/L' ? 10.0 : 180);
+
+  setText($('emChildName'), name);
+  setText($('emChildAge'), ageStr);
+  setText($('emGlucoseRange'), `${min} - ${max} ${unit}`);
+
+  // ولي الأمر
+  const parentName = user.displayName || 'ولي الأمر';
+  setText($('emParentName'), parentName);
+  const parentPhone = child.parentPhone || user.phoneNumber || '';
+  const pPhoneBtn = $('emParentPhoneBtn');
+  if (pPhoneBtn) {
+    if (parentPhone) {
+      pPhoneBtn.href = `tel:${parentPhone}`;
+      pPhoneBtn.textContent = `📞 ${parentPhone}`;
+    } else {
+      pPhoneBtn.href = '#';
+      pPhoneBtn.textContent = '📞 غير مسجل';
+      pPhoneBtn.onclick = (e) => {
+        e.preventDefault();
+        const p = prompt('أدخل رقم هاتف ولي الأمر للتواصل في الطوارئ:');
+        if (p) {
+          pPhoneBtn.href = `tel:${p}`;
+          pPhoneBtn.textContent = `📞 ${p}`;
+        }
+      };
+    }
+  }
+
+  // الطبيب المعالج
+  const docInfo = child.assignedDoctorInfo || {};
+  const docName = docInfo.name || child.assignedDoctorName || 'غير مسند بعد';
+  setText($('emDoctorName'), docName);
+  const docPhoneBtn = $('emDoctorPhoneBtn');
+  if (docPhoneBtn) {
+    const docPhone = docInfo.phone || child.doctorPhone || '';
+    if (docPhone) {
+      docPhoneBtn.href = `tel:${docPhone}`;
+      docPhoneBtn.textContent = `📞 ${docPhone}`;
+      docPhoneBtn.classList.remove('hidden');
+    } else {
+      docPhoneBtn.textContent = '📞 بدون هاتف';
+      docPhoneBtn.classList.add('hidden');
+    }
+  }
+
+  // الأنسولين
+  const basal = child.insulin?.basal || child.basalType || 'طويل المفعول';
+  const bolus = child.insulin?.bolus || child.bolusType || 'سريع المفعول';
+  const cf = child.cf ?? child.correctionFactor ?? '—';
+  const hypoCarbs = child.hypoCarbs || 15;
+
+  setText($('emBasalText'), basal);
+  setText($('emBolusText'), bolus);
+  setText($('emCFText'), String(cf));
+  setText($('emHypoCarbsText'), `${hypoCarbs} جرام`);
+
+  btnOpen?.addEventListener('click', () => dialog.showModal());
+  btnClose?.addEventListener('click', () => dialog.close());
+  btnPrint?.addEventListener('click', () => window.print());
+
+  // فتح تلقائي إذا تم تمرير openEmergency=1 في الرابط
+  if (params.get('openEmergency') === '1' || params.get('emergency') === '1') {
+    setTimeout(() => {
+      try { dialog.showModal(); } catch(e){}
+    }, 300);
+  }
 }
 
 document.getElementById('logoutBtn')?.addEventListener('click',()=>signOut(auth).catch(()=>{}));
@@ -328,6 +588,9 @@ onAuthStateChanged(auth, async (user)=>{
 
     await renderGlucoseSparkline(user.uid, c);
     await renderLabCard(user.uid);
+    await initBasalTracker(user.uid, c);
+    initEmergencyCard(user, c);
+    setHref($('radarAddMeasBtn'), `measurements.html?child=${encodeURIComponent(childId)}`);
 
     addLabBtn?.addEventListener('click',e=>{ e.stopPropagation(); location.href=`labs.html?child=${encodeURIComponent(childId)}`; });
     openLabsBtn?.addEventListener('click',e=>{ e.stopPropagation(); location.href=`labs.html?child=${encodeURIComponent(childId)}`; });

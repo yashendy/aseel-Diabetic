@@ -47,6 +47,7 @@
           <span class="v-chip">🎯 النطاق: <b id="chipRange">—</b></span>
           <span class="v-chip">🍔 CR: <b id="chipCR">—</b></span>
           <span class="v-chip">💉 CF: <b id="chipCF">—</b></span>
+          <button id="btnEmergencyCard" type="button" class="btn-emergency-pill">🪪 بطاقة الطوارئ والمدرسة</button>
         </div>
       </div>
       <div class="vitals-stats">
@@ -56,9 +57,6 @@
       </div>
     </header>
 
-    <!-- تنبيه روشتة الطبيب -->
-    <!-- ... (باقي الكود كما هو في ملفك الأصلي) ... -->
-
     <!-- تنبيه روشتة الطبيب (إغلاق الدائرة) -->
     <div id="doctorNoteAlert" class="hidden" style="background: #eff6ff; border: 1px solid #bfdbfe; border-inline-start: 4px solid #3b82f6; border-radius: 12px; padding: 16px; margin-bottom: 24px; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
       <div style="font-size: 24px;">👨‍⚕️</div>
@@ -67,6 +65,80 @@
         <p id="doctorNoteText" style="margin: 0; color: #1e3a8a; font-size: 14px; line-height: 1.5;"></p>
       </div>
     </div>
+
+    <!-- كارت متابعة وتأكيد الأنسولين القاعدي (Basal Tracker) -->
+    <section id="basalCard" class="basal-tracker-card no-print">
+      <div class="btc-header">
+        <div class="btc-title">
+          <span class="btc-icon">💉</span>
+          <div>
+            <h3>الأنسولين القاعدي اليومي (Basal Tracker)</h3>
+            <p id="basalInfoText" class="muted">تأكيد أخذ جرعة طويل المفعول لتفادي النسيان أو التكرار بالخطأ</p>
+          </div>
+        </div>
+        <span id="basalStatusBadge" class="basal-status-badge pending">⏳ لم تُسجّل جرعة اليوم بعد</span>
+      </div>
+
+      <div class="btc-body">
+        <div class="btc-details">
+          <div class="btc-item">
+            <span class="lbl">نوع الأنسولين:</span>
+            <strong id="basalTypeName">—</strong>
+          </div>
+          <div class="btc-item">
+            <span class="lbl">الجرعة المقترحة:</span>
+            <strong id="basalDoseRec">—</strong>
+          </div>
+          <div class="btc-item">
+            <span class="lbl">وقت الحقن المعتاد:</span>
+            <strong id="basalTimeRec">مساءً</strong>
+          </div>
+        </div>
+
+        <div class="btc-action">
+          <button id="btnConfirmBasal" type="button" class="btn-confirm-basal">💉 تسجيل أخذ جرعة اليوم</button>
+          <div id="basalLoggedInfo" class="basal-logged-info hidden">
+            <span id="basalLoggedText">✅ تم أخذ الجرعة اليوم</span>
+            <button id="btnUndoBasal" type="button" class="btn-undo-basal" title="إلغاء أو تعديل">تراجع ↺</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- نموذج تسجيل الجرعة السريع -->
+      <div id="basalConfirmForm" class="basal-confirm-form hidden">
+        <div class="bcf-row">
+          <div class="bcf-field">
+            <label for="basalDoseInput">الجرعة المأخوذة (وحدة):</label>
+            <input type="number" id="basalDoseInput" step="0.5" min="0.5" max="100" placeholder="مثال: 12" />
+          </div>
+          <div class="bcf-field">
+            <label for="basalTimeInput">وقت الحقن:</label>
+            <input type="time" id="basalTimeInput" />
+          </div>
+          <div class="bcf-buttons">
+            <button id="btnSaveBasalDose" type="button" class="btn primary btn-sm">حفظ وتأكيد ✓</button>
+            <button id="btnCancelBasalDose" type="button" class="btn ghost btn-sm">إلغاء</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- رادار الجلوكوز ومنحنى الأيام السبعة -->
+    <section id="radarCard" class="radar-card no-print">
+      <div class="radar-header">
+        <div class="radar-title">
+          <span class="radar-icon">📡</span>
+          <div>
+            <h3>رادار الجلوكوز المباشر (Glucose Radar)</h3>
+            <p class="muted">تحليل القراءات، النطاق المستهدف، والمنحنى الأسبوعي التفاعلي</p>
+          </div>
+        </div>
+        <a href="measurements.html" id="radarAddMeasBtn" class="btn ghost btn-sm">➕ إضافة قراءة سكر</a>
+      </div>
+      <div id="glucoseSparkContainer">
+        <!-- يتم ملؤه ديناميكياً بواسطة renderGlucoseSparkline -->
+      </div>
+    </section>
 
     <section class="dashboard-grid">
       <!-- كارت القياسات -->
@@ -134,6 +206,99 @@
       </a>
     </section>
   </div>
+
+  <!-- بطاقة الطوارئ والمدرسة المطبوعة والمتحركة -->
+  <dialog id="emergencyCardDialog" class="emergency-dialog">
+    <div class="em-dialog-content">
+      <div class="em-card-badge" id="printableEmergencyCard">
+        <!-- الشريط العلوي للبطاقة الطبية -->
+        <header class="em-card-header">
+          <div class="em-cross">🏥</div>
+          <div class="em-title-box">
+            <h2>بطاقة طوارئ طبية مدرسية</h2>
+            <span class="em-sub">Medical Emergency ID • Type 1 Diabetes Mellitus</span>
+          </div>
+          <div class="em-flag">عاجل ⚠️</div>
+        </header>
+
+        <!-- بيانات الطفل الأساسية -->
+        <div class="em-card-body">
+          <div class="em-section em-profile-grid">
+            <div class="em-info-item">
+              <span class="em-lbl">اسم الطفل:</span>
+              <strong id="emChildName" class="em-val">—</strong>
+            </div>
+            <div class="em-info-item">
+              <span class="em-lbl">العمر والنوع:</span>
+              <strong id="emChildAge" class="em-val">—</strong>
+            </div>
+            <div class="em-info-item">
+              <span class="em-lbl">التشخيص الطبي:</span>
+              <strong class="em-val em-danger-text">سكري من النوع الأول (معتمد على الأنسولين)</strong>
+            </div>
+            <div class="em-info-item">
+              <span class="em-lbl">نطاق السكر المستهدف:</span>
+              <strong id="emGlucoseRange" class="em-val">—</strong>
+            </div>
+          </div>
+
+          <!-- أرقام الاتصال بالطوارئ وولي الأمر والطبيب -->
+          <div class="em-section em-contacts-box">
+            <h4 class="em-section-title">📞 جهات الاتصال الفورية للطوارئ:</h4>
+            <div class="em-contacts-grid">
+              <div class="em-contact-card">
+                <span class="c-title">👨‍👩‍👧 ولي الأمر</span>
+                <strong id="emParentName">—</strong>
+                <a id="emParentPhoneBtn" href="#" class="em-call-btn">📞 اتصال</a>
+              </div>
+              <div class="em-contact-card" id="emDocContactCard">
+                <span class="c-title">👨‍⚕️ الطبيب المعالج</span>
+                <strong id="emDoctorName">غير محدد</strong>
+                <a id="emDoctorPhoneBtn" href="#" class="em-call-btn">📞 اتصال</a>
+              </div>
+              <div class="em-contact-card em-ambulance">
+                <span class="c-title">🚑 إسعاف الطوارئ</span>
+                <strong>123</strong>
+                <a href="tel:123" class="em-call-btn danger">📞 اتصال 123</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- الأنسولين والمعاملات السريعة -->
+          <div class="em-section em-regimen-box">
+            <h4 class="em-section-title">💉 نظام الأنسولين المسجل:</h4>
+            <div class="em-regimen-chips">
+              <div class="em-rchip"><span>القاعدي (طويل المفعول):</span> <strong id="emBasalText">—</strong></div>
+              <div class="em-rchip"><span>السريع (للوجبات):</span> <strong id="emBolusText">—</strong></div>
+              <div class="em-rchip"><span>معامل التصحيح (CF):</span> <strong id="emCFText">—</strong></div>
+              <div class="em-rchip"><span>كارب علاج الهبوط:</span> <strong id="emHypoCarbsText">15 جرام</strong></div>
+            </div>
+          </div>
+
+          <!-- بروتوكول إسعاف هبوط السكر المدرسي (قاعدة 15-15) -->
+          <div class="em-section em-protocol-box">
+            <h4 class="em-section-title em-pulse">🚨 بروتوكول التعامل الفوري مع هبوط السكر (أقل من 70 mg/dL):</h4>
+            <ol class="em-steps-list">
+              <li><b>الأعراض:</b> عرق بارد، رجفة بالأيدي، دوخة، زغللة، شحوب، جوع شديد مفاجئ، أو نوبات بكاء وتشتت.</li>
+              <li><b>الإسعاف الفوري (قاعدة 15):</b> إعطاء 15 جرام سكريات سريعة فوراً:
+                <span>(نصف كوب عصير محلى 125 مل، أو 3 أقراص سكر/جلوكوز، أو ملعقة كبيرة عسل/سكر).</span>
+              </li>
+              <li><b>الانتظار 15 دقيقة:</b> اترك الطفل يرتاح مع إعادة قياس السكر بعد 15 دقيقة بالضبط.</li>
+              <li><b>إذا ظل السكر أقل من 70 mg/dL:</b> تُكرر نفس كمية العصير السريع (15 جرام) مرة ثانية فوراً.</li>
+              <li><b>عند استقرار السكر ووصوله لأكثر من 70 mg/dL:</b> يُعطى الطفل وجبة خفيفة نشوية (سندوتش أو بسكويت) لحمايته.</li>
+              <li class="em-danger-rule">⛔ <b>تحذير عاجل لإدارة المدرسة والمشرفين:</b> في حالة فقدان الوعي أو التشنجات، يُمنع منعاً باتاً إعطاء أي طعام أو شراب بالفم! يُحقن الجلوكاجون فوراً في العضل ويتم الاتصال بالإسعاف (123) وولي الأمر فوراً.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- أزرار التحكم بالبطاقة (لا تظهر عند الطباعة) -->
+      <div class="em-dialog-actions no-print">
+        <button id="btnPrintEmergencyCard" type="button" class="btn primary">🖨️ طباعة البطاقة المدرسية</button>
+        <button id="btnCloseEmergencyCard" type="button" class="btn ghost">❌ إغلاق</button>
+      </div>
+    </div>
+  </dialog>
 
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
