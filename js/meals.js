@@ -4,7 +4,7 @@
 // ========================================================
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteField, getDocs, query, where, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteField, getDocs, query, where, orderBy, limit, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {
   esc, round, localDateStr, localTimeStr, whenFromParts, toDateObj, convert, mealOfSlot, SLOT_ORDER,
   getTherapy, calcBolus, calcIOB, extractDoseEntries, isMealDoc, glucoseFields
@@ -17,6 +17,23 @@ import { normAr } from './food-utils.js';
 const $ = id => document.getElementById(id);
 const fmt = (n, d = 1) => Number.isFinite(n) ? (+n).toFixed(d) : "—";
 const SAFE_PLACEHOLDER = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%22100%22%20style%3D%22background%3A%23f1f5f9%22%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%2394a3b8%22%20font-size%3D%2220%22%3E%F0%9F%8D%BD%EF%B8%8F%3C%2Ftext%3E%3C%2Fsvg%3E';
+
+export function addHoursToTimeStr(timeStr, hours = 2) {
+  if (!timeStr) return '';
+  const [h, m] = String(timeStr).split(':').map(Number);
+  const totalMins = (h * 60 + (m || 0) + hours * 60) % (24 * 60);
+  const nh = Math.floor(totalMins / 60);
+  const nm = totalMins % 60;
+  return `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
+}
+
+export const PRE_TO_POST_SLOT = {
+  PRE_BREAKFAST: 'POST_BREAKFAST',
+  PRE_LUNCH: 'POST_LUNCH',
+  PRE_DINNER: 'POST_DINNER',
+  FASTING: 'POST_BREAKFAST',
+  SNACK: 'SNACK'
+};
  
 let state = {
   childId: null, parentId: null, child: null, therapy: null,
@@ -45,7 +62,9 @@ const els = {
   searchBox: $("searchBox"), itemsGrid: $("itemsGrid"), loadingLibrary: $("loadingLibrary"),
   dailyCarbTarget: $("dailyCarbTarget"), carbProgressBar: $("carbProgressBar"), carbProgressText: $("carbProgressText"),
   dailyCalorieTarget: $("dailyCalorieTarget"), calProgressBar: $("calProgressBar"), calProgressText: $("calProgressText"),
-  todayDateLabel: $("todayDateLabel"), dailyMealsBody: $("dailyMealsBody")
+  todayDateLabel: $("todayDateLabel"), dailyMealsBody: $("dailyMealsBody"),
+  postMealReminderBanner: $("postMealReminderBanner"), pmTime: $("pmTime"),
+  pmActionBtn: $("pmActionBtn"), pmDismissBtn: $("pmDismissBtn")
 };
  
 // عناصر إضافية تُنشأ برمجياً (بدون الحاجة لتعديل HTML)
@@ -137,7 +156,7 @@ async function loadChildData() {
 
 async function loadMostUsedFoods() {
   try {
-    const snap = await getDocs(query(measColl(), limit(40)));
+    const snap = await getDocs(query(measColl(), orderBy('when', 'desc'), limit(40)));
     const counts = {};
     snap.docs.forEach(d => {
       const items = d.data().mealItemsRef || [];
@@ -427,6 +446,20 @@ function calculateBolus() {
     let html = '';
     if (r.blocked) html += `<strong>⛔ لا يمكن حساب الجرعة:</strong> ${esc(r.blocked)}<br>`;
     r.alerts.forEach(a => { html += a.text + '<br>'; });
+
+    // حساب مكافئ الدهون والبروتين (FPU) والتأثير المتأخر
+    const fat = state.mealStats.fat || 0;
+    const pro = state.mealStats.pro || 0;
+    const fpu = ((fat * 9) + (pro * 4)) / 100;
+    if (fpu >= 1.5 || fat >= 20 || pro >= 30) {
+      html += `<div style="margin-top:6px; padding:6px 10px; background:#fef3c7; border:1px solid #fde68a; border-radius:6px; color:#92400e; font-size:12px;">🧀🥩 <b>تنبيه وجبة غنية بالدهون والبروتين (${round(fat, 1)}g دهون، ${round(pro, 1)}g بروتين ≈ ${round(fpu, 1)} FPU):</b> الدهون والبروتين تؤخر إفراغ المعدة وقد تؤدي لارتفاع متأخر في السكر بعد 3 إلى 5 ساعات. انتبهي لقياس السكر بعد ساعتين وبعد 4 ساعات واستشيري الطبيب بشأن جرعة ممتدة.</div>`;
+    }
+    if (state.mealStats.avgGI >= 70) {
+      html += `<div style="margin-top:4px; padding:4px 8px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; color:#1e40af; font-size:12px;">⚡ <b>مؤشر جلايسيمي مرتفع (GI = ${state.mealStats.avgGI}):</b> الكربوهيدرات سريعة الامتصاص، يُفضل حقن الأنسولين قبل تناول الوجبة بـ 15-20 دقيقة للحد من قفزة السكر الحادة.</div>`;
+    } else if (state.mealStats.avgGI > 0 && state.mealStats.avgGI <= 55) {
+      html += `<div style="margin-top:4px; padding:4px 8px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; color:#166534; font-size:12px;">🥗 <b>مؤشر جلايسيمي منخفض (GI = ${state.mealStats.avgGI}):</b> الوجبة غنية بالألياف وسيكون ارتفاع السكر تدريجياً ومستقراً.</div>`;
+    }
+
     els.smartAlerts.style.display = html ? 'block' : 'none';
     els.smartAlerts.innerHTML = html;
   }
@@ -477,22 +510,109 @@ async function autoFetchPreMeasurement() {
 async function loadTodayMeals() {
   const snap = await getDocs(query(measColl(), where('date', '==', state.date)));
   state.eatenToday = 0; state.caloriesEatenToday = 0;
- 
-  const validDocs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.carbs > 0 || m.totalDose > 0);
+
+  const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const validDocs = allDocs.filter(m => m.carbs > 0 || m.totalDose > 0);
   if (validDocs.length === 0) {
-    els.dailyMealsBody.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center;">لا توجد وجبات أو قياسات مسجلة في هذا اليوم</td></tr>`;
+    els.dailyMealsBody.innerHTML = `<tr><td colspan="8" class="muted" style="text-align:center;">لا توجد وجبات أو قياسات مسجلة في هذا اليوم</td></tr>`;
   } else {
     validDocs.sort((a, b) => (toDateObj(a.when) || 0) - (toDateObj(b.when) || 0));
     els.dailyMealsBody.innerHTML = validDocs.map(m => {
       state.eatenToday += Number(m.carbs || 0); state.caloriesEatenToday += Number(m.calories || 0);
+
+      // البحث عن قياس ما بعد الوجبة المتطابق
+      const postSlotKey = PRE_TO_POST_SLOT[m.slotKey] || 'OTHER';
+      const expectedTime = addHoursToTimeStr(m.time || '12:00', 2);
+      const mDateObj = toDateObj(m.when);
+
+      // نبحث أولاً عن وثيقة بنفس slotKey ما بعد الوجبة
+      let postDoc = allDocs.find(d => d.id !== m.id && d.slotKey === postSlotKey);
+      if (!postDoc && mDateObj) {
+        // أو نبحث عن وثيقة تم قياسها بين 75 دقيقة و 210 دقيقة بعد الوجبة
+        const mEpoch = mDateObj.getTime();
+        postDoc = allDocs.find(d => {
+          if (d.id === m.id) return false;
+          const dEpoch = (toDateObj(d.when) || 0).getTime();
+          const diffMins = (dEpoch - mEpoch) / 60000;
+          return diffMins >= 75 && diffMins <= 210;
+        });
+      }
+
+      let outcomeHTML = '';
+      if (postDoc && postDoc.value !== undefined && postDoc.value !== null && postDoc.value !== '') {
+        const postVal = Number(postDoc.value);
+        const postUnit = postDoc.unit || state.therapy.unit;
+        const postNorm = postDoc.normalizedValue ?? convert(postVal, postUnit, state.therapy.unit);
+        const preVal = (m.value !== undefined && m.value !== null && m.value !== '') ? Number(m.value) : null;
+        const preNorm = preVal !== null ? (m.normalizedValue ?? convert(preVal, m.unit || state.therapy.unit, state.therapy.unit)) : null;
+
+        let diffStr = '';
+        let diffVal = null;
+        if (preNorm !== null) {
+          diffVal = round(postNorm - preNorm, 1);
+          diffStr = diffVal > 0 ? `+${diffVal}` : `${diffVal}`;
+        }
+
+        const L = state.therapy.limits;
+        if (postNorm < L.low) {
+          outcomeHTML = `
+            <div class="badge-outcome danger">
+              <span>🚨 هبوط: ${postVal} ${postUnit}</span>
+              <small>${diffStr ? `فارق (${diffStr} ${state.therapy.unit}) • ` : ''}جرعة زائدة أو نشاط كبير</small>
+            </div>`;
+        } else if (postNorm > L.high || (diffVal !== null && diffVal > (state.therapy.unit === 'mmol/L' ? 4 : 70))) {
+          outcomeHTML = `
+            <div class="badge-outcome warn">
+              <span>⚠️ ارتفاع: ${postVal} ${postUnit}</span>
+              <small>${diffStr ? `فارق (${diffStr} ${state.therapy.unit}) • ` : ''}راجع معامل الكارب CR</small>
+            </div>`;
+        } else {
+          outcomeHTML = `
+            <div class="badge-outcome success">
+              <span>🎯 في الهدف: ${postVal} ${postUnit}</span>
+              <small>${diffStr ? `فارق (${diffStr} ${state.therapy.unit}) • ` : ''}جرعة ووجبة ممتازة</small>
+            </div>`;
+        }
+      } else {
+        // لا يوجد قياس بعد الوجبة مسجل حتى الآن
+        const now = new Date();
+        const isToday = state.date === localDateStr(now);
+        let isDue = false;
+        if (isToday && m.time) {
+          const [mh, mm] = m.time.split(':').map(Number);
+          const mealT = new Date(); mealT.setHours(mh, mm, 0, 0);
+          const elapsedMins = (now - mealT) / 60000;
+          if (elapsedMins >= 110) isDue = true;
+        }
+
+        const measUrl = `measurements.html?child=${encodeURIComponent(state.childId)}&slot=${encodeURIComponent(postSlotKey)}&date=${encodeURIComponent(state.date)}&time=${encodeURIComponent(expectedTime)}`;
+
+        if (isDue) {
+          outcomeHTML = `
+            <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
+              <span style="font-size:11px; color:#dc2626; font-weight:bold;">⏰ حان موعد القياس!</span>
+              <a href="${measUrl}" class="btn-measure-pill alert-pulse">🩸 سجلي القياس الآن</a>
+            </div>`;
+        } else if (isToday) {
+          outcomeHTML = `
+            <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
+              <span style="font-size:11px; color:#64748b;">⏳ موعد القياس: ${expectedTime}</span>
+              <a href="${measUrl}" class="btn-measure-pill">📊 تسجيل القياس</a>
+            </div>`;
+        } else {
+          outcomeHTML = `<span class="muted tiny">— لم يُسجل</span>`;
+        }
+      }
+
       return `
         <tr>
-          <td>${getSlotLabel(m.slotKey)}</td>
+          <td><b>${getSlotLabel(m.slotKey)}</b><br><span class="muted tiny">🕒 ${esc(m.time || '—')}</span></td>
           <td>${esc(m.carbs || 0)}g</td>
-          <td>${Number(m.calories || 0).toFixed(1)} kcal</td>
+          <td>${Number(m.calories || 0).toFixed(0)} kcal</td>
           <td>${esc(m.carbDose || 0)}U</td>
           <td>${esc(m.correctionDose || 0)}U</td>
-          <td><strong style="color:var(--primary)">${esc(m.totalDose || m.totalInsulin || 0)}U</strong></td>
+          <td><strong style="color:var(--primary); font-size:15px;">${esc(m.totalDose || m.totalInsulin || 0)}U</strong></td>
+          <td>${outcomeHTML}</td>
           <td>
             <button class="btn ghost sm" data-act="edit" data-slot="${esc(m.slotKey)}" style="padding:4px; font-size:12px;">✏️ تعديل</button>
             <button class="btn danger sm" data-act="del" data-id="${esc(m.id)}" style="padding:4px; font-size:12px;">🗑️</button>
@@ -605,20 +725,37 @@ els.btnSaveMeal.onclick = async () => {
  
     if (target) await setDoc(doc(measColl(), target.id), { ...payload, updatedAt: serverTimestamp() }, { merge: true });
     else await addDoc(measColl(), { ...payload, createdAt: serverTimestamp() });
- 
-    alert("تم حفظ واعتماد الجرعة بنجاح! ✅");
+
+    showPostMealReminder(state.time, state.slot, state.date);
     await loadTodayMeals(); loadIOB();
   } catch (e) {
     console.error(e);
     alert("خطأ في الحفظ: " + e.message);
   } finally { els.btnSaveMeal.disabled = false; els.btnSaveMeal.textContent = "💾 اعتماد الجرعة وحفظ الوجبة"; }
 };
- 
+
+function showPostMealReminder(timeStr, slotKey, dateStr) {
+  if (!els.postMealReminderBanner) return;
+  const postTime = addHoursToTimeStr(timeStr, 2);
+  const postSlot = PRE_TO_POST_SLOT[slotKey] || 'OTHER';
+  if (els.pmTime) els.pmTime.textContent = postTime;
+  if (els.pmActionBtn) {
+    els.pmActionBtn.href = `measurements.html?child=${encodeURIComponent(state.childId)}&slot=${encodeURIComponent(postSlot)}&date=${encodeURIComponent(dateStr)}&time=${encodeURIComponent(postTime)}`;
+  }
+  els.postMealReminderBanner.classList.remove('hidden');
+  els.postMealReminderBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 // ========================================================
 // 10. الأحداث
 // ========================================================
 function setupEvents() {
   $('logoutBtn').onclick = () => signOut(auth);
+  if (els.pmDismissBtn) {
+    els.pmDismissBtn.onclick = () => {
+      if (els.postMealReminderBanner) els.postMealReminderBanner.classList.add('hidden');
+    };
+  }
  
   const refreshContext = () => { state.iobDirty = false; loadIOB(); };
  
