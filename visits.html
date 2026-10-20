@@ -6,20 +6,38 @@
   <title>الزيارات والمتابعات الطبية</title>
   <link rel="stylesheet" href="css/visits.css?v=6">
   <link rel="icon" href="favicon.ico">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <!-- شريط التنقل الموحد -->
-  <!-- شريط التنقل الموحد -->
-  <header class="topbar no-print" style="background: #1e3a8a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-    <div style="display: flex; align-items: center; gap: 10px;">
-      <span style="font-size: 24px;">🩺</span>
-      <h2 style="margin: 0; font-size: 18px;">الزيارات والمتابعات الطبية (Visits)</h2>
+  <!-- 1. شريط التنقل الموحد -->
+  <header class="main-topbar no-print">
+    <div class="topbar-right">
+      <div class="top-avatar" id="topAvatar">أ</div>
+      <div class="top-info">
+        <h3 id="topChildName">جاري التحميل...</h3>
+        <span id="topChildMeta" class="muted tiny">—</span>
+      </div>
     </div>
-    <div>
-      <button onclick="location.href='child.html?child=' + new URLSearchParams(location.search).get('child')" class="btn" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s;">🏠 رجوع للوحة الطفل</button>
+    <nav class="topbar-nav">
+      <a href="child.html" class="nav-pill" id="navHome">🏠 الرئيسية</a>
+      <a href="measurements.html" class="nav-pill" id="navMeas">📊 القياسات</a>
+      <a href="meals.html" class="nav-pill" id="navMeals">🍽️ الوجبات</a>
+      <a href="reports.html" class="nav-pill" id="navReports">📈 التقارير</a>
+      <a href="labs.html" class="nav-pill" id="navLabs">🔬 التحاليل</a>
+      <a href="#" class="nav-pill active" id="navVisits">🩺 الزيارات</a>
+    </nav>
+    <div class="topbar-left">
+      <button id="backBtn" class="btn" style="background:#3b82f6; color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold;">🏠 رجوع</button>
+      <button id="logoutBtn" class="btn-logout-outline" style="margin-inline-start:8px;">↪ خروج</button>
     </div>
   </header>
-  <div id="appLoader" class="loader"><span class="spinner"></span><span>جاري جلب البيانات...</span></div>
+
+  <!-- 2. مسار التنقل (Breadcrumbs) -->
+  <div class="breadcrumbs no-print">
+    <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>الزيارات والمتابعات السريرية 🩺</b>
+  </div>
+
+  <div id="appLoader"  class="loader"><span class="spinner"></span><span>جاري جلب البيانات...</span></div>
 
   <div class="container">
     
@@ -62,6 +80,25 @@
 
     <div class="main-layout">
       <section class="visits-section">
+        <!-- منحنى نمو الطفل والكتلة (Pediatric Growth & BMI Tracker) -->
+        <section class="growth-card no-print">
+          <div class="row space" style="border-bottom:1px solid #f1f5f9; padding-bottom:10px; margin-bottom:12px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:22px;">📈</span>
+              <div>
+                <h3 style="margin:0; font-size:15px; color:#1e3a8a;">منحنى نمو الطفل والعلامات الحيوية (Pediatric Growth & Vitals)</h3>
+                <span class="tiny-text" style="color:#64748b;">تطور الوزن (kg) والطول (cm) ومؤشر كتلة الجسم (BMI) عبر الزيارات الطبية</span>
+              </div>
+            </div>
+            <div id="latestGrowthBadges" class="growth-badges-wrap">
+              <!-- Dynamic Badges -->
+            </div>
+          </div>
+          <div style="position:relative; height:200px; width:100%;">
+            <canvas id="growthCanvas"></canvas>
+          </div>
+        </section>
+
         <div id="visitsList" class="visits-grid"></div>
       </section>
 
@@ -102,6 +139,32 @@
           <div class="field"><label>وقت الزيارة</label><input type="time" id="time"></div>
         </div>
         
+        
+        <!-- قياسات النمو والعلامات الحيوية -->
+        <div class="vitals-box bg-light pad-10">
+          <h4 style="margin:0 0 10px 0; color:#1e3a8a; font-size:13px; display:flex; align-items:center; gap:6px;">
+            <span>📏</span> قياسات النمو والعلامات الحيوية (Pediatric Anthropometrics)
+          </h4>
+          <div class="grid4" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
+            <div class="field">
+              <label>الوزن (kg)</label>
+              <input type="number" id="weight" step="0.1" placeholder="مثال: 24.5">
+            </div>
+            <div class="field">
+              <label>الطول (cm)</label>
+              <input type="number" id="height" step="0.5" placeholder="مثال: 122">
+            </div>
+            <div class="field">
+              <label>مؤشر الكتلة (BMI)</label>
+              <input type="text" id="bmi" placeholder="محسوب تلقائياً" readonly style="background:#e2e8f0; font-weight:bold; color:#1e3a8a;">
+            </div>
+            <div class="field">
+              <label>ضغط الدم</label>
+              <input type="text" id="bloodPressure" placeholder="مثال: 105/70">
+            </div>
+          </div>
+        </div>
+
         <div class="field"><label>سبب الزيارة</label><input type="text" id="reason" placeholder="متابعة جرعات / هبوط متكرر..."></div>
         
         <div class="field"><label>خلاصة وتشخيص الطبيب</label><textarea id="summary" rows="2" placeholder="ماذا قال الطبيب؟"></textarea></div>
@@ -138,6 +201,5 @@
   </div>
 
   <script type="module" src="js/visits.js?v=6"></script>
-  <script type="module" src="js/header.js"></script>
 </body>
 </html>

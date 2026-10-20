@@ -12,34 +12,84 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   <!-- دعم تشكيل العربية + ترتيب RTL -->
   <script src="https://cdn.jsdelivr.net/npm/arabic-persian-reshaper@2.2.1/dist/arabic-persian-reshaper.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bidi-js@1.0.3/dist/bidi.min.js"></script>
 </head>
 <body>
-  <!-- شريط التنقل الموحد -->
-  <!-- شريط التنقل الموحد -->
-  <header class="topbar no-print" style="background: #1e3a8a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-    <div style="display: flex; align-items: center; gap: 10px;">
-      <span style="font-size: 24px;">🔬</span>
-      <h2 style="margin: 0; font-size: 18px;">تقارير التحاليل الطبية الشاملة (Labs)</h2>
+  <!-- 1. شريط التنقل الموحد -->
+  <header class="main-topbar no-print">
+    <div class="topbar-right">
+      <div class="top-avatar" id="topAvatar">أ</div>
+      <div class="top-info">
+        <h3 id="topChildName">جاري التحميل...</h3>
+        <span id="topChildMeta" class="muted tiny">—</span>
+      </div>
     </div>
-    <div>
-      <button onclick="location.href='child.html?child=' + new URLSearchParams(location.search).get('child')" class="btn" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s;">🏠 رجوع للوحة الطفل</button>
+    <nav class="topbar-nav">
+      <a href="child.html" class="nav-pill" id="navHome">🏠 الرئيسية</a>
+      <a href="measurements.html" class="nav-pill" id="navMeas">📊 القياسات</a>
+      <a href="meals.html" class="nav-pill" id="navMeals">🍽️ الوجبات</a>
+      <a href="reports.html" class="nav-pill" id="navReports">📈 التقارير</a>
+      <a href="#" class="nav-pill active" id="navLabs">🔬 التحاليل</a>
+      <a href="visits.html" class="nav-pill" id="navVisits">🩺 الزيارات</a>
+    </nav>
+    <div class="topbar-left">
+      <button id="backBtn" class="btn" style="background:#3b82f6; color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold;">🏠 رجوع</button>
+      <button id="logoutBtn" class="btn-logout-outline" style="margin-inline-start:8px;">↪ خروج</button>
     </div>
   </header>
+
+  <!-- 2. مسار التنقل (Breadcrumbs) -->
+  <div class="breadcrumbs no-print">
+    <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>الفحوصات المخبرية والمتابعة الدورية 🔬</b>
+  </div>
 
   <div class="container">
 
     <div class="row space no-print" style="margin-bottom: 15px;">
       <div class="row">
-        <button class="btn ghost" onclick="history.back()" style="border: 1px solid #cbd5e1;">↩︎ رجوع للملف</button>
+        <button class="btn ghost" id="fileBackBtn" style="border: 1px solid #cbd5e1;">↩︎ رجوع للملف</button>
       </div>
       <div class="row">
         <button id="printBtn" class="btn secondary">🖨️ طباعة السجل</button>
       </div>
     </div>
+
+    <!-- لوحة المتابعة الدورية والفحوصات السنوية (ADA / ISPAD Periodic Due Tracker) -->
+    <section class="card due-tracker-card no-print">
+      <div class="row space" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 12px;">
+        <div>
+          <h3 style="margin:0; border:none; padding:0; display:flex; align-items:center; gap:8px;">
+            <span>📅</span> جدول الفحوصات الدورية والسنوية لأطفال السكري
+          </h3>
+          <span class="tiny muted">متابعة الفحوصات الإلزامية وفق توصيات ISPAD و ADA لاكتشاف المضاعفات مبكراً</span>
+        </div>
+        <span id="dueSummaryBadge" class="pill tiny ok">جاري الفحص...</span>
+      </div>
+
+      <div class="due-grid" id="dueGrid">
+        <div class="tiny muted" style="grid-column:1/-1; text-align:center; padding:15px;">جاري حساب مواعيد استحقاق الفحوصات...</div>
+      </div>
+    </section>
+
+    <!-- مسار تطور السكر التراكمي (HbA1c Trend Tracker) -->
+    <section class="card trend-card no-print">
+      <div class="row space" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 12px;">
+        <div>
+          <h3 style="margin:0; border:none; padding:0; display:flex; align-items:center; gap:8px;">
+            <span>📈</span> مسار تطور السكر التراكمي (HbA1c Trend)
+          </h3>
+          <span class="tiny muted">رصد قراءات التراكمي عبر الزمن ومقارنتها بالهدف السريري (&lt; 7.0%)</span>
+        </div>
+        <span class="tiny" style="color:#15803d; font-weight:bold; background:#dcfce7; padding:4px 8px; border-radius:6px;">الهدف السريري: &lt; 7.0% 🎯</span>
+      </div>
+      <div style="position:relative; height:200px; width:100%;">
+        <canvas id="hba1cTrendCanvas"></canvas>
+      </div>
+    </section>
 
     <!-- بيانات عامة -->
     <div class="card">
@@ -105,6 +155,74 @@
         <tr><td data-label="الاختبار">FT4 (هرمون الغدة)</td><td data-label="القيمة"><input id="thy_ft4" type="number" step="0.01"></td><td data-label="المرجع" class="tiny">0.9 - 1.7</td><td data-label="الوحدة">ng/dL</td><td data-label="ملاحظات"></td></tr>
         <tr><td data-label="الاختبار">Microalbumin (الزلال)</td><td data-label="القيمة"><input id="ren_mac" type="number" step="0.01"></td><td data-label="المرجع" class="tiny">&lt; 30</td><td data-label="الوحدة">mg/g</td><td data-label="ملاحظات"><input id="ren_note" placeholder="ملاحظات"></td></tr>
         <tr><td data-label="الاختبار">Creatinine (الكرياتينين)</td><td data-label="القيمة"><input id="ren_creat" type="number" step="0.01"></td><td data-label="المرجع" class="tiny">0.6 - 1.2</td><td data-label="الوحدة">mg/dL</td><td data-label="ملاحظات"></td></tr>
+      </table>
+    </div>
+
+    
+    <!-- حساسية القمح (Celiac Disease Screening) -->
+    <div class="card">
+      <div class="row space" style="border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 12px;">
+        <h3 style="margin:0; border:none; padding:0;">حساسية القمح (Celiac Screening - Anti-tTG IgA) <span class="tiny muted" style="font-weight:normal;">(فحص مناعي سنوي إلزامي لسكري النوع الأول)</span></h3>
+        <span class="tiny" style="color:#2563eb; font-weight:bold;">المرجع: &lt; 10 U/mL</span>
+      </div>
+      <table>
+        <tr><th>الاختبار</th><th>القيمة</th><th>المعدل الطبيعي</th><th>الوحدة</th><th>ملاحظات والنتيجة</th></tr>
+        <tr>
+          <td data-label="الاختبار">Anti-tTG IgA (الأجسام المضادة)</td>
+          <td data-label="القيمة"><input id="cel_ttg" type="number" step="0.1" placeholder="مثال: 4.2"></td>
+          <td data-label="المرجع" class="tiny">&lt; 10 (سلبي)</td>
+          <td data-label="الوحدة">U/mL</td>
+          <td data-label="ملاحظات">
+            <select id="cel_result" style="padding:6px; font-size:13px;">
+              <option value="">اختر التقييم</option>
+              <option value="negative">سلبي (سليم) ✅</option>
+              <option value="weak_positive">إيجابي ضعيف (متابعة) ⚠️</option>
+              <option value="positive">إيجابي (حمية خالية من الجلوتين) 🚨</option>
+            </select>
+          </td>
+        </tr>
+        <tr>
+          <td data-label="الاختبار">Total Serum IgA (إجمالي الأجسام)</td>
+          <td data-label="القيمة"><input id="cel_iga" type="number" step="0.01" placeholder="مثال: 1.8"></td>
+          <td data-label="المرجع" class="tiny">0.7 - 4.0 (لاستبعاد نقص IgA)</td>
+          <td data-label="الوحدة">g/L</td>
+          <td data-label="ملاحظات"><input id="cel_note" placeholder="ملاحظات حساسية الجلوتين"></td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- الفحوصات السريرية والوقائية السنوية -->
+    <div class="card">
+      <h3>الفحوصات السريرية والوقائية السنوية (Annual Preventive Screenings)</h3>
+      <table>
+        <tr><th>الفحص الوقائي</th><th>الحالة والتقييم</th><th>تاريخ الفحص</th><th>ملاحظات الطبيب</th></tr>
+        <tr>
+          <td data-label="الفحص">👁️ فحص قاع العين السنوي (Dilated Eye Exam)</td>
+          <td data-label="الحالة">
+            <select id="eye_status" style="padding:6px; font-size:13px;">
+              <option value="">اختر الحالة</option>
+              <option value="normal">سليم تماماً (Normal) ✅</option>
+              <option value="followup">يحتاج متابعة دورية ⚠️</option>
+              <option value="retinopathy">اعتلال شبكية مبكر 🚨</option>
+              <option value="not_done">لم يتم الفحص بعد ⚪</option>
+            </select>
+          </td>
+          <td data-label="التاريخ"><input type="date" id="eye_date"></td>
+          <td data-label="ملاحظات"><input id="eye_note" placeholder="اسم طبيب العيون أو المركز"></td>
+        </tr>
+        <tr>
+          <td data-label="الفحص">🦷 فحص الأسنان والقدمين (Dental & Foot Screening)</td>
+          <td data-label="الحالة">
+            <select id="foot_status" style="padding:6px; font-size:13px;">
+              <option value="">اختر الحالة</option>
+              <option value="normal">سليم (خالي من التقرحات والالتهابات) ✅</option>
+              <option value="needs_care">يحتاج علاج أو عناية لثوية ⚠️</option>
+              <option value="not_done">لم يتم الفحص ⚪</option>
+            </select>
+          </td>
+          <td data-label="التاريخ"><input type="date" id="foot_date"></td>
+          <td data-label="ملاحظات"><input id="foot_note" placeholder="ملاحظات العناية بالقدم والأسنان"></td>
+        </tr>
       </table>
     </div>
 

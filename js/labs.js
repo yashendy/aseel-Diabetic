@@ -3,47 +3,74 @@ import { auth, db } from './firebase-config.js';
 import {
   collection, doc, setDoc, addDoc, getDoc, getDocs, query, orderBy, serverTimestamp, deleteDoc, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-const childNameEl = document.getElementById('childName');
-const labDateEl   = document.getElementById('labDate');
-const labTypeEl   = document.getElementById('labType');
-const dueBadge    = document.getElementById('dueBadge');
-const saveBtn     = document.getElementById('saveBtn');
-const savePdfBtn  = document.getElementById('savePdfBtn');
-const pdfBtn      = document.getElementById('pdfBtn');
-const fileLinkBox = document.getElementById('fileLinkBox');
-const printBtn    = document.getElementById('printBtn');
+const $ = id => document.getElementById(id);
+const setText = (el, v) => { if (el) el.textContent = (v == null || v === '') ? '—' : v; };
 
-const hba1cVal  = document.getElementById('hba1cVal');
-const hba1cNote = document.getElementById('hba1cNote');
+function calcAge(bd) {
+  if (!bd) return '-';
+  const b = new Date(bd), t = new Date();
+  let a = t.getFullYear() - b.getFullYear();
+  const m = t.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && t.getDate() < b.getDate())) a--;
+  return a;
+}
 
-const lip_tc = document.getElementById('lip_tc');
-const lip_ldl= document.getElementById('lip_ldl');
-const lip_hdl= document.getElementById('lip_hdl');
-const lip_tg = document.getElementById('lip_tg');
-const lip_note = document.getElementById('lip_note');
+const childNameEl = $('childName');
+const labDateEl   = $('labDate');
+const labTypeEl   = $('labType');
+const dueBadge    = $('dueBadge');
+const saveBtn     = $('saveBtn');
+const savePdfBtn  = $('savePdfBtn');
+const pdfBtn      = $('pdfBtn');
+const fileLinkBox = $('fileLinkBox');
+const printBtn    = $('printBtn');
 
-const thy_tsh = document.getElementById('thy_tsh');
-const thy_ft4 = document.getElementById('thy_ft4');
-const thy_note= document.getElementById('thy_note');
+const hba1cVal  = $('hba1cVal');
+const hba1cNote = $('hba1cNote');
 
-const ren_mac = document.getElementById('ren_mac');
-const ren_creat = document.getElementById('ren_creat');
-const ren_note = document.getElementById('ren_note');
+const lip_tc = $('lip_tc');
+const lip_ldl= $('lip_ldl');
+const lip_hdl= $('lip_hdl');
+const lip_tg = $('lip_tg');
+const lip_note = $('lip_note');
 
-const generalNote = document.getElementById('generalNote');
-const historyBody = document.getElementById('historyBody');
+const thy_tsh = $('thy_tsh');
+const thy_ft4 = $('thy_ft4');
+const thy_note= $('thy_note');
+
+const ren_mac = $('ren_mac');
+const ren_creat = $('ren_creat');
+const ren_note = $('ren_note');
+
+// حقول حساسية القمح والفحوصات الوقائية السنوية (ADA / ISPAD)
+const cel_ttg = $('cel_ttg');
+const cel_result = $('cel_result');
+const cel_iga = $('cel_iga');
+const cel_note = $('cel_note');
+
+const eye_status = $('eye_status');
+const eye_date = $('eye_date');
+const eye_note = $('eye_note');
+
+const foot_status = $('foot_status');
+const foot_date = $('foot_date');
+const foot_note = $('foot_note');
+
+const generalNote = $('generalNote');
+const historyBody = $('historyBody');
 
 const params = new URLSearchParams(location.search);
 const childId = params.get('child');
 const labIdParam = params.get('lab');
+const parentIdParam = params.get('parentId');
 
-const pad = n=>String(n).padStart(2,'0');
-const fmt = d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-labDateEl.value = fmt(new Date());
+const pad = n => String(n).padStart(2,'0');
+const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+if (labDateEl) labDateEl.value = fmt(new Date());
 
-function addMonths(date, m=4){
+function addMonths(date, m=3){
   const d = new Date(date);
   const day = d.getDate();
   d.setMonth(d.getMonth()+m);
@@ -52,11 +79,12 @@ function addMonths(date, m=4){
 }
 
 let _currentLabId = null;
+let trendChart = null;
 
 // --- نظام التلوين الذكي للمراجع الطبية ---
 function checkRanges() {
   const validate = (el, condition) => {
-    if (!el.value) { el.classList.remove('out-of-range'); return; }
+    if (!el || !el.value) { if(el) el.classList.remove('out-of-range'); return; }
     if (condition(Number(el.value))) el.classList.add('out-of-range');
     else el.classList.remove('out-of-range');
   };
@@ -70,50 +98,87 @@ function checkRanges() {
   validate(thy_ft4, v => v < 0.9 || v > 1.7);
   validate(ren_mac, v => v > 30);
   validate(ren_creat, v => v > 1.2);
+  validate(cel_ttg, v => v >= 10);
 }
 
 // ربط الحقول بنظام التلوين الذكي عند الكتابة
-[hba1cVal, lip_tc, lip_ldl, lip_hdl, lip_tg, thy_tsh, thy_ft4, ren_mac, ren_creat].forEach(input => {
+[hba1cVal, lip_tc, lip_ldl, lip_hdl, lip_tg, thy_tsh, thy_ft4, ren_mac, ren_creat, cel_ttg].forEach(input => {
   if(input) input.addEventListener('input', checkRanges);
 });
 
-onAuthStateChanged(auth, async user=>{
+onAuthStateChanged(auth, async user => {
   if(!user){ location.href='index.html'; return; }
   if(!childId){ alert('لم يتم العثور على رقم الطفل.'); return; }
 
-  const cref = doc(db, `parents/${user.uid}/children/${childId}`);
+  const parentId = parentIdParam || user.uid;
+  const isDoctor = parentIdParam && parentIdParam !== user.uid;
+
+  // إعداد زر الرجوع بذكاء
+  const backBtn = $('backBtn');
+  const fileBackBtn = $('fileBackBtn');
+  const backUrl = isDoctor ? 'doctor-dashboard.html' : `child.html?child=${childId}`;
+  if(backBtn) {
+    backBtn.textContent = isDoctor ? '🩺 رجوع للعيادة' : '🏠 رجوع للوحة الطفل';
+    backBtn.onclick = () => location.href = backUrl;
+  }
+  if(fileBackBtn) fileBackBtn.onclick = () => location.href = backUrl;
+
+  $('logoutBtn')?.addEventListener('click', () => signOut(auth).catch(() => {}));
+
+  const cref = doc(db, `parents/${parentId}/children/${childId}`);
   const csnp = await getDoc(cref);
-  const childName = csnp.exists() ? (csnp.data().name || 'طفل') : 'طفل';
+  const childData = csnp.exists() ? csnp.data() : {};
+  const childName = childData.name || 'الطفل';
   
   if(childNameEl) childNameEl.textContent = childName;
+  setText($('topChildName'), childName);
+  setText($('breadChildName'), childName);
+  if($('topAvatar')) $('topAvatar').textContent = childName.trim().charAt(0) || 'أ';
 
-  await loadHistory(user.uid, childId, childName);
+  const age = calcAge(childData.birthDate);
+  const genderStr = childData.gender === 'female' ? 'أنثى' : (childData.gender === 'male' ? 'ذكر' : '');
+  const regimenStr = childData.regimen === 'pump' ? 'مضخة إنسولين' : 'حقن يومية (MDI)';
+  const metaParts = [];
+  if (age !== '-') metaParts.push(`العمر: ${age} سنة`);
+  if (genderStr) metaParts.push(genderStr);
+  if (regimenStr) metaParts.push(regimenStr);
+  setText($('topChildMeta'), metaParts.join(' • ') || '—');
+
+  // تحديث روابط الشريط العلوي
+  const qParams = `?child=${encodeURIComponent(childId)}${isDoctor ? `&parentId=${encodeURIComponent(parentId)}` : ''}`;
+  $('navHome')?.setAttribute('href', `child.html${qParams}`);
+  $('navMeas')?.setAttribute('href', `measurements.html${qParams}`);
+  $('navMeals')?.setAttribute('href', `meals.html${qParams}`);
+  $('navReports')?.setAttribute('href', `reports.html${qParams}`);
+  $('navVisits')?.setAttribute('href', `visits.html${qParams}`);
+  $('breadChildName')?.setAttribute('href', `child.html${qParams}`);
+
+  await loadHistory(parentId, childId, childName);
 
   if (labIdParam){
-    const labRef = doc(db, `parents/${user.uid}/children/${childId}/labs/${labIdParam}`);
+    const labRef = doc(db, `parents/${parentId}/children/${childId}/labs/${labIdParam}`);
     const labSnap= await getDoc(labRef);
     if (!labSnap.exists()){ alert('التقرير غير موجود.'); return; }
     const labData = labSnap.data();
     _currentLabId = labSnap.id;
     fillFormFromDoc(labData);
     checkRanges(); 
-    showDueBadge(labData.nextDue?.toDate ? labData.nextDue.toDate() : addMonths(labData.when?.toDate ? labData.when.toDate() : new Date(labData.date)));
+    showDueBadge(labData.nextDue?.toDate ? labData.nextDue.toDate() : addMonths(labData.when?.toDate ? labData.when.toDate() : new Date(labData.date), 3));
     openPdf(_currentLabId, childName, labData);
   } else {
-    const lref = collection(db, `parents/${user.uid}/children/${childId}/labs`);
+    const lref = collection(db, `parents/${parentId}/children/${childId}/labs`);
     const qy = query(lref, orderBy('when','desc'), limit(1));
     const sn = await getDocs(qy);
     if (!sn.empty){
       const last = sn.docs[0].data();
       const due = last.nextDue?.toDate ? last.nextDue.toDate()
-                : addMonths(last.when?.toDate ? last.when.toDate() : new Date(last.date));
+                : addMonths(last.when?.toDate ? last.when.toDate() : new Date(last.date), 3);
       showDueBadge(due);
     }
   }
 
-  // ربط الأزرار الآن سيعمل بنجاح
-  if(saveBtn) saveBtn.addEventListener('click', ()=> saveLab(user.uid, childId, childName, false));
-  if(savePdfBtn) savePdfBtn.addEventListener('click', ()=> saveLab(user.uid, childId, childName, true));
+  if(saveBtn) saveBtn.addEventListener('click', ()=> saveLab(parentId, childId, childName, false));
+  if(savePdfBtn) savePdfBtn.addEventListener('click', ()=> saveLab(parentId, childId, childName, true));
   if(pdfBtn) pdfBtn.addEventListener('click', ()=>{
     const fake = buildDocFromForm();
     openPdf(_currentLabId || 'preview', childName, fake);
@@ -151,12 +216,25 @@ function fillFormFromDoc(d){
   if(ren_creat) ren_creat.value= d?.renal?.creatinine ?? '';
   if(ren_note) ren_note.value= d?.renal?.note ?? '';
 
+  if(cel_ttg) cel_ttg.value = d?.celiac?.ttg ?? '';
+  if(cel_result) cel_result.value = d?.celiac?.result ?? '';
+  if(cel_iga) cel_iga.value = d?.celiac?.iga ?? '';
+  if(cel_note) cel_note.value = d?.celiac?.note ?? '';
+
+  if(eye_status) eye_status.value = d?.preventive?.eye_status ?? '';
+  if(eye_date) eye_date.value = d?.preventive?.eye_date ?? '';
+  if(eye_note) eye_note.value = d?.preventive?.eye_note ?? '';
+
+  if(foot_status) foot_status.value = d?.preventive?.foot_status ?? '';
+  if(foot_date) foot_date.value = d?.preventive?.foot_date ?? '';
+  if(foot_note) foot_note.value = d?.preventive?.foot_note ?? '';
+
   if(generalNote) generalNote.value = d?.generalNote ?? '';
 }
 
 function buildDocFromForm(){
   const when = new Date((labDateEl?.value || fmt(new Date()))+'T00:00:00');
-  const nextDue = addMonths(when, 4);
+  const nextDue = addMonths(when, 3);
   return {
     when,
     date: fmt(when),
@@ -166,6 +244,11 @@ function buildDocFromForm(){
     lipid: { tc:numOrNull(lip_tc?.value), ldl:numOrNull(lip_ldl?.value), hdl:numOrNull(lip_hdl?.value), tg:numOrNull(lip_tg?.value), note: strOrNull(lip_note?.value) },
     thyroid: { tsh:numOrNull(thy_tsh?.value), ft4:numOrNull(thy_ft4?.value), note: strOrNull(thy_note?.value) },
     renal: { microalb_creat:numOrNull(ren_mac?.value), creatinine:numOrNull(ren_creat?.value), note: strOrNull(ren_note?.value) },
+    celiac: { ttg:numOrNull(cel_ttg?.value), result:strOrNull(cel_result?.value), iga:numOrNull(cel_iga?.value), note:strOrNull(cel_note?.value) },
+    preventive: { 
+      eye_status: strOrNull(eye_status?.value), eye_date: strOrNull(eye_date?.value), eye_note: strOrNull(eye_note?.value),
+      foot_status: strOrNull(foot_status?.value), foot_date: strOrNull(foot_date?.value), foot_note: strOrNull(foot_note?.value)
+    },
     generalNote: strOrNull(generalNote?.value),
     updatedAt: serverTimestamp(),
     createdAt: serverTimestamp()
@@ -207,6 +290,7 @@ function buildReportUrl(labId){
   const url = new URL('labs.html', location.href);
   url.searchParams.set('child', childId);
   url.searchParams.set('lab', labId);
+  if (parentIdParam) url.searchParams.set('parentId', parentIdParam);
   return url.toString();
 }
 
@@ -217,94 +301,101 @@ async function openPdf(labId, childName, data){
   doc.setFont('Helvetica');
 
   doc.setFontSize(16);
-  doc.text(`Lab Report — ${childName}`, 40, 40);
-  doc.setFontSize(11);
-  doc.text(`Report ID: ${labId}`, 40, 62);
-  doc.text(`Sample Date: ${data.date}`, 40, 78);
+  doc.text(`Comprehensive Pediatric Lab Report — ${childName}`, 40, 40);
+  doc.setFontSize(10);
+  doc.text(`Report ID: ${labId}`, 40, 60);
+  doc.text(`Sample Date: ${data.date}`, 40, 74);
+  doc.text(`Clinical Target: HbA1c < 7.0% (ISPAD/ADA Standard)`, 40, 88);
 
   const reportUrl = labId==='preview' ? location.href : buildReportUrl(labId);
 
   try{
-    const qrDiv = document.getElementById('qr');
-    qrDiv.innerHTML = '';
-    const qr = new QRCode(qrDiv, {text: reportUrl, width: 90, height: 90, correctLevel: QRCode.CorrectLevel.M});
-    const qrCanvas = qrDiv.querySelector('canvas');
-    const qrDataUrl = qrCanvas ? qrCanvas.toDataURL('image/png') : null;
+    const qrDiv = $('qr');
+    if (qrDiv) {
+      qrDiv.innerHTML = '';
+      const qr = new QRCode(qrDiv, {text: reportUrl, width: 80, height: 80, correctLevel: QRCode.CorrectLevel.M});
+      const qrCanvas = qrDiv.querySelector('canvas');
+      const qrDataUrl = qrCanvas ? qrCanvas.toDataURL('image/png') : null;
 
-    const svg = document.getElementById('barcode');
-    JsBarcode(svg, reportUrl, {format:'CODE128', displayValue:false, height:45, margin:0});
-    const svgData = new XMLSerializer().serializeToString(svg);
-    const svgBase64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+      const svg = $('barcode');
+      JsBarcode(svg, reportUrl, {format:'CODE128', displayValue:false, height:35, margin:0});
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const svgBase64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
 
-    if (qrDataUrl) doc.addImage(qrDataUrl, 'PNG', 40, 96, 90, 90);
-    doc.addImage(svgBase64, 'SVG', 140, 120, 220, 40);
-
-    doc.link(40, 96, 90, 90, { url: reportUrl });
-    doc.textWithLink('Open Report', 370, 135, { url: reportUrl, align: 'right' });
+      if (qrDataUrl) doc.addImage(qrDataUrl, 'PNG', 460, 40, 80, 80);
+      doc.addImage(svgBase64, 'SVG', 330, 95, 210, 30);
+    }
   }catch(e){ console.warn('Barcode/QR warning', e); }
 
-  let y = 210;
+  let y = 135;
 
   const baseTable = {
-    styles:{halign:'left', font: 'Helvetica'},
-    headStyles:{fillColor:[244,247,255], font:'Helvetica'},
+    styles:{halign:'left', font: 'Helvetica', fontSize: 9},
+    headStyles:{fillColor:[241,245,249], textColor:[30,41,59], fontStyle:'bold'},
     theme:'grid',
     margin:{left:40,right:40}
   };
 
-  const hbaRows = [[ data?.hba1c?.value ?? '-', '%', data?.hba1c?.note ?? '-' ]];
+  // 1. HbA1c
+  const hbaRows = [[ data?.hba1c?.value != null ? `${data.hba1c.value}%` : '-', '< 7.0%', data?.hba1c?.note ?? '-' ]];
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [['HbA1c', 'Unit', 'Notes']],
-    body: [ hbaRows[0].map(v => (v===null?'-':v)) ]
+    head: [['Glycemic Control (HbA1c)', 'Reference Target', 'Clinical Notes']],
+    body: hbaRows
   });
-  y = doc.lastAutoTable.finalY + 14;
+  y = doc.lastAutoTable.finalY + 10;
 
+  // 2. Lipid
   const lipRows = [
-    ['TC', data?.lipid?.tc ?? '-', 'mg/dL', data?.lipid?.note ?? '-'],
-    ['LDL', data?.lipid?.ldl ?? '-', 'mg/dL', '-'],
-    ['HDL', data?.lipid?.hdl ?? '-', 'mg/dL', '-'],
-    ['TG', data?.lipid?.tg  ?? '-', 'mg/dL', '-'],
+    ['TC (Total Cholesterol)', data?.lipid?.tc ?? '-', '< 200 mg/dL', data?.lipid?.note ?? '-'],
+    ['LDL (Bad Cholesterol)', data?.lipid?.ldl ?? '-', '< 100 mg/dL', '-'],
+    ['HDL (Good Cholesterol)', data?.lipid?.hdl ?? '-', '> 40 mg/dL', '-'],
+    ['TG (Triglycerides)', data?.lipid?.tg  ?? '-', '< 150 mg/dL', '-'],
   ];
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [['Lipid Profile', 'Value', 'Unit', 'Notes']],
+    head: [['Lipid Profile', 'Result', 'Reference Target', 'Notes']],
     body: lipRows
   });
-  y = doc.lastAutoTable.finalY + 14;
+  y = doc.lastAutoTable.finalY + 10;
 
-  const thRows = [
-    ['TSH', data?.thyroid?.tsh ?? '-', 'mIU/L', data?.thyroid?.note ?? '-'],
-    ['FT4', data?.thyroid?.ft4 ?? '-', 'ng/dL', '-'],
+  // 3. Thyroid & Renal
+  const thRnRows = [
+    ['TSH (Thyroid Stimulating Hormone)', data?.thyroid?.tsh ?? '-', '0.4 - 4.0 mIU/L', data?.thyroid?.note ?? '-'],
+    ['FT4 (Free Thyroxine)', data?.thyroid?.ft4 ?? '-', '0.9 - 1.7 ng/dL', '-'],
+    ['Microalbumin/Creatinine Ratio', data?.renal?.microalb_creat ?? '-', '< 30 mg/g', data?.renal?.note ?? '-'],
+    ['Serum Creatinine', data?.renal?.creatinine ?? '-', '0.6 - 1.2 mg/dL', '-'],
   ];
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [['Thyroid', 'Value', 'Unit', 'Notes']],
-    body: thRows
+    head: [['Thyroid & Renal Function', 'Result', 'Reference', 'Notes']],
+    body: thRnRows
   });
-  y = doc.lastAutoTable.finalY + 14;
+  y = doc.lastAutoTable.finalY + 10;
 
-  const rnRows = [
-    ['Microalbumin/Creatinine', data?.renal?.microalb_creat ?? '-', 'mg/g', data?.renal?.note ?? '-'],
-    ['Creatinine', data?.renal?.creatinine ?? '-', 'mg/dL', '-'],
+  // 4. Celiac
+  const celRows = [
+    ['Anti-tTG IgA (Celiac Antibody)', data?.celiac?.ttg ?? '-', '< 10 U/mL (Negative)', data?.celiac?.result ?? (data?.celiac?.note ?? '-')],
+    ['Total Serum IgA', data?.celiac?.iga ?? '-', '0.7 - 4.0 g/L', data?.celiac?.note ?? '-']
   ];
   doc.autoTable({
     ...baseTable,
     startY: y,
-    head: [['Renal', 'Value', 'Unit', 'Notes']],
-    body: rnRows
+    head: [['Celiac Screening (Anti-tTG)', 'Result', 'Reference', 'Notes']],
+    body: celRows
   });
-  y = doc.lastAutoTable.finalY + 14;
+  y = doc.lastAutoTable.finalY + 10;
 
-  const nextDue = data.nextDue ? (data.nextDue instanceof Date ? data.nextDue : new Date(data.nextDue)) : addMonths(new Date(data.date),4);
-  doc.setFontSize(11);
-  doc.text(`Next Lab Due (HbA1c every 4 months): ${fmt(nextDue)}`, 40, y);
-  y += 18;
+  const nextDue = data.nextDue ? (data.nextDue instanceof Date ? data.nextDue : new Date(data.nextDue)) : addMonths(new Date(data.date),3);
+  doc.setFontSize(10);
+  doc.text(`Next Recommended HbA1c Lab Due Date: ${fmt(nextDue)} (Every 3 months)`, 40, y);
+  y += 14;
+
   if (data?.generalNote){
-    doc.setFont('Helvetica','bold'); doc.text('General Notes:', 40, y); y+=14;
+    doc.setFont('Helvetica','bold'); doc.text('Physician Recommendations & Notes:', 40, y); y+=12;
     doc.setFont('Helvetica','normal'); doc.text(String(data.generalNote), 40, y, {maxWidth:515});
   }
 
@@ -313,20 +404,266 @@ async function openPdf(labId, childName, data){
   window.open(url, '_blank');
 }
 
-async function loadHistory(uid, childId, childName){
-  if(!historyBody) return;
-  const lref = collection(db, `parents/${uid}/children/${childId}/labs`);
-  const qy = query(lref, orderBy('when','desc'), limit(20));
-  const sn = await getDocs(qy);
+// ============================================================
+// لوحة المتابعة الدورية + منحنى تطور السكر التراكمي
+// ============================================================
+function renderDueTracker(allDocs) {
+  const grid = $('dueGrid');
+  if(!grid) return;
 
-  historyBody.innerHTML = '';
-  if (sn.empty){
-    historyBody.innerHTML = `<tr><td colspan="4" class="muted" style="text-align: center; padding: 20px;">لا توجد سجلات سابقة</td></tr>`;
+  const now = new Date();
+
+  // استخراج أحدث فحص مسجل لكل تصنيف سريري
+  let latest = {
+    hba1c: null,
+    thyroid: null,
+    celiac: null,
+    renal: null,
+    lipid: null,
+    preventive: null
+  };
+
+  allDocs.forEach(d => {
+    const w = d.when?.toDate ? d.when.toDate() : (d.date ? new Date(d.date) : null);
+    if(!w || isNaN(w)) return;
+
+    if(d.hba1c?.value != null && (!latest.hba1c || w > latest.hba1c.date)) {
+      latest.hba1c = { date: w, val: `${d.hba1c.value}%`, note: d.hba1c.note };
+    }
+    if((d.thyroid?.tsh != null || d.thyroid?.ft4 != null) && (!latest.thyroid || w > latest.thyroid.date)) {
+      latest.thyroid = { date: w, val: `TSH: ${d.thyroid?.tsh ?? '—'}`, note: d.thyroid?.note };
+    }
+    if((d.celiac?.ttg != null || d.celiac?.result) && (!latest.celiac || w > latest.celiac.date)) {
+      latest.celiac = { date: w, val: d.celiac.result === 'negative' ? 'سلبي (سليم) ✅' : (d.celiac.ttg != null ? `${d.celiac.ttg} U/mL` : 'مسجل'), note: d.celiac.note };
+    }
+    if((d.renal?.microalb_creat != null || d.renal?.creatinine != null) && (!latest.renal || w > latest.renal.date)) {
+      latest.renal = { date: w, val: `الزلال: ${d.renal?.microalb_creat ?? '—'} mg/g`, note: d.renal?.note };
+    }
+    if((d.lipid?.tc != null || d.lipid?.ldl != null) && (!latest.lipid || w > latest.lipid.date)) {
+      latest.lipid = { date: w, val: `الكولسترول: ${d.lipid?.tc ?? '—'} mg/dL`, note: d.lipid?.note };
+    }
+    if((d.preventive?.eye_status || d.preventive?.foot_status) && (!latest.preventive || w > latest.preventive.date)) {
+      latest.preventive = { date: w, val: d.preventive.eye_status === 'normal' ? 'فحص العيون سليم ✅' : 'متابع', note: d.preventive.eye_note };
+    }
+  });
+
+  const categories = [
+    { key: 'hba1c', name: 'السكر التراكمي (HbA1c)', icon: '🩸', intervalDays: 90, freqText: 'كل 3 أشهر', target: 'الهدف: < 7.0%' },
+    { key: 'thyroid', name: 'وظائف الغدة الدرقية', icon: '🦋', intervalDays: 365, freqText: 'فحص سنوي', target: 'TSH / FT4' },
+    { key: 'celiac', name: 'حساسية القمح (Celiac)', icon: '🌾', intervalDays: 365, freqText: 'فحص سنوي', target: 'Anti-tTG IgA' },
+    { key: 'renal', name: 'زلال البول ووظائف الكلى', icon: '🧪', intervalDays: 365, freqText: 'فحص سنوي', target: 'Microalbumin / Creatinine' },
+    { key: 'lipid', name: 'دهون الدم (Lipid Profile)', icon: '🫀', intervalDays: 365, freqText: 'فحص سنوي', target: 'TC, LDL, HDL, TG' },
+    { key: 'preventive', name: 'قاع العين والأسنان', icon: '👁️', intervalDays: 365, freqText: 'فحص سنوي', target: 'كشف وقائي سريري' }
+  ];
+
+  let overdueCount = 0;
+  let warnCount = 0;
+
+  const html = categories.map(cat => {
+    const item = latest[cat.key];
+    let badgeClass = 'empty', badgeText = 'غير مسجل ⚪', subText = 'لم يُسجل أي فحص مسبقاً';
+    let cardClass = '';
+
+    if (item && item.date) {
+      const daysSince = Math.floor((now - item.date) / (1000 * 60 * 60 * 24));
+      const remaining = cat.intervalDays - daysSince;
+
+      if (remaining < 0) {
+        badgeClass = 'danger';
+        cardClass = 'danger';
+        badgeText = 'مستحق الآن 🚨';
+        subText = `متأخر منذ ${Math.abs(remaining)} يوم (آخر فحص: ${fmt(item.date)})`;
+        overdueCount++;
+      } else if (remaining <= 30) {
+        badgeClass = 'warn';
+        cardClass = 'warn';
+        badgeText = 'مستحق قريباً ⚠️';
+        subText = `متبقي ${remaining} يوم (آخر فحص: ${fmt(item.date)})`;
+        warnCount++;
+      } else {
+        badgeClass = 'ok';
+        cardClass = 'ok';
+        badgeText = 'مكتمل حديثاً 🟢';
+        subText = `متبقي ${remaining} يوم (آخر فحص: ${fmt(item.date)})`;
+      }
+    } else {
+      overdueCount++;
+    }
+
+    return `
+      <div class="due-card ${cardClass}">
+        <div class="dc-head">
+          <div class="dc-title">
+            <span>${cat.icon}</span> ${cat.name}
+          </div>
+          <span class="dc-badge ${badgeClass}">${badgeText}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span class="dc-freq">${cat.freqText}</span>
+          <span style="font-size:11.5px; color:#2563eb; font-weight:600;">${cat.target}</span>
+        </div>
+        <div class="dc-body">
+          <div>آخر نتيجة: <b>${item ? item.val : 'لا توجد بيانات'}</b></div>
+          <div class="tiny" style="color:#64748b;">${subText}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  grid.innerHTML = html;
+
+  const summary = $('dueSummaryBadge');
+  if(summary) {
+    if(overdueCount > 0) {
+      summary.className = 'pill tiny danger';
+      summary.textContent = `${overdueCount} فحوصات مستحقة 🚨`;
+    } else if(warnCount > 0) {
+      summary.className = 'pill tiny warn';
+      summary.textContent = `${warnCount} فحوصات مستحقة قريباً ⚠️`;
+    } else {
+      summary.className = 'pill tiny ok';
+      summary.textContent = 'جميع الفحوصات مكتملة ومحدثة ✅';
+    }
+  }
+}
+
+function renderHbA1cTrend(allDocs) {
+  const canvas = $('hba1cTrendCanvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  // استخراج القراءات الصالحة فقط وترتيبها تصاعدياً حسب التاريخ
+  const hbaList = [];
+  allDocs.forEach(d => {
+    if(d?.hba1c?.value != null && !isNaN(Number(d.hba1c.value))) {
+      const w = d.when?.toDate ? d.when.toDate() : (d.date ? new Date(d.date) : new Date());
+      hbaList.push({
+        date: fmt(w),
+        val: Number(d.hba1c.value),
+        when: w,
+        note: d.hba1c.note || ''
+      });
+    }
+  });
+
+  hbaList.sort((a,b) => a.when - b.when);
+
+  if (trendChart) {
+    trendChart.destroy();
+    trendChart = null;
+  }
+
+  if(!hbaList.length) {
+    trendChart = new Chart(ctx, {
+      type: 'line',
+      data: { datasets: [] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: 'لا توجد قراءات كافية للسكر التراكمي لعرض المنحنى' }
+        }
+      }
+    });
     return;
   }
 
-  sn.forEach(d=>{
+  const pointColors = hbaList.map(item => {
+    if(item.val < 7.0) return '#16a34a'; // good green
+    if(item.val <= 8.5) return '#f59e0b'; // amber
+    return '#dc2626'; // bad red
+  });
+
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: hbaList.map(x => x.date),
+      datasets: [
+        {
+          label: 'السكر التراكمي (HbA1c %)',
+          data: hbaList.map(x => x.val),
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37, 99, 235, 0.08)',
+          fill: true,
+          tension: 0.3,
+          pointBackgroundColor: pointColors,
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 6,
+          pointHoverRadius: 8
+        },
+        {
+          label: 'الهدف السريري (7.0%)',
+          data: hbaList.map(() => 7.0),
+          borderColor: '#16a34a',
+          borderWidth: 1.5,
+          borderDash: [6, 6],
+          pointRadius: 0,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          min: 4.5,
+          suggestedMax: 11,
+          title: { display: true, text: 'HbA1c (%)', font: { weight: 'bold', size: 11 } },
+          grid: { color: '#f1f5f9' }
+        },
+        x: {
+          grid: { color: '#f1f5f9' },
+          ticks: { font: { size: 11 } }
+        }
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          labels: { boxWidth: 12, font: { size: 11 } }
+        },
+        tooltip: {
+          rtl: true,
+          callbacks: {
+            label: (ctx) => {
+              const item = hbaList[ctx.dataIndex];
+              let res = `HbA1c: ${item.val}%`;
+              if (item.val < 7.0) res += ' (ضمن الهدف السريري ✅)';
+              else res += ' (أعلى من الهدف ⚠️)';
+              if(item.note) res += ` • ملاحظات: ${item.note}`;
+              return res;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+async function loadHistory(uid, childId, childName){
+  if(!historyBody) return;
+  const lref = collection(db, `parents/${uid}/children/${childId}/labs`);
+  const qy = query(lref, orderBy('when','desc'), limit(30));
+  const sn = await getDocs(qy);
+
+  historyBody.innerHTML = '';
+  const allDocs = [];
+
+  if (sn.empty){
+    historyBody.innerHTML = `<tr><td colspan="4" class="muted" style="text-align: center; padding: 20px;">لا توجد سجلات سابقة</td></tr>`;
+    renderDueTracker([]);
+    renderHbA1cTrend([]);
+    return;
+  }
+
+  sn.forEach(d => {
     const v = d.data();
+    v._id = d.id;
+    allDocs.push(v);
+
     const when = v.when?.toDate ? v.when.toDate() : (v.date ? new Date(v.date) : new Date());
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -358,4 +695,7 @@ async function loadHistory(uid, childId, childName){
     });
     historyBody.appendChild(tr);
   });
+
+  renderDueTracker(allDocs);
+  renderHbA1cTrend(allDocs);
 }
