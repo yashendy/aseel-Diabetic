@@ -91,3 +91,112 @@ body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background:
 .spinner { width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .hidden { display: none !important; }
+
+/* ================= لوحة الفرز والمؤشرات المحدثة ================= */
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.stat-box {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.stat-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+}
+.stat-box.primary { border-inline-start: 4px solid var(--secondary); }
+.stat-box.alert { border-inline-start: 4px solid var(--danger); background: #fffbfa; }
+.stat-box.warn { border-inline-start: 4px solid var(--warn); background: #fffdfa; }
+.stat-box.info { border-inline-start: 4px solid #8b5cf6; background: #faf8ff; }
+
+.sb-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.sb-icon { font-size: 20px; }
+.sb-label { font-size: 13.5px; font-weight: bold; color: var(--muted); }
+.sb-sub { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+
+.doc-badge {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+/* Triage Filters */
+.flex-wrap { flex-wrap: wrap; gap: 12px; }
+.triage-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.triage-btn {
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: 0.2s;
+  font-family: inherit;
+}
+.triage-btn:hover { background: #e2e8f0; }
+.triage-btn.active { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
+.triage-btn.danger.active { background: #dc2626; color: #fff; border-color: #dc2626; }
+.triage-btn.warn.active { background: #d97706; color: #fff; border-color: #d97706; }
+.triage-btn.info.active { background: #7c3aed; color: #fff; border-color: #7c3aed; }
+.triage-btn.ok.active { background: #16a34a; color: #fff; border-color: #16a34a; }
+
+/* Table Action Buttons */
+.actions-cell {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.action-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  text-decoration: none;
+  background: #ffffff;
+  color: #1e293b;
+  transition: 0.15s;
+  cursor: pointer;
+}
+.action-link-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+.action-link-btn.primary {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+.action-link-btn.primary:hover {
+  background: #dbeafe;
+}
+.action-link-btn.alt {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border-color: #ddd6fe;
+}
+.action-link-btn.alt:hover {
+  background: #ede9fe;
+}

@@ -3,159 +3,253 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ملف المريض الطّبي</title>
-  <link rel="stylesheet" href="./css/doctor-child.css?v=3" />
-  <link rel="stylesheet" href="./css/doctor-dashboard.css" />
+  <title>محطة رعاية المريض السريرية | بوابة الطبيب</title>
+  <link rel="stylesheet" href="./css/doctor-child.css?v=6" />
   <link rel="icon" href="favicon.ico" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
-  <header class="page-header no-print">
-    <h1>ملف المريض: <span id="childTitle" class="pill" style="color:var(--primary); font-weight:bold;">—</span></h1>
-    <nav class="header-actions">
-      <button id="btnOpenReport" class="btn good">التقرير الذكي 📊</button>
-      <a class="btn ghost" href="doctor-dashboard.html">رجوع للوحة</a>
-    </nav>
-  </header>
-
-  <!-- نظرة الذكاء الاصطناعي السريعة -->
-  <section id="aiQuickLook" class="card ai-card hidden">
-    <div class="ai-header">
-      <span class="ai-icon">🧠</span>
-      <h3>رصد الأنماط السريع (آخر فترة معروضة)</h3>
-    </div>
-    <div id="aiSummary" class="ai-content">جارِ التحليل...</div>
-  </section>
-
-  <!-- بطاقة معلومات المريض -->
-  <section class="card" id="childCard">
-    <div class="card-row">
-      <div><b>الاسم:</b> <span id="c_name">—</span></div>
-      <div><b>العمر:</b> <span id="c_age">—</span></div>
-      <div><b>الجنس:</b> <span id="c_gender">—</span></div>
-      <div><b>الوحدة:</b> <span id="c_unit" class="badge bg-muted">—</span></div>
-    </div>
-    <div class="card-row">
-      <div><b>الهدف (Target):</b> <span id="c_target" style="color:var(--primary); font-weight:bold;">—</span></div>
-      <div><b>CF:</b> <span id="c_cf">—</span></div>
-      <div><b>Basal:</b> <span id="c_basal">—</span></div>
-      <div><b>Bolus:</b> <span id="c_bolus">—</span></div>
-    </div>
-    <div class="card-row muted" style="font-size: 13px;">
-      <div><b>CR فطار:</b> <span id="c_cr_b">—</span></div>
-      <div><b>CR غداء:</b> <span id="c_cr_l">—</span></div>
-      <div><b>CR عشاء:</b> <span id="c_cr_d">—</span></div>
-      <div><b>CR سناك:</b> <span id="c_cr_s">—</span></div>
-    </div>
-  </section>
-
-  <!-- روشتة وتعليمات الطبيب -->
-  <section class="card doc-note-card">
-    <div class="section-head">
-      <h2>📝 تعليمات الطبيب المباشرة للأهل</h2>
-      <button id="btnSaveNote" class="btn primary">إرسال التحديث للأم</button>
-    </div>
-    <textarea id="doctorPrescription" class="input-area" rows="3" placeholder="اكتب تعليماتك هنا (مثال: تم تعديل معامل الكارب للغداء إلى 12، يرجى مراقبة القياسات). ستظهر هذه الرسالة فوراً في لوحة الأم."></textarea>
-  </section>
-
-  <!-- تحكّم الفترة للرسوم البيانية -->
-  <section class="controls no-print">
-    <div class="controls-row">
-      <label>نطاق العرض:</label>
-      <select id="preset" class="input">
-        <option value="7">آخر 7 أيام</option>
-        <option value="14" selected>آخر 14 يوم</option>
-        <option value="30">آخر 30 يوم</option>
-      </select>
-      <button id="runData" class="btn secondary ml8">تحديث البيانات</button>
-      <button id="exportCsv" class="btn ghost ml8">تصدير CSV</button>
-    </div>
-  </section>
-
-  <!-- التحليلات السريعة (TIR) -->
-  <section class="card">
-    <h2>نسبة الوقت في النطاق (TIR)</h2>
-    <div class="analytics">
-      <div class="chart-box"><canvas id="doughnutChart"></canvas></div>
-      <div class="badges" id="analysisNumbers" style="flex-direction: column; gap:10px;">
-        <!-- ستملأ برمجياً -->
+  <!-- شريط التنقل الموحد لمحطة عمل الطبيب -->
+  <header class="doc-workstation-topbar no-print">
+    <div class="topbar-right">
+      <div class="patient-avatar" id="patientAvatar">أ</div>
+      <div class="patient-header-info">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <h2 id="patientName" style="margin:0; font-size:18px; color:#fff;">جاري التحميل...</h2>
+          <span class="badge-tag" id="patientRegimen">حقن MDI</span>
+        </div>
+        <span id="patientMeta" class="muted-text tiny">—</span>
       </div>
     </div>
-  </section>
 
-  <!-- القياسات والوجبات (مدمجة في جدول واحد لسهولة القراءة) -->
-  <section class="card">
-    <h2>سجل القياسات والوجبات</h2>
-    <div class="table-wrap">
-      <table class="grid">
-        <thead>
-          <tr>
-            <th>التاريخ والوقت</th>
-            <th>النوع</th>
-            <th>السكر</th>
-            <th>الحالة</th>
-            <th>الكارب</th>
-            <th>جرعة الإنسولين</th>
-            <th>ملاحظات</th>
-          </tr>
-        </thead>
-        <tbody id="combinedRows">
-          <tr><td colspan="7" class="empty">جارِ التحميل...</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
+    <!-- أزرار التنقل السريرية الخاصة بالطبيب للوصول لكافة صفحات المريض -->
+    <nav class="doctor-nav-pills">
+      <a href="#" class="doc-pill active" id="navDocStation">🩺 المحطة السريرية</a>
+      <a href="#" class="doc-pill" id="navDocReports" target="_blank">📈 تقرير الـ AGP</a>
+      <a href="#" class="doc-pill" id="navDocLabs" target="_blank">🔬 التحاليل المخبرية</a>
+      <a href="#" class="doc-pill" id="navDocVisits" target="_blank">🩺 الزيارات والنمو</a>
+      <a href="#" class="doc-pill" id="navDocMeals" target="_blank">🍽️ سجل الوجبات</a>
+    </nav>
 
-  <!-- محرر الإعدادات الطبية (العيادة) -->
-  <section class="card medical-settings">
-    <h2>⚙️ التعديل الطبي لبروتوكول العلاج</h2>
-    
-    <h3 class="sub-title">1. النطاقات المستهدفة (الوحدة الحالية: <span id="lblUnit"></span>)</h3>
-    <div class="form-grid">
-      <label>الهدف المثالي (Target) <input id="f_target" type="number" step="0.1"/></label>
-      <label class="alert-bg">هبوط حرج 🚨 <input id="f_critLow" type="number" step="0.1"/></label>
-      <label class="warn-bg">هبوط ↓ <input id="f_low" type="number" step="0.1"/></label>
-      <label class="warn-bg">ارتفاع ↑ <input id="f_high" type="number" step="0.1"/></label>
-      <label class="alert-bg">ارتفاع حرج 🚨 <input id="f_critHigh" type="number" step="0.1"/></label>
+    <div class="topbar-left">
+      <a href="doctor-dashboard.html" class="btn-back-clinic">🏠 رجوع للوحة العيادة</a>
     </div>
+  </header>
 
-    <h3 class="sub-title mt-15">2. معاملات الجرعات (CF & CR)</h3>
-    <div class="form-grid">
-      <label>معامل التصحيح (CF) <input id="f_cf" type="number" step="0.1"/></label>
-      <label>CR (فطار) <input id="f_cr_b" type="number" step="0.1"/></label>
-      <label>CR (غداء) <input id="f_cr_l" type="number" step="0.1"/></label>
-      <label>CR (عشاء) <input id="f_cr_d" type="number" step="0.1"/></label>
-      <label>CR (سناك) <input id="f_cr_s" type="number" step="0.1"/></label>
-    </div>
+  <!-- مسار التنقل -->
+  <div class="breadcrumbs no-print">
+    <a href="doctor-dashboard.html">عيادتي (قائمة المرضى) 👨‍⚕️</a> <span>›</span> <b id="breadPatientName">المريض</b> <span>›</span> <b>محطة المتابعة والذكاء الاصطناعي السريري 🧠</b>
+  </div>
 
-    <h3 class="sub-title mt-15">3. أنواع الإنسولين</h3>
-    <div class="form-grid">
-      <label>القاعدي (Basal) <input id="f_basal" type="text"/></label>
-      <label>البلعة (Bolus) <input id="f_bolus" type="text"/></label>
-    </div>
+  <div class="container">
 
-    <h3 class="sub-title mt-15">4. فحص أماكن الحقن (Clinical Injection Map) 🧍‍♂️</h3>
-    <p class="muted" style="font-size:13px;">حددي حالة الجلد ليقوم النظام بتنبيه الأم وقت حساب الوجبة للابتعاد عن مناطق التكتل.</p>
-    <div class="injection-grid">
-      <label>البطن يمين علوي <select id="inj_abd_top_right"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
-      <label>البطن يسار علوي <select id="inj_abd_top_left"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
-      <label>البطن يمين سفلي <select id="inj_abd_bottom_right"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
-      <label>البطن يسار سفلي <select id="inj_abd_bottom_left"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
-      <label>الذراع الأيمن <select id="inj_arm_right"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
-      <label>الذراع الأيسر <select id="inj_arm_left"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
-      <label>الفخذ الأيمن <select id="inj_thigh_right"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
-      <label>الفخذ الأيسر <select id="inj_thigh_left"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
-    </div>
+    <!-- 1. محرك الذكاء الاصطناعي السريري المتقدم (Clinical AI Pattern Engine) -->
+    <section class="card ai-engine-card">
+      <div class="section-head">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="ai-spark-icon">🧠</span>
+          <div>
+            <h2 style="margin:0; color:#1e3a8a;">محرك الذكاء الاصطناعي السريري (Clinical AI Engine)</h2>
+            <span class="tiny muted">رصد الأنماط الطبية المعقدة، التذبذبات، وتوصيات ضبط الجرعات ومعاملات الكارب</span>
+          </div>
+        </div>
+        <button id="btnReanalyzeAI" class="btn secondary sm">🔄 إعادة التحليل</button>
+      </div>
 
-    <div class="actions" style="margin-top: 20px; justify-content: flex-end;">
-      <span id="saveStatus" class="status"></span>
-      <button id="btnSaveMedical" class="btn good" style="font-size: 16px; padding: 12px 24px;">💾 حفظ البروتوكول الطبي</button>
-    </div>
-  </section>
+      <div id="aiPatternsGrid" class="ai-patterns-grid">
+        <div class="tiny muted" style="padding:20px; text-align:center;">جاري تحليل القراءات والوجبات والأنماط...</div>
+      </div>
+    </section>
+
+    <!-- 2. لوحة المؤشرات السريرية المعيارية (ADA / ISPAD Clinical Standards) -->
+    <section class="card clinical-summary-card">
+      <div class="section-head">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:20px;">🎯</span>
+          <div>
+            <h2 style="margin:0; font-size:16px;">المؤشرات الحيوية المعيارية (Clinical Targets)</h2>
+            <span class="tiny muted">ملخص الفترة الحالية وفق توصيات الجمعية الأمريكية والمنظمة الدولية لسكري الأطفال</span>
+          </div>
+        </div>
+        <div class="controls-row">
+          <label class="tiny">الفترة:</label>
+          <select id="preset" class="input sm">
+            <option value="7">آخر 7 أيام</option>
+            <option value="14" selected>آخر 14 يوم</option>
+            <option value="30">آخر شهر</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="clinical-metrics-grid">
+        <div class="metric-box tir-box">
+          <span class="mb-title">🎯 داخل النطاق (TIR)</span>
+          <b class="mb-val" id="mTIR">—</b>
+          <span class="mb-target">الهدف: &gt; 70%</span>
+        </div>
+        <div class="metric-box tbr-box">
+          <span class="mb-title">⬇️ انخفاض (TBR)</span>
+          <b class="mb-val" id="mTBR">—</b>
+          <span class="mb-target">الهدف: &lt; 4%</span>
+        </div>
+        <div class="metric-box tar-box">
+          <span class="mb-title">⬆️ ارتفاع (TAR)</span>
+          <b class="mb-val" id="mTAR">—</b>
+          <span class="mb-target">الهدف: &lt; 25%</span>
+        </div>
+        <div class="metric-box gmi-box">
+          <span class="mb-title">🧪 التراكمي التقديري (GMI)</span>
+          <b class="mb-val" id="mGMI">—</b>
+          <span class="mb-target">Bergenstal 2018</span>
+        </div>
+        <div class="metric-box cv-box">
+          <span class="mb-title">⚡ التباين والتذبذب (CV%)</span>
+          <b class="mb-val" id="mCV">—</b>
+          <span class="mb-target">الهدف: &le; 36%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. كارت طلب الفحوصات والتحاليل المباشر من الطبيب (Lab Ordering System) -->
+    <section class="card lab-order-card">
+      <div class="section-head">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:20px;">🔬</span>
+          <div>
+            <h2 style="margin:0; font-size:16px;">طلب فحوصات وتحاليل طبية للطفل (Prescribe Labs)</h2>
+            <span class="tiny muted">حدد الفحوصات المطلوبة لإرسال تنبيه مباشر للأم ومزامنتها مع سجل التحاليل والزيارات</span>
+          </div>
+        </div>
+        <button id="btnSendLabOrder" class="btn good sm">📨 إرسال طلب الفحوصات للأسرة</button>
+      </div>
+
+      <div class="lab-checkboxes-grid">
+        <label class="lab-check-label"><input type="checkbox" value="HbA1c (السكر التراكمي)" class="lab-order-item" checked> 🩸 HbA1c (السكر التراكمي)</label>
+        <label class="lab-check-label"><input type="checkbox" value="وظائف الغدة الدرقية (TSH/FT4)" class="lab-order-item"> 🦋 وظائف الغدة الدرقية</label>
+        <label class="lab-check-label"><input type="checkbox" value="حساسية القمح (Anti-tTG IgA)" class="lab-order-item"> 🌾 حساسية القمح (Celiac)</label>
+        <label class="lab-check-label"><input type="checkbox" value="زلال البول الدقيق (Microalbumin)" class="lab-order-item"> 🧪 زلال البول والكلى</label>
+        <label class="lab-check-label"><input type="checkbox" value="دهون الدم (Lipid Profile)" class="lab-order-item"> 🫀 دهون الدم الشاملة</label>
+        <label class="lab-check-label"><input type="checkbox" value="فحص قاع العين السنوي" class="lab-order-item"> 👁️ فحص قاع العين السنوي</label>
+      </div>
+      <div style="margin-top:10px;">
+        <input type="text" id="labOrderNote" class="input full-width" placeholder="ملاحظات أو توجيهات خاصة بالتحاليل (مثال: صيام 8 ساعات قبل فحص دهون الدم)...">
+      </div>
+    </section>
+
+    <!-- 4. محرر الإعدادات والبروتوكول الطبي وخريطة الحقن -->
+    <section class="card medical-settings-card">
+      <div class="section-head">
+        <div>
+          <h2 style="margin:0; color:#1e3a8a;">⚙️ بروتوكول العلاج الطبي وضبط الجرعات</h2>
+          <span class="tiny muted">تعديل معاملات الكارب، معامل التصحيح، جرعات الإنسولين، وخريطة أماكن الحقن</span>
+        </div>
+        <button id="btnSaveMedical" class="btn good">💾 حفظ واعتماد البروتوكول وتوثيقه</button>
+      </div>
+
+      <!-- روشتة الطبيب المباشرة للأم -->
+      <div class="prescription-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <h4 style="margin:0; color:#1d4ed8; font-size:14px;">📝 روشتة وتعليمات الطبيب المباشرة لولي الأمر</h4>
+          <span class="tiny" style="color:#2563eb; font-weight:bold;">تظهر فوراً في لوحة الأم والطفل ⚡</span>
+        </div>
+        <textarea id="doctorPrescription" class="input-area" rows="3" placeholder="اكتب تعليماتك وتوجيهاتك للأسرة هنا (مثال: تم تعديل معامل الغداء، يرجى الالتزام بقياس السكر بعد الوجبة بساعتين والابتعاد عن الذراع الأيمن لوجود تكتل)..."></textarea>
+      </div>
+
+      <div class="settings-grid">
+        <!-- النطاقات المستهدفة -->
+        <div class="sub-card">
+          <h4>🎯 النطاقات والحدود (الوحدة: <span id="lblUnit">mg/dL</span>)</h4>
+          <div class="grid-2-col">
+            <label class="field"><span>الهدف المثالي (Target)</span><input id="f_target" type="number" step="0.1"/></label>
+            <label class="field alert-bg"><span>هبوط حرج 🚨</span><input id="f_critLow" type="number" step="0.1"/></label>
+            <label class="field warn-bg"><span>هبوط ↓</span><input id="f_low" type="number" step="0.1"/></label>
+            <label class="field warn-bg"><span>ارتفاع ↑</span><input id="f_high" type="number" step="0.1"/></label>
+            <label class="field alert-bg"><span>ارتفاع حرج 🚨</span><input id="f_critHigh" type="number" step="0.1"/></label>
+          </div>
+        </div>
+
+        <!-- المعاملات الطبية -->
+        <div class="sub-card">
+          <h4>💧 معاملات الجرعات (CF & CR)</h4>
+          <div class="grid-2-col">
+            <label class="field"><span>معامل التصحيح (CF)</span><input id="f_cf" type="number" step="0.1"/></label>
+            <label class="field"><span>CR فطار</span><input id="f_cr_b" type="number" step="0.1"/></label>
+            <label class="field"><span>CR غداء</span><input id="f_cr_l" type="number" step="0.1"/></label>
+            <label class="field"><span>CR عشاء</span><input id="f_cr_d" type="number" step="0.1"/></label>
+            <label class="field"><span>CR سناك</span><input id="f_cr_s" type="number" step="0.1"/></label>
+          </div>
+        </div>
+
+        <!-- أنواع الإنسولين -->
+        <div class="sub-card">
+          <h4>💉 خطة الإنسولين المعتمدة</h4>
+          <div class="grid-2-col">
+            <label class="field"><span>الإنسولين القاعدي (Basal)</span><input id="f_basal" type="text" placeholder="تريسيبا / لانتوس"/></label>
+            <label class="field"><span>الإنسولين السريع (Bolus)</span><input id="f_bolus" type="text" placeholder="نوفورابيد / هيومالوج"/></label>
+          </div>
+        </div>
+
+        <!-- خريطة الحقن -->
+        <div class="sub-card">
+          <h4>🧍‍♂️ خريطة أماكن الحقن والتكتلات (Injection Map)</h4>
+          <p class="tiny muted" style="margin:0 0 8px 0;">حدد مناطق التكتل لتنبيه الأسرة بالابتعاد عنها فترة التعافي.</p>
+          <div class="injection-grid">
+            <label class="field"><span>البطن يمين علوي</span><select id="inj_abd_top_right"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
+            <label class="field"><span>البطن يسار علوي</span><select id="inj_abd_top_left"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
+            <label class="field"><span>البطن يمين سفلي</span><select id="inj_abd_bottom_right"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
+            <label class="field"><span>البطن يسار سفلي</span><select id="inj_abd_bottom_left"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
+            <label class="field"><span>الذراع الأيمن</span><select id="inj_arm_right"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
+            <label class="field"><span>الذراع الأيسر</span><select id="inj_arm_left"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
+            <label class="field"><span>الفخذ الأيمن</span><select id="inj_thigh_right"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
+            <label class="field"><span>الفخذ الأيسر</span><select id="inj_thigh_left"><option value="normal">سليم ✅</option><option value="lump">تكتل دهني 🚨</option><option value="rest">فترة إراحة ⏸</option></select></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- سجل التعديلات التاريخي للجرعات (Regimen History & Audit Trail) -->
+      <div class="history-audit-box" style="margin-top:20px; border-top:1px dashed #e2e8f0; padding-top:15px;">
+        <h4 style="margin:0 0 10px 0; color:#475569; font-size:14px;">📜 سجل تعديلات الجرعات والبروتوكول السابقة (Audit Trail)</h4>
+        <div id="regimenHistoryList" class="history-list">
+          <div class="tiny muted">جاري جلب سجل التعديلات التاريخية...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. جدول القياسات والوجبات المدمج -->
+    <section class="card readings-card">
+      <div class="section-head">
+        <div>
+          <h2 style="margin:0;">سجل القياسات والوجبات التفصيلي</h2>
+          <span class="tiny muted">استعراض قراءات الفترة المحددة مع تفاصيل الكارب وجرعات الإنسولين</span>
+        </div>
+        <button id="exportCsv" class="btn secondary sm">⬇️ تصدير CSV</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="grid">
+          <thead>
+            <tr>
+              <th>التاريخ والوقت</th>
+              <th>الفترة / التوقيت</th>
+              <th>مستوى الجلوكوز</th>
+              <th>الحالة السريرية</th>
+              <th>الكاربوهيدرات</th>
+              <th>جرعة الإنسولين</th>
+              <th>ملاحظات وعلاج</th>
+            </tr>
+          </thead>
+          <tbody id="combinedRows">
+            <tr><td colspan="7" class="empty">جارِ التحميل...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
 
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="./js/doctor-child.js?v=4"></script>
+  <script type="module" src="./js/doctor-child.js?v=6"></script>
 </body>
 </html>

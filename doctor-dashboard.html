@@ -3,9 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>لوحة الطبيب | منصة أسيل</title>
-  <!-- تم تصحيح المسار هنا -->
-  <link rel="stylesheet" href="./css/doctor-dashboard.css" />
+  <title>بوابة الطبيب والعيادة الذكية | منصة أسيل</title>
+  <link rel="stylesheet" href="./css/doctor-dashboard.css?v=5" />
   <link rel="icon" href="favicon.ico" />
 </head>
 <body>
@@ -15,62 +14,93 @@
     <div class="brand-area">
       <span class="icon">🩺</span>
       <div class="titles">
-        <h1 style="margin: 0; font-size: 18px; color: #fff;">بوابة الأطباء (Doctor Portal)</h1>
-        <p style="margin: 0; font-size: 12px; color: #bfdbfe;">متابعة وتوجيه المرضى لحظياً</p>
+        <h1 style="margin: 0; font-size: 18px; color: #fff;">بوابة الأطباء والعيادة الذكية (Doctor Portal)</h1>
+        <p style="margin: 0; font-size: 12px; color: #bfdbfe;">المتابعة السريرية والفرز الذكي للمرضى وفق معايير ADA / ISPAD</p>
       </div>
     </div>
-    <nav class="doctor-nav">
-      <a href="#" class="nav-btn active">المرضى والتقارير</a>
-      <a href="#" class="nav-btn">الرسائل (قريباً)</a>
-    </nav>
     <div class="doctor-profile">
-      <span id="doctorName">د. جاري التحميل...</span>
-      <button id="btnLogout" class="btn danger sm">🚪 خروج</button>
+      <span class="doc-badge" id="doctorName">د. جاري التحميل...</span>
+      <button id="btnLogout" class="btn danger sm">🚪 تسجيل خروج</button>
     </div>
   </header>
 
   <div class="container" id="doctorDashboard">
     <div class="dashboard-actions no-print">
-      <button id="btnRefresh" class="btn secondary">🔄 تحديث البيانات</button>
+      <button id="btnRefresh" class="btn secondary">🔄 تحديث البيانات فورياً</button>
     </div>
 
-    <div class="dashboard-grid">
-      <!-- كارت أكواد الربط -->
-      <section class="card codes-card">
-        <div class="section-head">
-          <h2>🔗 أكواد الربط بالمرضى</h2>
-          <button id="btnCreateCode" class="btn good sm">➕ إنشاء كود جديد</button>
+    <!-- شبكة المؤشرات العيادية وإحصاءات الفرز (Clinical Triage) -->
+    <div class="stats-overview">
+      <div class="stat-box primary">
+        <div class="sb-head">
+          <span class="sb-icon">👥</span>
+          <span class="sb-label">إجمالي المرضى</span>
         </div>
-        <p class="muted tiny" style="margin-top:0;">أعطِ هذا الكود لولي الأمر لربط حساب طفله بملفك الطبي.</p>
-        <div id="codesList" class="list codes-scroll">
-          <div class="empty">لا توجد أكواد نشطة.</div>
-        </div>
-      </section>
+        <span class="stat-num" id="totalPatients">0</span>
+        <span class="sb-sub">أطفال مسندين لملفك</span>
+      </div>
 
-      <!-- كارت الإحصائيات -->
-      <section class="card stats-card">
-        <div class="section-head">
-          <h2>📊 نظرة عامة</h2>
+      <div class="stat-box alert">
+        <div class="sb-head">
+          <span class="sb-icon">🚨</span>
+          <span class="sb-label">حالات حرجة اليوم</span>
         </div>
-        <div class="stats-grid">
-          <div class="stat-box">
-            <span class="stat-num" id="totalPatients">0</span>
-            <span class="stat-label">إجمالي المرضى</span>
-          </div>
-          <div class="stat-box alert">
-            <span class="stat-num" id="criticalPatients">0</span>
-            <span class="stat-label">حالات حرجة اليوم</span>
-          </div>
+        <span class="stat-num" id="criticalPatients">0</span>
+        <span class="sb-sub">هبوط حاد &lt;54 أو ارتفاع &gt;250</span>
+      </div>
+
+      <div class="stat-box warn">
+        <div class="sb-head">
+          <span class="sb-icon">⚠️</span>
+          <span class="sb-label">بحاجة لمتابعة</span>
         </div>
-      </section>
+        <span class="stat-num" id="attentionPatients">0</span>
+        <span class="sb-sub">ضعف TIR أو تذبذب عالي</span>
+      </div>
+
+      <div class="stat-box info">
+        <div class="sb-head">
+          <span class="sb-icon">🔬</span>
+          <span class="sb-label">فحوصات مستحقة</span>
+        </div>
+        <span class="stat-num" id="dueLabsPatients">0</span>
+        <span class="sb-sub">تراكمي أو فحوصات سنوية</span>
+      </div>
     </div>
 
-    <!-- قائمة الأطفال (المرضى) -->
-    <section class="card mt-20">
+    <!-- بطاقة أكواد الربط ومشاركة العيادة -->
+    <div class="card codes-card mt-20 no-print">
       <div class="section-head">
-        <h2>أطفالي (المرضى المتابعين)</h2>
+        <h2>🔗 أكواد ربط المرضى بالعيادة</h2>
+        <button id="btnCreateCode" class="btn good sm">➕ توليد كود ربط جديد</button>
+      </div>
+      <p class="muted tiny" style="margin-top:0;">
+        أعطِ هذا الكود لولي الأمر لربط ملف طفله بعيادتك الطبية فوراً وبشكل آمن.
+      </p>
+      <div id="codesList" class="codes-scroll">
+        <div class="empty">لا توجد أكواد نشطة.</div>
+      </div>
+    </div>
+
+    <!-- لوحة جدول المرضى والفرز السريري -->
+    <section class="card mt-20">
+      <div class="section-head flex-wrap">
+        <div>
+          <h2>👨‍⚕️ قائمة المرضى والمتابعة السريرية</h2>
+          <span class="tiny muted">اضغط على أي مريض للوصول المباشر لمحطة علاجه والتقارير</span>
+        </div>
+        
+        <!-- فلاتر الفرز السريري -->
+        <div class="triage-filters">
+          <button class="triage-btn active" data-filter="all">الكل (<span id="countAll">0</span>)</button>
+          <button class="triage-btn danger" data-filter="crit">🚨 حرجة (<span id="countCrit">0</span>)</button>
+          <button class="triage-btn warn" data-filter="attention">⚠️ بحاجة لمتابعة (<span id="countAtt">0</span>)</button>
+          <button class="triage-btn info" data-filter="labs">🔬 تحاليل مستحقة (<span id="countLabs">0</span>)</button>
+          <button class="triage-btn ok" data-filter="ok">🟢 مستقرة (<span id="countOk">0</span>)</button>
+        </div>
+
         <div class="inline">
-          <input id="childSearch" class="input" type="search" placeholder="ابحث باسم المريض…" style="width:250px;" />
+          <input id="childSearch" class="input" type="search" placeholder="ابحث باسم المريض أو الملاحظات…" style="width:240px;" />
           <span class="badge badge-primary" id="childrenCount">—</span>
         </div>
       </div>
@@ -80,27 +110,28 @@
           <thead>
             <tr>
               <th>اسم المريض</th>
-              <th>العمر</th>
-              <th>الوحدة</th>
-              <th>آخر قراءة</th>
-              <th>حالة القياس</th>
-              <th style="text-align: center;">الإجراءات الطبية</th>
+              <th>العمر والنظام</th>
+              <th>آخر قراءة مسجلة</th>
+              <th>مؤشر النطاق (7 أيام)</th>
+              <th>الفحوصات المخبرية</th>
+              <th style="text-align: center;">الإجراءات السريرية المباشرة</th>
             </tr>
           </thead>
           <tbody id="childrenTbody">
-            <tr><td class="empty" colspan="6">جارِ تحميل بيانات المرضى…</td></tr>
+            <tr><td class="empty" colspan="6">جارِ تحميل بيانات المرضى من قاعدة البيانات…</td></tr>
           </tbody>
         </table>
       </div>
     </section>
   </div>
 
-  <!-- النافذة المنبثقة: الملف الطبي وإغلاق الدائرة -->
+  <!-- النافذة المنبثقة: التعديل السريع لبروتوكول العلاج -->
   <dialog id="medical-modal" class="dialog">
     <form id="medical-form" method="dialog">
       <div class="dialog-header">
         <div>
-          <h3 id="patientNameTitle" style="margin:0; color:#1e3a8a;">ملف المريض</h3>
+          <h3 id="patientNameTitle" style="margin:0; color:#1e3a8a;">ملف المريض والجرعات</h3>
+          <span class="tiny muted">تعديل معاملات الكارب، التصحيح، والروشتة المباشرة</span>
         </div>
         <button id="modal-close" class="icon-btn" type="button">✕</button>
       </div>
@@ -116,31 +147,31 @@
             <div class="section-card">
               <h4>⚙️ المعاملات الطبية (Dosing Rules)</h4>
               <div class="grid-2-mini">
-                <label class="field"><span>الهدف (Target BG)</span><input id="targetBg" type="number" required></label>
-                <label class="field"><span>معامل التصحيح (CF)</span><input id="cfVal" type="number" required></label>
+                <label class="field"><span>الهدف (Target BG)</span><input id="targetBg" type="number" step="0.1" required></label>
+                <label class="field"><span>معامل التصحيح (CF)</span><input id="cfVal" type="number" step="0.1" required></label>
               </div>
               <hr style="border-top:1px dashed #cbd5e1; margin:12px 0;">
               <strong>معاملات الكارب (CR) للوجبات:</strong>
               <div class="grid-2-mini mt-10">
-                <label class="field"><span>الفطور</span><input id="crBreakfast" type="number" required></label>
-                <label class="field"><span>الغداء</span><input id="crLunch" type="number" required></label>
-                <label class="field"><span>العشاء</span><input id="crDinner" type="number" required></label>
-                <label class="field"><span>السناك</span><input id="crSnack" type="number" required></label>
+                <label class="field"><span>الفطور</span><input id="crBreakfast" type="number" step="0.1" required></label>
+                <label class="field"><span>الغداء</span><input id="crLunch" type="number" step="0.1" required></label>
+                <label class="field"><span>العشاء</span><input id="crDinner" type="number" step="0.1" required></label>
+                <label class="field"><span>السناك</span><input id="crSnack" type="number" step="0.1" required></label>
               </div>
             </div>
 
             <div class="section-card" style="background:#eff6ff; border-color:#bfdbfe;">
-              <h4>👨‍⚕️ روشتة الطبيب المباشرة</h4>
-              <p class="muted tiny" style="margin-bottom:8px;">تظهر هذه التعليمات فوراً كشريط تحذيري في لوحة الأم.</p>
-              <textarea id="doctorNote" rows="3" placeholder="اكتب تعليماتك هنا..."></textarea>
+              <h4>👨‍⚕️ روشتة وتعليمات الطبيب المباشرة للأم</h4>
+              <p class="muted tiny" style="margin-bottom:8px;">تظهر هذه التعليمات فوراً كشريط تنبيه مميز في لوحة الأم والطفل.</p>
+              <textarea id="doctorNote" rows="3" placeholder="اكتب تعليماتك وتوجيهاتك للأهل هنا..."></textarea>
             </div>
           </div>
 
           <!-- العمود الثاني: خريطة الحقن -->
           <div class="col">
             <div class="section-card">
-              <h4>🧍‍♂️ خريطة أماكن الحقن (Injection Map)</h4>
-              <p class="muted tiny">حدد أماكن التكتل لمنع الأم من الحقن فيها.</p>
+              <h4>🧍‍♂️ خريطة أماكن الحقن (Clinical Injection Map)</h4>
+              <p class="muted tiny">حدد مناطق التكتل لتنبيه الأسرة بالابتعاد عنها فترة التعافي.</p>
               
               <div class="injection-grid">
                 <label class="field"><span>الذراع الأيمن</span><select id="inj_arm_right"><option value="ok">✅ سليم</option><option value="lump">🚨 تكتل دهني</option><option value="rest">⏸️ فترة إراحة</option></select></label>
@@ -160,17 +191,17 @@
         </div>
       </div>
       <div class="dialog-footer">
-        <button type="button" id="btn-view-reports" class="btn alt">📊 فتح التقرير الذكي للمريض</button>
+        <button type="button" id="btn-view-workstation" class="btn primary">🩺 فتح المحطة السريرية للمريض</button>
+        <button type="button" id="btn-view-reports" class="btn alt">📊 تقرير الـ AGP</button>
         <div style="flex:1"></div>
         <button class="btn ghost" type="button" id="btn-cancel">إلغاء</button>
-        <button id="btn-save-medical" class="btn primary" type="submit">💾 اعتماد وتحديث البروتوكول</button>
+        <button id="btn-save-medical" class="btn good" type="submit">💾 اعتماد وتحديث البروتوكول</button>
       </div>
     </form>
   </dialog>
 
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
-  <!-- تم تصحيح المسار هنا أيضاً -->
-  <script type="module" src="./js/doctor-dashboard.js"></script>
+  <script type="module" src="./js/doctor-dashboard.js?v=6"></script>
 </body>
 </html>

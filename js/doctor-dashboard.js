@@ -1,11 +1,14 @@
 // js/doctor-dashboard.js
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { collection, collectionGroup, getDocs, doc, getDoc, updateDoc, setDoc, query, where, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import {
+  collection, collectionGroup, getDocs, doc, getDoc, updateDoc, setDoc, addDoc, query, where, orderBy, limit, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
 let currentUser = null;
 let patients = [];
+let activeFilter = 'all';
 
 function showLoader(show) { $('loader').classList.toggle('hidden', !show); }
 
@@ -16,7 +19,6 @@ onAuthStateChanged(auth, async (user) => {
   
   const userSnap = await getDoc(doc(db, "users", user.uid));
   
-  // هنا التأكد إن اللي داخل هو "طبيب" مش "أدمن"
   if (!userSnap.exists() || userSnap.data().role !== 'doctor') {
     alert("حسابك لا يمتلك صلاحيات الطبيب.");
     location.href = "index.html"; return;
@@ -38,17 +40,18 @@ async function loadCodes() {
     const q = query(collection(db, "linkCodes"), where("doctorId", "==", currentUser.uid), orderBy("createdAt", "desc"));
     const snap = await getDocs(q);
     
-    if (snap.empty) { list.innerHTML = '<div class="empty">لا توجد أكواد نشطة.</div>'; return; }
+    if (snap.empty) { list.innerHTML = '<div class="empty">لا توجد أكواد نشطة. أنشئ كوداً جديداً لمشاركته مع الأسرة.</div>'; return; }
     
     let html = '';
     snap.forEach(d => {
       const c = d.data();
+      const dateStr = c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString('ar-EG') : 'حديث';
       html += `
         <div class="code-row">
           <div class="code-val">${d.id}</div>
           <div class="code-meta">
-            ${c.used ? `<span style="color:var(--danger)">مستخدم ❌</span>` : `<span style="color:var(--good)">متاح ✅</span>`}
-            <br>${c.createdAt?.toDate().toLocaleDateString('ar-EG') || ''}
+            ${c.used ? `<span style="color:var(--danger)">مستخدم ❌</span>` : `<span style="color:var(--good); font-weight:bold;">متاح للاستخدام ✅</span>`}
+            <br><small style="color:var(--muted)">تاريخ الإنشاء: ${dateStr}</small>
           </div>
         </div>
       `;
@@ -71,90 +74,314 @@ $('btnCreateCode').onclick = async () => {
   showLoader(false);
 };
 
-// --- 3. قائمة المرضى والأطفال ---
+// --- 3. جلب بيانات الأطفال والمرضى المتابعين بدقة وأمان ---
 async function loadPatients() {
   showLoader(true);
   const tbody = $('childrenTbody');
   try {
-    const q = query(collectionGroup(db, "children"), where("assignedDoctor", "==", currentUser.uid));
-    const snap = await getDocs(q);
-    
     patients = [];
-    let criticalCount = 0;
+    const docsMap = new Map();
 
-    for (let d of snap.docs) {
-      const p = { id: d.id, parentId: d.ref.parent.parent.id, ...d.data() };
-      const mSnap = await getDocs(query(collection(db, `parents/${p.parentId}/children/${p.id}/measurements`), orderBy('when', 'desc'), limit(1)));
-      if (!mSnap.empty) { p.lastMeasurement = mSnap.docs[0].data(); }
+    // استعلام 1: الأطفال المسندين عبر حقل assignedDoctor المباشر
+    try {
+      const q1 = query(collectionGroup(db, "children"), where("assignedDoctor", "==", currentUser.uid));
+      const snap1 = await getDocs(q1);
+      snap1.forEach(d => docsMap.set(d.id, d));
+    } catch(e) {
+      console.warn("assignedDoctor query notice:", e);
+    }
+
+    // استعلام 2: الأطفال المسندين عبر كائن assignedDoctorInfo.uid لضمان عدم سقوط أي طفل مسند
+    try {
+      const q2 = query(collectionGroup(db, "children"), where("assignedDoctorInfo.uid", "==", currentUser.uid));
+      const snap2 = await getDocs(q2);
+      snap2.forEach(d => docsMap.set(d.id, d));
+    } catch(e) {
+      console.warn("assignedDoctorInfo.uid query notice:", e);
+    }
+
+    // استعلام 3: فحص مجموعة فرعية للأطباء doctors/{uid}/patients كخيار احتياطي
+    try {
+      const docPatientsSnap = await getDocs(collection(db, `doctors/${currentUser.uid}/patients`));
+      for (const dp of docPatientsSnap.docs) {
+        const dpData = dp.data();
+        if (dpData.childId && dpData.parentId && !docsMap.has(dpData.childId)) {
+          const cDoc = await getDoc(doc(db, `parents/${dpData.parentId}/children/${dpData.childId}`));
+          if (cDoc.exists()) docsMap.set(cDoc.id, cDoc);
+        }
+      }
+    } catch(e) {
+      // ignore
+    }
+
+    // معالجة كل طفل وجلب قياساته وتحاليله الأخيرة
+    for (const [id, d] of docsMap.entries()) {
+      const data = d.data();
+      const parentId = data.parentId || (d.ref.parent?.parent ? d.ref.parent.parent.id : null);
+      if (!parentId) continue;
+
+      const p = { id: d.id, parentId, ...data };
+
+      // 1. جلب آخر قياس جلوكوز مسجل
+      try {
+        const mSnap = await getDocs(query(
+          collection(db, `parents/${p.parentId}/children/${p.id}/measurements`),
+          orderBy('when', 'desc'),
+          limit(1)
+        ));
+        if (!mSnap.empty) {
+          p.lastMeasurement = mSnap.docs[0].data();
+        } else {
+          const mSnap2 = await getDocs(query(
+            collection(db, `parents/${p.parentId}/children/${p.id}/measurements`),
+            orderBy('date', 'desc'),
+            limit(1)
+          ));
+          if (!mSnap2.empty) p.lastMeasurement = mSnap2.docs[0].data();
+        }
+      } catch(err) {
+        console.warn(`Last measurement fetch error for ${p.id}:`, err);
+      }
+
+      // 2. جلب آخر تحليل سكر تراكمي لمعرفة الاستحقاق
+      try {
+        const lSnap = await getDocs(query(
+          collection(db, `parents/${p.parentId}/children/${p.id}/labs`),
+          orderBy('when', 'desc'),
+          limit(1)
+        ));
+        if (!lSnap.empty) {
+          p.lastLab = lSnap.docs[0].data();
+        }
+      } catch(err) {
+        console.warn(`Last lab fetch error for ${p.id}:`, err);
+      }
+
+      // 3. جلب قياسات آخر أسبوع لحساب الـ TIR التقديري
+      try {
+        const d7 = new Date(); d7.setDate(d7.getDate() - 7);
+        const d7Str = d7.toISOString().slice(0, 10);
+        const wSnap = await getDocs(query(
+          collection(db, `parents/${p.parentId}/children/${p.id}/measurements`),
+          where('date', '>=', d7Str)
+        ));
+        p.weekReadings = [];
+        wSnap.forEach(ws => {
+          const wd = ws.data();
+          const val = Number(wd.value_mgdl ?? wd.value ?? 0);
+          if (val > 0) p.weekReadings.push(val);
+        });
+      } catch(err) {
+        p.weekReadings = [];
+      }
+
+      // تصنيف المريض سريرياً (Triage State)
+      p.triage = evaluatePatientTriage(p);
       patients.push(p);
     }
 
-    $('childrenCount').textContent = `${patients.length} مرضى`;
-    $('totalPatients').textContent = patients.length;
-    renderPatients(patients);
+    updateTriageCounts();
+    renderPatients();
 
   } catch(e) { 
     console.error(e); 
-    tbody.innerHTML = `<tr><td colspan="6" class="empty">حدث خطأ. الرجاء التأكد من الاتصال.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">حدث خطأ في جلب بيانات المرضى. الرجاء المحاولة مرة أخرى.</td></tr>`;
   }
   showLoader(false);
 }
 
-function getPatientStatus(m, child) {
-  if(!m) return { html: '<span class="status-badge bg-muted">لا توجد قراءات</span>', crit: false };
-  
-  const unit = child.glucoseUnit || 'mg/dL';
-  const val = m.normalizedValue || m.value;
-  let cLow = unit === 'mmol/L' ? 3.0 : 54;
-  let low = unit === 'mmol/L' ? 3.9 : 70;
-  let high = unit === 'mmol/L' ? 10.0 : 180;
-  let cHigh = unit === 'mmol/L' ? 13.9 : 250;
+// تقييم وتصنيف حالة المريض السريرية
+function evaluatePatientTriage(p) {
+  const m = p.lastMeasurement;
+  const unit = p.glucoseUnit || 'mg/dL';
+  const cLow = unit === 'mmol/L' ? 3.0 : 54;
+  const cHigh = unit === 'mmol/L' ? 13.9 : 250;
+  const low = unit === 'mmol/L' ? 3.9 : 70;
+  const high = unit === 'mmol/L' ? 10.0 : 180;
 
-  if(child.glucose_limits) {
-    cLow = Number(child.glucose_limits.critical_low) || cLow;
-    low = Number(child.glucose_limits.low) || low;
-    high = Number(child.glucose_limits.high) || high;
-    cHigh = Number(child.glucose_limits.critical_high) || cHigh;
+  let isCritical = false;
+  let needsAttention = false;
+  let isLabsDue = false;
+
+  // فحص آخر قراءة
+  if (m) {
+    const val = Number(m.normalizedValue || m.value);
+    if (val <= cLow || val >= cHigh) isCritical = true;
+    else if (val < low || val > high) needsAttention = true;
   }
 
-  if(val <= cLow) return { html: `<span class="status-badge bg-danger">هبوط حرج</span>`, crit: true };
-  if(val < low) return { html: `<span class="status-badge bg-danger">هبوط</span>`, crit: false };
-  if(val >= cHigh) return { html: `<span class="status-badge bg-danger">ارتفاع حرج</span>`, crit: true };
-  if(val > high) return { html: `<span class="status-badge bg-warn">ارتفاع</span>`, crit: false };
-  return { html: `<span class="status-badge bg-ok">طبيعي</span>`, crit: false };
+  // فحص قراءات الأسبوع والـ TIR
+  if (p.weekReadings && p.weekReadings.length >= 3) {
+    const inRange = p.weekReadings.filter(v => v >= 70 && v <= 180).length;
+    const tir = Math.round((inRange / p.weekReadings.length) * 100);
+    p.tirPct = tir;
+    if (tir < 60) needsAttention = true;
+  }
+
+  // فحص استحقاق التحاليل (التراكمي كل 90 يوم)
+  if (!p.lastLab) {
+    isLabsDue = true;
+  } else {
+    const labDate = p.lastLab.when?.toDate ? p.lastLab.when.toDate() : (p.lastLab.date ? new Date(p.lastLab.date) : null);
+    if (labDate) {
+      const daysSince = Math.floor((new Date() - labDate) / (1000 * 60 * 60 * 24));
+      p.labDaysSince = daysSince;
+      if (daysSince > 90) isLabsDue = true;
+    } else {
+      isLabsDue = true;
+    }
+  }
+
+  p.isCritical = isCritical;
+  p.needsAttention = needsAttention && !isCritical;
+  p.isLabsDue = isLabsDue;
+  p.isOk = !isCritical && !needsAttention;
+
+  if (isCritical) return 'crit';
+  if (needsAttention) return 'attention';
+  if (isLabsDue) return 'labs';
+  return 'ok';
 }
 
-function renderPatients(list) {
+function updateTriageCounts() {
+  const total = patients.length;
+  const crit = patients.filter(p => p.isCritical).length;
+  const att = patients.filter(p => p.needsAttention).length;
+  const labs = patients.filter(p => p.isLabsDue).length;
+  const ok = patients.filter(p => p.isOk).length;
+
+  $('totalPatients').textContent = total;
+  $('criticalPatients').textContent = crit;
+  $('attentionPatients').textContent = att;
+  $('dueLabsPatients').textContent = labs;
+  $('childrenCount').textContent = `${total} مريض`;
+
+  $('countAll').textContent = total;
+  $('countCrit').textContent = crit;
+  $('countAtt').textContent = att;
+  $('countLabs').textContent = labs;
+  $('countOk').textContent = ok;
+}
+
+function getPatientStatusBadge(m, p) {
+  if(!m) return '<span class="status-badge bg-muted">لا قراءات</span>';
+  
+  const unit = p.glucoseUnit || 'mg/dL';
+  const val = Number(m.normalizedValue || m.value);
+  const cLow = unit === 'mmol/L' ? 3.0 : 54;
+  const cHigh = unit === 'mmol/L' ? 13.9 : 250;
+  const low = unit === 'mmol/L' ? 3.9 : 70;
+  const high = unit === 'mmol/L' ? 10.0 : 180;
+
+  const timeStr = m.time || (m.when?.toDate ? m.when.toDate().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}) : '');
+  const timeDisplay = timeStr ? `<small style="display:block; font-size:10px; color:#64748b; font-weight:normal;">${timeStr}</small>` : '';
+
+  if (val <= cLow) return `<span class="status-badge bg-danger">هبوط حرج 🚨 (${val})</span>${timeDisplay}`;
+  if (val < low) return `<span class="status-badge bg-warn">هبوط (${val})</span>${timeDisplay}`;
+  if (val >= cHigh) return `<span class="status-badge bg-danger">ارتفاع حرج 🚨 (${val})</span>${timeDisplay}`;
+  if (val > high) return `<span class="status-badge bg-warn">مرتفع (${val})</span>${timeDisplay}`;
+  return `<span class="status-badge bg-ok">في النطاق (${val})</span>${timeDisplay}`;
+}
+
+function renderPatients() {
   const tbody = $('childrenTbody');
   tbody.innerHTML = '';
-  if(!list.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty" style="text-align:center; padding:20px;">لا يوجد مرضى متابعين حالياً. أرسل كود الربط للمرضى.</td></tr>`; $('criticalPatients').textContent = '0'; return; }
 
-  let critTotal = 0;
+  const q = $('childSearch').value.toLowerCase().trim();
+
+  let list = patients;
+
+  // تطبيق فلتر الفرز السريري (Triage)
+  if (activeFilter === 'crit') list = list.filter(p => p.isCritical);
+  else if (activeFilter === 'attention') list = list.filter(p => p.needsAttention);
+  else if (activeFilter === 'labs') list = list.filter(p => p.isLabsDue);
+  else if (activeFilter === 'ok') list = list.filter(p => p.isOk);
+
+  // تطبيق البحث
+  if (q) {
+    list = list.filter(p => {
+      const name = (p.name || '').toLowerCase();
+      const parent = (p.parentName || '').toLowerCase();
+      const note = (p.doctor_note || '').toLowerCase();
+      return name.includes(q) || parent.includes(q) || note.includes(q);
+    });
+  }
+
+  if(!list.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty" style="text-align:center; padding:30px; color:#64748b;">لا يوجد مرضى مطابقين لهذا الفرز حالياً.</td></tr>`;
+    return;
+  }
+
   list.forEach(p => {
-    const status = getPatientStatus(p.lastMeasurement, p);
-    if(status.crit) critTotal++;
+    const statusHtml = getPatientStatusBadge(p.lastMeasurement, p);
+    
+    // شارة TIR للأسبوع
+    let tirBadge = '<span class="tiny muted">—</span>';
+    if (p.tirPct != null) {
+      const tirColor = p.tirPct >= 70 ? 'bg-ok' : (p.tirPct >= 50 ? 'bg-warn' : 'bg-danger');
+      tirBadge = `<span class="status-badge ${tirColor}">TIR: ${p.tirPct}%</span>`;
+    }
+
+    // شارة التحاليل
+    let labBadge = '<span class="status-badge bg-muted">لا توجد تحاليل</span>';
+    if (p.lastLab) {
+      const hba = p.lastLab.hba1c?.value;
+      if (p.isLabsDue) {
+        labBadge = `<span class="status-badge bg-warn" title="متأخر">تراكمي مستحق 🚨</span>`;
+      } else {
+        labBadge = `<span class="status-badge bg-ok">تراكمي: ${hba ? hba+'%' : 'مكتمل ✅'}</span>`;
+      }
+    } else {
+      labBadge = `<span class="status-badge bg-warn">فحص مبدئي مستحق 🔬</span>`;
+    }
+
+    const age = p.birthDate ? (new Date().getFullYear() - new Date(p.birthDate).getFullYear()) : '—';
+    const regimen = p.regimen === 'pump' ? 'مضخة 📟' : 'حقن MDI 💉';
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td style="font-weight:bold; color:var(--primary);">${p.name || '—'}</td>
-      <td>${p.birthDate ? (new Date().getFullYear() - new Date(p.birthDate).getFullYear()) : '—'} سنة</td>
-      <td><span class="badge badge-primary">${p.glucoseUnit || 'mg/dL'}</span></td>
-      <td style="font-weight:bold; font-size:16px;">${p.lastMeasurement ? p.lastMeasurement.value : '—'}</td>
-      <td>${status.html}</td>
-      <td style="text-align: center; display:flex; gap:8px; justify-content:center;">
-        <button class="btn secondary sm btn-open-child" data-id="${p.id}">الجرعات والحقن ⚙️</button>
-        <button class="btn alt sm btn-open-report" data-id="${p.id}" data-pid="${p.parentId}">التقرير 📊</button>
+      <td>
+        <div style="font-weight:bold; color:var(--primary); font-size:15px;">${p.name || '—'}</div>
+        <small style="color:var(--muted); font-size:11px;">رقم الملف: ${p.id.slice(0,8)}</small>
+      </td>
+      <td>
+        <div>${age} سنة • ${p.gender === 'female' ? 'أنثى' : 'ذكر'}</div>
+        <span class="badge" style="background:#eef2ff; color:#3b82f6; font-size:11px;">${regimen}</span>
+      </td>
+      <td>
+        <div style="font-weight:bold;">${statusHtml}</div>
+      </td>
+      <td>
+        <div>${tirBadge}</div>
+      </td>
+      <td>
+        <div>${labBadge}</div>
+      </td>
+      <td style="text-align: center;">
+        <div class="actions-cell">
+          <a href="doctor-child.html?child=${p.id}&parentId=${p.parentId}" class="action-link-btn primary" title="محطة المريض والجرعات والذكاء الاصطناعي">
+            🩺 المحطة السريرية
+          </a>
+          <a href="reports.html?child=${p.id}&parentId=${p.parentId}" target="_blank" class="action-link-btn" title="تقرير AGP المعياري">
+            📈 التقرير (AGP)
+          </a>
+          <a href="labs.html?child=${p.id}&parentId=${p.parentId}" target="_blank" class="action-link-btn" title="سجل التحاليل المخبرية">
+            🔬 التحاليل
+          </a>
+          <a href="visits.html?child=${p.id}&parentId=${p.parentId}" target="_blank" class="action-link-btn" title="الزيارات ومنحنى النمو">
+            🩺 الزيارات
+          </a>
+          <button class="action-link-btn alt btn-open-modal" data-id="${p.id}" title="تعديل بروتوكول الجرعات السريع">
+            ⚙️ تعديل الجرعات
+          </button>
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
   });
-  $('criticalPatients').textContent = critTotal;
 
-  document.querySelectorAll('.btn-open-child').forEach(btn => {
+  document.querySelectorAll('.btn-open-modal').forEach(btn => {
     btn.onclick = () => window.openMedicalModal(btn.dataset.id);
-  });
-  document.querySelectorAll('.btn-open-report').forEach(btn => {
-    btn.onclick = () => window.open(`reports.html?child=${btn.dataset.id}&parentId=${btn.dataset.pid}`, '_blank');
   });
 }
 
@@ -162,6 +389,12 @@ function renderPatients(list) {
 const modal = $('medical-modal');
 $('modal-close').onclick = () => modal.close();
 $('btn-cancel').onclick = () => modal.close();
+
+$('btn-view-workstation').onclick = () => {
+  const pId = $('parent-id').value;
+  const cId = $('child-id').value;
+  if(pId && cId) location.href = `doctor-child.html?child=${cId}&parentId=${pId}`;
+};
 
 $('btn-view-reports').onclick = () => {
   const pId = $('parent-id').value;
@@ -195,7 +428,7 @@ window.openMedicalModal = (childId) => {
 
 $('medical-form').onsubmit = async (e) => {
   e.preventDefault();
-  const btn = $('btn-save-medical'); btn.disabled = true; btn.textContent = 'جاري التحديث...';
+  const btn = $('btn-save-medical'); btn.disabled = true; btn.textContent = 'جاري التحديث والتوثيق...';
   const pId = $('parent-id').value; const cId = $('child-id').value;
 
   try {
@@ -214,14 +447,35 @@ $('medical-form').onsubmit = async (e) => {
       lastMedicalUpdate: serverTimestamp()
     };
 
+    // 1. تحديث بروتوكول الطفل
     await updateDoc(doc(db, `parents/${pId}/children/${cId}`), payload);
+
+    // 2. توثيق التعديل في سجل التاريخ الطبي للطفل (Audit Trail)
+    try {
+      await addDoc(collection(db, `parents/${pId}/children/${cId}/regimen_history`), {
+        timestamp: serverTimestamp(),
+        doctorId: currentUser.uid,
+        doctorName: $('doctorName').textContent,
+        targetBg: Number($('targetBg').value),
+        cf: Number($('cfVal').value),
+        cr: {
+          breakfast: Number($('crBreakfast').value),
+          lunch: Number($('crLunch').value),
+          dinner: Number($('crDinner').value),
+          snack: Number($('crSnack').value)
+        },
+        doctorNote: $('doctorNote').value.trim()
+      });
+    } catch(auditErr) {
+      console.warn("Could not save regimen history record:", auditErr);
+    }
     
-    alert("✅ تم حفظ البروتوكول! ستظهر التعليمات عند الأم فوراً.");
+    alert("✅ تم حفظ واعتماد البروتوكول وتوثيقه بنجاح! ستظهر التحديثات عند الأسرة فوراً.");
     modal.close();
     await loadPatients();
   } catch (err) { 
     console.error(err);
-    alert("❌ حدث خطأ أثناء الحفظ. تأكد من تحديث القواعد (Rules) في الفايربيز كما هو موضح."); 
+    alert("❌ حدث خطأ أثناء الحفظ. يرجى مراجعة الاتصال."); 
   } 
   finally { btn.disabled = false; btn.textContent = '💾 اعتماد وتحديث البروتوكول'; }
 };
@@ -229,8 +483,18 @@ $('medical-form').onsubmit = async (e) => {
 function setupEvents() {
   $('btnLogout').onclick = async () => { await signOut(auth); location.href = "index.html"; };
   $('btnRefresh').onclick = async () => { await loadCodes(); await loadPatients(); };
-  $('childSearch').addEventListener('input', (e) => {
-    const q = e.target.value.toLowerCase().trim();
-    renderPatients(q ? patients.filter(p => (p.name||'').toLowerCase().includes(q)) : patients);
+  
+  $('childSearch').addEventListener('input', () => {
+    renderPatients();
+  });
+
+  // فلاتر الفرز السريري (Triage Buttons)
+  document.querySelectorAll('.triage-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.triage-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = btn.dataset.filter;
+      renderPatients();
+    };
   });
 }
