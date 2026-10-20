@@ -222,8 +222,17 @@ $('linkSubmit').onclick = async () => {
     const batch = writeBatch(db);
     kids.forEach(k => {
       batch.update(doc(db, `parents/${currentUser.uid}/children/${k.id}`), {
-        assignedDoctor: d.doctorId, sharingConsent: true
+        assignedDoctor: d.doctorId,
+        assignedDoctorInfo: { uid: d.doctorId },
+        parentId: currentUser.uid,
+        sharingConsent: true
       });
+      batch.set(doc(db, `doctors/${d.doctorId}/patients/${k.id}`), {
+        childId: k.id,
+        parentId: currentUser.uid,
+        childName: k.name || null,
+        linkedAt: serverTimestamp()
+      }, { merge: true });
     });
     batch.update(codeRef, { used: true, parentId: currentUser.uid, usedAt: serverTimestamp() });
     await batch.commit();

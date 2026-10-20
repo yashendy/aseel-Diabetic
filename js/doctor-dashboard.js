@@ -25,12 +25,93 @@ onAuthStateChanged(auth, async (user) => {
   }
   
   const userData = userSnap.data();
-  $('doctorName').textContent = `د. ${userData.name || userData.displayName || 'طبيب'}`;
+  renderDoctorProfile(userData);
+  setupProfileModal(userData);
   
   await loadCodes();
   await loadPatients();
   setupEvents();
 });
+
+// --- عرض بيانات الطبيب والعيادة ---
+function renderDoctorProfile(userData) {
+  const name = userData.name || userData.displayName || 'طبيب';
+  if ($('doctorName')) $('doctorName').textContent = `د. ${name}`;
+  if ($('docCardName')) $('docCardName').textContent = `د. ${name}`;
+  if ($('docAvatar')) $('docAvatar').textContent = name.charAt(0);
+  if ($('docSpecialty')) $('docSpecialty').textContent = userData.specialty || 'استشاري سكري وغدد صماء أطفال';
+  if ($('docCenter')) $('docCenter').textContent = userData.center || userData.clinic || 'عيادة السكري التخصصية';
+  if ($('docEmail')) $('docEmail').textContent = userData.email || currentUser.email || '—';
+  if ($('docPhone')) $('docPhone').textContent = userData.phone || 'غير مسجل';
+  if ($('docPermCode')) $('docPermCode').textContent = userData.doctorCode || '—';
+  if ($('docStatusBadge')) {
+    $('docStatusBadge').textContent = userData.isApproved ? 'طبيب معتمد ✅' : 'بانتظار الاعتماد ⏳';
+    $('docStatusBadge').style.background = userData.isApproved ? '#dcfce7' : '#fef3c7';
+    $('docStatusBadge').style.color = userData.isApproved ? '#166534' : '#92400e';
+  }
+}
+
+// --- نافذة تعديل بيانات الطبيب ---
+function setupProfileModal(userData) {
+  const modal = $('docProfileModal');
+  const btnEdit = $('btnEditDocProfile');
+  const btnClose = $('btnCloseDocModal');
+  const btnCancel = $('btnCancelDocModal');
+  const btnSave = $('btnSaveDocProfile');
+
+  if (btnEdit && modal) {
+    btnEdit.onclick = () => {
+      if ($('inpDocName')) $('inpDocName').value = userData.name || userData.displayName || '';
+      if ($('inpDocSpecialty')) $('inpDocSpecialty').value = userData.specialty || '';
+      if ($('inpDocCenter')) $('inpDocCenter').value = userData.center || userData.clinic || '';
+      if ($('inpDocPhone')) $('inpDocPhone').value = userData.phone || '';
+      modal.classList.remove('hidden');
+    };
+  }
+
+  const closeModal = () => modal?.classList.add('hidden');
+  if (btnClose) btnClose.onclick = closeModal;
+  if (btnCancel) btnCancel.onclick = closeModal;
+
+  if (btnSave) {
+    btnSave.onclick = async () => {
+      const newName = $('inpDocName')?.value?.trim();
+      const newSpecialty = $('inpDocSpecialty')?.value?.trim();
+      const newCenter = $('inpDocCenter')?.value?.trim();
+      const newPhone = $('inpDocPhone')?.value?.trim();
+
+      if (!newName) {
+        alert("يرجى إدخال اسم الطبيب");
+        return;
+      }
+
+      showLoader(true);
+      try {
+        await updateDoc(doc(db, "users", currentUser.uid), {
+          name: newName,
+          specialty: newSpecialty || null,
+          center: newCenter || null,
+          phone: newPhone || null,
+          updatedAt: serverTimestamp()
+        });
+
+        userData.name = newName;
+        userData.specialty = newSpecialty;
+        userData.center = newCenter;
+        userData.phone = newPhone;
+
+        renderDoctorProfile(userData);
+        closeModal();
+        alert("تم تحديث بيانات الطبيب والعيادة بنجاح! ✅");
+      } catch (err) {
+        console.error("Error updating doctor profile:", err);
+        alert("حدث خطأ أثناء حفظ البيانات: " + err.message);
+      } finally {
+        showLoader(false);
+      }
+    };
+  }
+}
 
 // --- 2. إدارة أكواد الربط ---
 async function loadCodes() {
@@ -82,32 +163,91 @@ async function loadPatients() {
     patients = [];
     const docsMap = new Map();
 
-    // استعلام 1: الأطفال المسندين عبر حقل assignedDoctor المباشر
+    // 1. محاولة الاستعلام السريع عبر collectionGroup
     try {
       const q1 = query(collectionGroup(db, "children"), where("assignedDoctor", "==", currentUser.uid));
       const snap1 = await getDocs(q1);
       snap1.forEach(d => docsMap.set(d.id, d));
     } catch(e) {
-      console.warn("assignedDoctor query notice:", e);
+      console.warn("assignedDoctor collectionGroup query notice:", e.message);
     }
 
-    // استعلام 2: الأطفال المسندين عبر كائن assignedDoctorInfo.uid لضمان عدم سقوط أي طفل مسند
     try {
       const q2 = query(collectionGroup(db, "children"), where("assignedDoctorInfo.uid", "==", currentUser.uid));
       const snap2 = await getDocs(q2);
       snap2.forEach(d => docsMap.set(d.id, d));
     } catch(e) {
-      console.warn("assignedDoctorInfo.uid query notice:", e);
+      console.warn("assignedDoctorInfo.uid collectionGroup query notice:", e.message);
     }
 
-    // استعلام 3: فحص مجموعة فرعية للأطباء doctors/{uid}/patients كخيار احتياطي
+    // 2. مسار احتياطي موثوق 1: فحص الأسر المرتبطة بهذا الطبيب عبر أكواد الربط (linkCodes)
+    try {
+      const codesQ = query(collection(db, "linkCodes"), where("doctorId", "==", currentUser.uid));
+      const codesSnap = await getDocs(codesQ);
+      const linkedParentIds = new Set();
+      codesSnap.forEach(cd => {
+        const cData = cd.data();
+        if (cData.parentId) linkedParentIds.add(cData.parentId);
+      });
+
+      for (const pId of linkedParentIds) {
+        try {
+          const kSnap = await getDocs(collection(db, "parents", pId, "children"));
+          kSnap.forEach(kd => {
+            const kData = kd.data();
+            if (!docsMap.has(kd.id)) {
+              if (kData.assignedDoctor === currentUser.uid || kData.assignedDoctorInfo?.uid === currentUser.uid || !kData.assignedDoctor) {
+                kd._parentId = pId;
+                docsMap.set(kd.id, kd);
+              }
+            }
+          });
+        } catch(kErr) {
+          console.warn(`فحص أطفال الأسرة ${pId}:`, kErr);
+        }
+      }
+    } catch(codesErr) {
+      console.warn("linkCodes query fallback notice:", codesErr);
+    }
+
+    // 3. مسار احتياطي موثوق 2: فحص حسابات الأسر والبحث عن الأطفال المسندين (Direct Parent Scan)
+    // (نفس الطريقة المعتمدة بنجاح تام في لوحة الإدارة admin.js)
+    try {
+      const usersSnap = await getDocs(collection(db, "users"));
+      const parentDocs = usersSnap.docs.filter(u => {
+        const r = u.data()?.role;
+        return r === 'parent' || !r || r === 'user';
+      });
+
+      await Promise.all(parentDocs.map(async pDoc => {
+        try {
+          const cSnap = await getDocs(collection(db, "parents", pDoc.id, "children"));
+          cSnap.docs.forEach(cd => {
+            const cData = cd.data();
+            if (cData.assignedDoctor === currentUser.uid || cData.assignedDoctorInfo?.uid === currentUser.uid) {
+              cd._parentId = pDoc.id;
+              docsMap.set(cd.id, cd);
+            }
+          });
+        } catch(cErr) {
+          // ignore
+        }
+      }));
+    } catch(uErr) {
+      console.warn("Direct parent scan notice:", uErr);
+    }
+
+    // 4. استعلام فرعي: doctors/{uid}/patients كخيار احتياطي إضافي
     try {
       const docPatientsSnap = await getDocs(collection(db, `doctors/${currentUser.uid}/patients`));
       for (const dp of docPatientsSnap.docs) {
         const dpData = dp.data();
         if (dpData.childId && dpData.parentId && !docsMap.has(dpData.childId)) {
           const cDoc = await getDoc(doc(db, `parents/${dpData.parentId}/children/${dpData.childId}`));
-          if (cDoc.exists()) docsMap.set(cDoc.id, cDoc);
+          if (cDoc.exists()) {
+            cDoc._parentId = dpData.parentId;
+            docsMap.set(cDoc.id, cDoc);
+          }
         }
       }
     } catch(e) {
@@ -117,7 +257,7 @@ async function loadPatients() {
     // معالجة كل طفل وجلب قياساته وتحاليله الأخيرة
     for (const [id, d] of docsMap.entries()) {
       const data = d.data();
-      const parentId = data.parentId || (d.ref.parent?.parent ? d.ref.parent.parent.id : null);
+      const parentId = d._parentId || data.parentId || (d.ref.parent?.parent ? d.ref.parent.parent.id : null);
       if (!parentId) continue;
 
       const p = { id: d.id, parentId, ...data };

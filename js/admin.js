@@ -475,10 +475,22 @@ async function assignNow() {
     await updateDoc(ref, {
       assignedDoctor: doctorUid,
       assignedDoctorInfo: { uid: doctorUid, name: doctorName || null, email: doctorEmail || null },
+      parentId: parentId,
       sharingConsent: { doctor: true }, 
       shareDoctor: true,
       updatedAt: serverTimestamp()
     });
+
+    try {
+      await setDoc(doc(db, `doctors/${doctorUid}/patients/${childId}`), {
+        childId: childId,
+        parentId: parentId,
+        childName: childName || null,
+        linkedAt: serverTimestamp()
+      }, { merge: true });
+    } catch(errDoc) {
+      console.warn("Could not write to doctors subcollection:", errDoc);
+    }
 
     $('modalStatus').style.color = "var(--success)";
     $('modalStatus').textContent = '✅ تم ربط الطبيب بالمريض بنجاح!';

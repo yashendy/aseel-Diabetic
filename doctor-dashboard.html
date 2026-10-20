@@ -25,6 +25,44 @@
   </header>
 
   <div class="container" id="doctorDashboard">
+    <!-- 1. كارت الملف التعريفي والبيانات الخاصة بالطبيب والعيادة -->
+    <div class="card doctor-profile-card no-print">
+      <div class="doc-profile-inner">
+        <div class="doc-avatar-badge" id="docAvatar">👨‍⚕️</div>
+        <div class="doc-info-col">
+          <div class="doc-title-line">
+            <h2 id="docCardName" style="margin:0; font-size:20px; color:#1e3a8a;">د. جاري التحميل...</h2>
+            <span class="doc-badge-status" id="docStatusBadge">طبيب معتمد ✅</span>
+          </div>
+          <div class="doc-meta-grid">
+            <div class="doc-meta-item">
+              <span class="meta-label">🩺 التخصص السريري:</span>
+              <strong id="docSpecialty">استشاري سكري وغدد صماء أطفال</strong>
+            </div>
+            <div class="doc-meta-item">
+              <span class="meta-label">🏥 العيادة / المركز الطبي:</span>
+              <strong id="docCenter">عيادة السكري التخصصية</strong>
+            </div>
+            <div class="doc-meta-item">
+              <span class="meta-label">📧 البريد الإلكتروني:</span>
+              <strong id="docEmail">—</strong>
+            </div>
+            <div class="doc-meta-item">
+              <span class="meta-label">📞 هاتف العيادة:</span>
+              <strong id="docPhone">—</strong>
+            </div>
+            <div class="doc-meta-item highlight">
+              <span class="meta-label">🔑 كود العيادة الدائم:</span>
+              <strong id="docPermCode">—</strong>
+            </div>
+          </div>
+        </div>
+        <div class="doc-actions-col">
+          <button id="btnEditDocProfile" class="btn secondary sm">✏️ تعديل بياناتي</button>
+        </div>
+      </div>
+    </div>
+
     <div class="dashboard-actions no-print">
       <button id="btnRefresh" class="btn secondary">🔄 تحديث البيانات فورياً</button>
     </div>
@@ -203,5 +241,37 @@
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
   <script type="module" src="./js/doctor-dashboard.js?v=6"></script>
+
+  <!-- نافذة تعديل بيانات الطبيب المنبثقة -->
+  <div id="docProfileModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 style="margin:0; color:#1e3a8a;">✏️ تعديل بيانات الطبيب والعيادة</h3>
+        <button id="btnCloseDocModal" class="btn ghost sm">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="field">
+          <span>اسم الطبيب كاملاً:</span>
+          <input type="text" id="inpDocName" class="input" placeholder="د. فلان الفلاني">
+        </label>
+        <label class="field">
+          <span>التخصص الدقيق:</span>
+          <input type="text" id="inpDocSpecialty" class="input" placeholder="استشاري سكري وغدد صماء أطفال">
+        </label>
+        <label class="field">
+          <span>اسم المركز الطبي أو المستشفى أو العيادة:</span>
+          <input type="text" id="inpDocCenter" class="input" placeholder="مركز السكري ومستشفى الأطفال">
+        </label>
+        <label class="field">
+          <span>رقم الهاتف / العيادة:</span>
+          <input type="text" id="inpDocPhone" class="input" placeholder="مثال: 01012345678">
+        </label>
+      </div>
+      <div class="modal-foot">
+        <button id="btnSaveDocProfile" class="btn good">💾 حفظ التعديلات</button>
+        <button id="btnCancelDocModal" class="btn secondary">إلغاء</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
