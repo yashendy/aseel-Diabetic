@@ -147,8 +147,9 @@ async function saveMeasurement() {
   const selectedUnit = $('unitSel').value;
   if (!rawVal) { toast("يرجى إدخال قراءة صحيحة"); return; }
  
-  const day = $('dayPicker').value; const time = $('timePicker').value;
-  const slotKey = $('slotKey').value;
+  const day = $('dayPicker').value || localDateStr(new Date());
+  const time = $('timePicker').value || localTimeStr(new Date());
+  const slotKey = $('slotKey').value || 'OTHER';
   const notes = $('mNotes').value.trim();
   const corrDose = parseFloat($('corrDoseInput').value) || 0;
   const hypoTreat = $('hypoTreatment').value.trim();

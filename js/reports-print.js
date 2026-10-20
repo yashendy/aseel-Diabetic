@@ -164,7 +164,13 @@ function createDayRow(date, dayData, child, displayUnit) {
   }
 
   SLOT_KEYS.forEach(key => {
-    const m = dayData.find(d => d.slotKey === key);
+    const matches = dayData.filter(d => d.slotKey === key);
+    matches.sort((a, b) => {
+      const tA = a.when instanceof Date ? a.when.getTime() : (a.when ? new Date(a.when).getTime() : 0);
+      const tB = b.when instanceof Date ? b.when.getTime() : (b.when ? new Date(b.when).getTime() : 0);
+      return tA - tB;
+    });
+    const m = matches.length ? matches[matches.length - 1] : null;
     const ins = m ? (m.totalInsulin || m.correctionDose || m.totalDose || 0) : 0;
     html += `<div class="cell v-cell">
       ${m && !isBlank ? `

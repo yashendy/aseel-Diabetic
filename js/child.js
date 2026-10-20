@@ -232,33 +232,74 @@ async function renderGlucoseSparkline(uid, child){
     try { window._glucoseChart.destroy(); } catch(e){}
   }
 
+  const minGraphVal = Math.max(0, Math.min(...vals, low) - (isMmol ? 0.5 : 10));
+  const maxGraphVal = Math.max(...vals, high) + (isMmol ? 0.5 : 15);
+
   window._glucoseChart = new Chart(ctx,{
     type:'line',
     data:{
       labels,
-      datasets:[{
-        data: vals,
-        borderColor:'#3b82f6',
-        borderWidth:2,
-        pointBackgroundColor: colors,
-        pointBorderColor: colors,
-        pointRadius: vals.length>30 ? 2 : 4,
-        pointHoverRadius:6,
-        tension:0.3,
-        fill:{target:'origin',above:'rgba(59,130,246,0.06)'}
-      }]
+      datasets:[
+        {
+          label: `الحد الأدنى (${low} ${unit})`,
+          data: Array(vals.length).fill(low),
+          borderColor: '#10b981',
+          borderWidth: 1.5,
+          borderDash: [5, 5],
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          fill: false,
+          order: 3
+        },
+        {
+          label: `الحد الأعلى (${high} ${unit})`,
+          data: Array(vals.length).fill(high),
+          borderColor: '#10b981',
+          borderWidth: 1.5,
+          borderDash: [5, 5],
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          fill: '-1',
+          backgroundColor: 'rgba(16, 185, 129, 0.07)',
+          order: 2
+        },
+        {
+          label: 'رادار الجلوكوز',
+          data: vals,
+          borderColor: '#3b82f6',
+          borderWidth: 2.2,
+          pointBackgroundColor: colors,
+          pointBorderColor: colors,
+          pointRadius: vals.length>30 ? 2 : 4,
+          pointHoverRadius: 6,
+          tension: 0.3,
+          fill: { target: 'origin', above: 'rgba(59,130,246,0.06)' },
+          order: 1
+        }
+      ]
     },
     options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false}, tooltip:{callbacks:{label: ctx=>`${ctx.parsed.y} ${unit}`, title: ctx=>labels[ctx[0].dataIndex]}} },
+      responsive: true, maintainAspectRatio: false,
+      plugins:{
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              if (ctx.dataset.label && ctx.dataset.label.includes('الحد')) return ctx.dataset.label;
+              return `${ctx.parsed.y} ${unit}`;
+            },
+            title: ctx => labels[ctx[0].dataIndex]
+          }
+        }
+      },
       scales:{
-        x:{ display:false },
+        x:{ display: false },
         y:{
-          min: Math.max(0, isMmol ? Math.min(...vals) - 0.5 : Math.min(...vals) - 10),
-          max: isMmol ? Math.max(...vals) + 0.5 : Math.max(...vals) + 15,
-          ticks:{font:{size:10},color:'#94a3b8'},
-          grid:{color:'#f1f5f9'},
-          border:{display:false}
+          min: minGraphVal,
+          max: maxGraphVal,
+          ticks:{ font: { size: 10 }, color: '#94a3b8' },
+          grid:{ color: '#f1f5f9' },
+          border:{ display: false }
         }
       }
     }

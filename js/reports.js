@@ -1,3 +1,9 @@
+
+function formatDecHour(dec) {
+  const h = Math.floor(dec);
+  const m = Math.round((dec - h) * 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 // js/reports.js
 import { auth, db } from './firebase-config.js';
 import {
@@ -265,13 +271,18 @@ function groupByDaySlot(list){
  
 function cellHTML(vals,u){
   if(!vals || !vals.length) return '';
-  const v = vals[vals.length-1];
+  // فرز القياسات زمنياً لاختيار آخر قياس مسجل
+  vals.sort((a,b) => {
+    const tA = a.when instanceof Date ? a.when.getTime() : (a.when ? new Date(a.when).getTime() : 0);
+    const tB = b.when instanceof Date ? b.when.getTime() : (b.when ? new Date(b.when).getTime() : 0);
+    return tA - tB;
+  });
+  const v = vals[vals.length-1]; // أحدث قياس مسجل في هذا الوقت
   let html = `<div class="cell-data">`;
   if (v.val !== null) {
     const cls=classFor(v.val,u);
     html += `<div class="v ${cls}">${v.val}</div>`;
   }
-  // هنا استخدمنا round1 لتقريب الكارب والإنسولين لرقم عشري واحد
   if (v.carbs > 0) html += `<div class="badge-carb">🍔 ${round1(v.carbs)}g</div>`;
   if (v.ins > 0 || (v.carbs > 0 && v.ins === 0)) html += `<div class="badge-ins">💉 ${round1(v.ins)}U</div>`;
   if (vals.length > 1) html += `<div class="badge-more">+${vals.length-1} قياس</div>`;
@@ -506,41 +517,74 @@ function drawModalDayProfile(list, unit) {
     };
   });
 
+  // حساب منحنى رادار الجلوكوز الانسيابي الموحد (24-Hour Trendline)
+  const trendPoints = [];
+  const step = 0.5;
+  for (let h = 0; h <= 24; h += step) {
+    const nearby = scatterPoints.filter(p => Math.abs(p.x - h) <= 1.5);
+    if (nearby.length > 0) {
+      const avgY = nearby.reduce((acc, p) => acc + p.y, 0) / nearby.length;
+      trendPoints.push({ x: round1(h), y: round1(avgY) });
+    }
+  }
+
+  const chartDatasets = [
+    {
+      label: `الحد الأدنى (${L.low} ${unit})`,
+      data: [{ x: 0, y: L.low }, { x: 24, y: L.low }],
+      type: 'line',
+      borderColor: '#10b981',
+      borderWidth: 1.5,
+      borderDash: [5, 5],
+      pointRadius: 0,
+      fill: false,
+      order: 3
+    },
+    {
+      label: `الحد الأعلى (${L.high} ${unit})`,
+      data: [{ x: 0, y: L.high }, { x: 24, y: L.high }],
+      type: 'line',
+      borderColor: '#10b981',
+      borderWidth: 1.5,
+      borderDash: [5, 5],
+      pointRadius: 0,
+      fill: '-1',
+      backgroundColor: 'rgba(16, 185, 129, 0.08)',
+      order: 2
+    }
+  ];
+
+  if (trendPoints.length >= 2) {
+    chartDatasets.push({
+      label: 'منحنى رادار الجلوكوز (24h Trend)',
+      data: trendPoints,
+      type: 'line',
+      borderColor: '#2563eb',
+      borderWidth: 2.5,
+      pointRadius: 0,
+      pointHoverRadius: 0,
+      tension: 0.35,
+      spanGaps: true,
+      fill: false,
+      order: 1
+    });
+  }
+
+  chartDatasets.push({
+    label: 'قراءات السكر',
+    data: scatterPoints,
+    pointBackgroundColor: colors,
+    pointBorderColor: '#ffffff',
+    pointBorderWidth: 1,
+    pointRadius: 4.5,
+    pointHoverRadius: 7,
+    order: 0
+  });
+
   modalDayChart = new Chart(ctx, {
     type: 'scatter',
     data: {
-      datasets: [
-        {
-          label: `الحد الأدنى (${L.low} ${unit})`,
-          data: [{ x: 0, y: L.low }, { x: 24, y: L.low }],
-          type: 'line',
-          borderColor: '#10b981',
-          borderWidth: 1.5,
-          borderDash: [5, 5],
-          pointRadius: 0,
-          fill: false
-        },
-        {
-          label: `الحد الأعلى (${L.high} ${unit})`,
-          data: [{ x: 0, y: L.high }, { x: 24, y: L.high }],
-          type: 'line',
-          borderColor: '#10b981',
-          borderWidth: 1.5,
-          borderDash: [5, 5],
-          pointRadius: 0,
-          fill: '-1',
-          backgroundColor: 'rgba(16, 185, 129, 0.08)'
-        },
-        {
-          label: 'قراءات السكر',
-          data: scatterPoints,
-          pointBackgroundColor: colors,
-          pointBorderColor: '#ffffff',
-          pointBorderWidth: 1,
-          pointRadius: 4.5,
-          pointHoverRadius: 7
-        }
-      ]
+      datasets: chartDatasets
     },
     options: {
       responsive: true,
@@ -571,6 +615,10 @@ function drawModalDayProfile(list, unit) {
           callbacks: {
             label: (context) => {
               const raw = context.raw;
+              if (context.dataset.label && context.dataset.label.includes('الحد')) return context.dataset.label;
+              if (context.dataset.label && context.dataset.label.includes('منحنى رادار')) {
+                return 'منحنى رادار الجلوكوز: ' + raw.y + ' ' + unit + ' (الساعة ' + formatDecHour(raw.x) + ')';
+              }
               if (!raw || !raw.when) return '';
               const timeStr = raw.when.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
               const dateStr = raw.when.toLocaleDateString('ar-EG', { month: 'numeric', day: 'numeric' });
@@ -777,13 +825,17 @@ function kv(icon, label, value, cls=''){
   return `<div class="md-kv ${cls}"><span>${icon} ${label}</span><b>${value}</b></div>`;
 }
  
-function measurementCardHTML(v, unit){
+function measurementCardHTML(v, unit, isLatest = false){
   const x = v.raw || {};
-  const time = x.time || (v.when ? v.when.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '');
+  let time = x.time;
+  if (!time && v.when instanceof Date && !isNaN(v.when.getTime())) {
+    time = v.when.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
+  }
   const method = x.measureMethod === 'sensor' ? '📡 حساس' : x.measureMethod === 'blood' ? '🩸 وخز' : '';
+  const latestBadge = isLatest ? `<span style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700;">⚡ أحدث قياس مسجل</span>` : '';
  
   // ---- القراءة ----
-  let html = `<div class="md-card"><div class="md-card-head"><span class="md-time">🕒 ${esc(time)}</span><span class="md-method">${method}</span></div>`;
+  let html = `<div class="md-card ${isLatest ? 'is-latest' : ''}"><div class="md-card-head"><span class="md-time">🕒 ${esc(time || '—')}</span> <div style="display:flex; align-items:center; gap:6px;">${latestBadge}<span class="md-method">${method}</span></div></div>`;
   if (v.val !== null) {
     html += `<div class="md-bg-row"><span class="md-bg ${classFor(v.val, unit)}">${esc(v.val)} <small>${esc(unit)}</small></span><span class="md-state">${stateText(v.val, unit)}</span></div>`;
   }
@@ -842,10 +894,17 @@ function measurementCardHTML(v, unit){
  
 function detailHTML(day, slot, unit){
   const list = (day && day.slots[slot]) || [];
+  // ترتيب تنازلي: الأحدث أولاً
+  const sorted = [...list].sort((a,b) => {
+    const tA = a.when instanceof Date ? a.when.getTime() : (a.when ? new Date(a.when).getTime() : 0);
+    const tB = b.when instanceof Date ? b.when.getTime() : (b.when ? new Date(b.when).getTime() : 0);
+    return tB - tA;
+  });
+
   return {
     title: SLOT_FULL[slot] || esc(slot),
-    sub: `${formatDate(day.date)}${list.length > 1 ? ` — ${list.length} قياسات` : ''}`,
-    body: list.map(v => measurementCardHTML(v, unit)).join('')
+    sub: `${formatDate(day.date)}${sorted.length > 1 ? ` — مكتبة القياسات المسجلة (${sorted.length} قياسات)` : ''}`,
+    body: sorted.map((v, idx) => measurementCardHTML(v, unit, idx === 0 && sorted.length > 1)).join('')
   };
 }
 // <<MD-END
