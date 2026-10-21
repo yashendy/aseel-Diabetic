@@ -532,12 +532,15 @@ onAuthStateChanged(auth, async (user)=>{
   if(!user){ location.href='index.html'; return; }
   try{
     loader(true);
-    const childRef = doc(db,`parents/${user.uid}/children/${childId}`);
+    const parentId = parentIdParam || user.uid;
+    const isDoctor = parentIdParam && parentIdParam !== user.uid;
+    const childRef = doc(db,`parents/${parentId}/children/${childId}`);
     const snap = await getDoc(childRef);
     if(!snap.exists()){
-      alert('لم يتم العثور على الطفل');
-      localStorage.removeItem('lastChildId');
-      location.replace('parent.html?pickChild=1'); return;
+      alert('لم يتم العثور على ملف الطفل');
+      if (isDoctor) { location.href = 'doctor-dashboard.html'; }
+      else { localStorage.removeItem('lastChildId'); location.replace('parent.html?pickChild=1'); }
+      return;
     }
     const c = snap.data();
     localStorage.setItem('lastChildId', childId);
@@ -573,10 +576,11 @@ onAuthStateChanged(auth, async (user)=>{
     if(breadChildName) breadChildName.textContent = name;
     
     // --- تحديث روابط الـ Nav Pills الجديدة ---
-    setHref($('navMeas'), `measurements.html?child=${encodeURIComponent(childId)}`);
-    setHref($('navMeals'), `meals.html?child=${encodeURIComponent(childId)}`);
-    setHref($('navVisits'), `visits.html?child=${encodeURIComponent(childId)}`);
-    setHref($('navLabs'), `labs.html?child=${encodeURIComponent(childId)}`);
+    const qDocParams = `?child=${encodeURIComponent(childId)}${isDoctor ? `&parentId=${encodeURIComponent(parentId)}` : ''}`;
+    setHref($('navMeas'), `measurements.html${qDocParams}`);
+    setHref($('navMeals'), `meals.html${qDocParams}`);
+    setHref($('navVisits'), `visits.html${qDocParams}`);
+    setHref($('navLabs'), `labs.html${qDocParams}`);
 
     const unit = c.glucoseUnit || 'mg/dL';
     const limits = c.glucose_limits || {};
@@ -627,9 +631,9 @@ onAuthStateChanged(auth, async (user)=>{
     }
     setText(nextVisitEl, displayFollow);
 
-    await renderGlucoseSparkline(user.uid, c);
+    await renderGlucoseSparkline(parentId, c);
     await renderLabCard(user.uid);
-    await initBasalTracker(user.uid, c);
+    await initBasalTracker(parentId, c);
     initEmergencyCard(user, c);
     setHref($('radarAddMeasBtn'), `measurements.html?child=${encodeURIComponent(childId)}`);
 

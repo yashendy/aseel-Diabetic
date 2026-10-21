@@ -15,6 +15,7 @@ const params = new URLSearchParams(location.search);
 const childId = params.get('child') || localStorage.getItem('selectedChildId');
  
 let currentUser = null;
+const parentIdParam = params.get('parentId');
 let parentId = null;
 let therapy = getTherapy({});
 let todayMeasurements = [];
@@ -28,7 +29,8 @@ const measRef = () => collection(db, "parents", parentId, "children", childId, "
 onAuthStateChanged(auth, async (user) => {
   if (!user) { location.replace('index.html'); return; }
   currentUser = user;
-  parentId = localStorage.getItem('selectedParentId') || user.uid;
+  parentId = parentIdParam || localStorage.getItem('selectedParentId') || user.uid;
+  if (parentIdParam) localStorage.setItem('selectedParentId', parentIdParam);
   if (!childId) { location.href = "parent.html"; return; }
  
   if ($('dayPicker')) $('dayPicker').value = localDateStr();

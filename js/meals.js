@@ -100,7 +100,9 @@ onAuthStateChanged(auth, async (u) => {
  
   const qp = new URLSearchParams(location.search);
   state.childId = qp.get('child') || localStorage.getItem('selectedChildId');
-  state.parentId = localStorage.getItem('selectedParentId') || u.uid;
+  const parentIdParam = params.get('parentId');
+  state.parentId = parentIdParam || localStorage.getItem('selectedParentId') || u.uid;
+  if (parentIdParam) localStorage.setItem('selectedParentId', parentIdParam);
   if (!state.childId) { location.href = 'parent.html'; return; }
  
   state.date = qp.get("date") || state.date;
