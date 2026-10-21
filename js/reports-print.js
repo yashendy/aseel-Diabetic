@@ -2,65 +2,56 @@
 import { auth, db } from './firebase-config.js';
 import { collection, doc, getDoc, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-
 const params = new URLSearchParams(location.search);
 const childId = params.get('child');
 const parentIdParam = params.get('parentId');
 const fromDate = params.get('from');
 const toDate = params.get('to');
 const isBlank = params.get('blank') === '1';
-const urlUnit = params.get('unit'); 
-
+const urlUnit = params.get('unit');
 const SLOT_KEYS = ['FASTING','PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK','BEDTIME','DURING_SLEEP'];
 const SLOT_LABELS = ['صائم','ق.الفطار','ب.الفطار','ق.الغداء','ب.الغداء','ق.العشاء','ب.العشاء','سناك','ق.النوم','أثناء النوم'];
-
 const mgdl2mmol=v=>v/18.0182, mmol2mgdl=v=>v*18.0182, round1=n=>Math.round((+n||0)*10)/10;
-
 // استيراد النطاقات ديناميكياً
 let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
 let sysUnit = 'mg/dL';
-
 function limitsInUnit(targetUnit){
   if (targetUnit === sysUnit) return { ...sysLimits };
   if (targetUnit === 'mmol/L' && sysUnit === 'mg/dL') {
-    return { 
-      critLow: round1(mgdl2mmol(sysLimits.critLow)), 
-      low: round1(mgdl2mmol(sysLimits.low)), 
-      high: round1(mgdl2mmol(sysLimits.high)), 
-      critHigh: round1(mgdl2mmol(sysLimits.critHigh)) 
-    }; 
+    return {
+      critLow: round1(mgdl2mmol(sysLimits.critLow)),
+      low: round1(mgdl2mmol(sysLimits.low)),
+      high: round1(mgdl2mmol(sysLimits.high)),
+      critHigh: round1(mgdl2mmol(sysLimits.critHigh))
+    };
   }
   if (targetUnit === 'mg/dL' && sysUnit === 'mmol/L') {
-    return { 
-      critLow: round1(mmol2mgdl(sysLimits.critLow)), 
-      low: round1(mmol2mgdl(sysLimits.low)), 
-      high: round1(mmol2mgdl(sysLimits.high)), 
-      critHigh: round1(mmol2mgdl(sysLimits.critHigh)) 
+    return {
+      critLow: round1(mmol2mgdl(sysLimits.critLow)),
+      low: round1(mmol2mgdl(sysLimits.low)),
+      high: round1(mmol2mgdl(sysLimits.high)),
+      critHigh: round1(mmol2mgdl(sysLimits.critHigh))
     };
   }
   return { ...sysLimits };
 }
-
-function classFor(val, u){ 
+function classFor(val, u){
   if(val == null) return '';
-  const L=limitsInUnit(u); 
-  if(val >= L.critHigh) return 'crit'; 
-  if(val > L.high) return 'mild'; 
-  if(val <= L.critLow) return 'sev'; 
-  if(val < L.low) return 'sev'; 
-  return 'ok'; 
+  const L=limitsInUnit(u);
+  if(val >= L.critHigh) return 'crit';
+  if(val > L.high) return 'mild';
+  if(val <= L.critLow) return 'sev';
+  if(val < L.low) return 'sev';
+  return 'ok';
 }
-
 onAuthStateChanged(auth, async (user) => {
   if (!user) return;
   const container = document.getElementById('printContainer');
-  
   try {
     const parentId = parentIdParam || user.uid;
     const childRef = doc(db, `parents/${parentId}/children/${childId}`);
     const childSnap = await getDoc(childRef);
     const childData = childSnap.data();
-    
     sysUnit = childData.glucoseUnit || 'mg/dL';
     if(childData.glucose_limits) {
         sysLimits.low = Number(childData.glucose_limits.low) || (sysUnit==='mmol/L'? 3.9 : 70);
@@ -68,25 +59,46 @@ onAuthStateChanged(auth, async (user) => {
         sysLimits.critLow = Number(childData.glucose_limits.critical_low) || (sysUnit==='mmol/L'? 3.0 : 54);
         sysLimits.critHigh = Number(childData.glucose_limits.critical_high) || (sysUnit==='mmol/L'? 13.9 : 250);
     }
-
     const displayUnit = urlUnit || sysUnit;
-
     let data = [];
     if (!isBlank) {
       const q = query(collection(childRef, 'measurements'), where('date', '>=', fromDate), where('date', '<=', toDate), orderBy('date', 'asc'));
       const snap = await getDocs(q);
       snap.forEach(d => {
          const x = d.data();
-         let v = displayUnit.includes('mmol') 
+         let v = displayUnit.includes('mmol')
             ? (x.value_mmol ?? (x.unit==='mg/dL'? mgdl2mmol(x.value): x.value))
             : (x.value_mgdl ?? (x.unit==='mmol/L'? mmol2mgdl(x.value): x.value));
-         
          x.displayValue = Number.isFinite(+v) ? round1(+v) : null;
          data.push(x);
       });
     }
+    const basalMap = {};
+    if (!isBlank) {
+      try {
+        const basalCol = collection(db, `parents/${parentId}/children/${childId}/basalLogs`);
+        try {
+          const bq = query(basalCol, where('date', '>=', fromDate), where('date', '<=', toDate));
+          const bsnap = await getDocs(bq);
+          bsnap.forEach(d => {
+            const dt = d.data();
+            const k = dt.date || d.id;
+            if (dt.taken !== false) basalMap[k] = Number(dt.dose) || 0;
+          });
+        } catch (err) {
+          const bsnap = await getDocs(basalCol);
+          bsnap.forEach(d => {
+            const k = d.data().date || d.id;
+            if (k >= fromDate && k <= toDate && d.data().taken !== false) {
+              basalMap[k] = Number(d.data().dose) || 0;
+            }
+          });
+        }
+      } catch (e) { console.warn('Could not load basal logs for print:', e); }
+    }
 
     const weeks = chunkIntoWeeks(fromDate, toDate);
+    const allDates = weeks.flat();
     
     weeks.forEach((weekDays, index) => {
       const page = createPageStructure(childData, weekDays[0], weekDays[weekDays.length-1], index + 1, weeks.length, displayUnit);
@@ -94,22 +106,19 @@ onAuthStateChanged(auth, async (user) => {
       
       weekDays.forEach(date => {
         const dayData = data.filter(d => d.date === date);
-        grid.appendChild(createDayRow(date, dayData, childData, displayUnit));
+        grid.appendChild(createDayRow(date, dayData, childData, displayUnit, basalMap));
       });
       
       container.appendChild(page);
     });
 
     if (!isBlank && data.length > 0) {
-      container.appendChild(createSummaryPage(childData, data, displayUnit));
+      container.appendChild(createSummaryPage(childData, data, displayUnit, basalMap, allDates));
     }
-
     document.getElementById('appLoader').style.display = 'none';
     setTimeout(() => window.print(), 1000);
-
   } catch (e) { console.error(e); }
 });
-
 function chunkIntoWeeks(start, end) {
   let days = []; let curr = new Date(start); const last = new Date(end);
   while (curr <= last) { days.push(curr.toISOString().slice(0, 10)); curr.setDate(curr.getDate() + 1); }
@@ -117,7 +126,6 @@ function chunkIntoWeeks(start, end) {
   for (let i = 0; i < days.length; i += 7) chunks.push(days.slice(i, i + 7));
   return chunks;
 }
-
 function createPageStructure(child, start, end, pageNum, totalPages, displayUnit) {
   const div = document.createElement('div');
   div.className = 'print-page';
@@ -146,30 +154,39 @@ function createPageStructure(child, start, end, pageNum, totalPages, displayUnit
   `;
   return div;
 }
-
-function createDayRow(date, dayData, child, displayUnit) {
+function createDayRow(date, dayData, child, displayUnit, basalMap = {}) {
   const row = document.createElement('div');
   row.className = 'grid-row';
   const d = new Date(date);
   const dayName = d.toLocaleDateString('ar-EG', { weekday: 'short' });
-  
-  let dailyCarbs = 0, dailyIns = 0;
-  dayData.forEach(m => { dailyCarbs += (m.carbs || 0); dailyIns += (m.totalInsulin || m.correctionDose || m.totalDose || 0); });
+  let dailyCarbs = 0, dailyBolus = 0;
+  dayData.forEach(m => { 
+    dailyCarbs += (m.carbs || 0); 
+    dailyBolus += (m.totalInsulin || m.correctionDose || m.totalDose || 0); 
+  });
+  const defaultBasal = Number(child?.insulin?.basalDose || child?.basalDose) || 0;
+  const dailyBasal = basalMap[date] != null ? basalMap[date] : defaultBasal;
+  const dailyTDD = round1(dailyBasal + dailyBolus);
 
   let html = `<div class="cell"><b>${date}</b><br><small>${dayName}</small></div>`;
-  if(!isBlank && (dailyCarbs > 0 || dailyIns > 0)){
-    html += `<div class="cell" style="background:#f8fafc"><b>${dailyCarbs}g</b><br><b>${dailyIns}U</b></div>`;
+  if(!isBlank && (dailyCarbs > 0 || dailyTDD > 0 || dailyBolus > 0)){
+    html += `<div class="cell" style="background:#f8fafc; font-size:10.5px; padding:2px; line-height:1.2;">
+      ${dailyCarbs > 0 ? `<div><b>${round1(dailyCarbs)}g</b></div>` : ''}
+      ${dailyTDD > 0 ? `
+        <div style="color:#047857; font-weight:bold; margin-top:2px;">⚡ ${round1(dailyTDD)}U</div>
+        <div style="font-size:9px; color:#64748b;">ق:${round1(dailyBasal)} | س:${round1(dailyBolus)}</div>
+      ` : (dailyBolus > 0 ? `<div><b>${round1(dailyBolus)}U</b></div>` : '')}
+    </div>`;
   } else {
     html += `<div class="cell" style="background:#f8fafc"></div>`;
   }
-
   SLOT_KEYS.forEach(key => {
-    const matches = dayData.filter(d => d.slotKey === key);
-    matches.sort((a, b) => {
-      const tA = a.when instanceof Date ? a.when.getTime() : (a.when ? new Date(a.when).getTime() : 0);
-      const tB = b.when instanceof Date ? b.when.getTime() : (b.when ? new Date(b.when).getTime() : 0);
-      return tA - tB;
-    });
+    const matches = dayData.filter(d => d.slotKey === key);
+    matches.sort((a, b) => {
+      const tA = a.when instanceof Date ? a.when.getTime() : (a.when ? new Date(a.when).getTime() : 0);
+      const tB = b.when instanceof Date ? b.when.getTime() : (b.when ? new Date(b.when).getTime() : 0);
+      return tA - tB;
+    });
     const m = matches.length ? matches[matches.length - 1] : null;
     const ins = m ? (m.totalInsulin || m.correctionDose || m.totalDose || 0) : 0;
     html += `<div class="cell v-cell">
@@ -180,26 +197,43 @@ function createDayRow(date, dayData, child, displayUnit) {
       ` : ''}
     </div>`;
   });
-
   row.innerHTML = html;
   return row;
 }
+function createSummaryPage(child, allData, displayUnit, basalMap = {}, allDates = []) {
+  // حساب مؤشرات TDD والوزن ونسبة القاعدي/السريع
+  const defaultBasal = Number(child?.insulin?.basalDose || child?.basalDose) || 0;
+  const childWeight = Number(child?.vitals?.weight || child?.weight) || null;
+  
+  let totalBasalSum = 0, totalBolusSum = 0, tddDaysCount = 0;
+  allDates.forEach(dStr => {
+    const dayMatches = allData.filter(d => d.date === dStr);
+    let dayBolus = 0;
+    dayMatches.forEach(m => { dayBolus += (m.totalInsulin || m.correctionDose || m.totalDose || 0); });
+    const dayBasal = basalMap[dStr] != null ? basalMap[dStr] : defaultBasal;
+    if (dayBasal > 0 || dayBolus > 0) {
+      totalBasalSum += dayBasal;
+      totalBolusSum += dayBolus;
+      tddDaysCount++;
+    }
+  });
 
-function createSummaryPage(child, allData, displayUnit) {
+  const avgTDD = tddDaysCount > 0 ? round1((totalBasalSum + totalBolusSum) / tddDaysCount) : 0;
+  const avgBasal = tddDaysCount > 0 ? round1(totalBasalSum / tddDaysCount) : 0;
+  const avgBolus = tddDaysCount > 0 ? round1(totalBolusSum / tddDaysCount) : 0;
+  const basalRatio = avgTDD > 0 ? Math.round((avgBasal / avgTDD) * 100) : 0;
+  const bolusRatio = avgTDD > 0 ? (100 - basalRatio) : 0;
+  const tddPerKg = (childWeight && avgTDD > 0) ? (avgTDD / childWeight).toFixed(2) : null;
   const L = limitsInUnit(displayUnit);
   const valid = allData.filter(x => x.displayValue != null && Number.isFinite(+x.displayValue));
   const n = valid.length || 1;
-
   const critLows = valid.filter(x => x.displayValue < L.critLow).length;
   const mildLows = valid.filter(x => x.displayValue >= L.critLow && x.displayValue < L.low).length;
   const totalLows = critLows + mildLows;
-
   const inRange = valid.filter(x => x.displayValue >= L.low && x.displayValue <= L.high).length;
-
   const mildHighs = valid.filter(x => x.displayValue > L.high && x.displayValue <= L.critHigh).length;
   const critHighs = valid.filter(x => x.displayValue > L.critHigh).length;
   const totalHighs = mildHighs + critHighs;
-
   const tirPct = Math.round((inRange / n) * 100);
   const tbrPct = Math.round((totalLows / n) * 100);
   const tbrL1Pct = round1((mildLows / n) * 100);
@@ -207,14 +241,11 @@ function createSummaryPage(child, allData, displayUnit) {
   const tarPct = Math.round((totalHighs / n) * 100);
   const tarL1Pct = round1((mildHighs / n) * 100);
   const tarL2Pct = round1((critHighs / n) * 100);
-
   const mean = valid.reduce((a, x) => a + x.displayValue, 0) / n;
   const sd = Math.sqrt(valid.reduce((a, x) => a + Math.pow(x.displayValue - mean, 2), 0) / n);
   const cv = mean > 0 ? (sd / mean) * 100 : 0;
-
   const meanMgdl = displayUnit === 'mmol/L' ? mmol2mgdl(mean) : mean;
   const gmi = 3.31 + (0.02392 * meanMgdl);
-
   const div = document.createElement('div');
   div.className = 'print-page';
   div.innerHTML = `
@@ -228,7 +259,6 @@ function createSummaryPage(child, allData, displayUnit) {
         <b>العمر:</b> ${calcAge(child.birthDate)} سنة | <b>النظام:</b> ${child.regimen === 'pump' ? 'مضخة إنسولين' : 'حقن يومية (MDI)'}
       </div>
     </header>
-
     <!-- جدول المؤشرات السريرية الدولية -->
     <table class="agp-metrics-table">
       <thead>
@@ -299,9 +329,25 @@ function createSummaryPage(child, allData, displayUnit) {
           <td>—</td>
           <td colspan="2"><b>${round1(mean)} ${displayUnit}</b> (عدد القياسات: ${valid.length})</td>
         </tr>
+        <tr>
+          <td><b>إجمالي الجرعة اليومية وتوزيع الإنسولين (TDD / kg)</b></td>
+          <td>0.6 - 1.0 وحدة/كجم/يوم (القاعدي 40-50%)</td>
+          <td>
+            ${avgTDD > 0 ? `
+              <b>${avgTDD} U/يوم</b> ${tddPerKg ? `(${tddPerKg} U/kg)` : ''}
+              <br><small style="color:#64748b;">قاعدي: ${basalRatio}% | سريع: ${bolusRatio}% ${childWeight ? `| وزن: ${childWeight}kg` : ''}</small>
+            ` : '—'}
+          </td>
+          <td>
+            ${!avgTDD ? '—' : (
+              tddPerKg && Number(tddPerKg) > 1.25 ? 'جرعة مرتفعة مقارنة بالوزن ⚠️' :
+              (basalRatio > 55 ? 'نسبة القاعدي مرتفعة (>50%) ⚠️' : 
+               (basalRatio < 35 ? 'نسبة السريع مرتفعة (>65%) ⚠️' : 'توزيع متوازن ومثالي 🟢'))
+            )}
+          </td>
+        </tr>
       </tbody>
     </table>
-
     <div class="summary-page">
       <div class="chart-box" style="display:flex; flex-direction:column; align-items:center;">
         <h4 style="margin:0 0 6px 0; color:#334155;">توزيع النطاقات الزمنية (TIR / TBR / TAR)</h4>
@@ -312,7 +358,6 @@ function createSummaryPage(child, allData, displayUnit) {
         <div id="aiContent"></div>
       </div>
     </div>
-
     <!-- خانة توقيع وتوصيات الطبيب المعالج -->
     <div class="doctor-sign-row">
       <div style="flex:1;">
@@ -326,14 +371,11 @@ function createSummaryPage(child, allData, displayUnit) {
         <div style="margin-top:8px;"><b>التوقيع / الختم:</b> ...................................</div>
       </div>
     </div>
-
     <div class="footer">نهاية التقرير الطبي السريري المعتمد — منصة أسيل لرعاية أطفال السكري</div>
   `;
-  
-  setTimeout(() => { renderPrintCharts(valid, displayUnit, tirPct, totalLows, totalHighs); renderAI(allData, displayUnit); }, 100);
+  setTimeout(() => { renderPrintCharts(valid, displayUnit, tirPct, totalLows, totalHighs); renderAI(allData, displayUnit, child, avgTDD, basalRatio, tddPerKg); }, 100);
   return div;
 }
-
 function renderPrintCharts(valid, displayUnit, tirPct, totalLows, totalHighs) {
   if(!valid.length) return;
   const ctx = document.getElementById('printPieTIR')?.getContext('2d');
@@ -357,14 +399,36 @@ function renderPrintCharts(valid, displayUnit, tirPct, totalLows, totalHighs) {
     }
   });
 }
-
-function renderAI(list, displayUnit) {
+function renderAI(list, displayUnit, child = {}, avgTDD = 0, basalRatio = 0, tddPerKg = null) {
   const L = limitsInUnit(displayUnit);
   const patterns = [];
-  
+
+  // فحص توازن القاعدي والسريع والجرعة الكلية قياساً بالوزن
+  if (avgTDD > 0) {
+    if (basalRatio > 55) {
+      patterns.push({
+        name: 'إفراط الأنسولين القاعدي (Over-basalization) 🚨',
+        desc: `نسبة القاعدي تمثل ${basalRatio}% من إجمالي الجرعة اليومية (المثالي 40-50%)، مما يرفع خطر نوبات الهبوط الصباحي والنويم.`,
+        rec: 'يُرجى مراجعة الطبيب لتخفيض جرعة القاعدي بنسبة 10-15% ونقل العبء للأنسولين السريع عند الوجبات.'
+      });
+    } else if (basalRatio < 35 && basalRatio > 0) {
+      patterns.push({
+        name: 'نقص الأنسولين القاعدي (Under-basalization) ⚠️',
+        desc: `نسبة القاعدي تمثل فقط ${basalRatio}% من إجمالي الجرعة، مع الاعتماد المكثف على الجرعات التصحيحية السريعة.`,
+        rec: 'قد يحتاج الطفل لزيادة طفيفة في جرعة القاعدي لتأمين استقرار خط الأساس على مدار 24 ساعة.'
+      });
+    }
+
+    if (tddPerKg && Number(tddPerKg) > 1.25) {
+      patterns.push({
+        name: 'جرعة يومية كلية مرتفعة (اشتباه تضخم شحمي) ⚠️',
+        desc: `الجرعة الكلية للطفل تبلغ ${tddPerKg} وحدة/كجم وهي أعلى من المتوسط المعتاد للأطفال (0.6 - 1.0 U/kg).`,
+        rec: 'افحص مواضع الحقن بدقة لاستبعاد التضخم الشحمي (Lipohypertrophy) واحرص على التدوير المنتظم لأماكن الحقن.'
+      });
+    }
+  }
   // استخراج القراءات الصحيحة فقط
   const valid = list.filter(x => typeof x.displayValue === 'number');
-
   if (valid.length < 5) {
     const aiContainer = document.getElementById('aiContent');
     if (aiContainer) {
@@ -372,20 +436,16 @@ function renderAI(list, displayUnit) {
     }
     return;
   }
-
   // تجميع القراءات حسب الفترات
   const slots = {};
   valid.forEach(m => {
     if (!slots[m.slotKey]) slots[m.slotKey] = [];
     slots[m.slotKey].push(m.displayValue);
   });
-
   const countHigh = (arr) => arr ? arr.filter(v => v > L.high).length : 0;
   const countLow = (arr) => arr ? arr.filter(v => v < L.low).length : 0;
-
   const sleep = slots['DURING_SLEEP'] || [];
   const fast = slots['FASTING'] || slots['WAKE'] || slots['PRE_BREAKFAST'] || [];
-
   // 1. تحليل فترة النوم والصباح (ظاهرة الفجر مقابل تأثير سوموجي)
   if (fast.length >= 3) {
     const fastHighRatio = countHigh(fast) / fast.length;
@@ -412,19 +472,16 @@ function renderAI(list, displayUnit) {
         });
     }
   }
-
   // 2. تحليل الوجبات (مراجعة معامل الكارب CR)
   const meals = [
     { name: 'الإفطار', post: slots['POST_BREAKFAST'] },
     { name: 'الغداء', post: slots['POST_LUNCH'] },
     { name: 'العشاء', post: slots['POST_DINNER'] }
   ];
-
   meals.forEach(meal => {
     if (meal.post && meal.post.length >= 3) {
       const postHighRatio = countHigh(meal.post) / meal.post.length;
       const postLowRatio = countLow(meal.post) / meal.post.length;
-
       if (postHighRatio >= 0.5) {
         patterns.push({
           name: `ارتفاع متكرر بعد ${meal.name} 📈`,
@@ -440,7 +497,6 @@ function renderAI(list, displayUnit) {
       }
     }
   });
-
   // 3. حالة الاستقرار (إذا لم يتم رصد أي أنماط سلبية)
   if (patterns.length === 0) {
     patterns.push({
@@ -449,7 +505,6 @@ function renderAI(list, displayUnit) {
       rec: 'استمر على الخطة العلاجية والغذائية الحالية، أداء ممتاز!'
     });
   }
-
   // طباعة النتائج في التقرير
   const aiContainer = document.getElementById('aiContent');
   if (aiContainer) {
@@ -462,5 +517,4 @@ function renderAI(list, displayUnit) {
     `).join('');
   }
 }
-
-function calcAge(bd) { if(!bd) return '—'; const b=new Date(bd), t=new Date(); let a=t.getFullYear()-b.getFullYear(); if(t.getMonth()<b.getMonth() || (t.getMonth()===b.getMonth()&&t.getDate()<b.getDate())) a--; return a; }
+function calcAge(bd) { if(!bd) return '—'; const b=new Date(bd), t=new Date(); let a=t.getFullYear()-b.getFullYear(); if(t.getMonth()<b.getMonth() || (t.getMonth()===b.getMonth()&&t.getDate()<b.getDate())) a--; return a; }

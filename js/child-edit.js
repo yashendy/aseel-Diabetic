@@ -174,6 +174,7 @@ async function loadChildData() {
     $('#f_unit').dispatchEvent(new Event('change')); // لتحديث الأمثلة بناءً على الوحدة المحفوظة
     
     $('#f_basal').value = d.insulin?.basal || d.basalType || '';
+    if ($('#f_basal_dose')) $('#f_basal_dose').value = d.insulin?.basalDose || d.basalDose || '';
     $('#f_bolus').value = d.insulin?.bolus || d.bolusType || '';
     $('#f_cf').value = d.cf || d.correctionFactor || '';
     if ($('#f_step')) $('#f_step').value = String(d.insulinStep || 0.5);
@@ -267,7 +268,12 @@ async function saveChildData() {
       glucoseUnit: $('#f_unit').value,
  
       // 4. الأنسولين والمعاملات
-      insulin: { basal: $('#f_basal').value, bolus: $('#f_bolus').value },
+      insulin: {
+        basal: $('#f_basal').value,
+        basalDose: Number($('#f_basal_dose')?.value) || null,
+        bolus: $('#f_bolus').value
+      },
+      basalDose: Number($('#f_basal_dose')?.value) || null,
       cf: Number($('#f_cf').value) || null,
       insulinStep: Number($('#f_step')?.value) || 0.5,
       maxDose: Number($('#f_maxdose')?.value) || null,

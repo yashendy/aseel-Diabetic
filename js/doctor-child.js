@@ -107,7 +107,9 @@ async function loadChildProfile() {
   if ($('f_cr_s')) $('f_cr_s').value = cr.snack || '';
 
   if ($('f_basal')) $('f_basal').value = childData.insulin?.basal || childData.basalType || '';
+  if ($('f_basal_dose')) $('f_basal_dose').value = childData.insulin?.basalDose || childData.basalDose || '';
   if ($('f_bolus')) $('f_bolus').value = childData.insulin?.bolus || childData.bolusType || '';
+  if ($('f_child_weight')) $('f_child_weight').value = childData.vitals?.weight || childData.weight || '';
 
   // خريطة الحقن
   const imap = childData.injection_map || {};
@@ -556,8 +558,11 @@ async function saveMedicalProtocol() {
     glucose_limits: limitsData,
     insulin: {
       basal: $('f_basal')?.value?.trim() || null,
+      basalDose: parseFloat($('f_basal_dose')?.value) || null,
       bolus: $('f_bolus')?.value?.trim() || null
     },
+    basalDose: parseFloat($('f_basal_dose')?.value) || null,
+    weight: parseFloat($('f_child_weight')?.value) || null,
     injection_map: injectionMapData,
     doctor_note: $('doctorPrescription')?.value?.trim() || null,
     updatedAt: serverTimestamp()
