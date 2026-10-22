@@ -57,6 +57,29 @@
       </a>
     </section>
 
+    <!-- قسم إعدادات الذكاء الاصطناعي (Google Gemini AI) -->
+    <section class="panel" style="margin-bottom: 24px; border-inline-start: 5px solid #8b5cf6;">
+      <div class="panel-head">
+        <h2>🤖 إعدادات مساعد أسيل الذكي (Google Gemini API)</h2>
+        <span id="aiGlobalStatusBadge" class="badge" style="background: rgba(139, 92, 246, 0.2); color: #a78bfa; font-size: 12px; padding: 4px 10px; border-radius: 999px;">جاري التحقق...</span>
+      </div>
+      <div style="padding: 16px; background: rgba(0,0,0,0.1); border-radius: 12px;">
+        <p style="margin: 0 0 12px 0; font-size: 14px; color: var(--muted); line-height: 1.6;">
+          أدخل هنا مفتاح <b>Google Gemini API</b> الخاص بالمنصة؛ ليتم تفعيل النموذج السحابي الذكي (Gemini 2.0 / 1.5 Flash) تلقائياً لجميع الأطفال وأولياء الأمور دون الحاجة لإدخاله يدوياً في كل جهاز.
+          <br><small style="color: #a78bfa;">* يمكنك الحصول على مفتاح مجاني تماماً من منصة <b>Google AI Studio</b> (aistudio.google.com).</small>
+        </p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+          <div style="flex: 1; min-width: 260px; position: relative;">
+            <input id="globalGeminiKeyInput" type="password" class="input" placeholder="AIzaSy..." dir="ltr" style="width: 100%; font-family: monospace; letter-spacing: 1px;" />
+            <button type="button" id="btnToggleKeyVisibility" style="position: absolute; inset-inline-end: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; color: var(--muted);">👁️</button>
+          </div>
+          <button id="btnSaveGlobalAiKey" type="button" class="btn primary" style="background: #7c3aed; border-color: #7c3aed;">حفظ وتعميم المفتاح 💾</button>
+          <button id="btnTestGlobalAiKey" type="button" class="btn ghost">فحص الاتصال ⚡</button>
+        </div>
+        <div id="aiGlobalKeyMsg" style="margin-top: 10px; font-size: 13px; font-weight: bold;"></div>
+      </div>
+    </section>
+
     <!-- 2. بوابة اعتماد الأطباء -->
     <section class="panel">
       <div class="panel-head">

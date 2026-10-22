@@ -1,6 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { collection, collectionGroup, query, where, getDocs, getDoc, doc, updateDoc, deleteField, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { collection, collectionGroup, query, where, getDocs, getDoc, doc, setDoc, updateDoc, deleteField, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
 let CURRENT_ADMIN = null;
@@ -502,4 +502,149 @@ async function assignNow() {
   } finally {
     $('btnAssign').disabled = false; $('btnAssign').textContent = "✅ اعتماد الإسناد الآن";
   }
+}
+
+
+/* ========================================================= */
+/* إعدادات الذكاء الاصطناعي العامة للأدمن (Gemini Global API) */
+/* ========================================================= */
+const globalKeyInput = $('globalGeminiKeyInput');
+const btnSaveGlobalAiKey = $('btnSaveGlobalAiKey');
+const btnTestGlobalAiKey = $('btnTestGlobalAiKey');
+const btnToggleKeyVisibility = $('btnToggleKeyVisibility');
+const aiGlobalKeyMsg = $('aiGlobalKeyMsg');
+const aiGlobalStatusBadge = $('aiGlobalStatusBadge');
+
+async function loadGlobalAiSettings() {
+  if (!globalKeyInput) return;
+  try {
+    const snap = await getDoc(doc(db, 'admin/global/settings/ai'));
+    if (snap.exists() && snap.data()?.geminiApiKey) {
+      const key = String(snap.data().geminiApiKey).trim();
+      globalKeyInput.value = key;
+      if (aiGlobalStatusBadge) {
+        aiGlobalStatusBadge.textContent = '✅ مفعل ويعمل للجميع';
+        aiGlobalStatusBadge.style.color = '#4ade80';
+        aiGlobalStatusBadge.style.background = 'rgba(74, 222, 128, 0.15)';
+      }
+    } else {
+      if (aiGlobalStatusBadge) {
+        aiGlobalStatusBadge.textContent = '⚠️ غير مفعل (المحرك السريري الافتراضي نشط)';
+        aiGlobalStatusBadge.style.color = '#fbbf24';
+        aiGlobalStatusBadge.style.background = 'rgba(251, 191, 36, 0.15)';
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading global AI settings:', err);
+    if (aiGlobalStatusBadge) {
+      aiGlobalStatusBadge.textContent = 'المحرك السريري الافتراضي نشط';
+    }
+  }
+}
+
+if (btnToggleKeyVisibility && globalKeyInput) {
+  btnToggleKeyVisibility.onclick = () => {
+    const isPass = globalKeyInput.type === 'password';
+    globalKeyInput.type = isPass ? 'text' : 'password';
+    btnToggleKeyVisibility.textContent = isPass ? '🔒' : '👁️';
+  };
+}
+
+if (btnSaveGlobalAiKey && globalKeyInput) {
+  btnSaveGlobalAiKey.onclick = async () => {
+    const key = globalKeyInput.value.trim();
+    if (!key) {
+      if (!confirm('هل تريد حذف المفتاح والاعتماد على المحرك السريري الذكي المدمج فقط؟')) return;
+    }
+    
+    btnSaveGlobalAiKey.disabled = true;
+    if (aiGlobalKeyMsg) {
+      aiGlobalKeyMsg.style.color = 'var(--muted)';
+      aiGlobalKeyMsg.textContent = 'جاري الحفظ والتعميم على المنصة...';
+    }
+
+    try {
+      await setDoc(doc(db, 'admin/global/settings/ai'), {
+        geminiApiKey: key,
+        updatedAt: serverTimestamp(),
+        updatedBy: CURRENT_ADMIN?.email || CURRENT_ADMIN?.uid || 'admin'
+      }, { merge: true });
+
+      if (key) {
+        localStorage.setItem('aseel_gemini_key', key);
+        if (aiGlobalKeyMsg) {
+          aiGlobalKeyMsg.style.color = 'var(--success)';
+          aiGlobalKeyMsg.textContent = '✅ تم حفظ وتعميم المفتاح بنجاح! أصبح مساعد الذكاء الاصطناعي السحابي مفعل الآن لجميع أطفال المنصة.';
+        }
+        if (aiGlobalStatusBadge) {
+          aiGlobalStatusBadge.textContent = '✅ مفعل ويعمل للجميع';
+          aiGlobalStatusBadge.style.color = '#4ade80';
+          aiGlobalStatusBadge.style.background = 'rgba(74, 222, 128, 0.15)';
+        }
+      } else {
+        localStorage.removeItem('aseel_gemini_key');
+        if (aiGlobalKeyMsg) {
+          aiGlobalKeyMsg.style.color = 'var(--warn)';
+          aiGlobalKeyMsg.textContent = 'تم إلغاء المفتاح؛ ستعمل المنصة بالمحرك السريري الذكي المدمج تلقائياً.';
+        }
+        if (aiGlobalStatusBadge) {
+          aiGlobalStatusBadge.textContent = 'المحرك السريري الافتراضي نشط';
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      if (aiGlobalKeyMsg) {
+        aiGlobalKeyMsg.style.color = 'var(--danger)';
+        aiGlobalKeyMsg.textContent = '❌ حدث خطأ أثناء الحفظ: ' + (err.message || 'يرجى التحقق من الصلاحيات');
+      }
+    } finally {
+      btnSaveGlobalAiKey.disabled = false;
+    }
+  };
+}
+
+if (btnTestGlobalAiKey && globalKeyInput) {
+  btnTestGlobalAiKey.onclick = async () => {
+    const key = globalKeyInput.value.trim();
+    if (!key) {
+      alert('يرجى إدخال المفتاح أولاً لفحصه.');
+      return;
+    }
+
+    btnTestGlobalAiKey.disabled = true;
+    if (aiGlobalKeyMsg) {
+      aiGlobalKeyMsg.style.color = 'var(--muted)';
+      aiGlobalKeyMsg.textContent = 'جاري اختبار الاتصال بخوادم Google Gemini...';
+    }
+
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'قل كلمة واحدة فقط للتأكيد: جاهز' }] }]
+        })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson?.error?.message || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (aiGlobalKeyMsg) {
+        aiGlobalKeyMsg.style.color = 'var(--success)';
+        aiGlobalKeyMsg.textContent = `⚡ الاتصال ناجح ومستقر تماماً! رد النموذج: "${reply.trim()}". المفتاح صالح للعمل.`;
+      }
+    } catch (e) {
+      if (aiGlobalKeyMsg) {
+        aiGlobalKeyMsg.style.color = 'var(--danger)';
+        aiGlobalKeyMsg.textContent = `❌ فشل الاتصال بالمفتاح: ${e.message}`;
+      }
+    } finally {
+      btnTestGlobalAiKey.disabled = false;
+    }
+  };
 }
