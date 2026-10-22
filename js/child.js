@@ -1512,29 +1512,64 @@ async function loadGlobalGeminiKey() {
   }
 }
 
+let _aiPresetMeals = [];
+let _aiCommonFoodNames = [];
+let _aiFavoriteFoodNames = [];
+
 async function computeRecentBolusStats(uid) {
   try {
     const mealsRef = collection(db, `parents/${uid}/children/${childId}/meals`);
-    const snap = await getDocs(query(mealsRef, orderBy('date', 'desc'), limit(25)));
+    const snap = await getDocs(query(mealsRef, orderBy('date', 'desc'), limit(30)));
     if (snap.empty) {
       _aiMealBolusAvg = 0;
-      return;
-    }
-    const byDate = {};
-    snap.docs.forEach(d => {
-      const m = d.data();
-      const dt = m.date || 'unknown';
-      const dose = Number(m.totalDose ?? m.insulinUnits ?? m.recommendedDose ?? 0) || 0;
-      byDate[dt] = (byDate[dt] || 0) + dose;
-    });
-    const days = Object.keys(byDate);
-    if (days.length) {
-      const total = days.reduce((acc, k) => acc + byDate[k], 0);
-      _aiMealBolusAvg = +(total / days.length).toFixed(1);
+    } else {
+      const byDate = {};
+      const foodFreq = {};
+      snap.docs.forEach(d => {
+        const m = d.data();
+        const dt = m.date || 'unknown';
+        const dose = Number(m.totalDose ?? m.insulinUnits ?? m.recommendedDose ?? 0) || 0;
+        byDate[dt] = (byDate[dt] || 0) + dose;
+
+        // استخراج الأصناف الأكثر تكراراً في وجبات الطفل
+        const items = m.items || m.foodItems || [];
+        if (Array.isArray(items)) {
+          items.forEach(it => {
+            const name = it.name || it.foodName || it.title;
+            if (name) foodFreq[name] = (foodFreq[name] || 0) + 1;
+          });
+        }
+      });
+      const days = Object.keys(byDate);
+      if (days.length) {
+        const total = days.reduce((acc, k) => acc + byDate[k], 0);
+        _aiMealBolusAvg = +(total / days.length).toFixed(1);
+      }
+      _aiCommonFoodNames = Object.entries(foodFreq)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(entry => entry[0]);
     }
   } catch (e) {
     _aiMealBolusAvg = 0;
   }
+
+  // تحميل الوجبات المفضلة والمحفوظة (Preset Meals)
+  try {
+    const presetsSnap = await getDocs(collection(db, `parents/${uid}/children/${childId}/presetMeals`));
+    if (!presetsSnap.empty) {
+      _aiPresetMeals = presetsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+  } catch(e){}
+
+  // تحميل المفضلات من التخزين المحلي إن وجدت
+  try {
+    const favsRaw = localStorage.getItem(`fav_foods_${childId}`);
+    if (favsRaw) {
+      const parsed = JSON.parse(favsRaw);
+      if (Array.isArray(parsed)) _aiFavoriteFoodNames = parsed;
+    }
+  } catch(e){}
 }
 
 function getChildClinicalProfile(child) {
@@ -1585,11 +1620,16 @@ function getChildClinicalProfile(child) {
     name, age, gender, weight,
     unit, isMmol,
     low, high, critLow, critHigh, target,
-    crBreakfast, crLunch, crDinner, crSnack, activeCR, mealNowLabel: mealNow.label,
+    crBreakfast, crLunch, crDinner, crSnack, activeCR, mealNowKey: mealNow.key, mealNowLabel: mealNow.label,
     cf, basalType, basalDose, bolusType, hypoCarbs, doctorNote,
     bolusAvg: _aiMealBolusAvg, tdd, tddPerKg, basalPct,
     stats: window._aiGlucoseStats || { hasData: false },
-    hba1c: window._aiLastHba1c || null
+    hba1c: window._aiLastHba1c || null,
+    dietary: {
+      presetMeals: _aiPresetMeals,
+      commonFoods: _aiCommonFoodNames,
+      favoriteFoods: _aiFavoriteFoodNames
+    }
   };
 }
 
@@ -1706,6 +1746,12 @@ function buildGeminiSystemPrompt(p) {
 - حد الارتفاع هو أعلى من **${p.high} ${p.unit}**، والارتفاع الحرج أعلى من **${p.critHigh} ${p.unit}**.
 - إذا ذكر ولي الأمر رقماً يبدو بالوحدة الأخرى (مثلاً ذكر رقم مثل 240 بينما الوحدة mmol/L، أو ذكر 5.5 بينما الوحدة mg/dL)، قم بتحويله فوراً لوحدة الطفل (${p.unit}) باستخدام المعامل 18 ووضّح له ذلك بلطف.
 
+[النظام الغذائي والمفضلات المسجلة للطفل]:
+- الوجبة الحالية بحسب التوقيت: ${p.mealNowLabel} (معامل الكارب: 1:${p.activeCR})
+- الأصناف الشائعة في سجل وجبات الطفل: ${p.dietary?.commonFoods?.length ? p.dietary.commonFoods.join('، ') : 'لم تسجل بعد (استخدم المطبخ العربي/المصري الصحي المعتاد)'}
+- الوجبات الجاهزة المحفوظة (Presets): ${p.dietary?.presetMeals?.length ? p.dietary.presetMeals.map(m=>m.name).join('، ') : 'لا توجد'}
+- عند اقتراح وجبات: اقترح دائماً وجبات صحية شهية تناسب سكري الأطفال، تراعي مفضلات الطفل المسجلة، الأطعمة المتاحة في البيت (مثل الخبز البلدي، البيض، الفول، الجبن القريش، الأرز، المكرونة، الفراخ، التونة، الشوفان، الفواكه والخضار الطازج)، مع كتابة تفاصيل كل مكون بالجرام، إجمالي جرامات الكارب، وجرعة الأنسولين السريع (${p.bolusType}) المحسوبة بمعامل وجبة ${p.mealNowLabel} (1 وحدة لكل ${p.activeCR} جرام كارب)، وتذكير بالقياس بوحدة ${p.unit}.
+
 [ملف الطفل الطبي الحالي]:
 - الاسم: ${p.name} | العمر: ${p.age} سنة | النوع: ${p.gender} | الوزن: ${p.weight ? p.weight + ' كجم' : 'غير مسجل'}
 - الأنسولين القاعدي: ${p.basalType} | الجرعة اليومية: ${p.basalDose ? p.basalDose + ' وحدة' : 'غير محددة'}
@@ -1772,6 +1818,135 @@ async function callGeminiCloudApi(userText, profile) {
 /* ---- المحرك السريري الذكي المدمج (Built-in Clinical Expert Engine) ----
    يعمل تلقائياً 100% بدون الحاجة لأي إعدادات، ويحلل السؤال + أرقام الطفل الحية
    مع التزام كامل بوحدة القياس (mg/dL أو mmol/L) */
+
+function generateSmartMealSuggestions(qLower, p) {
+  const cr = p.activeCR;
+  const u = p.unit;
+  const isMmol = p.isMmol;
+  const bolusType = p.bolusType;
+  const mealName = p.mealNowLabel;
+
+  // فحص نوع الوجبة المطلوبة في السؤال
+  let slotTitle = mealName;
+  let activeRatio = cr;
+  if (/فطور|فطار|صباح/.test(qLower)) {
+    slotTitle = 'الفطور';
+    activeRatio = p.crBreakfast || cr;
+  } else if (/غداء|غدا/.test(qLower)) {
+    slotTitle = 'الغداء';
+    activeRatio = p.crLunch || cr;
+  } else if (/عشاء|عشا|مساء/.test(qLower)) {
+    slotTitle = 'العشاء';
+    activeRatio = p.crDinner || cr;
+  } else if (/سناك|خفيف|تصبيرة|بين الوجبات/.test(qLower)) {
+    slotTitle = 'السناك الخفيف';
+    activeRatio = p.crSnack || cr;
+  }
+
+  // 1. فحص المفضلات والوجبات الجاهزة المحفوظة مسبقاً للطفل (Presets)
+  const presets = p.dietary?.presetMeals || [];
+  let presetNote = '';
+  if (presets.length > 0) {
+    const pSample = presets[0];
+    const pCarbs = Number(pSample.totalCarbs || pSample.carbs || 30);
+    const pDose = +(pCarbs / activeRatio).toFixed(1);
+    presetNote = `- ⭐ **من وجبات ${p.name} الجاهزة المحفوظة ("${pSample.name}"):** تحتوي على حوالي **${pCarbs}g كارب** ⬅️ الجرعة المحسوبة: **${pDose} وحدة** (${bolusType}).\n\n`;
+  }
+
+  // 2. فحص الأصناف الأكثر تكراراً في تاريخ وجبات الطفل
+  const commonFoods = p.dietary?.commonFoods || [];
+  let commonNote = '';
+  if (commonFoods.length > 0) {
+    commonNote = `💡 *أصناف يفضلها ويتناولها ${p.name} كثيراً في سجلاته:* (${commonFoods.slice(0, 5).join('، ')}).\n\n`;
+  }
+
+  // 3. فحص ما إذا كان ولي الأمر ذكر مكونات محددة متوفرة في بيته
+  const hasEggs = /(بيض|بيضه|بيضة)/.test(qLower);
+  const hasCheese = /(جبن|جبنة|قريش|شيدر|رومي)/.test(qLower);
+  const hasFul = /(فول)/.test(qLower);
+  const hasOats = /(شوفان)/.test(qLower);
+  const hasChicken = /(فراخ|دجاج|صدور)/.test(qLower);
+  const hasMeat = /(لحم|لحمة|كفتة|برجر)/.test(qLower);
+  const hasFish = /(سمك|تونا|تونة|جمبري)/.test(qLower);
+  const hasRice = /(رز|أرز|ارز)/.test(qLower);
+  const hasPasta = /(مكرون|مكرونة)/.test(qLower);
+  const hasPotato = /(بطاطس)/.test(qLower);
+
+  let customOption = '';
+  if (hasChicken || hasMeat || hasFish || hasRice || hasPasta || hasPotato) {
+    const carbBase = hasRice ? '5 ملاعق أرز مطبوخ (25g كارب)' : (hasPasta ? 'كوب مكرونة مسلوقة (35g كارب)' : (hasPotato ? 'حبة بطاطس متوسطة مشوية (25g كارب)' : 'نصف رغيف بلدي أو حبة بطاطس (25g كارب)'));
+    const carbCount = hasPasta ? 40 : 30;
+    const doseCustom = +(carbCount / activeRatio).toFixed(1);
+    customOption = `#### 🌟 خيار مخصص بالمتاح لديك (${carbCount} جرام كارب ⬅️ الجرعة: ${doseCustom} وحدة):\n` +
+      `- ${carbBase}\n` +
+      `- قطعة بروتين مشوي أو مسلوق (${hasFish ? 'سمك أو تونة' : (hasChicken ? 'صدور دجاج' : 'لحم خالي الدهن')}) (0g كارب - بروتين عالي يمنع هبوط السكر).\n` +
+      `- طبق خضار مطبوخ أو شوربة خضار + سلطة خضراء غنية بالألياف (خيار، طماطم، خس، جرجير) (5g كارب).\n\n`;
+  } else if (hasEggs || hasCheese || hasFul || hasOats) {
+    const carbBase = hasOats ? '4 ملاعق شوفان كامل الحبة مطبوخ بحليب (25g كارب)' : (hasFul ? '4 ملاعق فول بزيت زيتون وليمون (15g كارب) + نصف رغيف بلدي (20g كارب)' : 'نصف رغيف خبز بلدي أو 2 شريحة توست بني (25g كارب)');
+    const carbCount = hasFul ? 35 : (hasOats ? 30 : 25);
+    const doseCustom = +(carbCount / activeRatio).toFixed(1);
+    customOption = `#### 🌟 خيار مخصص بالمتاح لديك (${carbCount} جرام كارب ⬅️ الجرعة: ${doseCustom} وحدة):\n` +
+      `- ${carbBase}\n` +
+      `- بروتين مشبع: ${hasEggs ? '2 بيضة مسلوقة أو أومليت خفيف' : (hasCheese ? 'قطعة جبن قريش بزيت زيتون أو جبن أبيض قليل الدسم' : 'فول بزيت زيتون')} (0g كارب).\n` +
+      `- خضار طازج مقطع (خيار وخس وفلفل رومي) (0–3g كارب).\n\n`;
+  }
+
+  // 4. خيارات الوجبات المتوازنة الشائعة والمعتمدة لسكري الأطفال
+  let suggestionsBody = '';
+  if (slotTitle === 'الفطور') {
+    const d1 = +(25 / activeRatio).toFixed(1);
+    const d2 = +(35 / activeRatio).toFixed(1);
+    const d3 = +(15 / activeRatio).toFixed(1);
+    suggestionsBody = `
+- **الخيار 1: الفطور الشعبي المتوازن (25g كارب ⬅️ جرعة ${d1} وحدة ${bolusType})**
+  - نصف رغيف خبز بلدي أسمر (20g كارب) + 2 بيضة مسلوقة أو قطعة جبن قريش بزيت زيتون (0g) + طبق شرائح خيار وخس وطماطم (5g).
+- **الخيار 2: فطور الفول المشبع بالألياف (35g كارب ⬅️ جرعة ${d2} وحدة ${bolusType})**
+  - 4 ملاعق كبيرة فول مدمس بالكمون والليمون (15g) + نصف رغيف بلدي (20g) + بيضة مسلوقة (0g).
+- **الخيار 3: وعاء الشوفان والحليب الدافئ (25g كارب ⬅️ جرعة ${d1} وحدة ${bolusType})**
+  - 3 ملاعق شوفان حبة كاملة (15g) + نصف كوب حليب قليل الدسم (6g) + رشة قرفة ونصف تفاحة مقطعة (8g) ومكسرات نيئة.`;
+  } else if (slotTitle === 'الغداء') {
+    const d1 = +(35 / activeRatio).toFixed(1);
+    const d2 = +(45 / activeRatio).toFixed(1);
+    const d3 = +(30 / activeRatio).toFixed(1);
+    suggestionsBody = `
+- **الخيار 1: الأرز مع الدجاج والملوخية (35g كارب ⬅️ جرعة ${d1} وحدة ${bolusType})**
+  - 6 ملاعق أرز أبيض أو بسمتي مطبوخ (25g كارب) + طبق ملوخية بيتي بدون سكر (4g) + ربع دجاجة مشوية أو مسلوقة (0g) + طبق سلطة ملونة بزيت زيتون (6g).
+- **الخيار 2: صينية السمك المشوي والخضار (30g كارب ⬅️ جرعة ${d3} وحدة ${bolusType})**
+  - سمكة بلطي أو بوري مشوية بالردة (0g) + 5 ملاعق أرز صيادية (22g) + طبق سلطة خضراء وطحينة خفيفة (8g).
+- **الخيار 3: مكرونة مع كفتة مشوية (45g كارب ⬅️ جرعة ${d2} وحدة ${bolusType})**
+  - طبق مكرونة مسلوقة بصلصة الطماطم الخفيفة (35g) + 3 أصابع كفتة لحم مشوية بالفرن (2g) + سلطة جرجير وخيار وفجل (5g).`;
+  } else if (slotTitle === 'العشاء') {
+    const d1 = +(20 / activeRatio).toFixed(1);
+    const d2 = +(30 / activeRatio).toFixed(1);
+    const d3 = +(15 / activeRatio).toFixed(1);
+    suggestionsBody = `
+- **الخيار 1: عشاء خفيف يحمي من هبوط الفجر (20g كارب ⬅️ جرعة ${d1} وحدة ${bolusType})**
+  - كوب زبادي طبيعي أو لبن رايب (10g) + ملعقة بذور شيا أو شوفان (5g) + ربع رغيف بلدي مع بيضة مسلوقة أو قطعة جبن (10g).
+- **الخيار 2: سندوتش توست الحبوب الكاملة (25g كارب ⬅️ جرعة ${+(25/activeRatio).toFixed(1)} وحدة ${bolusType})**
+  - 2 شريحة توست بني بحبوب كاملة (20g) + شرائح جبن شيدر أو بيض أومليت (0g) + شرائح خيار وجزر (5g).
+- **الخيار 3: سلطة تونة بالذرة والخضار (20g كارب ⬅️ جرعة ${d1} وحدة ${bolusType})**
+  - علبة تونة مصفاة من الزيت + 3 ملاعق ذرة حلوة (12g) + خس وخيار وفلفل ألوان + ربع رغيف بلدي (10g).`;
+  } else {
+    const d1 = +(15 / activeRatio).toFixed(1);
+    suggestionsBody = `
+- **سناك 1 (15g كارب ⬅️ جرعة ${d1} وحدة):** كوب ونصف فشار منزلي بزيت خفيف (15g) + حفنة سوداني أو مكسرات نيئة.
+- **سناك 2 (15g كارب ⬅️ جرعة ${d1} وحدة):** ثمرة تفاح متوسطة أو برتقالة (15g) مع ملعقة صغيرة زبدة فول سوداني طبيعية.
+- **سناك 3 (10g كارب):** علبة زبادي صغيرة (8g) مع شرائح فراولة طازجة (5g).`;
+  }
+
+  return `### 🥗 مقترحات وجبات متوازنة لـ ${p.name} (${slotTitle})\n` +
+    `**معامل الكارب المعتمد لهذه الوجبة:** 1 وحدة أنسولين (${bolusType}) لكل **${activeRatio} جرام كارب**.\n\n` +
+    presetNote +
+    commonNote +
+    customOption +
+    `#### 📋 خيارات وجبات صحية محسوبة ومجربة:\n` +
+    suggestionsBody +
+    `\n\n### 🩺 إرشادات ذهبية لحماية سكر ${p.name} بعد الوجبة:\n` +
+    `1. **القياس قبل الأكل:** قِس السكر بوحدة **${u}**؛ إذا كان في النطاق (${p.low}–${p.high} ${u}) احقن جرعة الوجبة فقط قبل الأكل بـ 10–15 دقيقة.\n` +
+    `2. **ترتيب الأكل:** ابدأ بالخضار والسلطة والبروتين، ثم النشويات؛ هذا الترتيب يبطئ امتصاص السكر ويمنع الارتفاعات المفاجئة.\n` +
+    `3. **إذا كان السكر مرتفعاً قبل الوجبة:** يُضاف تصحيح السكر بمعامل الطفل (${p.cf} ${u}/وحدة) إلى جرعة الوجبة بعد التأكد من عدم وجود تكدس أنسولين.`;
+}
+
 function generateSmartClinicalReply(userText, p) {
   const q = userText.trim();
   const qLower = q.toLowerCase();
@@ -1936,20 +2111,9 @@ function generateSmartClinicalReply(userText, p) {
       `  - إذا كان قياس 3 فجراً أقل من **${p.low} ${u}** فالسبب زيادة في القاعدي (${p.basalType}) أو جرعة العشاء، أما إذا كان مرتفعاً طوال الليل فالسبب نقص في الجرعة أو كارب متأخر في العشاء.`;
   }
 
-  // 5. سؤال عن اقتراح وجبة صحية محسوبة الكارب والجرعة
-  if (/(وجب|اقترح|فطور|غداء|عشاء|سناك|طعام|أكل|اكل|تغذية)/.test(qLower)) {
-    const cr = p.activeCR;
-    const dose30 = +(30 / cr).toFixed(1);
-    const dose45 = +(45 / cr).toFixed(1);
-    const dose15 = +(15 / cr).toFixed(1);
-    return `### 🥗 مقترحات وجبات متوازنة لـ ${p.name} (محسوبة بمعامل ${p.mealNowLabel}: 1 وحدة لكل ${cr}g كارب)\n` +
-      `- **الخيار الأول: وجبة متوسطة (30 جرام كارب) ⬅️ الجرعة التقريبية: ${dose30} وحدة (${p.bolusType})**\n` +
-      `  - نصف رغيف خبز أسمر (15g) + بيضة مسلوقة أو قطعة جبن قريش/صدور دجاج (0g) + ثمرة تفاح صغيرة أو برتقالة (15g) + خيار وخس.\n` +
-      `- **الخيار الثاني: وجبة غداء مشبعة (45 جرام كارب) ⬅️ الجرعة التقريبية: ${dose45} وحدة (${p.bolusType})**\n` +
-      `  - 6 ملاعق أرز مطبوخ أو مكرونة (30g) + طبق خضار مطبوخ وقطعة لحم/سمك مشوي (0–5g) + كوب زبادي صغير مع نصف ثمرة فاكهة (12–15g).\n` +
-      `- **الخيار الثالث: سناك خفيف (15 جرام كارب) ⬅️ الجرعة التقريبية: ${dose15} وحدة (${p.bolusType})**\n` +
-      `  - كوب فشار منزلي متوسط (15g) أو ثمرة فاكهة متوسطة مع حفنة مكسرات نيئة.\n` +
-      `- 💡 *تذكير بوحدة **${u}**:* قِس السكر قبل الأكل؛ إذا كان داخل النطاق (**${p.low}–${p.high} ${u}**) تُعطى جرعة الكارب فقط قبل الأكل بـ 10–15 دقيقة.`;
+  // 5. سؤال عن اقتراح وجبة صحية محسوبة الكارب والجرعة والمفضلات والمتاح
+  if (/(وجب|اقترح|فطور|غداء|عشاء|سناك|طعام|أكل|اكل|تغذية|مفضل|متاح|شيوع|اكثر شيوعا)/.test(qLower)) {
+    return generateSmartMealSuggestions(qLower, p);
   }
 
   // 6. الرد الافتراضي الشامل: تحليل ذكي متكامل لملف الطفل وقراءاته + إجابة السياق
