@@ -618,25 +618,43 @@ if (btnTestGlobalAiKey && globalKeyInput) {
     }
 
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'قل كلمة واحدة فقط للتأكيد: جاهز' }] }]
-        })
-      });
+      const candidateModels = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+      let workingModel = null;
+      let reply = '';
+      let lastError = null;
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson?.error?.message || `HTTP ${res.status}`);
+      for (const m of candidateModels) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(key)}`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: 'قل كلمة واحدة للتأكيد: جاهز' }] }]
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'جاهز';
+            workingModel = m;
+            break;
+          } else {
+            const errJson = await res.json().catch(() => ({}));
+            lastError = new Error(errJson?.error?.message || `HTTP ${res.status}`);
+          }
+        } catch (subErr) {
+          lastError = subErr;
+        }
       }
 
-      const data = await res.json();
-      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      if (aiGlobalKeyMsg) {
-        aiGlobalKeyMsg.style.color = 'var(--success)';
-        aiGlobalKeyMsg.textContent = `⚡ الاتصال ناجح ومستقر تماماً! رد النموذج: "${reply.trim()}". المفتاح صالح للعمل.`;
+      if (workingModel) {
+        if (aiGlobalKeyMsg) {
+          aiGlobalKeyMsg.style.color = 'var(--success)';
+          aiGlobalKeyMsg.textContent = `⚡ الاتصال ناجح ومستقر تماماً عبر النموذج (${workingModel})! رد النموذج: "${reply.trim()}". المفتاح مفعل وجاهز.`;
+        }
+      } else {
+        throw lastError || new Error('تعذر العثور على نموذج متوافق مع المفتاح.');
       }
     } catch (e) {
       if (aiGlobalKeyMsg) {
