@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>لوحة الطفل - أسيل</title>
-  <link rel="stylesheet" href="css/child.css?v=2">
+  <link rel="stylesheet" href="css/child.css?v=3">
   <link rel="icon" type="image/png" href="favicon.png" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -48,6 +48,7 @@
           <span class="v-chip">🍔 CR: <b id="chipCR">—</b></span>
           <span class="v-chip">💉 CF: <b id="chipCF">—</b></span>
           <button id="btnEmergencyCard" type="button" class="btn-emergency-pill">🪪 بطاقة الطوارئ والمدرسة</button>
+          <button id="btnOpenAiHeader" type="button" class="btn-ai-pill">🤖 المساعد الذكي (تحليل فوري)</button>
         </div>
       </div>
       <div class="vitals-stats">
@@ -300,9 +301,74 @@
     </div>
   </dialog>
 
+  <!-- ================= مساعد أسيل الذكي (AI Medical Chat Assistant) ================= -->
+  <button id="aiChatFab" type="button" class="ai-chat-fab no-print" title="تحدث مع مساعد أسيل الذكي">
+    <span class="ai-fab-icon">🤖</span>
+    <span class="ai-fab-label">مساعد أسيل الذكي</span>
+    <span class="ai-fab-pulse"></span>
+  </button>
+
+  <aside id="aiChatWidget" class="ai-chat-widget hidden no-print" aria-label="مساعد أسيل الذكي">
+    <!-- هيدر الشات -->
+    <header class="ai-chat-header">
+      <div class="ai-header-right">
+        <div class="ai-BotAvatar">🤖</div>
+        <div class="ai-header-info">
+          <div class="ai-title-row">
+            <h4>مساعد أسيل الطبي الذكي</h4>
+            <span id="aiUnitBadge" class="ai-unit-badge">mg/dL</span>
+          </div>
+          <p id="aiChildContextSub">يحلل ملف الطفل وقراءاته تلقائياً</p>
+        </div>
+      </div>
+      <div class="ai-header-actions">
+        <button id="aiBtnSettings" type="button" class="ai-icon-btn" title="إعدادات محرك الذكاء الاصطناعي (Gemini API)">⚙️</button>
+        <button id="aiBtnReset" type="button" class="ai-icon-btn" title="بدء محادثة جديدة">🔄</button>
+        <button id="aiBtnClose" type="button" class="ai-icon-btn ai-close-btn" title="إغلاق الشات">✕</button>
+      </div>
+    </header>
+
+    <!-- شريط إعدادات Gemini API الاختياري -->
+    <div id="aiSettingsPanel" class="ai-settings-panel hidden">
+      <div class="ai-settings-title">🔑 ربط مفتاح Google Gemini API (اختياري لذكاء سحابي موسّع):</div>
+      <p class="ai-settings-hint">يعمل المساعد تلقائياً بمحرك أسيل السريري الذكي، ويمكنك إضافة مفتاح Gemini المجاني لتفعيل النموذج اللغوي السحابي.</p>
+      <div class="ai-settings-row">
+        <input type="password" id="aiGeminiKeyInput" placeholder="AIzaSy..." dir="ltr" />
+        <button id="aiSaveKeyBtn" type="button" class="btn primary btn-sm">حفظ</button>
+      </div>
+      <div id="aiKeyStatusMsg" class="ai-key-status"></div>
+    </div>
+
+    <!-- أزرار الأسئلة السريعة الذكية -->
+    <div class="ai-quick-chips" id="aiQuickChips">
+      <button type="button" class="ai-chip" data-prompt="حلل قراءات طفلي في آخر 7 أيام وأخبرني بأهم الملاحظات وأسباب الهبوط أو الارتفاع">📊 تحليل شامل لحالة طفلي</button>
+      <button type="button" class="ai-chip" data-prompt="هل جرعة الأنسولين القاعدي الحالية مناسبة لوزن طفلي وقراءاته؟">⚖️ تقييم جرعة القاعدي والوزن</button>
+      <button type="button" class="ai-chip" data-prompt="كيف أتصرف الآن إذا حدث هبوط أو ارتفاع شديد في سكر طفلي؟">🚨 طوارئ الهبوط والارتفاع</button>
+      <button type="button" class="ai-chip" data-prompt="ساعدني في حساب جرعة وجبة أو جرعة تصحيح بناءً على معاملات طفلي">🧮 حاسبة جرعة وتصحيح ذكية</button>
+      <button type="button" class="ai-chip" data-prompt="ما سبب ارتفاع أو هبوط السكر أثناء النوم والفجر وكيف نضبطه؟">🌙 ضبط سكر الليل والفجر</button>
+      <button type="button" class="ai-chip" data-prompt="اقترح لي وجبة صحية مشبعة لطفلي مع حساب الكارب وجرعة الأنسولين لها">🥗 اقتراح وجبة محسوبة الجرعة</button>
+    </div>
+
+    <!-- منطقة الرسائل -->
+    <div id="aiChatMessages" class="ai-chat-messages"></div>
+
+    <!-- شريط الإدخال -->
+    <form id="aiChatForm" class="ai-chat-input-bar">
+      <input
+        type="text"
+        id="aiChatInput"
+        placeholder="اسأل أي سؤال طبي أو اكتب قراءة السكر/الكارب..."
+        autocomplete="off"
+      />
+      <button id="aiChatSendBtn" type="submit" class="ai-send-btn" title="إرسال">
+        <span>إرسال</span> ➤
+      </button>
+    </form>
+  </aside>
+
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="js/child.js?v=6"></script>
+  <script type="module" src="js/child.js?v=7"></script>
   
 </body>
 </html>
