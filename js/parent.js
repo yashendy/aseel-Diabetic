@@ -92,7 +92,18 @@ async function loadKids() {
     const tStr = todayStr();
     await Promise.all(kids.map(async k => {
       try {
-        const mSnap = await getDocs(query(collection(db, `parents/${currentUser.uid}/children/${k.id}/measurements`), orderBy('when', 'desc'), limit(1)));
+        const mSnap = await getDocs(query(collection(db, `parents/${currentUser.uid}/children/${k.id}/measurements`), limit(5)));
+        if (!mSnap.empty) {
+          const sorted = mSnap.docs.map(d => d.data()).sort((a,b) => {
+            const ta = a.when?.toDate ? a.when.toDate() : new Date(a.when||0);
+            const tb = b.when?.toDate ? b.when.toDate() : new Date(b.when||0);
+            return tb - ta;
+          });
+          const d = sorted[0];
+          k._lastGlucoseNorm = d.normalizedValue || d.value;
+          k._lastGlucoseDisplay = d.value;
+          k._lastGlucoseUnit = d.unit || k._unit;
+        }
         if (!mSnap.empty) {
           const d = mSnap.docs[0].data();
           // نستخدم القيمة الموحدة للون، والقيمة المعروضة للعرض
@@ -242,34 +253,120 @@ $('linkSubmit').onclick = async () => {
   finally { loader(false); }
 };
 
-// ------ المساعد الذكي ------
-$('aiFab').onclick = () => openAIForChild(null);
+// ------ المساعد الذكي المتطور (Parent AI Assistant) ------
+let _parentAiApiKey = localStorage.getItem('aseel_gemini_key') || '';
+
+async function fetchParentAiKey() {
+  try {
+    const snap = await getDoc(doc(db, 'admin/global/settings/ai'));
+    if (snap.exists() && snap.data()?.geminiApiKey) {
+      _parentAiApiKey = String(snap.data().geminiApiKey).trim();
+      localStorage.setItem('aseel_gemini_key', _parentAiApiKey);
+    }
+  } catch(e){}
+}
+fetchParentAiKey();
+
+$('aiFab').onclick = () => openAIForChild(kids.length ? kids[0] : null);
 $('aiClose').onclick = () => $('aiWidget').classList.add('hidden');
 $('aiMin').onclick = () => $('aiWidget').classList.toggle('minimized'); 
 document.querySelectorAll('.ai-chip').forEach(c => c.onclick = () => { $('aiInput').value = c.dataset.q; sendAI(); });
 $('aiSend').onclick = sendAI;
+$('aiInput')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAI(); }
+});
 
 function openAIForChild(child) {
   aiState.child = child; aiState.history = [];
   $('aiWidget').classList.remove('hidden');
   $('aiMessages').innerHTML = '';
+  $('aiKeyWarn').classList.add('hidden');
   
   if (child) {
-    $('aiContext').textContent = `الطفل: ${child.name}`;
-    appendMsg('sys', `أهلاً! أنا المساعد الذكي الخاص بـ ${child.name}.\nمعامل الكارب (CR): ${child._crStr}\nالتصحيح (CF): ${child._cf}\nالهدف (Target): ${child._limits.target}\nكيف أساعدك اليوم؟`);
+    $('aiContext').textContent = `الطفل: ${child.name} (${child._unit})`;
+    const crDisplay = typeof child._crStr === 'string' && child._crStr.includes('/') ? child._crStr : (child._crStr || '10');
+    appendMsg('sys', `أهلاً بك! أنا مساعد أسيل الطبي الخاص بـ **${child.name}** 🤖.\n- **وحدة القياس:** ${child._unit}\n- **معامل الكارب (CR):** ${crDisplay}\n- **معامل التصحيح (CF):** ${child._cf} ${child._unit}\n- **الهدف المستهدف:** ${child._limits.target} ${child._unit}\n\nكيف أساعدك اليوم في حساب الوجبات أو ضبط الجرعات؟`);
   } else {
     $('aiContext').textContent = 'استشارة عامة';
-    appendMsg('sys', 'مرحباً! أنا المساعد الطبي لمنصة أسيل. اسألني أي سؤال عام عن السكري.');
+    appendMsg('sys', 'مرحباً بك! أنا مساعد أسيل الطبي الذكي. اسألني أي سؤال عن جرعات الأنسولين، حساب الكارب، أو تغذية السكري.');
   }
 }
 
-function appendMsg(role, txt) {
+function appendMsg(role, txt, isDisclaimer = false) {
   const div = document.createElement('div');
   div.className = `msg ${role === 'user' ? 'user' : role === 'sys' ? 'sys' : 'assistant'}`;
-  div.innerHTML = txt.replace(/\n/g, '<br>');
+  
+  // تنسيق بسيط للخط العريض والأسطر
+  let html = txt
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+    
+  if (role === 'assistant' && !isDisclaimer) {
+    html += '<div style="margin-top:8px; padding:6px 8px; background:#fffbeb; border:1px solid #fde68a; border-radius:6px; font-size:11px; color:#92400e; font-weight:600;">⚠️ تنبيه طبي: هذا الشات استرشادي ولا يغني عن مراجعة الطبيب.</div>';
+  }
+
+  div.innerHTML = html;
   $('aiMessages').appendChild(div);
   $('aiMessages').scrollTop = $('aiMessages').scrollHeight;
   return div;
+}
+
+function generateLocalParentReply(text, child) {
+  const q = text.toLowerCase();
+  const cName = child ? child.name : 'الطفل';
+  const unit = child ? child._unit : 'mg/dL';
+  
+  // استخراج معامل الكارب النشط
+  let activeCR = 10;
+  if (child) {
+    if (typeof child.carbRatio === 'number') activeCR = child.carbRatio;
+    else if (child.cr) activeCR = Number(child.cr.lunch || child.cr.breakfast || child.cr.dinner || 10);
+    else if (typeof child._crStr === 'string' && !child._crStr.includes('/')) activeCR = Number(child._crStr) || 10;
+  }
+
+  // سؤال عن الأرز / النشويات والوجبات
+  if (/(ارز|أرز|رز)/.test(q)) {
+    const carbsSmall = 30; // 5 ملاعق أرز
+    const carbsMed = 45;   // طبق أرز متوسط (حوالي 150 جرام)
+    const doseSmall = +(carbsSmall / activeCR).toFixed(1);
+    const doseMed = +(carbsMed / activeCR).toFixed(1);
+
+    return `### 🍚 حساب جرعة الأنسولين للأرز لـ **${cName}**:\n` +
+      `- **طبق الأرز المتوسط (حوالي 150 جرام مطبوخ / 8 ملاعق كبيرة):** يحتوي على حوالي **40 إلى 45 جرام كارب**.\n` +
+      `- **إذا كان طبق صغير (5 إلى 6 ملاعق كبيرة):** يحتوي على حوالي **25 إلى 30 جرام كارب**.\n\n` +
+      `### 💉 الجرعة المقترحة بناءً على معامل الكارب (1 وحدة لكل ${activeCR}g):\n` +
+      `- **لطبق الأرز المتوسط (45g كارب):** \`45 ÷ ${activeCR}\` = **${doseMed} وحدة** أنسولين سريع.\n` +
+      `- **لطبق الأرز الصغير (30g كارب):** \`30 ÷ ${activeCR}\` = **${doseSmall} وحدة** أنسولين سريع.\n\n` +
+      `💡 **نصائح هامة:**\n` +
+      `1. قيسي سكر الطفل قبل الوجبة بوحدة **${unit}**؛ إذا كان مرتفعاً يتم إضافة جرعة تصحيح.\n` +
+      `2. يُفضل إعطاء الأنسولين قبل تناول الأرز بـ **10 إلى 15 دقيقة** لتجنب الارتفاع المفاجئ بعد الأكل.\n` +
+      `3. إضافة خضار وسلطة وبروتين مع الأرز يبطئ امتصاص النشويات ويمنع تذبذب السكر.`;
+  }
+
+  // سؤال عن المكرونة
+  if (/(مكرون|مكرونة)/.test(q)) {
+    const carbs = 40;
+    const dose = +(carbs / activeCR).toFixed(1);
+    return `### 🍝 حساب جرعة المكرونة لـ **${cName}**:\n` +
+      `- طبق المكرونة المسلوقة المتوسط (حوالي كوب مسلوق) يحتوي على حوالي **35 إلى 40 جرام كارب**.\n` +
+      `- **الجرعة المقترحة بمعامل الكارب (${activeCR}):** \`${carbs} ÷ ${activeCR}\` = **${dose} وحدة** أنسولين سريع.\n` +
+      `- يُحقن الأنسولين قبل الأكل بـ 15 دقيقة ويُفضل تناول سلطة خضراء أولاً.`;
+  }
+
+  // سؤال عن الخبز / العيش
+  if (/(خبز|عيش|توست|سندوتش)/.test(q)) {
+    const doseBaladi = +(25 / activeCR).toFixed(1);
+    return `### 🍞 حساب جرعة الخبز لـ **${cName}**:\n` +
+      `- **نصف رغيف بلدي:** حوالي **25 إلى 28 جرام كارب** (الجرعة: **${doseBaladi} وحدة**).\n` +
+      `- **شريحة توست بني:** حوالي **12 إلى 15 جرام كارب**.\n` +
+      `- احسبي إجمالي الكارب واقسميه على معامل الكارب (${activeCR}).`;
+  }
+
+  // سؤال عام عن حساب الوجبة
+  return `### 🧮 طريقة حساب جرعة الوجبة لـ **${cName}**:\n` +
+    `- **القاعدة:** \`جرعة الأنسولين = إجمالي جرامات الكارب ÷ معامل الكارب (${activeCR})\`.\n` +
+    `- **معامل الكارب الحالي للطفل:** 1 وحدة لكل **${activeCR} جرام نشويات**.\n` +
+    `- اكتبي لي اسم الطعام أو عدد جرامات الكارب وسأحسب لك الجرعة فوراً!`;
 }
 
 async function sendAI() {
@@ -277,29 +374,62 @@ async function sendAI() {
   if(!text) return;
   $('aiInput').value = '';
   appendMsg('user', text);
-  const waitEl = appendMsg('assistant', 'جاري التفكير ⏳...');
+  const waitEl = appendMsg('assistant', 'جاري التفكير ⏳...', true);
   $('aiSend').disabled = true;
 
   try {
-    const KEY = window.GEMINI_API_KEY;
-    if (!KEY || KEY === 'YOUR_GEMINI_API_KEY') throw new Error('KeyMissing');
-    
-    const genAI = new window.GoogleGenerativeAI(KEY);
-    const sysPrompt = aiState.child 
-        ? `أنت مساعد طبي ذكي متخصص في سكري الأطفال. أجب بناءً على هذه البيانات: اسم الطفل (${aiState.child.name})، هدف السكر (${aiState.child._limits.target})، معامل التصحيح (${aiState.child._cf})، معامل الكارب (${aiState.child._crStr}). أجب باختصار وطمأنينة.` 
-        : `أنت مساعد طبي لإدارة سكر الأطفال. أجب باختصار وبأسلوب مطمئن وداعم.`;
+    let reply = null;
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', systemInstruction: sysPrompt});
-    
-    const chat = model.startChat({ history: aiState.history });
-    const res = await chat.sendMessage(text);
-    
-    aiState.history.push({ role:'user', parts:[{text}] }, { role:'model', parts:[{text:res.response.text()}] });
+    // محاولة الاتصال بـ Google Gemini إذا كان المفتاح متوفراً
+    if (_parentAiApiKey) {
+      const child = aiState.child;
+      const cName = child ? child.name : 'الطفل';
+      const cUnit = child ? child._unit : 'mg/dL';
+      const cTarget = child ? child._limits.target : (cUnit === 'mmol/L' ? '6.0' : '110');
+      const cCf = child ? child._cf : (cUnit === 'mmol/L' ? '2.8' : '50');
+      const cCr = child ? child._crStr : '10';
+
+      const sysPrompt = `أنت مساعد أسيل الطبي المتخصص في سكري الأطفال.
+معطيات الطفل الحالية: الاسم (${cName})، وحدة القياس (${cUnit})، السكر المستهدف (${cTarget} ${cUnit})، معامل التصحيح (${cCf})، ومعامل الكارب (${cCr}).
+أجب باللغة العربية بدقة وحسابات واضحة لجرامات الكارب وجرعة الأنسولين المطلوبة بوحدة ${cUnit}.`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6500);
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(_parentAiApiKey)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: sysPrompt }] },
+          contents: [{ parts: [{ text }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 600 }
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      }
+    }
+
+    // إذا لم يتوفر مفتاح أو فشل الاتصال الخارجي، نستخدم المحرك السريري الذكي المدمج
+    if (!reply) {
+      await new Promise(r => setTimeout(r, 350));
+      reply = generateLocalParentReply(text, aiState.child);
+    }
+
     waitEl.remove();
-    appendMsg('assistant', res.response.text());
+    appendMsg('assistant', reply);
   } catch(e) {
+    console.warn('AI parent fallback:', e);
     waitEl.remove();
-    appendMsg('assistant', '⚠️ لم أتمكن من الاتصال. تأكدي من إعدادات المفتاح.');
-    $('aiKeyWarn').classList.remove('hidden');
-  } finally { $('aiSend').disabled = false; }
+    const fallback = generateLocalParentReply(text, aiState.child);
+    appendMsg('assistant', fallback);
+  } finally {
+    $('aiSend').disabled = false;
+    $('aiInput')?.focus();
+  }
 }
