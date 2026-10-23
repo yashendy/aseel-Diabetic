@@ -618,7 +618,30 @@ if (btnTestGlobalAiKey && globalKeyInput) {
     }
 
     try {
-      const candidateModels = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+      // 1. محاولة استكشاف النماذج المتاحة لحساب المستخدم مباشرة من Google API
+      let candidateModels = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+      try {
+        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          const discovered = (listData?.models || [])
+            .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+            .map(m => m.name.replace(/^models\//, ''))
+            .filter(m => !m.includes('2.0-flash')); // استبعاد 2.0-flash الذي أوقفته جوجل
+          if (discovered.length) {
+            // نضع النماذج المفضلة أولاً
+            candidateModels = [
+              ...discovered.filter(m => m.includes('3.8') || m.includes('2.5')),
+              ...discovered.filter(m => m.includes('1.5-flash')),
+              ...discovered
+            ];
+            candidateModels = [...new Set(candidateModels)];
+          }
+        }
+      } catch (errList) {
+        console.warn('Could not query model list, fallback to static candidates:', errList);
+      }
+
       let workingModel = null;
       let reply = '';
       let lastError = null;
