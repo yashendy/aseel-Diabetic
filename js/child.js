@@ -1788,9 +1788,12 @@ async function callGeminiCloudApi(userText, profile) {
     parts: [{ text: userText }]
   });
 
-  const models = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+  const models = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-2.5-flash'];
   for (const modelName of models) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6500);
+
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(_aiGeminiApiKey)}`;
       const res = await fetch(url, {
         method: 'POST',
@@ -1802,8 +1805,11 @@ async function callGeminiCloudApi(userText, profile) {
             temperature: 0.4,
             maxOutputTokens: 900
           }
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
+
       if (!res.ok) continue;
       const data = await res.json();
       const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;

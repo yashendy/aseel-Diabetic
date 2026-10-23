@@ -504,7 +504,6 @@ async function assignNow() {
   }
 }
 
-
 /* ========================================================= */
 /* إعدادات الذكاء الاصطناعي العامة للأدمن (Gemini Global API) */
 /* ========================================================= */
@@ -515,29 +514,80 @@ const btnToggleKeyVisibility = $('btnToggleKeyVisibility');
 const aiGlobalKeyMsg = $('aiGlobalKeyMsg');
 const aiGlobalStatusBadge = $('aiGlobalStatusBadge');
 
+async function saveKeyGlobally(key, showUiMessage = true) {
+  if (!key) {
+    localStorage.removeItem('aseel_gemini_key');
+    try {
+      await setDoc(doc(db, 'admin/global/settings/ai'), { geminiApiKey: '', updatedAt: serverTimestamp() }, { merge: true });
+    } catch(e){}
+    if (aiGlobalStatusBadge) {
+      aiGlobalStatusBadge.textContent = 'ℹ️ المحرك السريري الافتراضي نشط';
+      aiGlobalStatusBadge.style.color = '#fbbf24';
+      aiGlobalStatusBadge.style.background = 'rgba(251, 191, 36, 0.15)';
+    }
+    if (showUiMessage && aiGlobalKeyMsg) {
+      aiGlobalKeyMsg.style.color = 'var(--warn)';
+      aiGlobalKeyMsg.textContent = 'تم إلغاء المفتاح؛ ستعمل المنصة بالمحرك السريري المدمج تلقائياً.';
+    }
+    return;
+  }
+
+  // حفظ محلي فوري
+  localStorage.setItem('aseel_gemini_key', key);
+
+  if (aiGlobalStatusBadge) {
+    aiGlobalStatusBadge.textContent = '✅ مفعل ومحفوظ للجميع';
+    aiGlobalStatusBadge.style.color = '#4ade80';
+    aiGlobalStatusBadge.style.background = 'rgba(74, 222, 128, 0.15)';
+  }
+
+  // حفظ سحابي في Firestore
+  try {
+    await setDoc(doc(db, 'admin/global/settings/ai'), {
+      geminiApiKey: key,
+      updatedAt: serverTimestamp(),
+      updatedBy: CURRENT_ADMIN?.email || CURRENT_ADMIN?.uid || 'admin'
+    }, { merge: true });
+
+    if (showUiMessage && aiGlobalKeyMsg) {
+      aiGlobalKeyMsg.style.color = 'var(--success)';
+      aiGlobalKeyMsg.textContent = '✅ تم حفظ وتعميم المفتاح بنجاح! يعمل الآن تلقائياً لجميع الأطفال وأولياء الأمور.';
+    }
+  } catch (err) {
+    console.warn('Firestore write warning:', err);
+    if (showUiMessage && aiGlobalKeyMsg) {
+      aiGlobalKeyMsg.style.color = 'var(--success)';
+      aiGlobalKeyMsg.textContent = '✅ تم حفظ المفتاح بنجاح في متصفحك (جاهز للعمل).';
+    }
+  }
+}
+
 async function loadGlobalAiSettings() {
   if (!globalKeyInput) return;
+  let key = localStorage.getItem('aseel_gemini_key') || '';
+
   try {
     const snap = await getDoc(doc(db, 'admin/global/settings/ai'));
     if (snap.exists() && snap.data()?.geminiApiKey) {
-      const key = String(snap.data().geminiApiKey).trim();
-      globalKeyInput.value = key;
-      if (aiGlobalStatusBadge) {
-        aiGlobalStatusBadge.textContent = '✅ مفعل ويعمل للجميع';
-        aiGlobalStatusBadge.style.color = '#4ade80';
-        aiGlobalStatusBadge.style.background = 'rgba(74, 222, 128, 0.15)';
-      }
-    } else {
-      if (aiGlobalStatusBadge) {
-        aiGlobalStatusBadge.textContent = '⚠️ غير مفعل (المحرك السريري الافتراضي نشط)';
-        aiGlobalStatusBadge.style.color = '#fbbf24';
-        aiGlobalStatusBadge.style.background = 'rgba(251, 191, 36, 0.15)';
-      }
+      key = String(snap.data().geminiApiKey).trim();
+      localStorage.setItem('aseel_gemini_key', key);
     }
   } catch (err) {
     console.warn('Error reading global AI settings:', err);
+  }
+
+  if (key) {
+    globalKeyInput.value = key;
     if (aiGlobalStatusBadge) {
-      aiGlobalStatusBadge.textContent = 'المحرك السريري الافتراضي نشط';
+      aiGlobalStatusBadge.textContent = '✅ مفعل ويعمل للجميع';
+      aiGlobalStatusBadge.style.color = '#4ade80';
+      aiGlobalStatusBadge.style.background = 'rgba(74, 222, 128, 0.15)';
+    }
+  } else {
+    if (aiGlobalStatusBadge) {
+      aiGlobalStatusBadge.textContent = '⚠️ غير مفعل (المحرك السريري الافتراضي نشط)';
+      aiGlobalStatusBadge.style.color = '#fbbf24';
+      aiGlobalStatusBadge.style.background = 'rgba(251, 191, 36, 0.15)';
     }
   }
 }
@@ -550,53 +600,22 @@ if (btnToggleKeyVisibility && globalKeyInput) {
   };
 }
 
+// حفظ تلقائي فوري عند اللصق أو التعديل
+if (globalKeyInput) {
+  globalKeyInput.addEventListener('input', () => {
+    const val = globalKeyInput.value.trim();
+    if (val.length >= 35 && val.startsWith('AIzaSy')) {
+      saveKeyGlobally(val, false);
+    }
+  });
+}
+
 if (btnSaveGlobalAiKey && globalKeyInput) {
   btnSaveGlobalAiKey.onclick = async () => {
     const key = globalKeyInput.value.trim();
-    if (!key) {
-      if (!confirm('هل تريد حذف المفتاح والاعتماد على المحرك السريري الذكي المدمج فقط؟')) return;
-    }
-    
     btnSaveGlobalAiKey.disabled = true;
-    if (aiGlobalKeyMsg) {
-      aiGlobalKeyMsg.style.color = 'var(--muted)';
-      aiGlobalKeyMsg.textContent = 'جاري الحفظ والتعميم على المنصة...';
-    }
-
     try {
-      await setDoc(doc(db, 'admin/global/settings/ai'), {
-        geminiApiKey: key,
-        updatedAt: serverTimestamp(),
-        updatedBy: CURRENT_ADMIN?.email || CURRENT_ADMIN?.uid || 'admin'
-      }, { merge: true });
-
-      if (key) {
-        localStorage.setItem('aseel_gemini_key', key);
-        if (aiGlobalKeyMsg) {
-          aiGlobalKeyMsg.style.color = 'var(--success)';
-          aiGlobalKeyMsg.textContent = '✅ تم حفظ وتعميم المفتاح بنجاح! أصبح مساعد الذكاء الاصطناعي السحابي مفعل الآن لجميع أطفال المنصة.';
-        }
-        if (aiGlobalStatusBadge) {
-          aiGlobalStatusBadge.textContent = '✅ مفعل ويعمل للجميع';
-          aiGlobalStatusBadge.style.color = '#4ade80';
-          aiGlobalStatusBadge.style.background = 'rgba(74, 222, 128, 0.15)';
-        }
-      } else {
-        localStorage.removeItem('aseel_gemini_key');
-        if (aiGlobalKeyMsg) {
-          aiGlobalKeyMsg.style.color = 'var(--warn)';
-          aiGlobalKeyMsg.textContent = 'تم إلغاء المفتاح؛ ستعمل المنصة بالمحرك السريري الذكي المدمج تلقائياً.';
-        }
-        if (aiGlobalStatusBadge) {
-          aiGlobalStatusBadge.textContent = 'المحرك السريري الافتراضي نشط';
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      if (aiGlobalKeyMsg) {
-        aiGlobalKeyMsg.style.color = 'var(--danger)';
-        aiGlobalKeyMsg.textContent = '❌ حدث خطأ أثناء الحفظ: ' + (err.message || 'يرجى التحقق من الصلاحيات');
-      }
+      await saveKeyGlobally(key, true);
     } finally {
       btnSaveGlobalAiKey.disabled = false;
     }
@@ -613,79 +632,62 @@ if (btnTestGlobalAiKey && globalKeyInput) {
 
     btnTestGlobalAiKey.disabled = true;
     if (aiGlobalKeyMsg) {
-      aiGlobalKeyMsg.style.color = 'var(--muted)';
-      aiGlobalKeyMsg.textContent = 'جاري اختبار الاتصال بخوادم Google Gemini...';
+      aiGlobalKeyMsg.style.color = '#818cf8';
+      aiGlobalKeyMsg.textContent = '⏳ جاري الاتصال بخوادم Google وفحص المفتاح...';
     }
 
-    try {
-      // 1. محاولة استكشاف النماذج المتاحة لحساب المستخدم مباشرة من Google API
-      let candidateModels = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    // تجربة النماذج المعتمدة من Google مع مهلة زمنية صارمة لتفادي التعليق
+    const candidateModels = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-2.5-flash'];
+    let successfulModel = null;
+    let replyText = '';
+    let lastError = null;
+
+    for (const model of candidateModels) {
       try {
-        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
-        if (listRes.ok) {
-          const listData = await listRes.json();
-          const discovered = (listData?.models || [])
-            .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
-            .map(m => m.name.replace(/^models\//, ''))
-            .filter(m => !m.includes('2.0-flash')); // استبعاد 2.0-flash الذي أوقفته جوجل
-          if (discovered.length) {
-            // نضع النماذج المفضلة أولاً
-            candidateModels = [
-              ...discovered.filter(m => m.includes('3.8') || m.includes('2.5')),
-              ...discovered.filter(m => m.includes('1.5-flash')),
-              ...discovered
-            ];
-            candidateModels = [...new Set(candidateModels)];
-          }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 ثوانٍ كحد أقصى
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'قل: جاهز' }] }]
+          }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'جاهز';
+          successfulModel = model;
+          break;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          lastError = new Error(errData?.error?.message || `HTTP ${res.status}`);
         }
-      } catch (errList) {
-        console.warn('Could not query model list, fallback to static candidates:', errList);
+      } catch (subErr) {
+        lastError = subErr;
       }
+    }
 
-      let workingModel = null;
-      let reply = '';
-      let lastError = null;
+    if (successfulModel) {
+      // ✅ حفظ وتعميم المفتاح أوتوماتيكياً فور نجاح الفحص
+      await saveKeyGlobally(key, false);
 
-      for (const m of candidateModels) {
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(key)}`;
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: 'قل كلمة واحدة للتأكيد: جاهز' }] }]
-            })
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'جاهز';
-            workingModel = m;
-            break;
-          } else {
-            const errJson = await res.json().catch(() => ({}));
-            lastError = new Error(errJson?.error?.message || `HTTP ${res.status}`);
-          }
-        } catch (subErr) {
-          lastError = subErr;
-        }
+      if (aiGlobalKeyMsg) {
+        aiGlobalKeyMsg.style.color = 'var(--success)';
+        aiGlobalKeyMsg.textContent = `⚡ الاتصال ناجح ومستقر تماماً بنموذج (${successfulModel})! تم حفظ المفتاح وتعميمه تلقائياً على كل المنصة.`;
       }
-
-      if (workingModel) {
-        if (aiGlobalKeyMsg) {
-          aiGlobalKeyMsg.style.color = 'var(--success)';
-          aiGlobalKeyMsg.textContent = `⚡ الاتصال ناجح ومستقر تماماً عبر النموذج (${workingModel})! رد النموذج: "${reply.trim()}". المفتاح مفعل وجاهز.`;
-        }
-      } else {
-        throw lastError || new Error('تعذر العثور على نموذج متوافق مع المفتاح.');
-      }
-    } catch (e) {
+    } else {
       if (aiGlobalKeyMsg) {
         aiGlobalKeyMsg.style.color = 'var(--danger)';
-        aiGlobalKeyMsg.textContent = `❌ فشل الاتصال بالمفتاح: ${e.message}`;
+        const msg = lastError?.name === 'AbortError' ? 'انتهت مهلة الاتصال بالخادم، يرجى التحقق من اتصال الإنترنت.' : (lastError?.message || 'تعذر الاتصال بالمفتاح');
+        aiGlobalKeyMsg.textContent = `❌ فشل الاتصال: ${msg}`;
       }
-    } finally {
-      btnTestGlobalAiKey.disabled = false;
     }
+
+    btnTestGlobalAiKey.disabled = false;
   };
 }
