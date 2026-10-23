@@ -1768,7 +1768,13 @@ function buildGeminiSystemPrompt(p) {
 [تحليل قراءات الجلوكوز الحية للطفل]:
 ${statsSummary}
 
-قدّم إجابة منظمة بنقاط واضحة وعناوين فرعية قصيرة، ولا تكتب نص التحذير الطبي في نهاية الرسالة لأن النظام يضيفه تلقائياً.`;
+[تعليمات الأسلوب الحواري والتفاعلي]:
+- أنت شات ذكاء اصطناعي تفاعلي عالمي فائق الذكاء، خبير متخصص في سكري الأطفال (Type 1 Diabetes) والتغذية السريرية وحساب الكارب.
+- أجب إجابة ذكية ومباشرة وتفاعلية على سؤال المستخدم بالتحديد (الخاص بالطفل/الطفلة ${p.name}).
+- تجنب تماماً سرد وتكرار ملف الطفل أو المعاملات كقالب ثابت في كل رد، بل وظف الأرقام (مثل معامل الكارب ${p.activeCR}، التصحيح ${p.cf} ${p.unit}، الوزن ${p.weight || ''}) داخل الحسابات العملية بذكاء وبدون حشو.
+- إذا سأل عن كمية طعام (مثل طبق أرز، مكرونة، عيش، فاكهة، حلويات، أو وجبة)، قدّر كمية الكارب بدقة بالجرام والملاعق/الأحجام، واحسب الجرعة المقترحة فوراً بمعادلة: (جرام الكارب ÷ معامل الكارب للطفل ${p.activeCR}) مع إرشادات توقيت الحقن ومؤشر السكر.
+- التزم بوحدة قياس الطفل (${p.unit}) حصراً.
+- لا تكتب نص التحذير الطبي في ردك لأن النظام يضيفه تلقائياً في الصندوق المخصص بالأسفل.`;
 }
 
 async function callGeminiCloudApi(userText, profile) {
@@ -1790,7 +1796,7 @@ async function callGeminiCloudApi(userText, profile) {
     parts: [{ text: userText }]
   });
 
-  const models = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-2.5-flash'];
+  const models = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-pro-latest'];
   for (const modelName of models) {
     try {
       const controller = new AbortController();
@@ -1804,8 +1810,8 @@ async function callGeminiCloudApi(userText, profile) {
           systemInstruction: { parts: [{ text: sysInstruction }] },
           contents,
           generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 900
+            temperature: 0.6,
+            maxOutputTokens: 1200
           }
         }),
         signal: controller.signal
@@ -2120,7 +2126,7 @@ function generateSmartClinicalReply(userText, p) {
   }
 
   // 5. سؤال عن اقتراح وجبة صحية محسوبة الكارب والجرعة والمفضلات والمتاح
-  if (/(وجب|اقترح|فطور|غداء|عشاء|سناك|طعام|أكل|اكل|تغذية|مفضل|متاح|شيوع|اكثر شيوعا)/.test(qLower)) {
+  if (/(وجب|اقترح|فطور|غداء|عشاء|سناك|طعام|أكل|اكل|تغذية|مفضل|متاح|شيوع|اكثر شيوعا|ارز|أرز|رز|مكرون|مكرونة|خبز|عيش|توست|بطاطس|فول|بيض|شوفان|فراخ|دجاج|لحم|سمك|تونة|كارب)/.test(qLower)) {
     return generateSmartMealSuggestions(qLower, p);
   }
 
