@@ -636,55 +636,56 @@ if (btnTestGlobalAiKey && globalKeyInput) {
       aiGlobalKeyMsg.textContent = '⏳ جاري الاتصال بخوادم Google وفحص المفتاح...';
     }
 
-    // تجربة النماذج المعتمدة من Google مع مهلة زمنية صارمة لتفادي التعليق
-    const candidateModels = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-2.5-flash'];
-    let successfulModel = null;
-    let replyText = '';
-    let lastError = null;
+    // فحص مباشر بنموذج gemini-1.5-flash القياسي بطلب واحد لتجنب استهلاك الحصة (Rate Limit)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    for (const model of candidateModels) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 ثوانٍ كحد أقصى
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(key)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'قل: جاهز' }] }]
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: 'قل: جاهز' }] }]
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'جاهز';
-          successfulModel = model;
-          break;
-        } else {
-          const errData = await res.json().catch(() => ({}));
-          lastError = new Error(errData?.error?.message || `HTTP ${res.status}`);
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'جاهز';
+        // حفظ وتعميم فوري
+        await saveKeyGlobally(key, false);
+        if (aiGlobalKeyMsg) {
+          aiGlobalKeyMsg.style.color = 'var(--success)';
+          aiGlobalKeyMsg.textContent = `⚡ الاتصال ناجح ومستقر تماماً بنموذج (gemini-1.5-flash)! رد الخادم: "${reply.trim()}". تم حفظ وتعميم المفتاح على جميع أطفال المنصة.`;
         }
-      } catch (subErr) {
-        lastError = subErr;
-      }
-    }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        const status = res.status;
+        let errMsg = errData?.error?.message || `HTTP ${status}`;
 
-    if (successfulModel) {
-      // ✅ حفظ وتعميم المفتاح أوتوماتيكياً فور نجاح الفحص
-      await saveKeyGlobally(key, false);
+        if (status === 429) {
+          errMsg = '⚠️ تجاوز عدد الطلبات المسموح بها في الدقيقة من Google (Rate Limit 429). انتظر دقيقة واحدة، مع العلم أن المفتاح صالح ويمكنك حفظه الآن ليعمل به الشات.';
+          // نقوم بحفظ المفتاح رغم خطأ 429 لأن المفتاح صحيح ولكن تم استهلاكه مؤقتاً
+          await saveKeyGlobally(key, false);
+        } else if (status === 400) {
+          errMsg = '❌ المفتاح غير صالح أو مكتوب بطريقة غير صحيحة، تأكد من نسخه كاملاً من Google AI Studio.';
+        } else if (status === 503) {
+          errMsg = '⏳ خوادم Google تواجه ضغطاً مؤقتاً (503)، المحرك السريري المدمج يعمل كبديل فوري.';
+        }
 
-      if (aiGlobalKeyMsg) {
-        aiGlobalKeyMsg.style.color = 'var(--success)';
-        aiGlobalKeyMsg.textContent = `⚡ الاتصال ناجح ومستقر تماماً بنموذج (${successfulModel})! تم حفظ المفتاح وتعميمه تلقائياً على كل المنصة.`;
+        if (aiGlobalKeyMsg) {
+          aiGlobalKeyMsg.style.color = status === 429 ? 'var(--warn)' : 'var(--danger)';
+          aiGlobalKeyMsg.textContent = errMsg;
+        }
       }
-    } else {
+    } catch (e) {
       if (aiGlobalKeyMsg) {
         aiGlobalKeyMsg.style.color = 'var(--danger)';
-        const msg = lastError?.name === 'AbortError' ? 'انتهت مهلة الاتصال بالخادم، يرجى التحقق من اتصال الإنترنت.' : (lastError?.message || 'تعذر الاتصال بالمفتاح');
-        aiGlobalKeyMsg.textContent = `❌ فشل الاتصال: ${msg}`;
+        const msg = e.name === 'AbortError' ? 'انتهت مهلة الاتصال بالخادم، يرجى فحص سرعة الإنترنت.' : e.message;
+        aiGlobalKeyMsg.textContent = `❌ تعذر الاتصال: ${msg}`;
       }
     }
 
