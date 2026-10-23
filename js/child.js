@@ -1336,6 +1336,8 @@ onAuthStateChanged(auth, async (user)=>{
 
     setHref($('radarAddMeasBtn'), `measurements.html${qDocParams}`);
 
+    await initAiAssistant(parentId, c);
+
 
 
     addLabBtn?.addEventListener('click',e=>{ e.stopPropagation(); location.href=`labs.html${qDocParams}`; });
@@ -2229,22 +2231,12 @@ async function initAiAssistant(parentId, child) {
 
   if (!widget) return;
 
-  await Promise.all([
-    loadGlobalGeminiKey(),
-    computeRecentBolusStats(parentId)
-  ]);
-
-  const profile = getChildClinicalProfile(child);
-  if (unitBadge) unitBadge.textContent = `📏 ${profile.unit}`;
-  if (subText) subText.textContent = `متصل بملف: ${profile.name} • الوحدة: ${profile.unit}`;
-  if (keyInput && _aiGeminiApiKey) keyInput.value = _aiGeminiApiKey;
-
   function renderInitialWelcome() {
     const container = $('aiChatMessages');
     if (!container) return;
     container.innerHTML = '';
     _aiChatHistory = [];
-    const freshProfile = getChildClinicalProfile(_aiCurrentChild);
+    const freshProfile = getChildClinicalProfile(_aiCurrentChild || child);
     const welcomeMd = buildWelcomeMessage(freshProfile);
     appendAiMessage('bot', formatAiMarkdown(welcomeMd), true);
   }
@@ -2262,12 +2254,18 @@ async function initAiAssistant(parentId, child) {
     widget.classList.add('hidden');
   }
 
-  fab?.addEventListener('click', () => {
+  // ربط أحداث الفتح والإغلاق فوراً دون انتظار أي تحميل
+  fab?.addEventListener('click', (e) => {
+    e.preventDefault();
     if (widget.classList.contains('hidden')) openChat();
     else closeChat();
   });
 
-  headerBtn?.addEventListener('click', () => openChat());
+  headerBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openChat();
+  });
+
   closeBtn?.addEventListener('click', () => closeChat());
 
   resetBtn?.addEventListener('click', () => {
@@ -2277,6 +2275,29 @@ async function initAiAssistant(parentId, child) {
   settingsBtn?.addEventListener('click', () => {
     settingsPanel?.classList.toggle('hidden');
   });
+
+  // تحديث الشارات الأولية
+  const initialProfile = getChildClinicalProfile(child);
+  if (unitBadge) unitBadge.textContent = `📏 ${initialProfile.unit}`;
+  if (subText) subText.textContent = `متصل بملف: ${initialProfile.name} • الوحدة: ${initialProfile.unit}`;
+
+  // تحميل الإعدادات الخلفية بالتوازي
+  Promise.all([
+    loadGlobalGeminiKey(),
+    computeRecentBolusStats(parentId)
+  ]).then(() => {
+    const fresh = getChildClinicalProfile(child);
+    if (unitBadge) unitBadge.textContent = `📏 ${fresh.unit}`;
+    if (subText) subText.textContent = `متصل بملف: ${fresh.name} • الوحدة: ${fresh.unit}`;
+    if (keyInput && _aiGeminiApiKey) keyInput.value = _aiGeminiApiKey;
+  }).catch(e => console.warn('Background init warning:', e));
+
+  const profile = getChildClinicalProfile(child);
+  if (unitBadge) unitBadge.textContent = `📏 ${profile.unit}`;
+  if (subText) subText.textContent = `متصل بملف: ${profile.name} • الوحدة: ${profile.unit}`;
+  if (keyInput && _aiGeminiApiKey) keyInput.value = _aiGeminiApiKey;
+
+
 
   saveKeyBtn?.addEventListener('click', async () => {
     const val = (keyInput?.value || '').trim();
