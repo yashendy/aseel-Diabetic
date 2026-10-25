@@ -14,6 +14,7 @@ const childId = params.get('child');
 const parentId = params.get('parentId');
 
 let currentUser = null;
+let currentDoctorName = 'الطبيب المعالج';
 let childData = {};
 let sysUnit = 'mg/dL';
 let sysLimits = { critLow: 54, low: 70, target: 100, high: 180, critHigh: 250 };
@@ -22,6 +23,34 @@ let measurementsData = [];
 function showLoader(show) {
   const el = $('loader');
   if (el) el.classList.toggle('hidden', !show);
+}
+
+// دالة حماية النصوص ضد ثغرات XSS
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// دالة التاريخ المحلي بصيغة YYYY-MM-DD
+function localDateStr(dateObj = new Date()) {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const d = String(dateObj.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// دالة التاريخ والوقت المحلي بصيغة YYYY-MM-DD HH:mm:ss
+function localDateTimeStr(dateObj = new Date()) {
+  const datePart = localDateStr(dateObj);
+  const hh = String(dateObj.getHours()).padStart(2, '0');
+  const mm = String(dateObj.getMinutes()).padStart(2, '0');
+  const ss = String(dateObj.getSeconds()).padStart(2, '0');
+  return `${datePart} ${hh}:${mm}:${ss}`;
 }
 
 onAuthStateChanged(auth, async (user) => {
@@ -33,9 +62,26 @@ onAuthStateChanged(auth, async (user) => {
 
   showLoader(true);
   try {
-    await loadChildProfile();
-    await fetchAndRenderData(parseInt($('preset')?.value || 14));
-    await loadRegimenHistory();
+    // 1. جلب بيانات الطبيب وملف الطفل بالتوازي
+    const [docUserSnap] = await Promise.all([
+      getDoc(doc(db, "users", user.uid)).catch(() => null),
+      loadChildProfile()
+    ]);
+
+    if (docUserSnap && docUserSnap.exists()) {
+      const uData = docUserSnap.data();
+      currentDoctorName = uData.name || uData.displayName || user.displayName || childData.assignedDoctorInfo?.name || 'الطبيب المعالج';
+    } else {
+      currentDoctorName = user.displayName || childData.assignedDoctorInfo?.name || 'الطبيب المعالج';
+    }
+
+    // 2. جلب القياسات وسجل التعديلات التاريخي بالتوازي لتسريع فتح المحطة
+    const daysPreset = parseInt($('preset')?.value || 14);
+    await Promise.all([
+      fetchAndRenderData(daysPreset),
+      loadRegimenHistory()
+    ]);
+
     setupEvents();
   } catch (e) {
     console.error("Error loading workstation data:", e);
@@ -49,7 +95,7 @@ onAuthStateChanged(auth, async (user) => {
 async function loadChildProfile() {
   const childRef = doc(db, "parents", parentId, "children", childId);
   const snap = await getDoc(childRef);
-  if (!snap.exists()) throw new Error("لم يتم العثور على ملف المريض");
+  if (!snap.exists()) throw new Error("لم يتم العثور على ملف المريض أو أن الأسرة أوقفت مشاركة البيانات.");
 
   childData = snap.data();
   sysUnit = childData.glucoseUnit || 'mg/dL';
@@ -72,12 +118,15 @@ async function loadChildProfile() {
   if ($('breadPatientName')) $('breadPatientName').textContent = patientName;
   if ($('patientAvatar')) $('patientAvatar').textContent = patientName.charAt(0);
 
-  // حساب العمر
+  // حساب العمر الدقيق
   let ageStr = '—';
   if (childData.birthDate) {
     const b = new Date(childData.birthDate);
-    const age = new Date().getFullYear() - b.getFullYear();
-    ageStr = `${age} سنة`;
+    const t = new Date();
+    let age = t.getFullYear() - b.getFullYear();
+    const m = t.getMonth() - b.getMonth();
+    if (m < 0 || (m === 0 && t.getDate() < b.getDate())) age--;
+    ageStr = `${Math.max(0, age)} سنة`;
   }
   const genderStr = childData.gender === 'female' ? 'أنثى' : 'ذكر';
   if ($('patientMeta')) $('patientMeta').textContent = `${genderStr} • ${ageStr} • الوحدة: ${sysUnit}`;
@@ -87,10 +136,12 @@ async function loadChildProfile() {
   if ($('lblUnit')) $('lblUnit').textContent = sysUnit;
 
   // روابط التنقل لمحطة الطبيب
-  if ($('navDocReports')) $('navDocReports').href = `reports.html?child=${childId}&parentId=${parentId}`;
-  if ($('navDocLabs')) $('navDocLabs').href = `labs.html?child=${childId}&parentId=${parentId}`;
-  if ($('navDocVisits')) $('navDocVisits').href = `visits.html?child=${childId}&parentId=${parentId}`;
-  if ($('navDocMeals')) $('navDocMeals').href = `child.html?child=${childId}&parentId=${parentId}#meals`;
+  const safeChild = encodeURIComponent(childId);
+  const safeParent = encodeURIComponent(parentId);
+  if ($('navDocReports')) $('navDocReports').href = `reports.html?child=${safeChild}&parentId=${safeParent}`;
+  if ($('navDocLabs')) $('navDocLabs').href = `labs.html?child=${safeChild}&parentId=${safeParent}`;
+  if ($('navDocVisits')) $('navDocVisits').href = `visits.html?child=${safeChild}&parentId=${safeParent}`;
+  if ($('navDocMeals')) $('navDocMeals').href = `child.html?child=${safeChild}&parentId=${safeParent}#meals`;
 
   // تعبئة حقول البروتوكول الطبي
   if ($('f_target')) $('f_target').value = sysLimits.target;
@@ -111,12 +162,15 @@ async function loadChildProfile() {
   if ($('f_bolus')) $('f_bolus').value = childData.insulin?.bolus || childData.bolusType || '';
   if ($('f_child_weight')) $('f_child_weight').value = childData.vitals?.weight || childData.weight || '';
 
-  // خريطة الحقن
+  // خريطة الحقن (مع توحيد القيمة الافتراضية normal ودعم ok السابقة)
   const imap = childData.injection_map || {};
   const mapIds = ['abd_top_right', 'abd_top_left', 'abd_bottom_right', 'abd_bottom_left', 'arm_right', 'arm_left', 'thigh_right', 'thigh_left'];
   mapIds.forEach(id => {
     const el = $(`inj_${id}`);
-    if (el) el.value = imap[id] || 'normal';
+    if (el) {
+      const savedVal = imap[id];
+      el.value = (savedVal === 'ok' ? 'normal' : savedVal) || 'normal';
+    }
   });
 
   // تعليمات الطبيب الحالية
@@ -128,57 +182,58 @@ async function loadChildProfile() {
 // --- 2. جلب القياسات ومعالجتها ---
 async function fetchAndRenderData(daysBack) {
   showLoader(true);
+  try {
+    const toDate = new Date();
+    const fromDate = new Date();
+    fromDate.setDate(toDate.getDate() - daysBack);
 
-  const toDate = new Date();
-  const fromDate = new Date();
-  fromDate.setDate(toDate.getDate() - daysBack);
+    const toStr = localDateStr(toDate);
+    const fromStr = localDateStr(fromDate);
 
-  const toStr = toDate.toISOString().slice(0, 10);
-  const fromStr = fromDate.toISOString().slice(0, 10);
+    const col = collection(db, "parents", parentId, "children", childId, "measurements");
+    const qy = query(col, where("date", ">=", fromStr), where("date", "<=", toStr));
+    const snap = await getDocs(qy);
 
-  const col = collection(db, "parents", parentId, "children", childId, "measurements");
-  const qy = query(col, where("date", ">=", fromStr), where("date", "<=", toStr));
-  const snap = await getDocs(qy);
+    measurementsData = [];
+    snap.forEach(d => {
+      const x = d.data();
+      let v = sysUnit.includes('mmol')
+        ? (x.value_mmol ?? (x.unit === 'mg/dL' ? mgdl2mmol(x.value) : x.value))
+        : (x.value_mgdl ?? (x.unit === 'mmol/L' ? mmol2mgdl(x.value) : x.value));
 
-  measurementsData = [];
-  snap.forEach(d => {
-    const x = d.data();
-    let v = sysUnit.includes('mmol')
-      ? (x.value_mmol ?? (x.unit === 'mg/dL' ? mgdl2mmol(x.value) : x.value))
-      : (x.value_mgdl ?? (x.unit === 'mmol/L' ? mmol2mgdl(x.value) : x.value));
+      let mWhen = null;
+      if (x.when?.toDate) {
+        mWhen = x.when.toDate();
+      } else if (x.timestamp?.toDate) {
+        mWhen = x.timestamp.toDate();
+      } else if (x.date) {
+        mWhen = new Date(x.date + (x.time ? 'T' + x.time : 'T00:00:00'));
+      } else {
+        mWhen = new Date();
+      }
 
-    let mWhen = null;
-    if (x.when?.toDate) {
-      mWhen = x.when.toDate();
-    } else if (x.timestamp?.toDate) {
-      mWhen = x.timestamp.toDate();
-    } else if (x.date) {
-      mWhen = new Date(x.date + (x.time ? 'T' + x.time : 'T00:00:00'));
-    } else {
-      mWhen = new Date();
-    }
-
-    measurementsData.push({
-      id: d.id,
-      dateStr: x.date || '',
-      timeStr: x.time || '',
-      when: mWhen,
-      slotKey: x.slotKey || x.slot || 'OTHER',
-      val: Number.isFinite(+v) ? Math.round((+v) * 10) / 10 : null,
-      carbs: Number(x.carbs) || 0,
-      ins: Number(x.totalInsulin || x.totalDose || x.correctionDose || x.dose) || 0,
-      notes: x.notes || ''
+      measurementsData.push({
+        id: d.id,
+        dateStr: x.date || '',
+        timeStr: x.time || '',
+        when: mWhen,
+        slotKey: x.slotKey || x.slot || 'OTHER',
+        val: Number.isFinite(+v) ? Math.round((+v) * 10) / 10 : null,
+        carbs: Number(x.carbs) || 0,
+        ins: Number(x.totalInsulin || x.totalDose || x.correctionDose || x.dose) || 0,
+        notes: x.notes || ''
+      });
     });
-  });
 
-  // ترتيب تنازلي (الأحدث أولاً)
-  measurementsData.sort((a, b) => b.when - a.when);
+    // ترتيب تنازلي (الأحدث أولاً)
+    measurementsData.sort((a, b) => b.when - a.when);
 
-  renderClinicalMetrics();
-  evaluateClinicalPatterns();
-  renderTable();
-
-  showLoader(false);
+    renderClinicalMetrics();
+    evaluateClinicalPatterns();
+    renderTable();
+  } finally {
+    showLoader(false);
+  }
 }
 
 // --- 3. حساب المؤشرات السريرية المعيارية (ADA / ISPAD) ---
@@ -236,7 +291,6 @@ function evaluateClinicalPatterns() {
   const chrono = [...valid].reverse(); // ترتيب تصاعدي زمني للتحليل التسلسلي
 
   // 1. ظاهرة الفجر (Dawn Phenomenon)
-  // ارتفاع قراءات الصباح الباكر (صائم أو استيقاظ) مع استقرار قراءات الليل (أثناء النوم أو منتصف الليل)
   const fastingHighThreshold = sysUnit === 'mmol/L' ? 7.2 : 130;
   const nocturnalLowThreshold = sysUnit === 'mmol/L' ? 4.0 : 72;
   const morningWakeSlots = ['FASTING', 'WAKE', 'PRE_BREAKFAST'];
@@ -247,8 +301,6 @@ function evaluateClinicalPatterns() {
   if (morningReadings.length >= 3) {
     const highMornings = morningReadings.filter(x => x.val > fastingHighThreshold);
     const morningHighPct = highMornings.length / morningReadings.length;
-
-    // فحص ما إذا كان الليل مستقراً (ليس به هبوطات)
     const hasNightHypos = nightReadings.some(x => x.val < nocturnalLowThreshold);
 
     if (morningHighPct >= 0.45 && !hasNightHypos) {
@@ -263,7 +315,6 @@ function evaluateClinicalPatterns() {
   }
 
   // 2. تأثير سوموجي (Somogyi Rebound)
-  // هبوط ليلي (< 70) يتبعه ارتفاع شديد (> 180) في الصباح الباكر
   let somogyiEvents = 0;
   for (let i = 0; i < chrono.length - 1; i++) {
     const curr = chrono[i];
@@ -461,14 +512,14 @@ function renderTable() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td style="font-size:12px; color:#475569;">
-        ${m.dateStr}<br><b style="color:#0f172a;">${m.timeStr || '—'}</b>
+        ${escapeHtml(m.dateStr)}<br><b style="color:#0f172a;">${escapeHtml(m.timeStr || '—')}</b>
       </td>
-      <td><b>${SLOT_LABELS[m.slotKey] || m.slotKey}</b></td>
+      <td><b>${escapeHtml(SLOT_LABELS[m.slotKey] || m.slotKey)}</b></td>
       <td style="font-weight:800; font-size:16px;">${m.val !== null ? m.val : '—'}</td>
       <td>${statusHtml}</td>
       <td style="color:#7c3aed; font-weight:700;">${m.carbs > 0 ? m.carbs + 'g' : '—'}</td>
       <td style="color:#dc2626; font-weight:700;">${m.ins > 0 ? m.ins + 'U' : '—'}</td>
-      <td style="font-size:12px; color:#64748b; max-width:220px;">${m.notes || '—'}</td>
+      <td style="font-size:12px; color:#64748b; max-width:220px;">${escapeHtml(m.notes || '—')}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -492,26 +543,28 @@ async function sendLabOrder() {
       tests: selectedTests,
       notes: note || null,
       orderedByDoctorId: currentUser.uid,
-      orderedByDoctorName: currentUser.displayName || 'الطبيب المعالج',
+      orderedByDoctorName: currentDoctorName,
       status: 'pending',
-      dateStr: new Date().toISOString().slice(0, 10),
+      dateStr: localDateStr(),
       createdAt: serverTimestamp()
     };
 
-    // حفظ في سجل طلبات الفحوصات للمريض
+    // حفظ في سجل طلبات الفحوصات للمريض وتحديث ملف الطفل بالتوازي
     const labOrdersCol = collection(db, "parents", parentId, "children", childId, "lab_orders");
-    await addDoc(labOrdersCol, orderData);
-
-    // تحديث ملف الطفل بآخر طلب فحوصات معلق
     const childRef = doc(db, "parents", parentId, "children", childId);
-    await updateDoc(childRef, {
-      pending_lab_order: {
-        tests: selectedTests,
-        notes: note || null,
-        orderedAt: serverTimestamp(),
-        doctorName: currentUser.displayName || 'الطبيب المعالج'
-      }
-    });
+
+    await Promise.all([
+      addDoc(labOrdersCol, orderData),
+      updateDoc(childRef, {
+        pending_lab_order: {
+          tests: selectedTests,
+          notes: note || null,
+          orderedAt: serverTimestamp(),
+          dateStr: localDateStr(),
+          doctorName: currentDoctorName
+        }
+      })
+    ]);
 
     alert(`تم إرسال طلب الفحوصات (${selectedTests.length} فحص) بنجاح إلى ملف الطفل والأسرة! 🔬📨`);
 
@@ -549,7 +602,7 @@ async function saveMedicalProtocol() {
   const injectionMapData = {};
   mapIds.forEach(id => {
     const el = $(`inj_${id}`);
-    if (el) injectionMapData[id] = el.value;
+    if (el) injectionMapData[id] = el.value || 'normal';
   });
 
   const payload = {
@@ -565,31 +618,36 @@ async function saveMedicalProtocol() {
     weight: parseFloat($('f_child_weight')?.value) || null,
     injection_map: injectionMapData,
     doctor_note: $('doctorPrescription')?.value?.trim() || null,
+    lastMedicalUpdate: serverTimestamp(),
     updatedAt: serverTimestamp()
   };
 
   try {
     const childRef = doc(db, "parents", parentId, "children", childId);
-    await updateDoc(childRef, payload);
-
-    // تسجيل التعديل في سجل التاريخ السريري (regimen_history)
     const historyCol = collection(db, "parents", parentId, "children", childId, "regimen_history");
-    await addDoc(historyCol, {
-      timestamp: serverTimestamp(),
-      dateStr: new Date().toISOString().slice(0, 19).replace('T', ' '),
-      doctorId: currentUser.uid,
-      doctorName: currentUser.displayName || 'الطبيب المعالج',
-      doctorNote: payload.doctor_note,
-      target: limitsData.target,
-      cf: payload.cf,
-      cr: payload.cr,
-      insulin: payload.insulin
-    });
+
+    await Promise.all([
+      updateDoc(childRef, payload),
+      addDoc(historyCol, {
+        timestamp: serverTimestamp(),
+        dateStr: localDateTimeStr(),
+        doctorId: currentUser.uid,
+        doctorName: currentDoctorName,
+        doctorNote: payload.doctor_note,
+        target: limitsData.target,
+        targetBg: limitsData.target,
+        cf: payload.cf,
+        cr: payload.cr,
+        insulin: payload.insulin
+      })
+    ]);
 
     alert("تم حفظ واعتماد البروتوكول العلاجي وتوثيق التعديل في السجل السريري بنجاح! 💾✅");
 
-    await loadChildProfile();
-    await loadRegimenHistory();
+    await Promise.all([
+      loadChildProfile(),
+      loadRegimenHistory()
+    ]);
   } catch (e) {
     console.error("Error saving medical protocol:", e);
     alert("حدث خطأ أثناء حفظ البروتوكول: " + (e.message || e));
@@ -617,23 +675,25 @@ async function loadRegimenHistory() {
     snap.forEach(d => {
       const h = d.data();
       const dt = h.dateStr || (h.timestamp?.toDate ? h.timestamp.toDate().toLocaleString('ar-EG') : '—');
-      const docName = h.doctorName || 'الطبيب المعالج';
-      const note = h.doctorNote ? `<div style="color:#1d4ed8; font-weight:600; margin-top:3px;">📝 ${h.doctorNote}</div>` : '';
+      const docName = (h.doctorName || 'الطبيب المعالج').replace(/^د\.\s*/, '');
+      const note = h.doctorNote ? `<div style="color:#1d4ed8; font-weight:600; margin-top:3px;">📝 ${escapeHtml(h.doctorNote)}</div>` : '';
 
       const cr = h.cr || {};
       const crParts = [];
-      if (cr.breakfast) crParts.push(`فطار: ${cr.breakfast}`);
-      if (cr.lunch) crParts.push(`غداء: ${cr.lunch}`);
-      if (cr.dinner) crParts.push(`عشاء: ${cr.dinner}`);
+      if (cr.breakfast) crParts.push(`فطار: ${escapeHtml(cr.breakfast)}`);
+      if (cr.lunch) crParts.push(`غداء: ${escapeHtml(cr.lunch)}`);
+      if (cr.dinner) crParts.push(`عشاء: ${escapeHtml(cr.dinner)}`);
+
+      const targetVal = h.target ?? h.targetBg ?? '—';
 
       html += `
         <div class="history-item">
           <div class="history-meta">
-            <b>👨‍⚕️ د. ${docName}</b>
-            <span>🕒 ${dt}</span>
+            <b>👨‍⚕️ د. ${escapeHtml(docName)}</b>
+            <span>🕒 ${escapeHtml(dt)}</span>
           </div>
           <div class="history-changes">
-            <span>🎯 الهدف: <b>${h.target || '—'}</b> | CF: <b>${h.cf || '—'}</b> | CR: [${crParts.join('، ') || '—'}]</span>
+            <span>🎯 الهدف: <b>${escapeHtml(targetVal)}</b> | CF: <b>${escapeHtml(h.cf || '—')}</b> | CR: [${crParts.join('، ') || '—'}]</span>
             ${note}
           </div>
         </div>
@@ -649,7 +709,7 @@ async function loadRegimenHistory() {
 
 // --- 9. تصدير CSV ---
 function exportCsv() {
-  const BOM = "﻿";
+  const BOM = "\uFEFF";
   const header = ["التاريخ", "الوقت", "الفترة", "السكر", "الكاربوهيدرات", "الإنسولين", "ملاحظات"];
   const rows = [header];
 
