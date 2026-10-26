@@ -1434,14 +1434,14 @@ function buildMealChefSystemPrompt(userText) {
   for (const f of state.globalFoods) {
     const fn = normAr(`${f.name} ${f.category || ''}`);
     const isMatch = qWords.some(w => fn.includes(w)) || state.favorites.has(f.id) || state.mostUsedIds.includes(f.id);
-    if (isMatch && matchedFoods.length < 45) {
-      const unitsStr = (f.units || []).slice(0, 3).map(u => `${u.label}=${u.grams}g`).join(', ');
+    if (isMatch && matchedFoods.length < 22) {
+      const unitsStr = (f.units || []).slice(0, 2).map(u => `${u.label}=${u.grams}g`).join(', ');
       matchedFoods.push(`- ${f.name} [كارب/100جم: ${f.carbs}g, ألياف: ${f.fiber || 0}g, الوحدات: ${unitsStr || '100 جرام=100g'}]`);
     }
   }
-  if (matchedFoods.length < 30) {
-    for (const f of state.globalFoods.slice(0, 35)) {
-      if (matchedFoods.length >= 45) break;
+  if (matchedFoods.length < 15) {
+    for (const f of state.globalFoods.slice(0, 20)) {
+      if (matchedFoods.length >= 22) break;
       const unitsStr = (f.units || []).slice(0, 2).map(u => `${u.label}=${u.grams}g`).join(', ');
       const line = `- ${f.name} [كارب/100جم: ${f.carbs}g, الوحدات: ${unitsStr || '100 جرام=100g'}]`;
       if (!matchedFoods.includes(line)) matchedFoods.push(line);
@@ -1500,7 +1500,7 @@ async function callMealGeminiCloud(userText) {
 
   const sysInstruction = buildMealChefSystemPrompt(userText);
   const contents = [];
-  for (const h of _mealAiHistory.slice(-8)) {
+  for (const h of _mealAiHistory.slice(-6)) {
     contents.push({
       role: h.role === 'user' ? 'user' : 'model',
       parts: [{ text: h.text }]
@@ -1512,9 +1512,10 @@ async function callMealGeminiCloud(userText) {
   const models = ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-pro-latest'];
 
   for (const modelName of models) {
+    let tId = null;
     try {
       const controller = new AbortController();
-      const tId = setTimeout(() => controller.abort(), 9500);
+      tId = setTimeout(() => controller.abort('timeout'), 20000);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(_mealAiApiKey)}`;
       const res = await fetch(url, {
         method: 'POST',
@@ -1522,7 +1523,7 @@ async function callMealGeminiCloud(userText) {
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: sysInstruction }] },
           contents,
-          generationConfig: { temperature: 0.6, maxOutputTokens: 1400 }
+          generationConfig: { temperature: 0.6, maxOutputTokens: 1000 }
         }),
         signal: controller.signal
       });
@@ -1534,7 +1535,8 @@ async function callMealGeminiCloud(userText) {
         return reply.trim();
       }
     } catch (e) {
-      console.warn('Meal AI model fallback:', modelName, e);
+      if (tId) clearTimeout(tId);
+      console.info('Meal AI switching model:', modelName);
     }
   }
   return null;
