@@ -3,18 +3,31 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>تقرير متابعة السكري - منصة أسيل</title>
-  <link rel="stylesheet" href="css/reports-print.css?v=3"/>
+  <title>تقرير متابعة السكري المعتمد - منصة أسيل</title>
+  <link rel="icon" href="favicon.ico" />
+  <link rel="stylesheet" href="css/reports-print.css?v=4"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <div id="printContainer"></div>
-
-  <div id="appLoader" class="print-loader">
-    <div class="spinner"></div>
-    <p>جاري تجهيز التقرير الطبّي...</p>
+  <!-- شريط أدوات علوي يظهر على الشاشة فقط ويختفي عند الطباعة -->
+  <div class="screen-toolbar no-print">
+    <div class="st-right">
+      <b>🖨️ معاينة الطباعة الطبية المعتمدة (A4 بالعرض)</b>
+      <span id="printModeLabel" class="st-badge">—</span>
+    </div>
+    <div class="st-actions">
+      <button type="button" onclick="window.print()" class="st-btn primary">🖨️ طباعة الآن / حفظ PDF</button>
+      <button type="button" onclick="window.close()" class="st-btn">✕ إغلاق النافذة</button>
+    </div>
   </div>
 
-  <script type="module" src="js/reports-print.js?v=3"></script>
+  <div id="printContainer"></div>
+
+  <div id="appLoader" class="print-loader no-print">
+    <div class="spinner"></div>
+    <p>جاري تجهيز التقرير الطبّي المعتمد...</p>
+  </div>
+
+  <script type="module" src="js/reports-print.js?v=4"></script>
 </body>
 </html>
