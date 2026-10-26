@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>حاسبة الوجبات ومطبخ أسيل</title>
-  <link rel="stylesheet" href="css/meals.css?v=2026.10.13">
+  <link rel="stylesheet" href="css/meals.css?v=2026.10.27">
   <link rel="icon" href="favicon.ico">
   <style>
     /* تحسينات لخانة الجرعة النهائية لتبدو كالنص ولكن قابلة للتعديل */
@@ -273,6 +273,7 @@
       <div class="card-header">
         <h2>🍱 مطبخ أسيل (الأنظمة وبناء الوجبات)</h2>
         <div style="display:flex; gap:8px;">
+          <button id="btnOpenAiChef" class="btn primary sm" type="button" style="background:linear-gradient(135deg,#7c3aed,#2563eb); border:none; color:#fff;">🤖 المساعد الذكي للوجبات</button>
           <button id="btnOpenTareModal" class="btn alt sm" type="button" title="حاسبة وزن الطبق والميزان">⚖️ الميزان (Tare)</button>
           <button id="btnOpenLibrary" class="btn alt sm">➕ أضف صنف من المكتبة</button>
         </div>
@@ -461,7 +462,39 @@
       </div>
     </form>
   </dialog>
+  
+  <!-- المساعد الذكي التفاعلي لبناء الوجبات والمقادير -->
+  <button id="mealAiFab" type="button" class="meal-ai-fab no-print" title="افتح شات مطبخ أسيل الذكي">
+    <span class="pulse-dot"></span>
+    <span>🤖 شات الوجبات والمقادير</span>
+  </button>
+
+  <div id="mealAiDrawer" class="meal-ai-drawer hidden no-print">
+    <div class="meal-ai-head">
+      <div>
+        <h3>🤖 شات مطبخ أسيل الذكي</h3>
+        <span id="mealAiSubStatus">يقترح وجبات من المكتبة ويدرج الأصناف والمقادير تلقائياً</span>
+      </div>
+      <button type="button" id="mealAiCloseBtn" class="meal-ai-close" title="إغلاق">✕</button>
+    </div>
+
+    <div class="meal-ai-chips" id="mealAiQuickChips">
+      <button type="button" class="meal-ai-chip" data-prompt="اقترح وجبة فطار متوازنة لأسيل من الأصناف المفضلة والمكتبة مع المقادير والجرعة">🍳 اقترح فطار</button>
+      <button type="button" class="meal-ai-chip" data-prompt="اقترح وجبة غداء مشبعة ومتوازنة من مفضلات الطفل والمكتبة مع المقادير والجرعة">🍲 اقترح غداء</button>
+      <button type="button" class="meal-ai-chip" data-prompt="اقترح وجبة عشاء خفيفة ومشبعة تمنع هبوط الليل مع المقادير والجرعة">🥪 اقترح عشاء</button>
+      <button type="button" class="meal-ai-chip" data-prompt="اقترح سناك صحي محسوب في حدود 15 جرام كارب مع المقادير">🍎 اقترح سناك</button>
+      <button type="button" class="meal-ai-chip" data-prompt="راجع الأصناف الموجودة في جدول الوجبة حالياً واضبط مقاديرها لتكون متوازنة">⚖️ ضبط مقادير الجدول</button>
+    </div>
+
+    <div class="meal-ai-messages" id="mealAiMessages"></div>
+
+    <form id="mealAiForm" class="meal-ai-input-bar">
+      <input type="text" id="mealAiInput" placeholder="مثال: ضيف 5 ملاعق أرز وقطعة دجاج وسلطة، أو اقترح غداء..." autocomplete="off" />
+      <button type="submit" id="mealAiSendBtn" class="meal-ai-send-btn">إرسال</button>
+    </form>
+  </div>
+
   <div id="loader" class="loader"><div class="spinner"></div></div>
-  <script type="module" src="js/meals.js?v=2026.10.26"></script>
+  <script type="module" src="js/meals.js?v=2026.10.27"></script>
 </body>
 </html>

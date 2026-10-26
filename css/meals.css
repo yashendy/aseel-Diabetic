@@ -211,3 +211,257 @@ a { text-decoration: none; }
   .meal-table { width: 100% !important; border-collapse: collapse !important; }
   .meal-table th, .meal-table td { border: 1px solid #cbd5e1 !important; padding: 6px 8px !important; }
 }
+
+
+/* ================= شات مطبخ أسيل الذكي (AI Meal Chef) ================= */
+.meal-ai-fab {
+  position: fixed;
+  bottom: 22px;
+  left: 22px;
+  z-index: 95;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 10px 25px rgba(37, 99, 235, 0.35);
+  transition: transform 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+}
+.meal-ai-fab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(124, 58, 237, 0.45);
+}
+.meal-ai-fab .pulse-dot {
+  width: 9px;
+  height: 9px;
+  background: #4ade80;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.25);
+}
+
+.meal-ai-drawer {
+  position: fixed;
+  bottom: 82px;
+  left: 22px;
+  width: 420px;
+  max-width: calc(100vw - 28px);
+  height: 580px;
+  max-height: calc(100vh - 110px);
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+  border: 1px solid #e2e8f0;
+  z-index: 99;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.meal-ai-drawer.hidden {
+  display: none !important;
+}
+
+.meal-ai-head {
+  background: linear-gradient(135deg, #1e1b4b, #1d4ed8);
+  color: #fff;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.meal-ai-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.meal-ai-head span {
+  font-size: 11px;
+  color: #cbd5e1;
+  display: block;
+  margin-top: 2px;
+}
+.meal-ai-close {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.meal-ai-close:hover { background: rgba(255,255,255,0.28); }
+
+.meal-ai-chips {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.meal-ai-chip {
+  background: #ffffff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.15s;
+  font-family: inherit;
+}
+.meal-ai-chip:hover {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.meal-ai-messages {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #fcfdff;
+}
+.m-ai-msg {
+  max-width: 90%;
+  padding: 11px 14px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  word-wrap: break-word;
+}
+.m-ai-msg.bot {
+  align-self: flex-start;
+  background: #f1f5f9;
+  color: #0f172a;
+  border-bottom-right-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+.m-ai-msg.user {
+  align-self: flex-end;
+  background: #2563eb;
+  color: #ffffff;
+  border-bottom-left-radius: 4px;
+}
+
+.ai-meal-option-card {
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.06);
+}
+.ai-meal-option-title {
+  font-weight: 800;
+  color: #1e3a8a;
+  font-size: 13px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ai-meal-option-list {
+  margin: 0 0 8px 0;
+  padding-right: 16px;
+  font-size: 12.5px;
+  color: #334155;
+}
+.ai-meal-option-list li {
+  margin-bottom: 3px;
+}
+.ai-meal-option-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.btn-apply-ai-meal {
+  flex: 1;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  transition: 0.15s;
+}
+.btn-apply-ai-meal:hover { filter: brightness(1.06); }
+.btn-append-ai-meal {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-append-ai-meal:hover { background: #dbeafe; }
+
+.meal-ai-input-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+}
+.meal-ai-input-bar input {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  outline: none;
+  font-family: inherit;
+}
+.meal-ai-input-bar input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+.meal-ai-send-btn {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.meal-ai-send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .meal-ai-drawer {
+    left: 10px;
+    right: 10px;
+    bottom: 75px;
+    width: auto;
+    height: 72vh;
+  }
+}
