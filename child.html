@@ -19,22 +19,34 @@
       </div>
     </div>
     
-    <nav class="topbar-nav">
-      <a href="#" class="nav-pill active">🏠 الرئيسية</a>
+    <!-- شريط تنقل ولي الأمر / الطفل -->
+    <nav class="topbar-nav" id="parentNav">
+      <a href="#" class="nav-pill active" id="navHome">🏠 الرئيسية</a>
       <a href="measurements.html" class="nav-pill" id="navMeas">📊 القياسات</a>
       <a href="meals.html" class="nav-pill" id="navMeals">🍽️ الوجبات</a>
-      <a href="visits.html" class="nav-pill" id="navVisits">🩺 الزيارات</a>
+      <a href="reports.html" class="nav-pill" id="navReports">📈 التقارير</a>
       <a href="labs.html" class="nav-pill" id="navLabs">🔬 التحاليل</a>
+      <a href="visits.html" class="nav-pill" id="navVisits">🩺 الزيارات</a>
     </nav>
-    
+
+    <!-- شريط تنقل الطبيب السريري الموحد -->
+    <nav class="topbar-nav hidden" id="doctorNav">
+      <a href="doctor-child.html" class="nav-pill" id="navDocStation">🩺 المحطة السريرية</a>
+      <a href="reports.html" class="nav-pill" id="navDocReports">📈 التقرير (AGP)</a>
+      <a href="labs.html" class="nav-pill" id="navDocLabs">🔬 التحاليل</a>
+      <a href="visits.html" class="nav-pill" id="navDocVisits">🩺 الزيارات</a>
+      <a href="doctor-child.html#protocolSection" class="nav-pill" id="navDocDoses">⚙️ تعديل الجرعات</a>
+    </nav>
+
     <div class="topbar-left">
-      <button id="logoutBtn" class="btn-logout-outline">↪ خروج</button>
+      <button id="backBtn" class="btn hidden" style="background:#3b82f6; color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold;">🏠 رجوع للوحة العيادة</button>
+      <button id="logoutBtn" class="btn-logout-outline" style="margin-inline-start:8px;">↪ خروج</button>
     </div>
   </header>
 
   <!-- 2. مسار التنقل (Breadcrumbs) -->
   <div class="breadcrumbs no-print">
-    <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="#" id="breadChildName">الطفل</a> <span>›</span> <b>الرئيسية 🏠</b>
+    <a href="parent.html" id="breadRootLink">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="#" id="breadChildName">الطفل</a> <span>›</span> <b>الرئيسية 🏠</b>
   </div>
 
   <div class="container">
@@ -369,7 +381,7 @@
 
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="js/child.js?v=12"></script>
+  <script type="module" src="js/child.js?v=9"></script>
   
 </body>
 </html>

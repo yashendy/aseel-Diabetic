@@ -77,7 +77,7 @@ function setupRoleNavigation(isDoc, pId, cId) {
     $('navDocReports')?.setAttribute('href', `reports.html${qDoc}`);
     $('navDocLabs')?.setAttribute('href', `labs.html${qDoc}`);
     $('navDocVisits')?.setAttribute('href', `visits.html${qDoc}`);
-    $('navDocMeals')?.setAttribute('href', `meals.html${qDoc}`);
+    $('navDocDoses')?.setAttribute('href', `${workstationUrl}#protocolSection`);
 
     if (backBtn) {
       backBtn.innerHTML = '🏠 رجوع للوحة العيادة';

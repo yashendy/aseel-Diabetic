@@ -135,13 +135,20 @@ async function loadChildProfile() {
   if ($('patientRegimen')) $('patientRegimen').textContent = regimenType;
   if ($('lblUnit')) $('lblUnit').textContent = sysUnit;
 
-// روابط التنقل لمحطة الطبيب (إخفاء زر الوجبات الخاص بصفحة الطفل)
+// روابط التنقل الموحدة لمحطة الطبيب
   const safeChild = encodeURIComponent(childId);
   const safeParent = encodeURIComponent(parentId);
-  if ($('navDocReports')) $('navDocReports').href = `reports.html?child=${safeChild}&parentId=${safeParent}`;
-  if ($('navDocLabs')) $('navDocLabs').href = `labs.html?child=${safeChild}&parentId=${safeParent}`;
-  if ($('navDocVisits')) $('navDocVisits').href = `visits.html?child=${safeChild}&parentId=${safeParent}`;
-  if ($('navDocMeals')) $('navDocMeals').href = `meals.html?child=${safeChild}&parentId=${safeParent}`;
+  const qDoc = `?child=${safeChild}&parentId=${safeParent}`;
+  if ($('navDocReports')) $('navDocReports').href = `reports.html${qDoc}`;
+  if ($('navDocLabs')) $('navDocLabs').href = `labs.html${qDoc}`;
+  if ($('navDocVisits')) $('navDocVisits').href = `visits.html${qDoc}`;
+  if ($('navDocDoses')) {
+    $('navDocDoses').href = '#protocolSection';
+    $('navDocDoses').onclick = (e) => {
+      e.preventDefault();
+      document.getElementById('protocolSection')?.scrollIntoView({ behavior: 'smooth' });
+    };
+  }
 
   // تعبئة حقول البروتوكول الطبي
   if ($('f_target')) $('f_target').value = sysLimits.target;
@@ -764,4 +771,11 @@ function setupEvents() {
   if (exportBtn) {
     exportBtn.onclick = exportCsv;
   }
+}
+
+// Scroll to protocol section if requested via hash
+if (window.location.hash === '#protocolSection') {
+  setTimeout(() => {
+    document.getElementById('protocolSection')?.scrollIntoView({ behavior: 'smooth' });
+  }, 600);
 }

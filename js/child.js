@@ -1220,17 +1220,64 @@ onAuthStateChanged(auth, async (user)=>{
 
     
 
-    // --- تحديث روابط الـ Nav Pills الجديدة ---
+    // --- تحديث روابط وأزرار الشريط العلوي وفق دور المستخدم ---
+    const safeChild = encodeURIComponent(childId);
+    const safeParent = encodeURIComponent(parentId);
+    const qDoc = `?child=${safeChild}&parentId=${safeParent}`;
+    const qChild = `?child=${safeChild}`;
+    const workstationUrl = `doctor-child.html${qDoc}`;
 
-    const qDocParams = `?child=${encodeURIComponent(childId)}${isDoctor ? `&parentId=${encodeURIComponent(parentId)}` : ''}`;
+    const parentNav = $('parentNav');
+    const doctorNav = $('doctorNav');
+    const backBtn = $('backBtn');
+    const breadRoot = $('breadRootLink');
 
-    setHref($('navMeas'), `measurements.html${qDocParams}`);
+    if (isDoctor) {
+      parentNav?.classList.add('hidden');
+      doctorNav?.classList.remove('hidden');
 
-    setHref($('navMeals'), `meals.html${qDocParams}`);
+      $('navDocStation')?.setAttribute('href', workstationUrl);
+      $('navDocReports')?.setAttribute('href', `reports.html${qDoc}`);
+      $('navDocLabs')?.setAttribute('href', `labs.html${qDoc}`);
+      $('navDocVisits')?.setAttribute('href', `visits.html${qDoc}`);
+      $('navDocDoses')?.setAttribute('href', `${workstationUrl}#protocolSection`);
 
-    setHref($('navVisits'), `visits.html${qDocParams}`);
+      if (backBtn) {
+        backBtn.classList.remove('hidden');
+        backBtn.textContent = '🏠 رجوع للوحة العيادة';
+        backBtn.onclick = () => location.href = 'doctor-dashboard.html';
+      }
 
-    setHref($('navLabs'), `labs.html${qDocParams}`);
+      if (breadRoot) {
+        breadRoot.textContent = 'عيادتي (قائمة المرضى) 👨‍⚕️';
+        breadRoot.href = 'doctor-dashboard.html';
+      }
+      if (breadChildName) {
+        breadChildName.href = workstationUrl;
+      }
+    } else {
+      doctorNav?.classList.add('hidden');
+      parentNav?.classList.remove('hidden');
+
+      $('navHome')?.setAttribute('href', `child.html${qChild}`);
+      $('navMeas')?.setAttribute('href', `measurements.html${qChild}`);
+      $('navMeals')?.setAttribute('href', `meals.html${qChild}`);
+      $('navReports')?.setAttribute('href', `reports.html${qChild}`);
+      $('navLabs')?.setAttribute('href', `labs.html${qChild}`);
+      $('navVisits')?.setAttribute('href', `visits.html${qChild}`);
+
+      if (backBtn) {
+        backBtn.classList.add('hidden');
+      }
+
+      if (breadRoot) {
+        breadRoot.textContent = 'أطفالي 👨‍👩‍👧‍👦';
+        breadRoot.href = 'parent.html';
+      }
+      if (breadChildName) {
+        breadChildName.href = `child.html${qChild}`;
+      }
+    }
 
 
 

@@ -78,7 +78,7 @@ function adaptHeaderForRole(isDoc, parentId) {
     $('navDocReports')?.setAttribute('href', `reports.html${qDoc}`);
     $('navDocLabs')?.setAttribute('href', `labs.html${qDoc}`);
     $('navDocVisits')?.setAttribute('href', `visits.html${qDoc}`);
-    $('navDocMeals')?.setAttribute('href', `meals.html${qDoc}`);
+    $('navDocDoses')?.setAttribute('href', `${workstationUrl}#protocolSection`);
 
     if (firstBreadLink) {
       firstBreadLink.textContent = 'عيادتي (قائمة المرضى) 👨‍⚕️';
