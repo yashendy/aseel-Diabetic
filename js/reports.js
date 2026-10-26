@@ -62,18 +62,25 @@ onAuthStateChanged(auth, async (u) => {
   parentIdForQuery = urlParams.get('parentId') || localStorage.getItem('selectedParentId') || u.uid;
   const isDoctorMode = urlParams.has('parentId') && parentIdForQuery !== u.uid;
 
-  // تكييف واجهة الصفحة لوضع الطبيب أو ولي الأمر
   const backBtn = $('backBtn');
   const workstationUrl = `doctor-child.html?child=${encodeURIComponent(childId)}&parentId=${encodeURIComponent(parentIdForQuery)}`;
 
   if (isDoctorMode) {
-    if (backBtn) {
-      backBtn.innerHTML = '🩺 المحطة السريرية';
-      backBtn.onclick = () => location.href = workstationUrl;
-    }
+    // 1. إخفاء أزرار صفحات الطفل اليومية عن الطبيب لمنع التشتت
+    $('navHome')?.classList.add('hidden');
+    $('navMeas')?.classList.add('hidden');
+    $('navMeals')?.classList.add('hidden');
+
+    // 2. إظهار زر المحطة السريرية للطبيب
     if ($('navWorkstation')) {
       $('navWorkstation').classList.remove('hidden');
       $('navWorkstation').href = workstationUrl;
+    }
+
+    // 3. ضبط زر الرجوع ومسار التنقل للطبيب
+    if (backBtn) {
+      backBtn.innerHTML = '🩺 المحطة السريرية';
+      backBtn.onclick = () => location.href = workstationUrl;
     }
     if ($('doctorQuickBanner')) {
       $('doctorQuickBanner').classList.remove('hidden');
@@ -86,6 +93,12 @@ onAuthStateChanged(auth, async (u) => {
       $('breadRootLink').href = 'doctor-dashboard.html';
     }
   } else {
+    // وضع ولي الأمر والطفل المعتاد
+    $('navHome')?.classList.remove('hidden');
+    $('navMeas')?.classList.remove('hidden');
+    $('navMeals')?.classList.remove('hidden');
+    $('navWorkstation')?.classList.add('hidden');
+
     if (backBtn) {
       backBtn.innerHTML = '🏠 رجوع للوحة الطفل';
       backBtn.onclick = () => location.href = `child.html?child=${encodeURIComponent(childId)}`;
