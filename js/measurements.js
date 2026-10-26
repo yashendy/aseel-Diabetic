@@ -1,7 +1,7 @@
 // js/measurements.js
 import { auth, db } from './firebase-config.js';
 import { collection, doc, getDoc, getDocs, addDoc, deleteDoc, onSnapshot, query, where, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
   esc, round, localDateStr, localTimeStr, whenFromParts, toDateObj, convert, roundToStep, SLOT_ORDER,
   getTherapy, glucoseState, glucoseFields, calcIOB, extractDoseEntries
@@ -59,16 +59,74 @@ async function loadChildSettings() {
     const c = snap.data();
     therapy = getTherapy(c);
  
-    if ($('childName')) $('childName').textContent = c.name || 'الطفل';
-    if ($('unitSel')) $('unitSel').value = therapy.unit;
-    if ($('therapyChips')) {
-      $('therapyChips').innerHTML =
-        `<span class="chip">🎯 الهدف: ${esc(therapy.target ?? '—')}</span><span class="chip">💉 CF: ${esc(therapy.CF ?? '—')}</span><span class="chip">📊 ${esc(therapy.unit)}</span>` +
-        (therapy.missing.length ? `<span class="chip" style="background:#fef2f2;color:#991b1b;">⚠️ ناقص: ${esc(therapy.missing.join('، '))}</span>` : '');
-    }
-    const isDoctor = parentId !== currentUser?.uid;
-    const qDocParams = `?child=${childId}${isDoctor ? `&parentId=${parentId}` : ''}`;
-    if ($('backToChild')) $('backToChild').onclick = () => location.href = `child.html${qDocParams}`;
+    const childName = c.name || 'الطفل';
+    if ($('childName')) $('childName').textContent = childName;
+    if ($('topChildName')) $('topChildName').textContent = childName;
+    if ($('topAvatar')) $('topAvatar').textContent = childName.trim().charAt(0) || 'أ';
+    if ($('topChildMeta')) $('topChildMeta').textContent = `${c.gender === 'female' ? 'أنثى' : 'ذكر'} • ${therapy.unit}`;
+    if ($('breadChildName')) $('breadChildName').textContent = childName;
+
+    if ($('unitSel')) $('unitSel').value = therapy.unit;
+
+    if ($('therapyChips')) {
+      $('therapyChips').innerHTML =
+        `<span class="chip">🎯 الهدف: ${esc(therapy.target ?? '—')}</span><span class="chip">💉 CF: ${esc(therapy.CF ?? '—')}</span><span class="chip">📊 ${esc(therapy.unit)}</span>` +
+        (therapy.missing.length ? `<span class="chip" style="background:#fef2f2;color:#991b1b;">⚠️ ناقص: ${esc(therapy.missing.join('، '))}</span>` : '');
+    }
+
+    const isDoctor = parentId !== currentUser?.uid;
+    const safeChild = encodeURIComponent(childId);
+    const safeParent = encodeURIComponent(parentId);
+    const qDoc = `?child=${safeChild}&parentId=${safeParent}`;
+    const qChild = `?child=${safeChild}`;
+    const workstationUrl = `doctor-child.html${qDoc}`;
+
+    const parentNav = $('parentNav');
+    const doctorNav = $('doctorNav');
+    const backBtn = $('backBtn');
+    const breadRoot = $('breadRootLink');
+
+    if (isDoctor) {
+      if (parentNav) { parentNav.classList.add('hidden'); parentNav.style.display = 'none'; }
+      if (doctorNav) { doctorNav.classList.remove('hidden'); doctorNav.style.display = 'flex'; }
+
+      $('navDocStation')?.setAttribute('href', workstationUrl);
+      $('navDocReports')?.setAttribute('href', `reports.html${qDoc}`);
+      $('navDocLabs')?.setAttribute('href', `labs.html${qDoc}`);
+      $('navDocVisits')?.setAttribute('href', `visits.html${qDoc}`);
+      $('navDocDoses')?.setAttribute('href', `${workstationUrl}#protocolSection`);
+
+      if (backBtn) {
+        backBtn.textContent = '🏠 رجوع للوحة العيادة';
+        backBtn.onclick = () => location.href = 'doctor-dashboard.html';
+      }
+      if (breadRoot) {
+        breadRoot.textContent = 'عيادتي (قائمة المرضى) 👨‍⚕️';
+        breadRoot.href = 'doctor-dashboard.html';
+      }
+      $('breadChildName')?.setAttribute('href', workstationUrl);
+    } else {
+      if (doctorNav) { doctorNav.classList.add('hidden'); doctorNav.style.display = 'none'; }
+      if (parentNav) { parentNav.classList.remove('hidden'); parentNav.style.display = 'flex'; }
+
+      $('navHome')?.setAttribute('href', `child.html${qChild}`);
+      $('navMeas')?.setAttribute('href', `measurements.html${qChild}`);
+      $('navMeals')?.setAttribute('href', `meals.html${qChild}`);
+      $('navReports')?.setAttribute('href', `reports.html${qChild}`);
+      $('navLabs')?.setAttribute('href', `labs.html${qChild}`);
+      $('navVisits')?.setAttribute('href', `visits.html${qChild}`);
+
+      if (backBtn) {
+        backBtn.textContent = '🏠 رجوع للوحة الطفل';
+        backBtn.onclick = () => location.href = `child.html${qChild}`;
+      }
+      if (breadRoot) {
+        breadRoot.textContent = 'أطفالي 👨‍👩‍👧‍👦';
+        breadRoot.href = 'parent.html';
+      }
+      $('breadChildName')?.setAttribute('href', `child.html${qChild}`);
+    }
+    $('logoutBtn')?.addEventListener('click', () => signOut(auth).then(() => location.href = 'index.html').catch(() => {}));
   } catch (e) { console.error(e); }
 }
  

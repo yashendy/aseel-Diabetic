@@ -27,19 +27,33 @@
         <span id="topChildMeta" class="muted tiny">—</span>
       </div>
     </div>
-    <nav class="topbar-nav">
+    <!-- شريط تنقل ولي الأمر / الطفل -->
+    <nav class="topbar-nav" id="parentNav">
       <a href="child.html" class="nav-pill" id="navHome">🏠 الرئيسية</a>
       <a href="measurements.html" class="nav-pill" id="navMeas">📊 القياسات</a>
-      <a href="#" class="nav-pill active">🍽️ الوجبات</a>
+      <a href="#" class="nav-pill active" id="navMeals">🍽️ الوجبات</a>
       <a href="reports.html" class="nav-pill" id="navReports">📈 التقارير</a>
+      <a href="labs.html" class="nav-pill" id="navLabs">🔬 التحاليل</a>
+      <a href="visits.html" class="nav-pill" id="navVisits">🩺 الزيارات</a>
     </nav>
+
+    <!-- شريط تنقل الطبيب السريري الموحد -->
+    <nav class="topbar-nav hidden" id="doctorNav" style="display:none;">
+      <a href="doctor-child.html" class="nav-pill" id="navDocStation">🩺 المحطة السريرية</a>
+      <a href="reports.html" class="nav-pill" id="navDocReports">📈 التقرير (AGP)</a>
+      <a href="labs.html" class="nav-pill" id="navDocLabs">🔬 التحاليل</a>
+      <a href="visits.html" class="nav-pill" id="navDocVisits">🩺 الزيارات</a>
+      <a href="doctor-child.html#protocolSection" class="nav-pill" id="navDocDoses">⚙️ تعديل الجرعات</a>
+    </nav>
+
     <div class="topbar-left">
-      <button id="logoutBtn" class="btn-logout-outline">↪ خروج</button>
+      <button id="backBtn" class="btn" style="background:#3b82f6; color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold;">🏠 رجوع للوحة الطفل</button>
+      <button id="logoutBtn" class="btn-logout-outline" style="margin-inline-start:8px;">↪ خروج</button>
     </div>
   </header>
  
   <div class="breadcrumbs no-print">
-    <a href="parent.html">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>حاسبة ومطبخ أسيل 🍽️</b>
+    <a href="parent.html" id="breadRootLink">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>حاسبة ومطبخ أسيل 🍽️</b>
   </div>
  
   <div class="container">
@@ -448,6 +462,6 @@
     </form>
   </dialog>
   <div id="loader" class="loader"><div class="spinner"></div></div>
-  <script type="module" src="js/meals.js?v=2026.10.13?v=6"></script>
+  <script type="module" src="js/meals.js?v=2026.10.26"></script>
 </body>
 </html>

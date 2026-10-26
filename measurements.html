@@ -4,21 +4,51 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>سجل القياسات</title>
-  <link rel="stylesheet" href="css/measurements.css?v=6" />
+  <link rel="stylesheet" href="css/measurements.css?v=8" />
   <link rel="icon" href="favicon.png" />
 </head>
 <body>
+  <!-- 1. شريط التنقل الموحد -->
+  <header class="main-topbar no-print">
+    <div class="topbar-right">
+      <div class="top-avatar" id="topAvatar">أ</div>
+      <div class="top-info">
+        <h3 id="topChildName">جاري التحميل...</h3>
+        <span id="topChildMeta" class="muted tiny">—</span>
+      </div>
+    </div>
+
+    <!-- شريط تنقل ولي الأمر / الطفل -->
+    <nav class="topbar-nav" id="parentNav">
+      <a href="child.html" class="nav-pill" id="navHome">🏠 الرئيسية</a>
+      <a href="#" class="nav-pill active" id="navMeas">📊 القياسات</a>
+      <a href="meals.html" class="nav-pill" id="navMeals">🍽️ الوجبات</a>
+      <a href="reports.html" class="nav-pill" id="navReports">📈 التقارير</a>
+      <a href="labs.html" class="nav-pill" id="navLabs">🔬 التحاليل</a>
+      <a href="visits.html" class="nav-pill" id="navVisits">🩺 الزيارات</a>
+    </nav>
+
+    <!-- شريط تنقل الطبيب السريري الموحد -->
+    <nav class="topbar-nav hidden" id="doctorNav" style="display:none;">
+      <a href="doctor-child.html" class="nav-pill" id="navDocStation">🩺 المحطة السريرية</a>
+      <a href="reports.html" class="nav-pill" id="navDocReports">📈 التقرير (AGP)</a>
+      <a href="labs.html" class="nav-pill" id="navDocLabs">🔬 التحاليل</a>
+      <a href="visits.html" class="nav-pill" id="navDocVisits">🩺 الزيارات</a>
+      <a href="doctor-child.html#protocolSection" class="nav-pill" id="navDocDoses">⚙️ تعديل الجرعات</a>
+    </nav>
+
+    <div class="topbar-left">
+      <button id="backBtn" class="btn" style="background:#3b82f6; color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold; height:36px;">🏠 رجوع للوحة الطفل</button>
+      <button id="logoutBtn" class="btn-logout-outline" style="margin-inline-start:8px;">↪ خروج</button>
+    </div>
+  </header>
+
+  <!-- 2. مسار التنقل (Breadcrumbs) -->
+  <div class="breadcrumbs no-print">
+    <a href="parent.html" id="breadRootLink">أطفالي 👨‍👩‍👧‍👦</a> <span>›</span> <a href="child.html" id="breadChildName">الطفل</a> <span>›</span> <b>سجل القياسات اليومية 📊</b>
+  </div>
+
   <div class="container">
-    <!-- الهيدر -->
-    <header class="page-head no-print">
-      <div class="right">
-        <strong id="childName">جاري التحميل...</strong>
-        <span id="childMeta" class="muted"></span>
-      </div>
-      <div class="left">
-        <button id="backToChild" class="btn btn--ghost">⬅ لوحة الطفل</button>
-      </div>
-    </header>
 
     <!-- شريط المعاملات -->
     <div id="therapyChips" class="chips" style="margin-bottom: 15px;"></div>
@@ -127,6 +157,6 @@
   </div>
 
   <div id="toast" class="toast hidden"></div>
-  <script type="module" src="js/measurements.js?v=6"></script>
+  <script type="module" src="js/measurements.js?v=8"></script>
 </body>
 </html>
