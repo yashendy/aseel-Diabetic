@@ -572,3 +572,10 @@ td.empty {
     justify-content: center;
   }
 }
+/* إخفاء روابط وعناصر ولي الأمر تماماً في وضع الطبيب */
+body.doctor-mode .nav-pill.parent-only,
+body.doctor-mode #navHome,
+body.doctor-mode #navMeas,
+body.doctor-mode #navMeals {
+  display: none !important;
+}
