@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>تقارير التحاليل الطبية</title>
   <link rel="icon" href="favicon.ico">
-  <link rel="stylesheet" href="css/labs.css">
+  <link rel="stylesheet" href="css/labs.css?v=5">
 
   <!-- مكتبات PDF وباركود (تم الحفاظ عليها) -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
@@ -39,7 +39,7 @@
     </nav>
 
     <!-- شريط تنقل الطبيب السريري الموحد -->
-    <nav class="topbar-nav hidden" id="doctorNav">
+    <nav class="topbar-nav hidden" id="doctorNav" style="display:none;">
       <a href="doctor-child.html" class="nav-pill" id="navDocStation">🩺 المحطة السريرية</a>
       <a href="reports.html" class="nav-pill" id="navDocReports">📈 التقرير (AGP)</a>
       <a href="#" class="nav-pill active" id="navDocLabs">🔬 التحاليل</a>
@@ -273,6 +273,6 @@
   </div>
 
   <!-- سكربت -->
-  <script type="module" src="js/labs.js?v=9"></script>
+  <script type="module" src="js/labs.js?v=11"></script>
 </body>
 </html>

@@ -166,8 +166,8 @@ onAuthStateChanged(auth, async user => {
   const firstBreadLink = breadContainer ? breadContainer.querySelector('a') : null;
 
   if (isDoctor) {
-    parentNav?.classList.add('hidden');
-    doctorNav?.classList.remove('hidden');
+    if (parentNav) { parentNav.classList.add('hidden'); parentNav.style.display = 'none'; }
+    if (doctorNav) { doctorNav.classList.remove('hidden'); doctorNav.style.display = 'flex'; }
 
     $('navDocStation')?.setAttribute('href', workstationUrl);
     $('navDocReports')?.setAttribute('href', `reports.html${qDoc}`);
@@ -185,8 +185,8 @@ onAuthStateChanged(auth, async user => {
     }
     $('breadChildName')?.setAttribute('href', workstationUrl);
   } else {
-    doctorNav?.classList.add('hidden');
-    parentNav?.classList.remove('hidden');
+    if (doctorNav) { doctorNav.classList.add('hidden'); doctorNav.style.display = 'none'; }
+    if (parentNav) { parentNav.classList.remove('hidden'); parentNav.style.display = 'flex'; }
 
     $('navHome')?.setAttribute('href', `child.html${qChild}`);
     $('navMeas')?.setAttribute('href', `measurements.html${qChild}`);
