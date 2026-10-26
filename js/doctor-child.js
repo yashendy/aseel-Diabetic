@@ -135,13 +135,13 @@ async function loadChildProfile() {
   if ($('patientRegimen')) $('patientRegimen').textContent = regimenType;
   if ($('lblUnit')) $('lblUnit').textContent = sysUnit;
 
-  // روابط التنقل لمحطة الطبيب
+// روابط التنقل لمحطة الطبيب (إخفاء زر الوجبات الخاص بصفحة الطفل)
   const safeChild = encodeURIComponent(childId);
   const safeParent = encodeURIComponent(parentId);
   if ($('navDocReports')) $('navDocReports').href = `reports.html?child=${safeChild}&parentId=${safeParent}`;
   if ($('navDocLabs')) $('navDocLabs').href = `labs.html?child=${safeChild}&parentId=${safeParent}`;
   if ($('navDocVisits')) $('navDocVisits').href = `visits.html?child=${safeChild}&parentId=${safeParent}`;
-  if ($('navDocMeals')) $('navDocMeals').href = `child.html?child=${safeChild}&parentId=${safeParent}#meals`;
+  if ($('navDocMeals')) $('navDocMeals').classList.add('hidden');
 
   // تعبئة حقول البروتوكول الطبي
   if ($('f_target')) $('f_target').value = sysLimits.target;
