@@ -153,14 +153,58 @@ onAuthStateChanged(auth, async user => {
   if (regimenStr) metaParts.push(regimenStr);
   setText($('topChildMeta'), metaParts.join(' • ') || '—');
 
-  // تحديث روابط الشريط العلوي
-  const qParams = `?child=${encodeURIComponent(childId)}${isDoctor ? `&parentId=${encodeURIComponent(parentId)}` : ''}`;
-  $('navHome')?.setAttribute('href', `child.html${qParams}`);
-  $('navMeas')?.setAttribute('href', `measurements.html${qParams}`);
-  $('navMeals')?.setAttribute('href', `meals.html${qParams}`);
-  $('navReports')?.setAttribute('href', `reports.html${qParams}`);
-  $('navVisits')?.setAttribute('href', `visits.html${qParams}`);
-  $('breadChildName')?.setAttribute('href', `child.html${qParams}`);
+    // تحديث روابط وأزرار الشريط العلوي وفق دور المستخدم
+  const safeChild = encodeURIComponent(childId);
+  const safeParent = encodeURIComponent(parentId);
+  const qDoc = `?child=${safeChild}&parentId=${safeParent}`;
+  const qChild = `?child=${safeChild}`;
+  const workstationUrl = `doctor-child.html${qDoc}`;
+
+  const parentNav = $('parentNav');
+  const doctorNav = $('doctorNav');
+  const breadContainer = document.querySelector('.breadcrumbs');
+  const firstBreadLink = breadContainer ? breadContainer.querySelector('a') : null;
+
+  if (isDoctor) {
+    parentNav?.classList.add('hidden');
+    doctorNav?.classList.remove('hidden');
+
+    $('navDocStation')?.setAttribute('href', workstationUrl);
+    $('navDocReports')?.setAttribute('href', `reports.html${qDoc}`);
+    $('navDocLabs')?.setAttribute('href', `labs.html${qDoc}`);
+    $('navDocVisits')?.setAttribute('href', `visits.html${qDoc}`);
+    $('navDocMeals')?.setAttribute('href', `meals.html${qDoc}`);
+
+    if (backBtn) {
+      backBtn.textContent = '🏠 رجوع للوحة العيادة';
+      backBtn.onclick = () => location.href = 'doctor-dashboard.html';
+    }
+    if (firstBreadLink) {
+      firstBreadLink.textContent = 'عيادتي (قائمة المرضى) 👨‍⚕️';
+      firstBreadLink.href = 'doctor-dashboard.html';
+    }
+    $('breadChildName')?.setAttribute('href', workstationUrl);
+  } else {
+    doctorNav?.classList.add('hidden');
+    parentNav?.classList.remove('hidden');
+
+    $('navHome')?.setAttribute('href', `child.html${qChild}`);
+    $('navMeas')?.setAttribute('href', `measurements.html${qChild}`);
+    $('navMeals')?.setAttribute('href', `meals.html${qChild}`);
+    $('navReports')?.setAttribute('href', `reports.html${qChild}`);
+    $('navLabs')?.setAttribute('href', `labs.html${qChild}`);
+    $('navVisits')?.setAttribute('href', `visits.html${qChild}`);
+
+    if (backBtn) {
+      backBtn.textContent = '🏠 رجوع للوحة الطفل';
+      backBtn.onclick = () => location.href = `child.html${qChild}`;
+    }
+    if (firstBreadLink) {
+      firstBreadLink.textContent = 'أطفالي 👨‍👩‍👧‍👦';
+      firstBreadLink.href = 'parent.html';
+    }
+    $('breadChildName')?.setAttribute('href', `child.html${qChild}`);
+  }
 
   await loadHistory(parentId, childId, childName);
 

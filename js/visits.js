@@ -58,61 +58,58 @@ function wireBmiCalc() {
 }
 
 function adaptHeaderForRole(isDoc, parentId) {
-  const safeChild = encodeURIComponent(childId);
-  const safeParent = encodeURIComponent(parentId);
-  const qParams = `?child=${safeChild}${isDoc ? `&parentId=${safeParent}` : ''}`;
-  const workstationUrl = `doctor-child.html?child=${safeChild}&parentId=${safeParent}`;
+  const safeChild = encodeURIComponent(childId || '');
+  const safeParent = encodeURIComponent(parentId || '');
+  const qDoc = `?child=${safeChild}&parentId=${safeParent}`;
+  const qChild = `?child=${safeChild}`;
+  const workstationUrl = `doctor-child.html${qDoc}`;
 
-  $('navReports')?.setAttribute('href', `reports.html${qParams}`);
-  $('navLabs')?.setAttribute('href', `labs.html${qParams}`);
-
+  const parentNav = $('parentNav');
+  const doctorNav = $('doctorNav');
   const backBtn = $('backBtn');
+  const breadContainer = document.querySelector('.breadcrumbs');
+  const firstBreadLink = breadContainer ? breadContainer.querySelector('a') : null;
 
   if (isDoc) {
-    $('navHome')?.classList.add('hidden');
-    $('navMeas')?.classList.add('hidden');
-    $('navMeals')?.classList.add('hidden');
+    parentNav?.classList.add('hidden');
+    doctorNav?.classList.remove('hidden');
 
-    const navBar = document.querySelector('.topbar-nav');
-    if (navBar && !$('navWorkstation')) {
-      const wsLink = document.createElement('a');
-      wsLink.id = 'navWorkstation';
-      wsLink.className = 'nav-pill';
-      wsLink.style.cssText = 'background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;';
-      wsLink.href = workstationUrl;
-      wsLink.innerHTML = '🩺 المحطة السريرية';
-      navBar.insertBefore(wsLink, navBar.firstChild);
-    } else if ($('navWorkstation')) {
-      $('navWorkstation').href = workstationUrl;
-      $('navWorkstation').classList.remove('hidden');
-    }
+    $('navDocStation')?.setAttribute('href', workstationUrl);
+    $('navDocReports')?.setAttribute('href', `reports.html${qDoc}`);
+    $('navDocLabs')?.setAttribute('href', `labs.html${qDoc}`);
+    $('navDocVisits')?.setAttribute('href', `visits.html${qDoc}`);
+    $('navDocMeals')?.setAttribute('href', `meals.html${qDoc}`);
 
-    const breadContainer = document.querySelector('.breadcrumbs');
-    if (breadContainer) {
-      const firstLink = breadContainer.querySelector('a');
-      if (firstLink) {
-        firstLink.textContent = 'بوابة الأطباء 🩺';
-        firstLink.href = 'doctor-dashboard.html';
-      }
+    if (firstBreadLink) {
+      firstBreadLink.textContent = 'عيادتي (قائمة المرضى) 👨‍⚕️';
+      firstBreadLink.href = 'doctor-dashboard.html';
     }
     $('breadChildName')?.setAttribute('href', workstationUrl);
 
     if (backBtn) {
-      backBtn.textContent = '🩺 المحطة السريرية';
-      backBtn.onclick = () => location.href = workstationUrl;
+      backBtn.innerHTML = '🏠 رجوع للوحة العيادة';
+      backBtn.onclick = () => location.href = 'doctor-dashboard.html';
     }
   } else {
-    $('navHome')?.classList.remove('hidden');
-    $('navMeas')?.classList.remove('hidden');
-    $('navMeals')?.classList.remove('hidden');
-    $('navHome')?.setAttribute('href', `child.html${qParams}`);
-    $('navMeas')?.setAttribute('href', `measurements.html${qParams}`);
-    $('navMeals')?.setAttribute('href', `meals.html${qParams}`);
-    $('breadChildName')?.setAttribute('href', `child.html${qParams}`);
+    doctorNav?.classList.add('hidden');
+    parentNav?.classList.remove('hidden');
+
+    $('navHome')?.setAttribute('href', `child.html${qChild}`);
+    $('navMeas')?.setAttribute('href', `measurements.html${qChild}`);
+    $('navMeals')?.setAttribute('href', `meals.html${qChild}`);
+    $('navReports')?.setAttribute('href', `reports.html${qChild}`);
+    $('navLabs')?.setAttribute('href', `labs.html${qChild}`);
+    $('navVisits')?.setAttribute('href', `visits.html${qChild}`);
+
+    if (firstBreadLink) {
+      firstBreadLink.textContent = 'أطفالي 👨‍👩‍👧‍👦';
+      firstBreadLink.href = 'parent.html';
+    }
+    $('breadChildName')?.setAttribute('href', `child.html${qChild}`);
 
     if (backBtn) {
-      backBtn.textContent = '🏠 رجوع للوحة الطفل';
-      backBtn.onclick = () => location.href = `child.html?child=${safeChild}`;
+      backBtn.innerHTML = '🏠 رجوع للوحة الطفل';
+      backBtn.onclick = () => location.href = `child.html${qChild}`;
     }
   }
 }

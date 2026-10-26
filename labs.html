@@ -28,13 +28,23 @@
         <span id="topChildMeta" class="muted tiny">—</span>
       </div>
     </div>
-    <nav class="topbar-nav">
+    <!-- شريط تنقل ولي الأمر / الطفل -->
+    <nav class="topbar-nav" id="parentNav">
       <a href="child.html" class="nav-pill" id="navHome">🏠 الرئيسية</a>
       <a href="measurements.html" class="nav-pill" id="navMeas">📊 القياسات</a>
       <a href="meals.html" class="nav-pill" id="navMeals">🍽️ الوجبات</a>
       <a href="reports.html" class="nav-pill" id="navReports">📈 التقارير</a>
       <a href="#" class="nav-pill active" id="navLabs">🔬 التحاليل</a>
       <a href="visits.html" class="nav-pill" id="navVisits">🩺 الزيارات</a>
+    </nav>
+
+    <!-- شريط تنقل الطبيب السريري الموحد -->
+    <nav class="topbar-nav hidden" id="doctorNav">
+      <a href="doctor-child.html" class="nav-pill" id="navDocStation">🩺 المحطة السريرية</a>
+      <a href="reports.html" class="nav-pill" id="navDocReports">📈 تقرير الـ AGP واللوجبوك</a>
+      <a href="#" class="nav-pill active" id="navDocLabs">🔬 التحاليل المخبرية</a>
+      <a href="visits.html" class="nav-pill" id="navDocVisits">🩺 الزيارات والنمو</a>
+      <a href="meals.html" class="nav-pill" id="navDocMeals">🍽️ سجل الوجبات</a>
     </nav>
     <div class="topbar-left">
       <button id="backBtn" class="btn" style="background:#3b82f6; color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold;">🏠 رجوع</button>
@@ -263,6 +273,6 @@
   </div>
 
   <!-- سكربت -->
-  <script type="module" src="js/labs.js?v=6"></script>
+  <script type="module" src="js/labs.js?v=9"></script>
 </body>
 </html>

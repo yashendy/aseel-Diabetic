@@ -141,7 +141,7 @@ async function loadChildProfile() {
   if ($('navDocReports')) $('navDocReports').href = `reports.html?child=${safeChild}&parentId=${safeParent}`;
   if ($('navDocLabs')) $('navDocLabs').href = `labs.html?child=${safeChild}&parentId=${safeParent}`;
   if ($('navDocVisits')) $('navDocVisits').href = `visits.html?child=${safeChild}&parentId=${safeParent}`;
-  if ($('navDocMeals')) $('navDocMeals').classList.add('hidden');
+  if ($('navDocMeals')) $('navDocMeals').href = `meals.html?child=${safeChild}&parentId=${safeParent}`;
 
   // تعبئة حقول البروتوكول الطبي
   if ($('f_target')) $('f_target').value = sysLimits.target;
