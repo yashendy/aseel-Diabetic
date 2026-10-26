@@ -1195,9 +1195,9 @@ function exportDailyMealsCSV() {
 // 15. المساعد الذكي التفاعلي لبناء الوجبات والمقادير (AI Meal Chef)
 // ========================================================
 let _mealAiApiKey = localStorage.getItem('aseel_gemini_key') || '';
-let _mealAiWorkingModel = sessionStorage.getItem('aseel_gemini_working_model') || '';
 let _mealAiHistory = [];
 let _mealAiInitialized = false;
+let _mealAiCurrentTopicSlot = null; // يتتبع نوع الوجبة التي يدور حولها النقاش حالياً
 
 async function loadMealGeminiKey() {
   try {
@@ -1215,46 +1215,34 @@ async function loadMealGeminiKey() {
   }
 }
 
-async function resolveWorkingGeminiModel() {
-  if (_mealAiWorkingModel) return _mealAiWorkingModel;
-  if (!_mealAiApiKey) return 'gemini-flash-latest';
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(_mealAiApiKey)}`);
-    if (res.ok) {
-      const data = await res.json();
-      const available = (data.models || [])
-        .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
-        .map(m => m.name.replace(/^models\//, ''));
+// اكتشاف نوع الوجبة تلقائياً من كلام الأم وتحديث الحاسبة عليها فوراً
+function detectAndSyncSlotFromText(userText) {
+  if (!userText) return;
+  const q = normAr(userText);
+  let detected = null;
 
-      const preferred = [
-        'gemini-2.5-flash',
-        'gemini-flash-latest',
-        'gemini-2.0-flash',
-        'gemini-flash-lite-latest',
-        'gemini-1.5-flash',
-        'gemini-pro-latest'
-      ];
-      for (const p of preferred) {
-        if (available.includes(p)) {
-          _mealAiWorkingModel = p;
-          sessionStorage.setItem('aseel_gemini_working_model', p);
-          return p;
-        }
-      }
-      if (available.length > 0) {
-        _mealAiWorkingModel = available[0];
-        sessionStorage.setItem('aseel_gemini_working_model', available[0]);
-        return available[0];
-      }
-    }
-  } catch (e) {
-    console.warn('Model discovery fallback:', e);
+  if (q.includes('فطار') || q.includes('فطور') || q.includes('صباح')) {
+    detected = 'PRE_BREAKFAST';
+  } else if (q.includes('غدا') || q.includes('غداء') || q.includes('ظهر')) {
+    detected = 'PRE_LUNCH';
+  } else if (q.includes('عشا') || q.includes('عشاء') || q.includes('ليل')) {
+    detected = 'PRE_DINNER';
+  } else if (q.includes('سناك') || q.includes('تصبيره') || q.includes('بين الوجبات')) {
+    detected = 'SNACK';
   }
-  return 'gemini-flash-latest';
+
+  if (detected) {
+    _mealAiCurrentTopicSlot = detected;
+    state.slot = detected;
+    if (els.slotSelect && els.slotSelect.value !== detected) {
+      els.slotSelect.value = detected;
+      els.slotSelect.dispatchEvent(new Event('change'));
+    }
+  }
 }
 
 function getActiveMealSlotContext() {
-  const slot = els.slotSelect?.value || state.slot || 'PRE_BREAKFAST';
+  const slot = _mealAiCurrentTopicSlot || els.slotSelect?.value || state.slot || 'PRE_BREAKFAST';
   const slotLabel = getSlotLabel(slot);
   const slotKeyMap = {
     PRE_BREAKFAST: 'breakfast',
@@ -1271,6 +1259,13 @@ function getActiveMealSlotContext() {
   const preBg = parseFloat(els.preBg?.value) || null;
   const iob = parseFloat(els.iobValue?.value) || 0;
   return { slot, slotLabel, activeCR, cf, target, unit, preBg, iob };
+}
+
+function getChildFavoritesAndPopularNames() {
+  const favs = state.globalFoods.filter(f => state.favorites.has(f.id)).map(f => f.name);
+  const used = state.mostUsedIds.map(id => state.globalFoods.find(f => f.id === id)?.name).filter(Boolean);
+  const combined = [...new Set([...favs, ...used])];
+  return combined.slice(0, 12);
 }
 
 function findBestLibraryFood(itemName) {
@@ -1307,7 +1302,6 @@ function findBestLibraryFood(itemName) {
   return bestScore >= 2 ? bestFood : null;
 }
 
-// تنظيف وتوحيد الكمية والوحدة لمنع تكرار "100 100 جرام" أو "0.5 نصف رغيف"
 function normalizeAiItemSpec(rawItem) {
   let qty = Number(rawItem.qty) > 0 ? Number(rawItem.qty) : 1;
   let unitLabel = String(rawItem.unitLabel || 'حصة').trim();
@@ -1315,25 +1309,18 @@ function normalizeAiItemSpec(rawItem) {
 
   const uNorm = normAr(unitLabel);
 
-  // لو الوحدة هي "100 جرام" والكمية مثلاً 100 أو 150 (يقصد 100 جرام أو 150 جرام)
   if ((uNorm === normAr('100 جرام') || uNorm === normAr('100 جم') || uNorm === '100g') && qty >= 20) {
     qty = round(qty / 100, 2);
     gramsPerUnit = 100;
     unitLabel = '100 جرام';
-  }
-  // لو الوحدة "جرام" أو "جم" فقط والكمية مثلاً 100
-  else if ((uNorm === 'جرام' || uNorm === 'جم' || uNorm === 'g') && qty >= 10) {
+  } else if ((uNorm === 'جرام' || uNorm === 'جم' || uNorm === 'g') && qty >= 10) {
     qty = round(qty / 100, 2);
     gramsPerUnit = 100;
     unitLabel = '100 جرام';
-  }
-  // لو الوحدة فيها "نصف رغيف" والكمية 0.5، نمنع ازدواج النصف
-  else if ((uNorm.includes('نصف') || uNorm.includes('نص')) && qty === 0.5) {
+  } else if ((uNorm.includes('نصف') || uNorm.includes('نص')) && qty === 0.5) {
     unitLabel = unitLabel.replace(/نصف|نص/g, '').trim() || 'رغيف';
     if (gramsPerUnit < 60) gramsPerUnit = gramsPerUnit * 2;
-  }
-  // لو الوحدة فيها "ربع رغيف" والكمية 0.25
-  else if (uNorm.includes('ربع') && qty === 0.25) {
+  } else if (uNorm.includes('ربع') && qty === 0.25) {
     unitLabel = unitLabel.replace(/ربع/g, '').trim() || 'رغيف';
     if (gramsPerUnit < 40) gramsPerUnit = gramsPerUnit * 4;
   }
@@ -1343,7 +1330,6 @@ function normalizeAiItemSpec(rawItem) {
   const fiber100 = Number(rawItem.fiberPer100g) || 0;
   const netCarbs = Math.max(0, round(((carbs100 - fiber100) * totalGrams) / 100, 1));
 
-  // صياغة عرض أنيقة للمستخدم بدون تكرار الأرقام
   let displayQtyUnit = `${qty} ${unitLabel}`;
   if (unitLabel === '100 جرام') {
     displayQtyUnit = `${totalGrams} جرام`;
@@ -1440,8 +1426,7 @@ function buildMealChefSystemPrompt(userText) {
     return `${it.name} (الكمية: ${it.mealQty} ${u.label})`;
   }).join('، ') || 'الجدول فارغ حالياً';
 
-  const favNames = state.globalFoods.filter(f => state.favorites.has(f.id)).slice(0, 20).map(f => f.name);
-  const mostUsedNames = state.mostUsedIds.map(id => state.globalFoods.find(f => f.id === id)?.name).filter(Boolean).slice(0, 15);
+  const favAndPopular = getChildFavoritesAndPopularNames();
   const presetList = state.presetMeals.slice(0, 8).map(p => `${p.name} (${p.totalCarbs || 0}g كارب)`);
 
   const qWords = normAr(userText).split(/\s+/).filter(w => w.length >= 2);
@@ -1463,66 +1448,50 @@ function buildMealChefSystemPrompt(userText) {
     }
   }
 
-  return `أنت "مساعد مطبخ أسيل التفاعلي" داخل صفحة الوجبات للطفل "${childName}".
-أنت شات ذكي محاور وتفاعلي جداً (مثل شات جي بي تي)، تتحدث مع الأم بودّ واختصار لتصميم الوجبة خطوة بخطوة.
+  return `أنت "مساعد مطبخ أسيل التفاعلي" داخل حاسبة الوجبات للطفلة/الطفل "${childName}".
+مهمتك الأساسية أن تتحاور وتتناقش أولاً مع ولي الأمر حول رغبة الطفل وتفضيلاته وما هو متاح في البيت قبل تقديم جدول المقادير النهائي!
 
-بيانات الوجبة الحالية للطفل:
-- الوجبة المختارة الآن: ${ctx.slotLabel}
-- معامل الكارب المعتمد لهذه الوجبة (CR): 1 وحدة أنسولين لكل ${ctx.activeCR} جرام كارب.
+بيانات الوجبة الحالية:
+- الوجبة المطلوبة الآن: **${ctx.slotLabel}** (التزم تماماً بنوع هذه الوجبة: إذا كانت غداء تحدث عن الغداء فقط، وإذا كانت فطار تحدث عن الفطار، ولا تخلط بينها وبين السناك أبداً).
+- معامل الكارب المعتمد لوجبة ${ctx.slotLabel} (CR): 1 وحدة أنسولين لكل ${ctx.activeCR} جرام كارب.
 - معامل التصحيح (CF): ${ctx.cf} ${ctx.unit}، والهدف: ${ctx.target} ${ctx.unit}.
 - قراءة السكر قبل الوجبة: ${ctx.preBg ? ctx.preBg + ' ' + ctx.unit : 'غير مدخلة بعد'}.
 - الأنسولين النشط (IOB): ${ctx.iob} وحدة.
 - الأصناف الموجودة حالياً في جدول الوجبة: ${currentTrayList}.
-- الأصناف المفضلة للطفل: ${favNames.join('، ') || 'خبز مصري، فول، بيض، أرز، مكرونة، دجاج، بطاطس، تفاح، زبادي'}.
-- الأصناف الأكثر استخداماً: ${mostUsedNames.join('، ') || 'غير محدد'}.
+- الأصناف المفضلة والأكثر تكراراً في سجلات ${childName}: ${favAndPopular.join('، ') || 'أرز مسلوق، يخنة بامية، خبز مصري، فطيرة بطاطس، مكرونة، دجاج، طعمية، تفاح'}.
 - الوجبات الجاهزة المحفوظة: ${presetList.join('، ') || 'لا يوجد'}.
 
 عينة من مكتبة الأصناف المتاحة ووحداتها:
 ${matchedFoods.join('\n')}
 
-طريقة عملك التفاعلية (مهم جداً):
-1. **عندما تطلب الأم تحضير أو اقتراح وجبة بشكل عام (مثل "عايزة فطار" أو "اقترح غداء" أو "تحضير عشاء"):**
-   - لا تفرض عليها وجبة واحدة جامدة فوراً، بل اسألها بتفاعل ولطف عن تفضيلات ${childName} اليوم والمتاح لديها في البيت! (مثلاً: هل تفضل النشويات تكون عيش بلدي أم توست أم أرز أم مكرونة؟ وما البروتين المتاح أو المفضل اليوم؟).
-   - ضع لها دائماً في الـ JSON قائمة "replies" تحتوي على 3 إلى 4 اختيارات سريعة تفاعلية تضغط عليها الأم بسهولة!
-2. **عندما تختار الأم التفضيل أو تذكر أصنافاً معينة (مثل "فول وعيش وبيض" أو "رز وبامية وفراخ" أو "تفاحة وزبادي"):**
-   - اقترح المقادير الدقيقة المتوازنة من المكتبة واحسب إجمالي الكارب الصافي والجرعة باختصار، واسألها: "هل هذه المقادير مناسبة لشهية ${childName} اليوم لنضيفها للجدول أم تحبين تعديل كمية أي صنف؟".
-   - أرفق الوجبة في مصفوفة "options" داخل الـ JSON حتى يظهر لها كارت الوجبة وزر (➕ إضافة الأصناف والمقادير للجدول) واختيارات تعديل سريعة في "replies" (مثل: "زود الكمية شوية"، "قلل الكارب شوية"، "بدّل صنف").
-3. **قواعد كتابة الكميات في الـ JSON لمنع الأخطاء:**
-   - إذا كانت الوحدة "رغيف" (100 جم) وتريد نصف رغيف: اجعل "qty": 0.5 و "unitLabel": "رغيف" و "gramsPerUnit": 100.
-   - إذا كانت الوحدة "ملعقة طعام" (15 جم) وتريد 5 ملاعق: اجعل "qty": 5 و "unitLabel": "ملعقة طعام" و "gramsPerUnit": 15.
-   - إذا كنت تقيس بالجرام (مثلاً 100 جرام فول): اجعل "qty": 1 و "unitLabel": "100 جرام" و "gramsPerUnit": 100 (لا تكتب qty:100 مع unitLabel:100 جرام أبداً).
-4. **هيكل كود الـ JSON الإلزامي في نهاية كل رد:**
+قواعد الحوار التفاعلي الإلزامية (التزم بها حرفياً):
+1. **المرحلة الأولى (النقاش والسؤال عن التفضيلات):**
+   - إذا قالت الأم جملة عامة مثل: ("عايزة نحضر غداء"، "اقترح فطار"، "عايزة عشاء"، "تحضير سناك") **ممنوع** أن تعطيها وجبة جاهزة فوراً في options!
+   - بدلاً من ذلك: ابدأ بنقاش ودود ومختصر، اذكر لها 3 أو 4 من الأصناف التي يحبها ${childName} المناسبة لوجبة (${ctx.slotLabel})، واسألها: "إيه اللي ${childName} نفسها تاكله النهاردة في ${ctx.slotLabel} أو المتاح عندكم في المطبخ؟ (مثلاً للغداء: أرز وخضار وفراخ/لحمة، ولا مكرونة وكفتة، ولا عيش وسمك؟)".
+   - وفي هذه المرحلة الأولى اجعل `"options": []` فارغة تماماً، وضع في `"replies"` 4 اختيارات تفاعلية متنوعة ومناسبة لوجبة (${ctx.slotLabel}) لتضغط عليها الأم أو تكتب ردها!
+
+2. **المرحلة الثانية (تحديد الأصناف ومناقشة الكمية ثم إعطاء خيار الإضافة):**
+   - بعد أن ترد الأم وتختار الأصناف التي تريدها (مثلاً: "أرز وبامية ولحمة" أو "مكرونة وبانيه" أو "فول وعيش"):
+   - ناقشها باختصار في المقادير المناسبة لـ ${childName}، واعرض لها في `"options"` الوجبة بمقاديرها الدقيقة من المكتبة (أو خيارين: كمية خفيفة وكمية متوسطة مشبعة) حتى يظهر لها زر **(✅ اعتماد وإضافة للجدول)**، وضع في `"replies"` أزرار تعديل سريعة مثل: `["➕ زود كمية النشويات شوية", "➖ قلل الكارب والجرعة", "🥗 ضيف سلطة خضراء معاهم", "🔄 غيّر صنف من الوجبة"]`.
+
+3. **قواعد ضبط الأرقام في الـ JSON:**
+   - إذا كانت الوحدة "رغيف" (100 جم) وتريد نصف رغيف: `"qty": 0.5, "unitLabel": "رغيف", "gramsPerUnit": 100`.
+   - إذا كانت الوحدة "ملعقة طعام" (15-20 جم) وتريد 6 ملاعق: `"qty": 6, "unitLabel": "ملعقة طعام", "gramsPerUnit": 20`.
+   - إذا كانت بالجرام (100 جرام): `"qty": 1, "unitLabel": "100 جرام", "gramsPerUnit": 100`.
+
+4. **أرفق دائماً في نهاية ردك بلوك JSON بهذا الشكل:**
 \`\`\`json
 {
   "autoApply": false,
   "replaceExisting": true,
   "replies": [
-    "🥙 فول وعيش بلدي وبيض",
-    "🧀 توست أسمر وجبنة وخضار",
-    "⭐ اقترح من مفضلات أسيل",
-    "🔄 عندي أصناف تانية في البيت"
+    "اختيار تفاعلي 1",
+    "اختيار تفاعلي 2",
+    "اختيار تفاعلي 3"
   ],
-  "options": [
-    {
-      "title": "اسم الوجبة (إجمالي الكارب g ⬅️ الجرعة U)",
-      "items": [
-        {
-          "name": "اسم الصنف",
-          "qty": 0.5,
-          "unitLabel": "رغيف",
-          "gramsPerUnit": 100,
-          "carbsPer100g": 50,
-          "fiberPer100g": 4,
-          "proteinPer100g": 9,
-          "fatPer100g": 1.5,
-          "kcalPer100g": 250
-        }
-      ]
-    }
-  ]
+  "options": []
 }
-\`\`\`
-ملاحظة: اجعل "autoApply": false دائماً حتى يكون القرار النهائي للأم بالضغط على زر الإضافة، إلا إذا قالت صراحةً "اعتمد وضيفهم للجدول حالاً".`;
+\`\`\``;
 }
 
 async function callMealGeminiCloud(userText) {
@@ -1539,13 +1508,13 @@ async function callMealGeminiCloud(userText) {
   }
   contents.push({ role: 'user', parts: [{ text: userText }] });
 
-  const primaryModel = await resolveWorkingGeminiModel();
-  const models = [primaryModel, 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-1.5-flash'].filter((v, i, a) => v && a.indexOf(v) === i);
+  // نفس النماذج المعتمدة والمجربة في صفحة الطفل والأدمن بدون أخطاء 404
+  const models = ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-pro-latest'];
 
   for (const modelName of models) {
     try {
       const controller = new AbortController();
-      const tId = setTimeout(() => controller.abort(), 10000);
+      const tId = setTimeout(() => controller.abort(), 9500);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(_mealAiApiKey)}`;
       const res = await fetch(url, {
         method: 'POST',
@@ -1553,7 +1522,7 @@ async function callMealGeminiCloud(userText) {
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: sysInstruction }] },
           contents,
-          generationConfig: { temperature: 0.55, maxOutputTokens: 1400 }
+          generationConfig: { temperature: 0.6, maxOutputTokens: 1400 }
         }),
         signal: controller.signal
       });
@@ -1562,8 +1531,6 @@ async function callMealGeminiCloud(userText) {
       const data = await res.json();
       const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (reply && reply.trim()) {
-        _mealAiWorkingModel = modelName;
-        sessionStorage.setItem('aseel_gemini_working_model', modelName);
         return reply.trim();
       }
     } catch (e) {
@@ -1573,74 +1540,201 @@ async function callMealGeminiCloud(userText) {
   return null;
 }
 
+// المحرك التفاعلي المدمج: يجري نقاشاً حقيقياً خطوة بخطوة حسب نوع الوجبة وتفضيلات الطفل
 function buildLocalMealChefFallback(userText) {
   const ctx = getActiveMealSlotContext();
   const childName = state.child?.name || 'الطفل';
   const qNorm = normAr(userText);
+  const favNames = getChildFavoritesAndPopularNames();
+  const favHint = favNames.length
+    ? `\n💡 *من الأصناف اللي ${childName} بتحبها في سجلاتها:* (${favNames.slice(0, 6).join('، ')}).`
+    : '';
 
-  // 1. Check if user is asking to start interactive preparation
-  if (qNorm.includes('اسالني') || qNorm.includes('تفاعلي')) {
-    if (qNorm.includes('فطار') || qNorm.includes('فطور')) {
+  // هل المستخدم يطلب بدء تحضير وجبة بشكل عام (المرحلة الأولى: النقاش والسؤال عن الرغبة)؟
+  const isGeneralStart =
+    qNorm.includes('نحضر') ||
+    qNorm.includes('تحضير') ||
+    qNorm.includes('تفاعلي') ||
+    qNorm.includes('اسالني') ||
+    qNorm.includes('على ذوقها') ||
+    qNorm === normAr('اقترح فطار') ||
+    qNorm === normAr('اقترح غداء') ||
+    qNorm === normAr('اقترح عشاء') ||
+    qNorm === normAr('اقترح سناك');
+
+  // فحص هل ذكر المستخدم أصناف طعام محددة في رسالته (مثل أرز، بامية، مكرونة، فول، توست، سمك...)
+  const foodKeywords = ['ارز', 'رز', 'مكرونه', 'مكرونة', 'باميه', 'بامية', 'فول', 'طعميه', 'طعمية', 'فلافل', 'بيض', 'شكشوكه', 'شكشوكة', 'توست', 'جبنه', 'جبنة', 'شوفان', 'زبادي', 'فراخ', 'دجاج', 'لحم', 'لحمه', 'كفته', 'كفتة', 'سمك', 'بطاطس', 'ملوخيه', 'ملوخية', 'عدس', 'فشار', 'تفاح', 'موز', 'فراوله'];
+  const mentionedSpecificFood = foodKeywords.some(kw => qNorm.includes(normAr(kw)));
+
+  // ==========================================================
+  // المرحلة 1: نقاش تفاعلي وسؤال عن تفضيلات الطفل أولاً (بدون فرض كارت وجبة)
+  // ==========================================================
+  if (isGeneralStart && !mentionedSpecificFood) {
+    if (ctx.slot === 'PRE_LUNCH') {
       return {
-        cleanText: `أهلاً بكِ! ☀️ عشان نحضر فطار يفتح نفس **${childName}** ومظبوط على معامل الكارب (1:${ctx.activeCR}):\n\nتحبي الفطار النهاردة يكون إيه؟ اختاري من التفضيلات بالأسفل أو اكتبي لي المتاح عندك في البيت:`,
+        cleanText: `أهلاً بكِ! يلا نرتب **وجبة الغداء** لـ **${childName}** مع بعض 🍲 (تم ضبط الحاسبة على الغداء — معامل الكارب 1:${ctx.activeCR}).${favHint}\n\nقوليلي الأول: **إيه اللي ${childName} نفسها تاكله النهاردة على الغداء أو إيه اللي طابخينه في البيت؟**\nاختاري الفكرة الأقرب أو اكتبي لي الأصناف المتاحة عندك:`,
         actionData: {
           autoApply: false,
           replies: [
-            '🥙 فول مدمس + نصف رغيف بلدي + بيضة',
-            '🧀 توست أسمر + جبنة قريش + خيار وطماطم',
-            '🥞 فطيرة بطاطس أو طعمية بيتي + خبز',
+            '🍚 أرز مسلوق + يخنة بامية أو خضار + فراخ/لحمة',
+            '🍝 مكرونة بالصلصة + كفتة أو بانيه + سلطة',
+            '🥖 خبز مصري + فطيرة بطاطس أو صينية بطاطس بالفراخ',
+            '🐟 سمك مشوي + أرز + سلطة خضراء'
+          ],
+          options: []
+        }
+      };
+    }
+
+    if (ctx.slot === 'PRE_BREAKFAST' || ctx.slot === 'FASTING') {
+      return {
+        cleanText: `صباح النشاط! ☀️ يلا نجهز **وجبة الفطار** لـ **${childName}** (معامل الكارب للفطار 1:${ctx.activeCR}).${favHint}\n\n**تحبي فطار ${childName} النهاردة يكون إيه؟**\nاختاري من التفضيلات دي أو اكتبي لي اللي تحبه:`,
+        actionData: {
+          autoApply: false,
+          replies: [
+            '🥙 خبز مصري + فول مدمس أو طعمية (فلافل) + بيضة',
+            '🧀 توست أسمر + جبنة قريش/بيضاء + خيار وطماطم',
+            '🥔 فطيرة البطاطس المفضلة لأسيل + جبنة وخضار',
             '🥣 شوفان بالحليب أو زبادي بالفواكه'
           ],
           options: []
         }
       };
     }
-    if (qNorm.includes('غدا') || qNorm.includes('غداء')) {
+
+    if (ctx.slot === 'PRE_DINNER') {
       return {
-        cleanText: `يلا نجهز غداء صحي ومشبع لـ **${childName}**! 🍲 (معامل الكارب للغداء 1:${ctx.activeCR})\n\nإيه الصنف الأساسي المتاح عندكم النهاردة أو اللي ${childName} بتفضله؟`,
+        cleanText: `مساء الخير! 🌙 في **وجبة العشاء** لـ **${childName}** (معامل الكارب 1:${ctx.activeCR}) بنحب دايماً نختار أصناف مريحة وتثبت السكر طول الليل.${favHint}\n\n**إيه اللي ${childName} حابة تتعشى بيه الليلة؟**`,
         actionData: {
           autoApply: false,
           replies: [
-            '🍚 أرز مصري + خضار مطبوخ (بامية/بسلة) + دجاج/لحم',
-            '🍝 مكرونة بالصلصة + كفتة مشوية + سلطة',
-            '🥖 عيش بلدي + سمك مشوي أو كبدة + سلطة',
-            '🥔 صينية بطاطس بالفراخ + أرز'
-          ],
-          options: []
-        }
-      };
-    }
-    if (qNorm.includes('عشا') || qNorm.includes('عشاء')) {
-      return {
-        cleanText: `لوجبة العشاء 🌙 نفضل دائماً دمج بروتين وألياف لمنع هبوط السكر أثناء النوم (معامل الكارب 1:${ctx.activeCR}).\n\nتحبي عشاء **${childName}** يكون بأي شكل الليلة؟`,
-        actionData: {
-          autoApply: false,
-          replies: [
-            '🥛 زبادي + نصف رغيف صغير + جبنة وبيضة',
+            '🥛 زبادي طبيعي + نصف رغيف صغير + جبنة وبيضة',
             '🥪 ساندويتش توست أسمر بالجبنة الرومي/الشيدر والخس',
-            '🍳 شكشوكة بالبيض والخضار + ربع رغيف بلدي'
+            '🍳 شكشوكة بالبيض والخضار + خبز مصري',
+            '🥔 قطعة فطيرة بطاطس + خيار وزبادي'
           ],
           options: []
         }
       };
     }
-    if (qNorm.includes('سناك')) {
-      return {
-        cleanText: `بالنسبة للسناك 🍎، تحبي يكون سناك فاكهة طازجة، ولا سناك مقرمش مالح، ولا حاجة حلوة خفيفة؟`,
-        actionData: {
-          autoApply: false,
-          replies: [
-            '🍎 تفاحة متوسطة مع ملعقة زبدة فول سوداني',
-            '🍿 2 كوب فشار منزلي بزيت خفيف + مكسرات',
-            '🍓 علبة زبادي صغيرة مع فراولة'
-          ],
-          options: []
-        }
-      };
-    }
+
+    // SNACK
+    return {
+      cleanText: `يلا نختار **سناك لذيذ ومحسوب** لـ **${childName}**! 🍎 (معامل الكارب للسناك 1:${ctx.activeCR}).\n\n**نفسها في سناك إيه دلوقتي؟** (فاكهة، ولا حاجة مقرمشة مالحة، ولا زبادي؟)`,
+      actionData: {
+        autoApply: false,
+        replies: [
+          '🍎 ثمرة تفاح أو برتقال مع زبدة فول سوداني',
+          '🍿 2 كوب فشار منزلي بزيت خفيف + حفنة مكسرات',
+          '🍓 علبة زبادي صغيرة مع شرائح فراولة',
+          '🥨 بسكويت شوفان خفيف أو مقرمشات'
+        ],
+        options: []
+      }
+    };
   }
 
-  // 2. Check if user selected or typed specific foods
+  // ==========================================================
+  // المرحلة 2: المستخدم اختار أو كتب أصنافاً محددة -> نناقشه في المقادير ونعرض خيار الإضافة!
+  // ==========================================================
+  if (qNorm.includes('ارز') || qNorm.includes('رز') || qNorm.includes('بامي')) {
+    const isLight = qNorm.includes('خفيف') || qNorm.includes('قلل');
+    const isExtra = qNorm.includes('زود') || qNorm.includes('كبير');
+    const riceSpooons = isLight ? 4 : (isExtra ? 8 : 6);
+    const items = [
+      { name: 'أرز مسلوق', qty: riceSpooons, unitLabel: 'ملعقة طعام', gramsPerUnit: 20, carbsPer100g: 28, fiberPer100g: 0.5, proteinPer100g: 2.7, fatPer100g: 0.3, kcalPer100g: 130 },
+      { name: 'يخنة بامية', qty: 1, unitLabel: 'كوب', gramsPerUnit: 150, carbsPer100g: 7, fiberPer100g: 3, proteinPer100g: 2, fatPer100g: 2, kcalPer100g: 55 },
+      { name: 'صدور دجاج أو لحم مشوي', qty: 1, unitLabel: 'قطعة متوسطة', gramsPerUnit: 100, carbsPer100g: 0, fiberPer100g: 0, proteinPer100g: 30, fatPer100g: 3.5, kcalPer100g: 165 }
+    ];
+    const netC = round((riceSpooons * 20 * 0.275) + (150 * 0.04), 1);
+    const dose = round(netC / ctx.activeCR, 1);
+
+    return {
+      cleanText: `اختيار رائع ومن الأكلات المفضلة لـ **${childName}**! 🍲👌\nالبامية مع البروتين هتبطئ امتصاص الأرز وتمنع ارتفاع السكر بعد الغداء.\n\nجهزت لك مقادير متوازنة (**${riceSpooons} ملاعق أرز + كوب بامية + قطعة بروتين** = **${netC} جم كارب** ⬅️ **${dose} وحدة**).\n\nإيه رأيك في الكمية دي لشهيتها النهاردة؟ تحبي نعدل عدد ملاعق الأرز ولا نضيفها للجدول؟`,
+      actionData: {
+        autoApply: false,
+        replaceExisting: true,
+        replies: [
+          '🤏 خلي الأرز 4 ملاعق بس (كمية خفيفة)',
+          '➕ زود الأرز لـ 8 ملاعق',
+          '🥖 ضيف معاها ربع رغيف خبز مصري',
+          '🔄 غير الأصناف لحاجة تانية'
+        ],
+        options: [{ title: `غداء أرز وبامية وبروتين (${netC}g كارب ⬅️ ${dose}U)`, items }]
+      }
+    };
+  }
+
+  if (qNorm.includes('مكرون')) {
+    const items = [
+      { name: 'مكرونة مسلوقة بالصلصة', qty: 1, unitLabel: 'كوب', gramsPerUnit: 140, carbsPer100g: 30, fiberPer100g: 2, proteinPer100g: 5, fatPer100g: 1.5, kcalPer100g: 150 },
+      { name: 'كفتة مشوية أو دجاج بانيه', qty: 1, unitLabel: 'حصة (100 جم)', gramsPerUnit: 100, carbsPer100g: 3, fiberPer100g: 0, proteinPer100g: 24, fatPer100g: 12, kcalPer100g: 215 },
+      { name: 'سلطة خضراء', qty: 1, unitLabel: 'طبق', gramsPerUnit: 100, carbsPer100g: 4, fiberPer100g: 2, proteinPer100g: 1, fatPer100g: 0.2, kcalPer100g: 20 }
+    ];
+    const netC = 44;
+    const dose = round(netC / ctx.activeCR, 1);
+    return {
+      cleanText: `وجبة مكرونة لذيذة لـ **${childName}**! 🍝\nنصيحة سريعة: ابدئي بطبق السلطة والبروتين الأول قبل المكرونة عشان السكر يفضل مستقر.\n\nالمقادير المقترحة بالأسفل (**${netC} جم كارب** ⬅️ **${dose} وحدة**). هل الكمية مناسبة ولا تحبي نقلل المكرونة لنصف كوب؟`,
+      actionData: {
+        autoApply: false,
+        replaceExisting: true,
+        replies: [
+          '🤏 خلي المكرونة نصف كوب بس',
+          '➕ زود المكرونة شوية',
+          '🔄 نرجع نختار غداء تاني'
+        ],
+        options: [{ title: `غداء مكرونة وبروتين وسلطة (${netC}g كارب ⬅️ ${dose}U)`, items }]
+      }
+    };
+  }
+
+  if (qNorm.includes('فول') || qNorm.includes('طعمي') || qNorm.includes('فلافل')) {
+    const items = [
+      { name: 'خبز مصري', qty: 0.5, unitLabel: 'رغيف', gramsPerUnit: 100, carbsPer100g: 50, fiberPer100g: 4, proteinPer100g: 9, fatPer100g: 1.5, kcalPer100g: 250 },
+      { name: 'فول مدمس مطبوخ', qty: 4, unitLabel: 'ملعقة طعام', gramsPerUnit: 15, carbsPer100g: 15, fiberPer100g: 4, proteinPer100g: 7, fatPer100g: 1, kcalPer100g: 110 },
+      { name: 'طعمية ـ فلافل', qty: 2, unitLabel: 'قرص متوسط', gramsPerUnit: 25, carbsPer100g: 31, fiberPer100g: 5, proteinPer100g: 13, fatPer100g: 17, kcalPer100g: 330 }
+    ];
+    const netC = 42.6;
+    const dose = round(netC / ctx.activeCR, 1);
+    return {
+      cleanText: `يا سلام على الفطار المصري المشبع لـ **${childName}**! 🥙\nالفول والطعمية مع نصف رغيف بلدي بيدوا شبع طويل الأمد.\n\nإليك المقادير المقترحة (**${netC} جم كارب** ⬅️ **${dose} وحدة**). لو حابة تضيفيها للجدول اضغطي على الزر الأخضر، أو قوليلي لو حابة نبدل الطعمية ببيضة مسلوقة:`,
+      actionData: {
+        autoApply: false,
+        replaceExisting: true,
+        replies: [
+          '🥚 بدّل الطعمية ببيضة مسلوقة',
+          '🤏 خلي العيش ربع رغيف بس',
+          '🔄 شوف خيارات فطار تانية'
+        ],
+        options: [{ title: `وجبة فول وطعمية ونصف رغيف (${netC}g كارب ⬅️ ${dose}U)`, items }]
+      }
+    };
+  }
+
+  if (qNorm.includes('بطاطس') || qNorm.includes('فطير')) {
+    const items = [
+      { name: 'فطيرة البطاطس', qty: 1, unitLabel: 'قطعة متوسطة', gramsPerUnit: 120, carbsPer100g: 22, fiberPer100g: 2, proteinPer100g: 5, fatPer100g: 6, kcalPer100g: 165 },
+      { name: 'خبز مصري', qty: 0.25, unitLabel: 'رغيف', gramsPerUnit: 100, carbsPer100g: 50, fiberPer100g: 4, proteinPer100g: 9, fatPer100g: 1.5, kcalPer100g: 250 },
+      { name: 'جبنة قريش أو بيضاء بالخيار', qty: 1, unitLabel: 'طبق صغير', gramsPerUnit: 80, carbsPer100g: 3, fiberPer100g: 0.5, proteinPer100g: 10, fatPer100g: 4, kcalPer100g: 90 }
+    ];
+    const netC = 37.5;
+    const dose = round(netC / ctx.activeCR, 1);
+    return {
+      cleanText: `فطيرة البطاطس من الأكلات المفضلة جداً لـ **${childName}**! 🥔⭐\nنسقتها لك مع ربع رغيف وجبنة بالخيار عشان تكون وجبة متكاملة (**${netC} جم كارب** ⬅️ **${dose} وحدة**).\n\nتحبي نعتمدها في الجدول ولا بدون عيش؟`,
+      actionData: {
+        autoApply: false,
+        replaceExisting: true,
+        replies: [
+          '👌 بدون عيش (فطيرة البطاطس والجبنة بس)',
+          '➕ زود قطعة فطيرة بطاطس كمان',
+          '🔄 نختار أصناف تانية'
+        ],
+        options: [{ title: `وجبة فطيرة البطاطس المفضلة (${netC}g كارب ⬅️ ${dose}U)`, items }]
+      }
+    };
+  }
+
+  // البحث في مكتبة الأصناف عن أي صنف ذكرته الأم
   const foundFoods = [];
   for (const f of state.globalFoods) {
     const fn = normAr(f.name);
@@ -1670,34 +1764,32 @@ function buildLocalMealChefFallback(userText) {
     const dose = round(totalCarbs / ctx.activeCR, 1);
 
     return {
-      cleanText: `جهزت لك الأصناف المختارة بالمقادير المناسبة لـ **${childName}**:\nإجمالي الكارب الصافي: **${round(totalCarbs, 1)} جم** ⬅️ الجرعة المقدرة: **${dose} وحدة**.\n\nهل المقادير دي مناسبة نضيفها للجدول ولا تحبي نعدل كمية أي صنف؟`,
+      cleanText: `تمام جداً! جهزت لك الأصناف دي لوجبة **${ctx.slotLabel}** لـ **${childName}** من المكتبة:\nإجمالي الكارب الصافي: **${round(totalCarbs, 1)} جم** ⬅️ الجرعة المقدرة: **${dose} وحدة**.\n\nتحبي نضيفهم للجدول بالمقادير دي ولا نعدل فيهم حاجة؟`,
       actionData: {
         autoApply: false,
         replaceExisting: true,
         replies: [
           '➕ زود الكمية شوية',
-          '➖ قلل الكارب شوية',
-          '🥗 ضيف سلطة خضراء معاهم'
+          '➖ قلل الكمية شوية',
+          '🔄 نختار أصناف تانية'
         ],
-        options: [{ title: `الوجبة المقترحة (${round(totalCarbs, 1)}g كارب ⬅️ ${dose}U)`, items }]
+        options: [{ title: `وجبة ${ctx.slotLabel} (${round(totalCarbs, 1)}g كارب ⬅️ ${dose}U)`, items }]
       }
     };
   }
 
-  // Default interactive meal card with follow-ups
-  const items = [
-    { name: 'خبز بلدي مصري', qty: 0.5, unitLabel: 'رغيف', gramsPerUnit: 100, carbsPer100g: 50, fiberPer100g: 4, proteinPer100g: 9, fatPer100g: 1.5, kcalPer100g: 250 },
-    { name: 'فول مدمس مطبوخ', qty: 4, unitLabel: 'ملعقة طعام', gramsPerUnit: 15, carbsPer100g: 15, fiberPer100g: 4, proteinPer100g: 7, fatPer100g: 1, kcalPer100g: 110 },
-    { name: 'بيض مسلوق', qty: 1, unitLabel: 'بيضة', gramsPerUnit: 50, carbsPer100g: 1, fiberPer100g: 0, proteinPer100g: 13, fatPer100g: 11, kcalPer100g: 155 }
-  ];
-  const dose = round(30 / ctx.activeCR, 1);
+  // إذا كان السؤال عاماً، نفتح النقاش التفاعلي حسب الوجبة الحالية بدون فرض كارت
   return {
-    cleanText: `إليك اقتراح متوازن لـ **${childName}** (${ctx.slotLabel}). قولي لي لو حابة نبدل أي صنف أو اضغطي على الزر بالأسفل لإضافتها للجدول:`,
+    cleanText: `أنا معكِ لتحضير وجبة **${ctx.slotLabel}** لـ **${childName}** (معامل الكارب 1:${ctx.activeCR})! 👩‍🍳${favHint}\n\nقولي لي: إيه الأصناف اللي ${childName} نفسها فيها دلوقتي أو المتوفرة عندك في المطبخ عشان نظبط مقاديرها سوا؟`,
     actionData: {
       autoApply: false,
-      replaceExisting: true,
-      replies: ['🍳 تحضير فطار تفاعلي', '🍲 تحضير غداء تفاعلي', '🥪 تحضير عشاء تفاعلي'],
-      options: [{ title: `وجبة متوازنة (30g كارب ⬅️ ${dose}U)`, items }]
+      replies: [
+        '🍳 عايزة نحضر فطار مع بعض',
+        '🍲 عايزة نحضر غداء على ذوقها',
+        '🥪 عايزة نحضر عشاء خفيف وآمن',
+        '🍎 عايزة سناك محسوب الكارب'
+      ],
+      options: []
     }
   };
 }
@@ -1728,11 +1820,12 @@ function appendMealAiMessage(role, text, actionData = null) {
 
   const formattedHtml = esc(text || '')
     .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+    .replace(/\*(.*?)\*/g, '<i>$1</i>')
     .replace(/\n/g, '<br>');
 
   msgDiv.innerHTML = `<div>${formattedHtml}</div>`;
 
-  // 1. Render Meal Option Cards (with normalized quantities & units)
+  // 1. Render Meal Option Cards when options are ready
   if (role === 'bot' && actionData && Array.isArray(actionData.options) && actionData.options.length) {
     actionData.options.forEach((opt) => {
       if (!opt.items || !opt.items.length) return;
@@ -1786,7 +1879,7 @@ function appendMealAiMessage(role, text, actionData = null) {
     }
   }
 
-  // 2. Render Interactive Quick-Reply Pills (for conversational preference selection)
+  // 2. Render Interactive Quick-Reply Pills
   if (role === 'bot' && actionData && Array.isArray(actionData.replies) && actionData.replies.length) {
     const repliesWrap = document.createElement('div');
     repliesWrap.className = 'ai-interactive-replies';
@@ -1814,6 +1907,9 @@ async function handleMealAiUserPrompt(userText) {
   const q = (userText || '').trim();
   if (!q) return;
 
+  // أول خطوة: اكتشاف نوع الوجبة من كلام الأم (فطار / غداء / عشاء / سناك) ومزامنته فوراً!
+  detectAndSyncSlotFromText(q);
+
   const input = $('mealAiInput');
   const sendBtn = $('mealAiSendBtn');
   if (input) input.value = '';
@@ -1825,7 +1921,7 @@ async function handleMealAiUserPrompt(userText) {
   const box = $('mealAiMessages');
   const loadingDiv = document.createElement('div');
   loadingDiv.className = 'm-ai-msg bot';
-  loadingDiv.innerHTML = '⏳ <i>جاري التفكير وتنسيق الأصناف والمقادير...</i>';
+  loadingDiv.innerHTML = '⏳ <i>جاري تنسيق الاقتراحات مع تفضيلات الطفل...</i>';
   box?.appendChild(loadingDiv);
   if (box) box.scrollTop = box.scrollHeight;
 
@@ -1857,7 +1953,7 @@ function initMealAiChef() {
   if (_mealAiInitialized) return;
   _mealAiInitialized = true;
 
-  loadMealGeminiKey().then(() => resolveWorkingGeminiModel());
+  loadMealGeminiKey();
 
   const drawer = $('mealAiDrawer');
   const fab = $('mealAiFab');
@@ -1866,15 +1962,23 @@ function initMealAiChef() {
   const form = $('mealAiForm');
   const chipsBox = $('mealAiQuickChips');
 
+  // عند تغيير نوع الوجبة يدوياً من القائمة المنسدلة نحدث سياق الشات أيضاً
+  els.slotSelect?.addEventListener('change', () => {
+    _mealAiCurrentTopicSlot = els.slotSelect.value;
+  });
+
   const openDrawer = () => {
     drawer?.classList.remove('hidden');
     const box = $('mealAiMessages');
     if (box && !box.children.length) {
       const ctx = getActiveMealSlotContext();
       const childName = state.child?.name || 'الطفل';
+      const favNames = getChildFavoritesAndPopularNames();
+      const favText = favNames.length ? `\n⭐ *من مفضلات ${childName}:* (${favNames.slice(0, 5).join('، ')}).` : '';
+
       appendMealAiMessage(
         'bot',
-        `أهلاً بكِ في شات مطبخ **${childName}** التفاعلي! 👩‍🍳🍽️\nالوجبة الحالية: **${ctx.slotLabel}** (معامل الكارب 1:${ctx.activeCR}).\n\nتحبي نحضر وجبة إيه مع بعض دلوقتي؟ اختاري من الأزرار التفاعلية أو اكتبي لي الأصناف اللي عندك أو اللي ${childName} نفسها فيها:`,
+        `أهلاً بكِ في شات مطبخ **${childName}** التفاعلي! 👩‍🍳🍽️${favText}\n\nتحبي نحضر وجبة إيه مع بعض دلوقتي؟ اختاري نوع الوجبة عشان نتناقش في الأصناف اللي ${childName} بتحبها والمتاحة عندك:`,
         {
           autoApply: false,
           replies: [
