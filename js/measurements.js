@@ -79,6 +79,8 @@ async function loadChildSettings() {
     const safeParent = encodeURIComponent(parentId);
     const qDoc = `?child=${safeChild}&parentId=${safeParent}`;
     const qChild = `?child=${safeChild}`;
+    const qDocParams = isDoctor ? qDoc : qChild;
+    const qParams = qDocParams;
     const workstationUrl = `doctor-child.html${qDoc}`;
 
     const parentNav = $('parentNav');
