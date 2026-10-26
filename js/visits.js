@@ -7,7 +7,6 @@ import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } fr
 const $ = id => document.getElementById(id);
 const setText = (el, v) => { if (el) el.textContent = (v == null || v === '') ? '—' : v; };
 
-// دالة حماية النصوص ضد XSS
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)
@@ -47,7 +46,6 @@ function showLoader(v) { const el = $('appLoader'); if (el) el.style.display = v
 const numOrNull = v => (v === '' || v == null || isNaN(Number(v))) ? null : Number(v);
 const strOrNull = v => (v && String(v).trim() !== '') ? String(v).trim() : null;
 
-// حساب مؤشر كتلة الجسم (BMI) تلقائياً عند إدخال الوزن والطول
 function wireBmiCalc() {
   const calc = () => {
     const w = Number($('weight')?.value);
@@ -63,25 +61,21 @@ function wireBmiCalc() {
   $('weight')?.addEventListener('input', calc);$('height')?.addEventListener('input', calc);
 }
 
-// تكييف شريط التنقل والمسارات لفصل بيئة الطبيب عن بيئة الطفل/ولي الأمر
 function adaptHeaderForRole(isDoc, parentId) {
   const safeChild = encodeURIComponent(childId);
   const safeParent = encodeURIComponent(parentId);
   const qParams = `?child=${safeChild}${isDoc ? `&parentId=${safeParent}` : ''}`;
   const workstationUrl = `doctor-child.html?child=${safeChild}&parentId=${safeParent}`;
 
-  // تحديث الروابط المشتركة
   $('navReports')?.setAttribute('href', `reports.html${qParams}`);
   $('navLabs')?.setAttribute('href', `labs.html${qParams}`);
 
   const backBtn = $('backBtn');
 
   if (isDoc) {
-    // 1. إخفاء أزرار صفحات الطفل اليومية عن الطبيب لمنع التشتت
     $('navHome')?.classList.add('hidden');
     $('navMeas')?.classList.add('hidden');$('navMeals')?.classList.add('hidden');
 
-    // 2. إضافة زر المحطة السريرية في شريط التنقل العلوي للطبيب إن لم يكن موجوداً
     const navBar = document.querySelector('.topbar-nav');
     if (navBar && !$('navWorkstation')) {
       const wsLink = document.createElement('a');
@@ -95,9 +89,220 @@ function adaptHeaderForRole(isDoc, parentId) {
       $('navWorkstation').classList.remove('hidden');
     }
 
-    // 3. تحديث مسار التنقل (Breadcrumbs) ليخص الطبيب بدلاً من "أطفالي"
     const breadContainer = document.querySelector('.breadcrumbs');
     if (breadContainer) {
       const firstLink = breadContainer.querySelector('a');
       if (firstLink) {
-        firstLink.textContent = 'بوابة الأطباء
+        firstLink.textContent = 'بوابة الأطباء 🩺';
+        firstLink.href = 'doctor-dashboard.html';
+      }
+    }
+    $('breadChildName')?.setAttribute('href', workstationUrl);
+
+    if (backBtn) {
+      backBtn.textContent = '🩺 المحطة السريرية';
+      backBtn.onclick = () => location.href = workstationUrl;
+    }
+  } else {
+    $('navHome')?.classList.remove('hidden');$('navMeas')?.classList.remove('hidden');
+    $('navMeals')?.classList.remove('hidden');$('navHome')?.setAttribute('href', `child.html${qParams}`);
+    $('navMeas')?.setAttribute('href', `measurements.html${qParams}`);
+    $('navMeals')?.setAttribute('href', `meals.html${qParams}`);
+    $('breadChildName')?.setAttribute('href', `child.html${qParams}`);
+
+    if (backBtn) {
+      backBtn.textContent = '🏠 رجوع للوحة الطفل';
+      backBtn.onclick = () => location.href = `child.html?child=${safeChild}`;
+    }
+  }
+}
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = 'index.html'; return; }
+  currentUser = user;
+
+  showLoader(true);
+  try {
+    activeParentId = parentIdParam || localStorage.getItem('selectedParentId') || user.uid;
+    isDoctorMode = Boolean(parentIdParam && parentIdParam !== user.uid);
+
+    $('logoutBtn')?.addEventListener('click', () => signOut(auth).then(() => location.href = 'index.html').catch(() => {}));
+
+    let snap = await getDoc(doc(db, `parents/${activeParentId}/children/${childId}`));
+    if (!snap.exists() && activeParentId !== user.uid) {
+      const fallbackSnap = await getDoc(doc(db, `parents/${user.uid}/children/${childId}`));
+      if (fallbackSnap.exists()) {
+        snap = fallbackSnap;
+        activeParentId = user.uid;
+        isDoctorMode = false;
+        localStorage.setItem('selectedParentId', user.uid);
+      }
+    }
+
+    if (snap.exists()) childData = snap.data();
+    else childData = {};
+
+    if (isDoctorMode) {
+      try {
+        const docSnap = await getDoc(doc(db, 'users', user.uid));
+        if (docSnap.exists()) {
+          currentDoctorName = docSnap.data().name || docSnap.data().displayName || user.displayName || '';
+        }
+      } catch (e) {}
+      if (!currentDoctorName) {
+        currentDoctorName = childData.assignedDoctorInfo?.name || user.displayName || '';
+      }
+    }
+
+    const childName = childData.name || 'الطفل';
+    setText($('topChildName'), childName);
+    setText($('breadChildName'), childName);
+    if ($('topAvatar'))$('topAvatar').textContent = childName.trim().charAt(0) || 'أ';
+
+    const age = calcAge(childData.birthDate);
+    const genderStr = childData.gender === 'female' ? 'أنثى' : (childData.gender === 'male' ? 'ذكر' : '');
+    const regimenStr = childData.regimen === 'pump' ? 'مضخة إنسولين' : 'حقن يومية (MDI)';
+    const metaParts = [];
+    if (age !== '-') metaParts.push(`العمر: ${age} سنة`);
+    if (genderStr) metaParts.push(genderStr);
+    if (regimenStr) metaParts.push(regimenStr);
+    setText($('topChildMeta'), metaParts.join(' • ') || '—');
+
+    adaptHeaderForRole(isDoctorMode, activeParentId);
+
+    if ($('fromDate'))$('fromDate').value = '';
+    if ($('toDate'))$('toDate').value = '';
+
+    wireBmiCalc();
+
+    await Promise.all([
+      loadVisits(),
+      buildAISuggestions()
+    ]);
+
+    ['filterType', 'filterApplied', 'searchBox', 'fromDate', 'toDate'].forEach(id => {
+      $(id)?.addEventListener('input', renderVisits);
+    });
+
+    if ($('newVisitBtn'))$('newVisitBtn').onclick = () => openModal();
+    if ($('closeModal')) $('closeModal').onclick = () =>$('visitModal').classList.add('hidden');
+    if ($('cancelVisitBtn')) $('cancelVisitBtn').onclick = () =>$('visitModal').classList.add('hidden');
+    if ($('copyAgenda'))$('copyAgenda').onclick = copyAgendaToClipboard;
+    if ($('exportCSV'))$('exportCSV').onclick = exportCSV;
+    if ($('printList'))$('printList').onclick = () => window.print();
+
+    if ($('attachments')) {$('attachments').onchange = (e) => { selectedFiles = Array.from(e.target.files); renderSelectedFiles(); };
+    }
+    if ($('visitForm')) {$('visitForm').onsubmit = handleSaveVisit;
+    }
+
+  } catch (e) { console.error(e); }
+  finally { showLoader(false); }
+});
+
+async function loadVisits() {
+  const qy = query(collection(db, `parents/${activeParentId}/children/${childId}/visits`), orderBy('date', 'desc'));
+  const snap = await getDocs(qy);
+  allVisits = [];
+
+  snap.forEach(d => {
+    const v = d.data();
+    const rawLabs = v.labsRequested;
+    v.labsRequested = Array.isArray(rawLabs)
+      ? rawLabs.filter(Boolean)
+      : (rawLabs ? String(rawLabs).split(',').map(s => s.trim()).filter(Boolean) : []);
+    v.labsCompleted = Array.isArray(v.labsCompleted) ? v.labsCompleted : [];
+    allVisits.push({ id: d.id, ...v });
+  });
+
+  const today = todayStr();
+  const future = allVisits.filter(r => r.followUpDate && r.followUpDate >= today).map(r => r.followUpDate).sort();
+
+  if ($('lastVisit'))$('lastVisit').textContent = allVisits.length ? allVisits[0].date : '—';
+  if ($('nextFollowUp'))$('nextFollowUp').textContent = future.length ? future[0] : '—';
+  if ($('pendingCount'))$('pendingCount').textContent = allVisits.filter(r => String(r.applied) !== 'true').length;
+
+  renderGrowthChart(allVisits);
+  renderVisits();
+}
+
+function renderGrowthChart(visits) {
+  const canvas = $('growthCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const growthData = [];
+  visits.forEach(v => {
+    if (v.weight != null || v.height != null || v.bmi != null) {
+      growthData.push({
+        date: v.date,
+        weight: numOrNull(v.weight),
+        height: numOrNull(v.height),
+        bmi: numOrNull(v.bmi),
+        bp: v.bloodPressure || ''
+      });
+    }
+  });
+
+  if (!growthData.length && (childData.weight || childData.vitals?.weight)) {
+    growthData.push({
+      date: todayStr(),
+      weight: numOrNull(childData.weight || childData.vitals?.weight),
+      height: numOrNull(childData.height || childData.vitals?.height),
+      bmi: null,
+      bp: ''
+    });
+  }
+
+  growthData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const badgesBox = $('latestGrowthBadges');
+  if (badgesBox) {
+    if (growthData.length) {
+      const last = growthData[growthData.length - 1];
+      badgesBox.innerHTML = `
+        ${last.weight ? `<span class="growth-badge">⚖️ الوزن: <b>${escapeHtml(last.weight)} kg</b></span>` : ''}
+        ${last.height ? `<span class="growth-badge">📏 الطول: <b>${escapeHtml(last.height)} cm</b></span>` : ''}
+        ${last.bmi ? `<span class="growth-badge">📊 BMI: <b>${escapeHtml(last.bmi)}</b></span>` : ''}
+        ${last.bp ? `<span class="growth-badge">💓 الضغط: <b>${escapeHtml(last.bp)}</b></span>` : ''}
+      `;
+    } else {
+      badgesBox.innerHTML = `<span class="tiny-text" style="color:#64748b;">لا توجد قياسات نمو مسجلة بعد</span>`;
+    }
+  }
+
+  if (growthChart) {
+    growthChart.destroy();
+    growthChart = null;
+  }
+
+  if (!growthData.length) {
+    growthChart = new Chart(ctx, {
+      type: 'line',
+      data: { datasets: [] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: 'سجل الوزن والطول في الزيارات لتفعيل منحنى النمو السريري' }
+        }
+      }
+    });
+    return;
+  }
+
+  const labels = growthData.map(d => d.date);
+
+  growthChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'الوزن (kg)',
+          data: growthData.map(d => d.weight),
+          borderColor: '#2563eb',
+          backgroundColor: '#2563eb',
+          yAxisID: 'yWeight',
+          tension:
