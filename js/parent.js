@@ -225,31 +225,39 @@ $('linkSubmit').onclick = async () => {
   if(!code) return;
   loader(true); $('linkMsg').textContent='جاري التحقق...'; $('linkMsg').classList.remove('hidden');
   try {
+    if (!kids.length) { $('linkMsg').textContent = 'أضف طفلاً أولاً قبل ربط الطبيب.'; return; }
+
     const codeRef = doc(db, 'linkCodes', code);
     const s = await getDoc(codeRef);
     if (!s.exists() || s.data().used) { $('linkMsg').textContent = 'الكود غير صحيح أو مستخدم.'; return; }
-    
+
     const d = s.data();
+    if (!d.doctorId) { $('linkMsg').textContent = 'الكود غير صحيح أو مستخدم.'; return; }
+
+    // انتهاء الصلاحية (الأكواد القديمة التي لا تحمل expiresAt تبقى صالحة)
+    const expMs = d.expiresAt && typeof d.expiresAt.toMillis === 'function' ? d.expiresAt.toMillis() : null;
+    if (expMs !== null && expMs < Date.now()) {
+      $('linkMsg').textContent = 'انتهت صلاحية هذا الكود. اطلب كوداً جديداً من الطبيب.';
+      return;
+    }
+
     const batch = writeBatch(db);
     kids.forEach(k => {
       batch.update(doc(db, `parents/${currentUser.uid}/children/${k.id}`), {
         assignedDoctor: d.doctorId,
-        assignedDoctorInfo: { uid: d.doctorId },
+        // بيانات عرض فقط (الاسم والمركز يأتيان من الكود إن وُجدا). الصلاحية الفعلية تعتمد على assignedDoctor
+        assignedDoctorInfo: { uid: d.doctorId, name: d.doctorName || null, center: d.doctorCenter || null },
         parentId: currentUser.uid,
-        sharingConsent: true
+        sharingConsent: { doctor: true }
       });
-      batch.set(doc(db, `doctors/${d.doctorId}/patients/${k.id}`), {
-        childId: k.id,
-        parentId: currentUser.uid,
-        childName: k.name || null,
-        linkedAt: serverTimestamp()
-      }, { merge: true });
+      // فهرس مرضى الطبيب (doctors/{id}/patients/{childId}) تنشئه وتحدّثه Cloud Function تلقائياً،
+      // ولا يُكتب من الواجهة (القواعد الجديدة تمنع ذلك).
     });
     batch.update(codeRef, { used: true, parentId: currentUser.uid, usedAt: serverTimestamp() });
     await batch.commit();
     $('linkDlg').classList.add('hidden');
     loadKids(); alert('تم ربط حساب الطبيب بنجاح ✅');
-  } catch(e) { $('linkMsg').textContent='حدث خطأ أثناء الربط.'; }
+  } catch(e) { console.error('link error:', e); $('linkMsg').textContent='حدث خطأ أثناء الربط.'; }
   finally { loader(false); }
 };
 
