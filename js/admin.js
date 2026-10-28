@@ -10,6 +10,15 @@ let ALL_CHILDREN = [];
 let DOCTOR_PATIENT_COUNTS = {};
 let ACTIVE_CHILD_FILTER = 'all';
 
+// الموافقة: مفعّلة ما لم تكن false صراحةً أو sharingConsent.doctor === false
+// (نفس منطق قواعد Firestore والـ Cloud Function)
+function consentActive(child) {
+  const v = child?.sharingConsent;
+  if (v === false) return false;
+  if (v && typeof v === 'object' && v.doctor === false) return false;
+  return true;
+}
+
 // --- نظام اللايت/دارك مود ---
 const themeBtn = $('themeToggle');
 const currentTheme = localStorage.getItem('adminTheme') || 'dark';
@@ -202,7 +211,7 @@ async function loadChildren() {
       const d = s.data();
       const parentUser = s._parentData || {};
       const parentName = d?.parentName || parentUser?.name || parentUser?.displayName || parentUser?.email || parentId;
-      const consent = d?.sharingConsent === true || (d?.sharingConsent && typeof d.sharingConsent === 'object' && d.sharingConsent.doctor === true) || d?.shareDoctor === true;
+      const consent = consentActive(d);
 
       const docUid = d?.assignedDoctor || null;
       let docName = d?.assignedDoctorInfo?.name || null;
@@ -431,7 +440,8 @@ window.unassignDoctor = async function(parentId, childId, childName) {
     await updateDoc(ref, {
       assignedDoctor: deleteField(),
       assignedDoctorInfo: deleteField(),
-      shareDoctor: false,
+      sharingConsent: { doctor: false },
+      shareDoctor: deleteField(),      // حقل قديم لم يعد يُستخدم
       updatedAt: serverTimestamp()
     });
     alert(`تم فك الارتباط للطفل "${childName}" بنجاح! ✅`);
@@ -476,21 +486,13 @@ async function assignNow() {
       assignedDoctor: doctorUid,
       assignedDoctorInfo: { uid: doctorUid, name: doctorName || null, email: doctorEmail || null },
       parentId: parentId,
-      sharingConsent: { doctor: true }, 
-      shareDoctor: true,
+      sharingConsent: { doctor: true },
+      shareDoctor: deleteField(),      // حقل قديم لم يعد يُستخدم
       updatedAt: serverTimestamp()
     });
 
-    try {
-      await setDoc(doc(db, `doctors/${doctorUid}/patients/${childId}`), {
-        childId: childId,
-        parentId: parentId,
-        childName: childName || null,
-        linkedAt: serverTimestamp()
-      }, { merge: true });
-    } catch(errDoc) {
-      console.warn("Could not write to doctors subcollection:", errDoc);
-    }
+    // فهرس مرضى الطبيب (doctors/{id}/patients/{childId}) تنشئه وتحدّثه Cloud Function تلقائياً،
+    // ولا يُكتب من الواجهة (القواعد الجديدة تمنع ذلك).
 
     $('modalStatus').style.color = "var(--success)";
     $('modalStatus').textContent = '✅ تم ربط الطبيب بالمريض بنجاح!';
