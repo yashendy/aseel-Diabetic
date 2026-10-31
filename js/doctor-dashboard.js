@@ -2,14 +2,17 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  collection, collectionGroup, getDocs, doc, getDoc, updateDoc, setDoc, addDoc, query, where, orderBy, limit, serverTimestamp
+  collection, getDocs, doc, getDoc, updateDoc, setDoc, addDoc, query, where, orderBy, limit, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { MAX_ACTIVE_LINK_CODES, generateExpiryDate } from './app-consts.js';
 
 const $ = id => document.getElementById(id);
 let currentUser = null;
 let currentDoctorData = {};
 let patients = [];
 let activeFilter = 'all';
+let pausedCount = 0;      // عدد الأسر التي أوقفت مشاركة البيانات (لا تظهر بياناتها)
+let loadedCodes = [];     // أكواد الربط المحمّلة (لحساب الأكواد النشطة)
 
 function showLoader(show) {
   const el = $('loader');
@@ -149,22 +152,36 @@ async function loadCodes() {
   try {
     const q = query(collection(db, "linkCodes"), where("doctorId", "==", currentUser.uid), orderBy("createdAt", "desc"));
     const snap = await getDocs(q);
+    loadedCodes = [];
 
     if (snap.empty) {
       list.innerHTML = '<div class="empty">لا توجد أكواد نشطة. أنشئ كوداً جديداً لمشاركته مع الأسرة.</div>';
       return;
     }
 
+    const now = Date.now();
     let html = '';
     snap.forEach(d => {
       const c = d.data();
+      const expMs = c.expiresAt?.toMillis ? c.expiresAt.toMillis() : null;
+      const expired = !c.used && expMs !== null && expMs < now;
+      loadedCodes.push({ id: d.id, used: !!c.used, expired });
+
       const dateStr = c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString('ar-EG') : 'حديث';
+      const statusHtml = c.used
+        ? `<span style="color:var(--danger)">مستخدم ❌</span>`
+        : (expired
+            ? `<span style="color:var(--muted)">منتهي ⌛</span>`
+            : `<span style="color:var(--good); font-weight:bold;">متاح للاستخدام ✅</span>`);
+      const expHtml = (!c.used && expMs !== null && !expired)
+        ? `<br><small style="color:var(--muted)">ينتهي: ${new Date(expMs).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</small>`
+        : '';
       html += `
         <div class="code-row">
           <div class="code-val">${escapeHtml(d.id)}</div>
           <div class="code-meta">
-            ${c.used ? `<span style="color:var(--danger)">مستخدم ❌</span>` : `<span style="color:var(--good); font-weight:bold;">متاح للاستخدام ✅</span>`}
-            <br><small style="color:var(--muted)">تاريخ الإنشاء: ${dateStr}</small>
+            ${statusHtml}
+            <br><small style="color:var(--muted)">تاريخ الإنشاء: ${dateStr}</small>${expHtml}
           </div>
         </div>
       `;
@@ -176,18 +193,43 @@ async function loadCodes() {
   }
 }
 
+// كود الربط: بادئة DOC- + 8 أحرف عشوائية آمنة (بدون الحروف المتشابهة 0/O و1/I)
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 32 حرفاً ⇒ توزيع منتظم مع بايت عشوائي
+function generateLinkCode() {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  let out = '';
+  for (const b of bytes) out += CODE_ALPHABET[b % CODE_ALPHABET.length];
+  return 'DOC-' + out;
+}
+
 if ($('btnCreateCode')) {
   $('btnCreateCode').onclick = async () => {
+    if (!currentDoctorData.isApproved) {
+      alert('لا يمكن توليد أكواد الربط قبل اعتماد حسابك من الإدارة.');
+      return;
+    }
+    const activeCount = loadedCodes.filter(c => !c.used && !c.expired).length;
+    if (activeCount >= MAX_ACTIVE_LINK_CODES) {
+      alert(`لديك ${activeCount} أكواد نشطة بالفعل (الحد الأقصى ${MAX_ACTIVE_LINK_CODES}). استخدم أحدها أو انتظر انتهاء صلاحيتها.`);
+      return;
+    }
+
     showLoader(true);
     try {
-      const newCode = 'DOC-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      const newCode = generateLinkCode();
       await setDoc(doc(db, "linkCodes", newCode), {
         doctorId: currentUser.uid,
+        // بيانات عرض تُنسخ لوثيقة الطفل عند الربط (ولي الأمر لا يقرأ ملف الطبيب)
+        doctorName: currentDoctorData.name || currentDoctorData.displayName || null,
+        doctorCenter: currentDoctorData.center || currentDoctorData.clinic || null,
         used: false,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        expiresAt: generateExpiryDate()   // 48 ساعة (من app-consts.js)
       });
       await loadCodes();
     } catch (e) {
+      console.error(e);
       alert("حدث خطأ أثناء إنشاء الكود");
     } finally {
       showLoader(false);
@@ -195,65 +237,61 @@ if ($('btnCreateCode')) {
   };
 }
 
-// --- 3. جلب بيانات الأطفال والمرضى المتابعين بدقة وأمان ---
+// --- 3. جلب بيانات المرضى من فهرس الطبيب ---
+// القائمة تأتي من doctors/{uid}/patients (تحافظ عليه Cloud Function تلقائياً)،
+// وبيانات كل طفل تُقرأ من وثيقته وتتحقق القواعد من الربط والموافقة.
 async function loadPatients() {
   showLoader(true);
   const tbody = $('childrenTbody');
   try {
     patients = [];
-    const docsMap = new Map();
+    pausedCount = 0;
 
-    // 1. الاستعلام السريع والآمن عبر collectionGroup (متوافق 100% مع Firestore Rules)
-    const [res1, res2] = await Promise.allSettled([
-      getDocs(query(collectionGroup(db, "children"), where("assignedDoctor", "==", currentUser.uid))),
-      getDocs(query(collectionGroup(db, "children"), where("assignedDoctorInfo.uid", "==", currentUser.uid)))
-    ]);
-
-    if (res1.status === 'fulfilled') {
-      res1.value.forEach(d => docsMap.set(d.id, d));
-    }
-    if (res2.status === 'fulfilled') {
-      res2.value.forEach(d => docsMap.set(d.id, d));
+    if (!currentDoctorData.isApproved) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="empty" style="text-align:center; padding:30px; color:#64748b;">حسابك بانتظار اعتماد الإدارة، وسيظهر مرضاك هنا بعد الاعتماد.</td></tr>`;
+      updateTriageCounts();
+      return;
     }
 
-    // 2. فحص سجل مرضى الطبيب المباشر (doctors/{uid}/patients) كمسار داعم وآمن
-    try {
-      const docPatientsSnap = await getDocs(collection(db, `doctors/${currentUser.uid}/patients`));
-      await Promise.all(docPatientsSnap.docs.map(async dp => {
-        const dpData = dp.data();
-        if (dpData.childId && dpData.parentId && !docsMap.has(dpData.childId)) {
-          try {
-            const cDoc = await getDoc(doc(db, `parents/${dpData.parentId}/children/${dpData.childId}`));
-            if (cDoc.exists()) {
-              cDoc._parentId = dpData.parentId;
-              docsMap.set(cDoc.id, cDoc);
-            }
-          } catch (innerErr) {
-            // يتم تجاهل الطفل إذا أوقفت الأسرة مشاركة البيانات (Consent Paused)
-          }
-        }
-      }));
-    } catch (e) {
-      // تجاهل في حال عدم وجود المجموعة الفرعية بعد
-    }
+    // 1. قائمة المرضى من الفهرس
+    const idxSnap = await getDocs(collection(db, `doctors/${currentUser.uid}/patients`));
+    const entries = [];
+    idxSnap.forEach(dp => {
+      const e = dp.data();
+      if (!e.parentId) return;
+      if (e.consent === false) { pausedCount++; return; }   // الأسرة أوقفت المشاركة
+      entries.push({ childId: e.childId || dp.id, parentId: e.parentId });
+    });
+
+    // 2. وثيقة كل طفل (القواعد ترفض القراءة عند إيقاف الموافقة أو تغيّر الطبيب)
+    const childDocs = await Promise.all(entries.map(async e => {
+      try {
+        const snap = await getDoc(doc(db, `parents/${e.parentId}/children/${e.childId}`));
+        return snap.exists() ? { snap, parentId: e.parentId } : null;
+      } catch (err) {
+        console.warn('تم تجاهل أحد المرضى (لا صلاحية قراءة):', e.childId, err?.code || err);
+        return null;
+      }
+    }));
 
     // 3. معالجة كل طفل وجلب قياساته وتحاليله الأخيرة بالتوازي
     const d7 = new Date();
     d7.setDate(d7.getDate() - 7);
     const d7Str = localDateStr(d7);
 
-    const processedPatients = await Promise.all(Array.from(docsMap.values()).map(async d => {
-      const data = d.data();
+    const processedPatients = await Promise.all(childDocs.filter(Boolean).map(async ({ snap, parentId }) => {
+      const data = snap.data();
 
-      // التحقق من أن موافقة الأسرة غير موقوفة
+      // تحقق احتياطي: الطفل ما زال مرتبطاً بهذا الطبيب والموافقة غير موقوفة
+      const linkedToMe = data.assignedDoctor === currentUser.uid || data.assignedDoctorInfo?.uid === currentUser.uid;
+      if (!linkedToMe) return null;
       if (data.sharingConsent === false || (data.sharingConsent && data.sharingConsent.doctor === false)) {
+        pausedCount++;
         return null;
       }
 
-      const parentId = d._parentId || data.parentId || (d.ref.parent?.parent ? d.ref.parent.parent.id : null);
-      if (!parentId) return null;
-
-      const p = { id: d.id, parentId, ...data, weekReadings: [] };
+      // id و parentId من مسار الوثيقة (المصدر الموثوق) وليسا من محتواها
+      const p = { ...data, id: snap.id, parentId, weekReadings: [] };
 
       const [measRes, labRes, weekRes] = await Promise.allSettled([
         getDocs(query(collection(db, `parents/${p.parentId}/children/${p.id}/measurements`), orderBy('when', 'desc'), limit(1))),
@@ -393,6 +431,12 @@ function getPatientStatusBadge(m, p) {
   return `<span class="status-badge bg-ok">في النطاق (${val})</span>${timeDisplay}`;
 }
 
+// سطر تنبيه: أسر أوقفت مشاركة بيانات أطفالها (لا تُعرض أي بيانات لهم)
+function pausedNoticeHtml() {
+  if (!pausedCount) return '';
+  return `<tr><td colspan="6" style="text-align:center; padding:14px; color:#64748b; font-size:13px;">ℹ️ ${pausedCount} مريض أوقفت أسرته مشاركة البيانات، ولا تظهر بياناته هنا.</td></tr>`;
+}
+
 function renderPatients() {
   const tbody = $('childrenTbody');
   if (!tbody) return;
@@ -416,7 +460,7 @@ function renderPatients() {
   }
 
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty" style="text-align:center; padding:30px; color:#64748b;">لا يوجد مرضى مطابقين لهذا الفرز حالياً.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty" style="text-align:center; padding:30px; color:#64748b;">لا يوجد مرضى مطابقين لهذا الفرز حالياً.</td></tr>` + pausedNoticeHtml();
     return;
   }
 
@@ -485,6 +529,7 @@ function renderPatients() {
     `;
     tbody.appendChild(tr);
   });
+  if (pausedCount) tbody.insertAdjacentHTML('beforeend', pausedNoticeHtml());
 
   document.querySelectorAll('.btn-open-modal').forEach(btn => {
     btn.onclick = () => window.openMedicalModal(btn.dataset.id);
