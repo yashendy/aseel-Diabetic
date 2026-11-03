@@ -142,7 +142,8 @@ async function loadDoctors() {
   ALL_DOCTORS_APPROVED = []; 
   ALL_DOCTORS_PENDING = [];
   try {
-    const qy = query(collection(db, 'users'), where('role', '==', 'doctor'));
+    // الأطباء المعتمدون (doctor) + الأطباء بانتظار الاعتماد (doctor-pending: حسابات سجّلت من register.html)
+    const qy = query(collection(db, 'users'), where('role', 'in', ['doctor', 'doctor-pending']));
     const snap = await getDocs(qy);
     snap.forEach(s => {
       const d = s.data();
@@ -391,7 +392,8 @@ window.approveDoctor = async function(uid) {
   if (!confirm('هل أنت متأكد من اعتماد هذا الطبيب؟')) return;
   $('loader').classList.remove('hidden');
   try {
-    await updateDoc(doc(db, 'users', uid), { isApproved: true, updatedAt: serverTimestamp() });
+    // الاعتماد = isApproved + تحويل الدور من doctor-pending إلى doctor (المستخدم نفسه لا يستطيع تغيير دوره)
+    await updateDoc(doc(db, 'users', uid), { role: 'doctor', isApproved: true, status: 'approved', updatedAt: serverTimestamp() });
     alert('تم الاعتماد بنجاح! ✅');
     await loadLists();
   } catch (e) { 
