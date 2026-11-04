@@ -1,6 +1,6 @@
 // js/child.js 
 
-import { auth, db } from './firebase-config.js';
+import { app, auth, db } from './firebase-config.js';
 
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
@@ -9,6 +9,7 @@ import {
   collection, getDocs, query, where, orderBy, limit, doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp
 
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
 
 
 
@@ -1549,19 +1550,10 @@ let _aiChatHistory = [];
 let _aiCurrentChild = null;
 let _aiParentId = null;
 let _aiMealBolusAvg = 0;
-let _aiGeminiApiKey = localStorage.getItem('aseel_gemini_key') || '';
-
-async function loadGlobalGeminiKey() {
-  try {
-    const snap = await getDoc(doc(db, 'admin/global/settings/ai'));
-    if (snap.exists() && snap.data()?.geminiApiKey) {
-      _aiGeminiApiKey = String(snap.data().geminiApiKey).trim();
-      localStorage.setItem('aseel_gemini_key', _aiGeminiApiKey);
-    }
-  } catch (e) {
-    // في حال عدم وجود مفتاح عام نعتمد على المفتاح المحلي أو المحرك السريري المدمج
-  }
-}
+// المساعد الذكي يعمل عبر الدالة الآمنة askGemini (المفتاح محفوظ على الخادم ولا يصل للمتصفح).
+// تنظيف أي مفتاح قديم كان مخزّناً في هذا المتصفح:
+try { localStorage.removeItem('aseel_gemini_key'); } catch (e) {}
+const askGemini = httpsCallable(getFunctions(app, 'europe-west1'), 'askGemini', { timeout: 25000 });
 
 let _aiPresetMeals = [];
 let _aiCommonFoodNames = [];
@@ -1829,53 +1821,35 @@ ${statsSummary}
 }
 
 async function callGeminiCloudApi(userText, profile) {
-  if (!_aiGeminiApiKey) return null;
-
   const sysInstruction = buildGeminiSystemPrompt(profile);
   const contents = [];
 
-  // إضافة آخر 6 رسائل من المحادثة للحفاظ على السياق
+  // إضافة آخر 6 رسائل من المحادثة للحفاظ على السياق (مع تقصير الطويل منها ليقبله الخادم)
   const recentHistory = _aiChatHistory.slice(-6);
   for (const item of recentHistory) {
     contents.push({
       role: item.role === 'user' ? 'user' : 'model',
-      parts: [{ text: item.text }]
+      parts: [{ text: String(item.text || '').slice(0, 5500) }]
     });
   }
+  while (contents.length && contents[0].role === 'model') contents.shift();   // Gemini يبدأ بدور المستخدم
   contents.push({
     role: 'user',
-    parts: [{ text: userText }]
+    parts: [{ text: String(userText || '').slice(0, 5500) }]
   });
 
-  const models = ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-pro-latest'];
-  for (const modelName of models) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6500);
-
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(_aiGeminiApiKey)}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: sysInstruction }] },
-          contents,
-          generationConfig: {
-            temperature: 0.6,
-            maxOutputTokens: 1200
-          }
-        }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (!res.ok) continue;
-      const data = await res.json();
-      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (reply && reply.trim()) return reply.trim();
-    } catch (e) {
-      console.warn(`Gemini model ${modelName} fallback:`, e);
-    }
+  try {
+    const out = await askGemini({
+      feature: 'child_assistant',
+      systemInstruction: sysInstruction,
+      contents,
+      temperature: 0.6,
+      maxOutputTokens: 1200
+    });
+    const reply = out?.data?.text;
+    if (reply && reply.trim()) return reply.trim();
+  } catch (e) {
+    console.warn('askGemini:', e?.code || e);   // نستخدم المحرك المحلي المدمج
   }
   return null;
 }
@@ -2348,40 +2322,21 @@ async function initAiAssistant(parentId, child) {
 
   // تحميل الإعدادات الخلفية بالتوازي
   Promise.all([
-    loadGlobalGeminiKey(),
     computeRecentBolusStats(parentId)
   ]).then(() => {
     const fresh = getChildClinicalProfile(child);
     if (unitBadge) unitBadge.textContent = `📏 ${fresh.unit}`;
     if (subText) subText.textContent = `متصل بملف: ${fresh.name} • الوحدة: ${fresh.unit}`;
-    if (keyInput && _aiGeminiApiKey) keyInput.value = _aiGeminiApiKey;
   }).catch(e => console.warn('Background init warning:', e));
 
   const profile = getChildClinicalProfile(child);
   if (unitBadge) unitBadge.textContent = `📏 ${profile.unit}`;
   if (subText) subText.textContent = `متصل بملف: ${profile.name} • الوحدة: ${profile.unit}`;
-  if (keyInput && _aiGeminiApiKey) keyInput.value = _aiGeminiApiKey;
 
 
-
-  saveKeyBtn?.addEventListener('click', async () => {
-    const val = (keyInput?.value || '').trim();
-    _aiGeminiApiKey = val;
-    if (val) {
-      localStorage.setItem('aseel_gemini_key', val);
-      try {
-        await setDoc(doc(db, 'admin/global/settings/ai'), { geminiApiKey: val, updatedAt: serverTimestamp() }, { merge: true });
-      } catch (e) {}
-      if (keyStatus) keyStatus.textContent = '✅ تم حفظ وتفعيل مفتاح Gemini السحابي بنجاح!';
-    } else {
-      localStorage.removeItem('aseel_gemini_key');
-      if (keyStatus) keyStatus.textContent = 'ℹ️ تم التبديل إلى محرك أسيل السريري المدمج.';
-    }
-    setTimeout(() => {
-      if (keyStatus) keyStatus.textContent = '';
-      settingsPanel?.classList.add('hidden');
-    }, 1500);
-  });
+  // لوحة إعدادات المفتاح لم تعد لازمة (الذكاء الاصطناعي يعمل عبر الخادم الآمن) فنخفيها
+  if (settingsBtn) settingsBtn.style.display = 'none';
+  if (settingsPanel) settingsPanel.style.display = 'none';
 
   quickChips?.querySelectorAll('.ai-chip').forEach(btn => {
     btn.addEventListener('click', () => {
