@@ -1,10 +1,11 @@
 // js/parent.js
-import { auth, db } from './firebase-config.js';
+import { app, auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
   collection, getDocs, query, orderBy, doc, getDoc, writeBatch,
   serverTimestamp, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
 
 const $ = id => document.getElementById(id);
 
@@ -262,18 +263,10 @@ $('linkSubmit').onclick = async () => {
 };
 
 // ------ المساعد الذكي المتطور (Parent AI Assistant) ------
-let _parentAiApiKey = localStorage.getItem('aseel_gemini_key') || '';
-
-async function fetchParentAiKey() {
-  try {
-    const snap = await getDoc(doc(db, 'admin/global/settings/ai'));
-    if (snap.exists() && snap.data()?.geminiApiKey) {
-      _parentAiApiKey = String(snap.data().geminiApiKey).trim();
-      localStorage.setItem('aseel_gemini_key', _parentAiApiKey);
-    }
-  } catch(e){}
-}
-fetchParentAiKey();
+// المساعد الذكي يعمل عبر الدالة الآمنة askGemini (المفتاح محفوظ على الخادم ولا يصل للمتصفح).
+// تنظيف أي مفتاح قديم كان مخزّناً في هذا المتصفح:
+try { localStorage.removeItem('aseel_gemini_key'); } catch (e) {}
+const askGemini = httpsCallable(getFunctions(app, 'europe-west1'), 'askGemini', { timeout: 15000 });
 
 $('aiFab').onclick = () => openAIForChild(kids.length ? kids[0] : null);
 $('aiClose').onclick = () => $('aiWidget').classList.add('hidden');
@@ -388,8 +381,8 @@ async function sendAI() {
   try {
     let reply = null;
 
-    // محاولة الاتصال بـ Google Gemini إذا كان المفتاح متوفراً
-    if (_parentAiApiKey) {
+    // محاولة الاتصال بـ Gemini عبر الدالة الآمنة (وإلا نستخدم المحرك المحلي أدناه)
+    if (currentUser) {
       const child = aiState.child;
       const cName = child ? child.name : 'الطفل';
       const cUnit = child ? child._unit : 'mg/dL';
@@ -401,25 +394,17 @@ async function sendAI() {
 معطيات الطفل الحالية: الاسم (${cName})، وحدة القياس (${cUnit})، السكر المستهدف (${cTarget} ${cUnit})، معامل التصحيح (${cCf})، ومعامل الكارب (${cCr}).
 أجب باللغة العربية بدقة وحسابات واضحة لجرامات الكارب وجرعة الأنسولين المطلوبة بوحدة ${cUnit}.`;
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6500);
-
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${encodeURIComponent(_parentAiApiKey)}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: sysPrompt }] },
-          contents: [{ parts: [{ text }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 600 }
-        }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = await res.json();
-        reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      try {
+        const out = await askGemini({
+          feature: 'parent_chat',
+          systemInstruction: sysPrompt,
+          contents: [{ role: 'user', parts: [{ text: text.slice(0, 3500) }] }],
+          temperature: 0.4,
+          maxOutputTokens: 600
+        });
+        reply = out?.data?.text || null;
+      } catch (err) {
+        console.warn('askGemini:', err?.code || err);   // نستخدم المحرك المحلي
       }
     }
 
