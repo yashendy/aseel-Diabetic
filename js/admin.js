@@ -1,6 +1,7 @@
-import { auth, db } from './firebase-config.js';
+import { app, auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { collection, collectionGroup, query, where, getDocs, getDoc, doc, setDoc, updateDoc, deleteField, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
 
 const $ = id => document.getElementById(id);
 let CURRENT_ADMIN = null;
@@ -509,190 +510,80 @@ async function assignNow() {
 }
 
 /* ========================================================= */
-/* إعدادات الذكاء الاصطناعي العامة للأدمن (Gemini Global API) */
+/* المساعد الذكي (Gemini): يعمل عبر الدالة الآمنة askGemini                 */
+/* المفتاح محفوظ في Secret Manager على الخادم، ولا يُدخل ولا يُخزَّن من المتصفح */
 /* ========================================================= */
 const globalKeyInput = $('globalGeminiKeyInput');
 const btnSaveGlobalAiKey = $('btnSaveGlobalAiKey');
 const btnTestGlobalAiKey = $('btnTestGlobalAiKey');
-const btnToggleKeyVisibility = $('btnToggleKeyVisibility');
 const aiGlobalKeyMsg = $('aiGlobalKeyMsg');
 const aiGlobalStatusBadge = $('aiGlobalStatusBadge');
+const askGemini = httpsCallable(getFunctions(app, 'europe-west1'), 'askGemini', { timeout: 25000 });
 
-async function saveKeyGlobally(key, showUiMessage = true) {
-  if (!key) {
-    localStorage.removeItem('aseel_gemini_key');
-    try {
-      await setDoc(doc(db, 'admin/global/settings/ai'), { geminiApiKey: '', updatedAt: serverTimestamp() }, { merge: true });
-    } catch(e){}
-    if (aiGlobalStatusBadge) {
-      aiGlobalStatusBadge.textContent = 'ℹ️ المحرك السريري الافتراضي نشط';
-      aiGlobalStatusBadge.style.color = '#fbbf24';
-      aiGlobalStatusBadge.style.background = 'rgba(251, 191, 36, 0.15)';
-    }
-    if (showUiMessage && aiGlobalKeyMsg) {
-      aiGlobalKeyMsg.style.color = 'var(--warn)';
-      aiGlobalKeyMsg.textContent = 'تم إلغاء المفتاح؛ ستعمل المنصة بالمحرك السريري المدمج تلقائياً.';
-    }
-    return;
-  }
+// تنظيف أي مفتاح قديم مخزّن في هذا المتصفح
+try { localStorage.removeItem('aseel_gemini_key'); } catch (e) {}
 
-  // حفظ محلي فوري
-  localStorage.setItem('aseel_gemini_key', key);
+// إخفاء إدخال المفتاح وزر الحفظ (لم يعودا مستخدمين)
+if (globalKeyInput && globalKeyInput.parentElement) globalKeyInput.parentElement.style.display = 'none';
+if (btnSaveGlobalAiKey) btnSaveGlobalAiKey.style.display = 'none';
+const aiSection = aiGlobalStatusBadge ? aiGlobalStatusBadge.closest('section') : null;
+const aiHint = aiSection ? aiSection.querySelector('p') : null;
+if (aiHint) {
+  aiHint.innerHTML = 'المساعد الذكي يعمل عبر دالة آمنة على خادم المنصة، ومفتاح <b>Google Gemini</b> محفوظ هناك ولا يصل لأي متصفح. ' +
+    'لتغيير المفتاح استخدم الأمر <code dir="ltr">firebase functions:secrets:set GEMINI_API_KEY</code> ثم أعد نشر الدوال. ' +
+    'اضغط <b>فحص الاتصال</b> للتأكد أن المساعد يعمل.';
+}
 
-  if (aiGlobalStatusBadge) {
-    aiGlobalStatusBadge.textContent = '✅ مفعل ومحفوظ للجميع';
-    aiGlobalStatusBadge.style.color = '#4ade80';
-    aiGlobalStatusBadge.style.background = 'rgba(74, 222, 128, 0.15)';
-  }
-
-  // حفظ سحابي في Firestore
-  try {
-    await setDoc(doc(db, 'admin/global/settings/ai'), {
-      geminiApiKey: key,
-      updatedAt: serverTimestamp(),
-      updatedBy: CURRENT_ADMIN?.email || CURRENT_ADMIN?.uid || 'admin'
-    }, { merge: true });
-
-    if (showUiMessage && aiGlobalKeyMsg) {
-      aiGlobalKeyMsg.style.color = 'var(--success)';
-      aiGlobalKeyMsg.textContent = '✅ تم حفظ وتعميم المفتاح بنجاح! يعمل الآن تلقائياً لجميع الأطفال وأولياء الأمور.';
-    }
-  } catch (err) {
-    console.warn('Firestore write warning:', err);
-    if (showUiMessage && aiGlobalKeyMsg) {
-      aiGlobalKeyMsg.style.color = 'var(--success)';
-      aiGlobalKeyMsg.textContent = '✅ تم حفظ المفتاح بنجاح في متصفحك (جاهز للعمل).';
-    }
-  }
+function setAiBadge(text, color, bg) {
+  if (!aiGlobalStatusBadge) return;
+  aiGlobalStatusBadge.textContent = text;
+  aiGlobalStatusBadge.style.color = color;
+  aiGlobalStatusBadge.style.background = bg;
 }
 
 async function loadGlobalAiSettings() {
-  if (!globalKeyInput) return;
-  let key = localStorage.getItem('aseel_gemini_key') || '';
-
-  try {
-    const snap = await getDoc(doc(db, 'admin/global/settings/ai'));
-    if (snap.exists() && snap.data()?.geminiApiKey) {
-      key = String(snap.data().geminiApiKey).trim();
-      localStorage.setItem('aseel_gemini_key', key);
-    }
-  } catch (err) {
-    console.warn('Error reading global AI settings:', err);
-  }
-
-  if (key) {
-    globalKeyInput.value = key;
-    if (aiGlobalStatusBadge) {
-      aiGlobalStatusBadge.textContent = '✅ مفعل ويعمل للجميع';
-      aiGlobalStatusBadge.style.color = '#4ade80';
-      aiGlobalStatusBadge.style.background = 'rgba(74, 222, 128, 0.15)';
-    }
-  } else {
-    if (aiGlobalStatusBadge) {
-      aiGlobalStatusBadge.textContent = '⚠️ غير مفعل (المحرك السريري الافتراضي نشط)';
-      aiGlobalStatusBadge.style.color = '#fbbf24';
-      aiGlobalStatusBadge.style.background = 'rgba(251, 191, 36, 0.15)';
-    }
-  }
+  setAiBadge('🔒 المفتاح محفوظ على الخادم', '#a78bfa', 'rgba(139, 92, 246, 0.2)');
 }
+loadGlobalAiSettings();
 
-if (btnToggleKeyVisibility && globalKeyInput) {
-  btnToggleKeyVisibility.onclick = () => {
-    const isPass = globalKeyInput.type === 'password';
-    globalKeyInput.type = isPass ? 'text' : 'password';
-    btnToggleKeyVisibility.textContent = isPass ? '🔒' : '👁️';
-  };
-}
-
-// حفظ تلقائي فوري عند اللصق أو التعديل
-if (globalKeyInput) {
-  globalKeyInput.addEventListener('input', () => {
-    const val = globalKeyInput.value.trim();
-    if (val.length >= 35 && val.startsWith('AIzaSy')) {
-      saveKeyGlobally(val, false);
-    }
-  });
-}
-
-if (btnSaveGlobalAiKey && globalKeyInput) {
-  btnSaveGlobalAiKey.onclick = async () => {
-    const key = globalKeyInput.value.trim();
-    btnSaveGlobalAiKey.disabled = true;
-    try {
-      await saveKeyGlobally(key, true);
-    } finally {
-      btnSaveGlobalAiKey.disabled = false;
-    }
-  };
-}
-
-if (btnTestGlobalAiKey && globalKeyInput) {
+if (btnTestGlobalAiKey) {
+  btnTestGlobalAiKey.textContent = 'فحص الاتصال ⚡';
   btnTestGlobalAiKey.onclick = async () => {
-    const key = globalKeyInput.value.trim();
-    if (!key) {
-      alert('يرجى إدخال المفتاح أولاً لفحصه.');
-      return;
-    }
-
     btnTestGlobalAiKey.disabled = true;
     if (aiGlobalKeyMsg) {
       aiGlobalKeyMsg.style.color = '#818cf8';
-      aiGlobalKeyMsg.textContent = '⏳ جاري الاتصال بخوادم Google وفحص المفتاح...';
+      aiGlobalKeyMsg.textContent = '⏳ جاري الاتصال بالمساعد الذكي عبر الخادم...';
     }
-
-    // فحص مباشر بنموذج gemini-1.5-flash القياسي بطلب واحد لتجنب استهلاك الحصة (Rate Limit)
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${encodeURIComponent(key)}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'قل: جاهز' }] }]
-        }),
-        signal: controller.signal
+      const out = await askGemini({
+        feature: 'parent_chat',
+        systemInstruction: '',
+        contents: [{ role: 'user', parts: [{ text: 'قل: جاهز' }] }],
+        temperature: 0,
+        maxOutputTokens: 50
       });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = await res.json();
-        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'جاهز';
-        // حفظ وتعميم فوري
-        await saveKeyGlobally(key, false);
-        if (aiGlobalKeyMsg) {
-          aiGlobalKeyMsg.style.color = 'var(--success)';
-          aiGlobalKeyMsg.textContent = `⚡ الاتصال ناجح ومستقر تماماً بنموذج (gemini-1.5-flash)! رد الخادم: "${reply.trim()}". تم حفظ وتعميم المفتاح على جميع أطفال المنصة.`;
-        }
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        const status = res.status;
-        let errMsg = errData?.error?.message || `HTTP ${status}`;
-
-        if (status === 429) {
-          errMsg = '⚠️ تجاوز عدد الطلبات المسموح بها في الدقيقة من Google (Rate Limit 429). انتظر دقيقة واحدة، مع العلم أن المفتاح صالح ويمكنك حفظه الآن ليعمل به الشات.';
-          // نقوم بحفظ المفتاح رغم خطأ 429 لأن المفتاح صحيح ولكن تم استهلاكه مؤقتاً
-          await saveKeyGlobally(key, false);
-        } else if (status === 400) {
-          errMsg = '❌ المفتاح غير صالح أو مكتوب بطريقة غير صحيحة، تأكد من نسخه كاملاً من Google AI Studio.';
-        } else if (status === 503) {
-          errMsg = '⏳ خوادم Google تواجه ضغطاً مؤقتاً (503)، المحرك السريري المدمج يعمل كبديل فوري.';
-        }
-
-        if (aiGlobalKeyMsg) {
-          aiGlobalKeyMsg.style.color = status === 429 ? 'var(--warn)' : 'var(--danger)';
-          aiGlobalKeyMsg.textContent = errMsg;
-        }
-      }
-    } catch (e) {
+      const reply = (out?.data?.text || '').trim() || 'جاهز';
       if (aiGlobalKeyMsg) {
-        aiGlobalKeyMsg.style.color = 'var(--danger)';
-        const msg = e.name === 'AbortError' ? 'انتهت مهلة الاتصال بالخادم، يرجى فحص سرعة الإنترنت.' : e.message;
-        aiGlobalKeyMsg.textContent = `❌ تعذر الاتصال: ${msg}`;
+        aiGlobalKeyMsg.style.color = 'var(--success)';
+        aiGlobalKeyMsg.textContent = `⚡ الاتصال ناجح (النموذج: ${out?.data?.model || '—'}). الرد: "${reply}"`;
       }
+      setAiBadge('✅ مفعل ويعمل للجميع', '#4ade80', 'rgba(74, 222, 128, 0.15)');
+    } catch (e) {
+      const code = String(e?.code || '').replace('functions/', '');
+      const messages = {
+        'not-found': '❌ الدالة askGemini غير منشورة بعد. انشرها بالأمر: firebase deploy --only functions',
+        'unavailable': '⏳ المساعد الذكي غير متاح الآن (تحقق من صحة مفتاح Gemini في Secret Manager أو من ضغط خوادم Google). المحرك المحلي المدمج يعمل كبديل.',
+        'resource-exhausted': '⚠️ تجاوزت الحد المسموح من الطلبات (40 في الساعة). حاول لاحقاً.',
+        'unauthenticated': '❌ يجب تسجيل الدخول.',
+        'permission-denied': '❌ هذا الحساب غير مسجّل في المنصة.',
+        'deadline-exceeded': '❌ انتهت مهلة الاتصال، يرجى المحاولة مرة أخرى.'
+      };
+      if (aiGlobalKeyMsg) {
+        aiGlobalKeyMsg.style.color = code === 'resource-exhausted' ? 'var(--warn)' : 'var(--danger)';
+        aiGlobalKeyMsg.textContent = messages[code] || `❌ تعذر الاتصال: ${e?.message || code || 'خطأ غير معروف'}`;
+      }
+      setAiBadge('⚠️ غير متاح (المحرك المحلي نشط)', '#fbbf24', 'rgba(251, 191, 36, 0.15)');
     }
-
     btnTestGlobalAiKey.disabled = false;
   };
 }
