@@ -1811,12 +1811,13 @@ ${statsSummary}
 
 [قواعد الرد الإلزامية]:
 - أنت "مساعد أسيل الطبي الذكي" للطفل/الطفلة (${p.name}).
-- مطلوب رد مباشر، مختصر جداً، ذكي ومفيد فوراً مثل شات جي بي تي (ChatGPT / Gemini)، بدون أي مقدمات طويلة، وبدون تكرار لملف الطفل أو جداول المعاملات.
-- عند السؤال عن أي صنف طعام أو نشويات (مثل أرز، مكرونة، خبز، فاكهة...):
-  1. اذكر جرامات الكارب التقديرية للصنف مباشرة (بالكوب أو الملاعق أو الوزن).
-  2. احسب الجرعة فوراً: \`جرام الكارب ÷ ${p.activeCR}\` (معامل الكارب الحالي لـ ${p.name}) = النتيجة بالوحدات من ${p.bolusType}.
-  3. سطر واحد فقط للتذكير بالقياس بوحدة (${p.unit}) وتوقيت الحقن قبل الأكل بـ 10-15 دقيقة.
-- في أي سؤال طبي أو عام، أجب بإيجاز ووضوح في 2 إلى 4 أسطر فقط.
+- الأسلوب: كلّم ولي الأمر بلغته (عامية مصرية مبسّطة أو عربية ميسّرة)، وابدأ بالإجابة المباشرة في سطر أو سطرين. كن مرناً وطبيعياً وافهم الأسئلة غير المرتبة. لا تكرر ملف الطفل ولا تعرض جداول ولا شرحاً طويلاً إلا إذا طلب ولي الأمر صراحة (تفاصيل / اشرح / ليه / بالتفصيل).
+- إن كانت معلومة أساسية ناقصة لا يمكن الإجابة بدونها، اسأل سؤالاً واحداً قصيراً بدل التخمين.
+- فهم الأرقام (مهم جداً): الرقم المقترن بـ(جرام/جم/غ) بجوار اسم صنف أو عبوة (مثل: علبة زبادي 170 جرام، كوب أرز 150 جرام) هو **وزن الصنف** وليس كمية الكارب. لا تعتبر الرقم كارباً إلا إذا قال ولي الأمر صراحة (كارب / كربوهيدرات / نشويات).
+- عند السؤال عن كمية الكارب في صنف أو وزن: احسب كارب الوزن = الوزن × (جرام الكارب في كل 100 جم من الصنف) ÷ 100، وأجب بسطر واحد (مثال: "170 جم زبادي سادة ≈ 8 جم كارب") واذكر أنه تقدير ويُفضّل مراجعة الملصق الغذائي. لا تحسب جرعة إلا إذا سأل عن الجرعة أو قال إن الطفل سيأكلها الآن؛ ويمكنك اختتام الرد بعرض: "تحب أحسبلك الجرعة؟".
+- عند السؤال عن الجرعة: جرام الكارب ÷ ${p.activeCR} (معامل الكارب الحالي لـ ${p.name}) = الوحدات من ${p.bolusType}، في سطرين مختصرين، ثم تذكير واحد قصير بقياس السكر بوحدة (${p.unit}) والحقن قبل الأكل بـ 10-15 دقيقة. لا تقترح تعديل الجرعات الثابتة أو القاعدي؛ التعديل للطبيب.
+- إذا كان الرقم أو الجرعة الناتجة كبيرة بشكل غير معتاد أو لم تتأكد من الصنف أو الكمية، اسأل بدل أن تخمّن.
+- في أي سؤال طبي أو عام: أجب في 2 إلى 4 أسطر كحد أقصى ما لم يُطلب تفصيل.
 - لا تكتب نص التحذير الطبي في ردك لأن النظام يضيفه تلقائياً.`;
 }
 
@@ -1986,8 +1987,94 @@ function generateSmartMealSuggestions(qLower, p) {
     `3. **إذا كان السكر مرتفعاً قبل الوجبة:** يُضاف تصحيح السكر بمعامل الطفل (${p.cf} ${u}/وحدة) إلى جرعة الوجبة بعد التأكد من عدم وجود تكدس أنسولين.`;
 }
 
+/* ---- فهم الأرقام في رسالة ولي الأمر (كارب مقابل وزن صنف) ---- */
+function aiNormalizeDigits(t) {
+  return String(t || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+}
+function aiNormAr(t) {
+  return String(t || '').toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
+}
+
+// جرامات الكارب في كل 100 جرام (قيم تقريبية شائعة للأطعمة المطبوخة/الجاهزة)
+const AI_FOOD_CARBS = [
+  { keys: ['زبادي', 'روب'], name: 'زبادي سادة', c: 5, alt: { when: /(فواكه|فاكهه|نكهه|فراوله|محلي|عسل|بالسكر)/, name: 'زبادي بنكهة/محلى', c: 14 } },
+  { keys: ['لبن', 'حليب'], name: 'لبن', c: 5 },
+  { keys: ['ارز', 'رز'], name: 'أرز مطبوخ', c: 28 },
+  { keys: ['مكرونه', 'معكرونه', 'باستا', 'اسباجيتي'], name: 'مكرونة مطبوخة', c: 27 },
+  { keys: ['عيش بلدي', 'خبز بلدي'], name: 'عيش بلدي', c: 50 },
+  { keys: ['فينو', 'عيش فينو'], name: 'عيش فينو', c: 50 },
+  { keys: ['توست'], name: 'توست', c: 47 },
+  { keys: ['عيش', 'خبز'], name: 'عيش/خبز', c: 50 },
+  { keys: ['بطاطس مقليه', 'فرايز', 'بطاطس محمره'], name: 'بطاطس مقلية', c: 40 },
+  { keys: ['شيبسي', 'شيبس'], name: 'شيبسي', c: 53 },
+  { keys: ['بطاطس', 'بطاطا'], name: 'بطاطس مسلوقة', c: 20 },
+  { keys: ['عدس'], name: 'عدس مطبوخ', c: 20 },
+  { keys: ['فول'], name: 'فول مدمس', c: 12 },
+  { keys: ['حمص'], name: 'حمص مطبوخ', c: 27 },
+  { keys: ['تفاح'], name: 'تفاح', c: 14 },
+  { keys: ['موز'], name: 'موز', c: 23 },
+  { keys: ['برتقال'], name: 'برتقال', c: 12 },
+  { keys: ['مانجو', 'مانجا'], name: 'مانجو', c: 15 },
+  { keys: ['عنب'], name: 'عنب', c: 17 },
+  { keys: ['بطيخ'], name: 'بطيخ', c: 8 },
+  { keys: ['فراوله'], name: 'فراولة', c: 8 },
+  { keys: ['تمر'], name: 'تمر', c: 75 },
+  { keys: ['عصير'], name: 'عصير فواكه', c: 11 },
+  { keys: ['كولا', 'بيبسي', 'مشروب غازي', 'سفن اب'], name: 'مشروب غازي', c: 11 },
+  { keys: ['شوكولاته', 'شيكولاته'], name: 'شوكولاتة', c: 57 },
+  { keys: ['بسكويت', 'بسكوت'], name: 'بسكويت', c: 68 },
+  { keys: ['كيك', 'كعك'], name: 'كيك', c: 50 },
+  { keys: ['ايس كريم', 'جيلاتي'], name: 'آيس كريم', c: 24 },
+  { keys: ['عسل'], name: 'عسل', c: 82 },
+  { keys: ['سكر ابيض', 'سكر مكعب', 'مكعبات سكر', 'ملعقه سكر', 'معلقه سكر'], name: 'سكر', c: 100 },
+  { keys: ['بيتزا'], name: 'بيتزا', c: 33 },
+  { keys: ['بيض', 'فراخ', 'دجاج', 'لحمه', 'لحم', 'سمك', 'جبنه', 'جبن'], name: 'بروتين (بدون كارب تقريباً)', c: 1 },
+].map(f => ({ ...f, keys: f.keys.map(aiNormAr) }));
+
+// الكارب يُعتبر مذكوراً فقط إذا ظهرت كلمة كارب/كربوهيدرات/نشويات بجوار الرقم
+function aiExtractExplicitCarbs(q) {
+  const t = aiNormalizeDigits(q).replace(/،/g, ' ');
+  const word = '(?:كارب|جارب|كربوهيدرات|كربو|نشويات|carbs?)';
+  let m = t.match(new RegExp('(\\d+(?:\\.\\d+)?)\\s*(?:جرام|جم|غرام|غ|g|gm)?\\s*(?:من\\s*ال)?\\s*' + word, 'i'));
+  if (m) return +m[1];
+  m = t.match(new RegExp(word + '\\s*(?:الوجبه|الوجبة|الاكل|الأكل)?\\s*(?:=|:|هو|هي|حوالي|تقريبا|تقريباً|يعني)?\\s*(\\d+(?:\\.\\d+)?)', 'i'));
+  if (m) return +m[1];
+  return null;
+}
+
+// رقم بالجرام بدون كلمة كارب = وزن صنف. نحاول التعرف على الصنف لتقدير كارب الوزن.
+function aiExtractFoodWeight(q) {
+  const t = aiNormalizeDigits(q);
+  const m = t.match(/(\d+(?:\.\d+)?)\s*(?:جرامات|جرام|جم|غرام|غ|gm|gr|g)(?![\u0600-\u06FFA-Za-z])/i);
+  if (!m) return null;
+  const grams = +m[1];
+  const nq = aiNormAr(t);
+  // مطابقة بالكلمة الكاملة (مع إزالة أدوات مثل ال/و/ب/ل) لتفادي التقاط حروف من كلمات أخرى
+  const tokens = nq.split(/[^\u0600-\u06FFa-z0-9]+/).filter(Boolean);
+  const stripPrefix = w => {
+    let x = w.replace(/^(وال|بال|لل|فال|كال|ال)/, '');
+    if (x === w && w.length > 3) x = w.replace(/^[وبلف]/, '');
+    return x;
+  };
+  const variants = new Set();
+  tokens.forEach(w => { variants.add(w); variants.add(stripPrefix(w)); });
+  const joined = ' ' + tokens.join(' ') + ' ';
+  let best = null, bestLen = 0;
+  for (const f of AI_FOOD_CARBS) {
+    for (const k of f.keys) {
+      const hit = k.includes(' ') ? joined.includes(' ' + k + ' ') : variants.has(k);
+      if (k && hit && k.length > bestLen) { best = f; bestLen = k.length; }
+    }
+  }
+  if (!best) return { grams, food: null };
+  const food = (best.alt && best.alt.when.test(nq)) ? best.alt : best;
+  return { grams, food: { name: food.name, c: food.c } };
+}
+
 function generateSmartClinicalReply(userText, p) {
-  const q = userText.trim();
+  const q = aiNormalizeDigits(userText.trim());
   const qLower = q.toLowerCase();
   const s = p.stats;
   const u = p.unit;
@@ -2006,14 +2093,37 @@ function generateSmartClinicalReply(userText, p) {
     let carbVal = null;
     let convertedNote = '';
 
-    for (const n of nums) {
-      if (hasCarbWord && (q.includes(`${n} جرام`) || q.includes(`${n}غ`) || q.includes(`${n} كارب`) || ( nums.length === 1 && !hasBgWord ))) {
-        carbVal = n;
-      } else if (bgVal === null) {
-        bgVal = n;
-      } else if (carbVal === null) {
-        carbVal = n;
+    // أ) كمية الكارب: فقط إذا ذُكرت صراحةً بجوار كلمة كارب/كربوهيدرات/نشويات
+    carbVal = aiExtractExplicitCarbs(q);
+    const usedNums = new Set();
+    let foodInfo = null;
+    let weightOnly = null;
+    if (carbVal !== null) usedNums.add(carbVal);
+
+    // ب) رقم بالجرام بدون كلمة كارب = وزن صنف (وليس كارباً): نقدّر الكارب من الصنف إن عُرف
+    if (carbVal === null) {
+      const fw = aiExtractFoodWeight(q);
+      if (fw) {
+        usedNums.add(fw.grams);
+        if (fw.food) {
+          carbVal = +(fw.grams * fw.food.c / 100).toFixed(1);
+          foodInfo = { grams: fw.grams, name: fw.food.name };
+        } else {
+          weightOnly = fw;
+        }
       }
+    }
+
+    // ج) قراءة السكر: فقط مع وجود كلمة تدل عليها، ومن الأرقام التي لم تُستخدم للكارب/الوزن
+    if (hasBgWord) {
+      for (const n of nums) {
+        if (!usedNums.has(n)) { bgVal = n; break; }
+      }
+    }
+
+    // وزن بدون صنف معروف ولا سكر: لا نخمّن جرعة، نسأل
+    if (weightOnly && carbVal === null && bgVal === null) {
+      return `الرقم **${weightOnly.grams} جرام** ده وزن الصنف مش كمية الكارب. 🙂\nقولّي اسم الصنف وأقدّر الكارب، أو اكتب الكارب صراحةً (مثال: \`كارب 15\`) وأحسبلك الجرعة.`;
     }
 
     // التحقق من تطابق الرقم مع وحدة قياس الطفل (mg/dL مقابل mmol/L)
@@ -2079,11 +2189,32 @@ function generateSmartClinicalReply(userText, p) {
     if (carbVal !== null) {
       const mealDose = +(carbVal / p.activeCR).toFixed(1);
       const mealRounded = Math.round(mealDose * 2) / 2;
+      const wantsDetails = /(تفصيل|بالتفصيل|اشرح|شرح|ليه|لماذا|وضح)/.test(qLower);
+      const asksDose = /(جرعه|جرعة|وحده|وحدة|وحدات|انسولين|أنسولين|ياخد|ياخذ|اخد|آخذ|نوفو|حقن)/.test(qLower);
+
+      // حماية: رقم كبير غير معتاد لوجبة واحدة
+      if (carbVal > 150 || mealDose > 15) {
+        return `⚠️ **${carbVal} جرام كارب** (جرعة ≈ ${mealDose} وحدة) رقم كبير جداً لوجبة واحدة.\nتأكد أن الرقم **كارب فعلاً** وليس وزن الصنف، وراجع الطبيب قبل أي جرعة.`;
+      }
+
+      const head = foodInfo
+        ? `**${foodInfo.grams} جم ${foodInfo.name} ≈ ${carbVal} جم كارب** _(تقدير، راجع الملصق الغذائي)_`
+        : `**${carbVal} جم كارب**`;
+
+      // سؤال عن كمية الكارب فقط: نجيب بالكارب مع سطر الجرعة مختصراً
+      if (foodInfo && !asksDose && !wantsDetails) {
+        return `${head}\nجرعتها لـ ${p.name}: ${carbVal} ÷ ${p.activeCR} = **${mealDose} وحدة** (≈ ${mealRounded}) ${p.bolusType}.`;
+      }
+
+      const dose = `الجرعة: ${carbVal} ÷ ${p.activeCR} = **${mealDose} وحدة** (≈ ${mealRounded}) ${p.bolusType}.`;
+      if (!wantsDetails) {
+        return `${head}\n${dose}\n💡 قِس السكر قبل الأكل بـ ${u}؛ لو فوق **${p.high} ${u}** تُضاف جرعة تصحيح.`;
+      }
       return `### 🥗 حساب جرعة الكارب لـ ${p.name}\n` +
-        `- **كمية الكارب المدخلة:** ${carbVal} جرام\n` +
+        `- ${head}\n` +
         `- **معامل الكارب النشط الآن (${p.mealNowLabel}):** 1 وحدة لكل **${p.activeCR} جرام كارب**\n` +
-        `- **جرعة الأنسولين السريع (${p.bolusType}) للوجبة:** \`${carbVal} ÷ ${p.activeCR}\` = **${mealDose} وحدة** (حوالي **${mealRounded} وحدة**).\n` +
-        `- 💡 *نصيحة:* قِس سكر الطفل قبل الوجبة بوحدة **${u}**؛ إذا كان أعلى من **${p.high} ${u}** ستُضاف جرعة التصحيح، وإذا كان في النطاق (**${p.low}–${p.high} ${u}**) نكتفي بجرعة الوجبة فقط.`;
+        `- **${dose}**\n` +
+        `- 💡 قِس سكر الطفل قبل الوجبة بوحدة **${u}**؛ إذا كان أعلى من **${p.high} ${u}** تُضاف جرعة التصحيح، وإذا كان داخل النطاق (${p.low}–${p.high} ${u}) تكتفي بجرعة الوجبة فقط. الحقن قبل الأكل بـ 10–15 دقيقة.`;
     }
   }
 
