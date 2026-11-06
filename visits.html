@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>الزيارات والمتابعات الطبية</title>
-  <link rel="stylesheet" href="css/visits.css?v=6">
+  <link rel="stylesheet" href="css/visits.css?v=7">
   <link rel="icon" href="favicon.ico">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -128,81 +128,96 @@
 
   </div>
 
-  <!-- نافذة إضافة زيارة -->
+  <!-- نافذة إضافة/تعديل زيارة -->
   <div id="visitModal" class="modal hidden">
     <div class="modal-body">
       <div class="modal-header">
-        <h3 id="modalTitle">إضافة زيارة طبية</h3>
-        <button id="closeModal" class="close-btn">✕</button>
+        <h3><span>🩺</span><span id="modalTitle">إضافة زيارة طبية</span></h3>
+        <button id="closeModal" class="close-btn" type="button" aria-label="إغلاق">✕</button>
       </div>
 
       <form id="visitForm" class="modal-form" novalidate>
-        <div class="grid2">
-          <div class="field"><label>تاريخ الزيارة</label><input type="date" id="date" required></div>
-          <div class="field"><label>نوع الزيارة</label>
-            <select id="type" required>
-              <option value="">اختر النوع</option>
-              <option>متابعة دورية</option><option>طارئة</option><option>فحص معملي</option><option>استشارة أونلاين</option>
-            </select>
-          </div>
-          <div class="field"><label>الطبيب / المركز</label><input type="text" id="doctorName" placeholder="مثال: د/ محمد علي" required></div>
-          <div class="field"><label>وقت الزيارة</label><input type="time" id="time"></div>
-        </div>
-        
-        
-        <!-- قياسات النمو والعلامات الحيوية -->
-        <div class="vitals-box bg-light pad-10">
-          <h4 style="margin:0 0 10px 0; color:#1e3a8a; font-size:13px; display:flex; align-items:center; gap:6px;">
-            <span>📏</span> قياسات النمو والعلامات الحيوية (Pediatric Anthropometrics)
-          </h4>
-          <div class="grid4" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
-            <div class="field">
-              <label>الوزن (kg)</label>
-              <input type="number" id="weight" step="0.1" placeholder="مثال: 24.5">
+        <div class="form-scroll">
+
+          <!-- 1) بيانات الزيارة -->
+          <section class="form-section">
+            <h4 class="section-title"><span class="ico">🗓️</span> بيانات الزيارة</h4>
+            <div class="grid2">
+              <div class="field"><label for="date">تاريخ الزيارة</label><input type="date" id="date" required></div>
+              <div class="field"><label for="type">نوع الزيارة</label>
+                <select id="type" required>
+                  <option value="">اختر النوع</option>
+                  <option>متابعة دورية</option><option>طارئة</option><option>فحص معملي</option><option>استشارة أونلاين</option>
+                </select>
+              </div>
+              <div class="field"><label for="doctorName">الطبيب / المركز</label><input type="text" id="doctorName" placeholder="مثال: د/ محمد علي" required></div>
+              <div class="field"><label for="time">وقت الزيارة</label><input type="time" id="time"></div>
             </div>
-            <div class="field">
-              <label>الطول (cm)</label>
-              <input type="number" id="height" step="0.5" placeholder="مثال: 122">
+          </section>
+
+          <!-- 2) القياسات والعلامات الحيوية -->
+          <section class="form-section vitals">
+            <h4 class="section-title"><span class="ico">📏</span> القياسات والعلامات الحيوية</h4>
+            <div class="grid4">
+              <div class="field"><label for="weight">الوزن (kg)</label><input type="number" id="weight" step="0.1" placeholder="مثال: 24.5"></div>
+              <div class="field"><label for="height">الطول (cm)</label><input type="number" id="height" step="0.5" placeholder="مثال: 122"></div>
+              <div class="field"><label for="bmi">مؤشر الكتلة (BMI)</label><input type="text" id="bmi" placeholder="محسوب تلقائياً" readonly></div>
+              <div class="field"><label for="bloodPressure">ضغط الدم</label><input type="text" id="bloodPressure" placeholder="مثال: 105/70"></div>
             </div>
-            <div class="field">
-              <label>مؤشر الكتلة (BMI)</label>
-              <input type="text" id="bmi" placeholder="محسوب تلقائياً" readonly style="background:#e2e8f0; font-weight:bold; color:#1e3a8a;">
+          </section>
+
+          <!-- 3) التشخيص والتوصيات -->
+          <section class="form-section">
+            <h4 class="section-title"><span class="ico">📝</span> التشخيص والتوصيات</h4>
+            <div class="stack">
+              <div class="field"><label for="reason">سبب الزيارة</label><input type="text" id="reason" placeholder="متابعة جرعات / هبوط متكرر..."></div>
+              <div class="field"><label for="summary">خلاصة وتشخيص الطبيب</label><textarea id="summary" rows="2" placeholder="ماذا قال الطبيب؟"></textarea></div>
+              <div class="field"><label for="recommendations">التوصيات والتعليمات</label><textarea id="recommendations" rows="3" placeholder="اكتب التعليمات لتتذكرها..."></textarea></div>
             </div>
-            <div class="field">
-              <label>ضغط الدم</label>
-              <input type="text" id="bloodPressure" placeholder="مثال: 105/70">
+          </section>
+
+          <!-- 4) تعديلات العلاج -->
+          <section class="form-section doses">
+            <h4 class="section-title"><span class="ico">💉</span> تعديلات الجرعات</h4>
+            <div class="grid2">
+              <div class="field"><label for="longActingChange">تعديل القاعدي (طويل المفعول)</label><input type="text" id="longActingChange" placeholder="مثال: +1 وحدة ليلاً"></div>
+              <div class="field"><label for="mealDosesChange">تعديل جرعات الوجبات</label><input type="text" id="mealDosesChange" placeholder="مثال: تقليل معامل الفطار"></div>
             </div>
-          </div>
+          </section>
+
+          <!-- 5) المتابعة -->
+          <section class="form-section">
+            <h4 class="section-title"><span class="ico">🔄</span> الفحوصات والمتابعة</h4>
+            <div class="stack">
+              <div class="field"><label for="labsRequested">فحوصات مطلوبة</label><input type="text" id="labsRequested" placeholder="HbA1c, Lipid Profile, TSH"><span class="hint">افصل بين الفحوصات بفاصلة</span></div>
+              <div class="grid2">
+                <div class="field"><label for="followUpDate">موعد المتابعة القادمة</label><input type="date" id="followUpDate"></div>
+                <div class="field"><label for="applied">حالة تطبيق التعليمات</label>
+                  <select id="applied"><option value="false">⏳ بانتظار التطبيق</option><option value="true">✅ تم التطبيق</option></select>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 6) المرفقات -->
+          <section class="form-section files">
+            <h4 class="section-title"><span class="ico">📎</span> المرفقات (روشتة / تحاليل)</h4>
+            <label class="dropzone" for="attachments">
+              <span style="font-size:22px">⬆️</span>
+              <span>اضغط لاختيار ملفات<small>PDF أو صور (JPG / PNG)</small></span>
+              <input type="file" id="attachments" multiple accept=".png,.jpg,.jpeg,.pdf">
+            </label>
+            <div class="hint" style="margin-top:8px">الحد الأقصى: <b>10 ميجا</b> لملف الـ PDF، وحتى <b>5 ملفات</b> لكل زيارة. الصور تُصغَّر تلقائياً قبل الرفع.</div>
+            <div id="uploadHint" class="hint" style="color:#6d28d9"></div>
+            <div id="selectedFiles" class="files-wrap"></div>
+            <div class="hidden" id="existingWrap">
+              <div class="files-sub">المرفقات الحالية (اضغط على اسم الملف لعرضه)</div>
+              <div id="existingFiles" class="files-wrap"></div>
+            </div>
+          </section>
         </div>
 
-        <div class="field"><label>سبب الزيارة</label><input type="text" id="reason" placeholder="متابعة جرعات / هبوط متكرر..."></div>
-        
-        <div class="field"><label>خلاصة وتشخيص الطبيب</label><textarea id="summary" rows="2" placeholder="ماذا قال الطبيب؟"></textarea></div>
-        
-        <div class="field"><label>التوصيات والتعليمات</label><textarea id="recommendations" rows="3" placeholder="اكتب التعليمات لتتذكرها..."></textarea></div>
-        
-        <div class="grid2 bg-light pad-10">
-          <div class="field"><label>تعديل القاعدي (طويل المفعول)</label><input type="text" id="longActingChange" placeholder="مثال: +1 وحدة ليلاً"></div>
-          <div class="field"><label>تعديل جرعات الوجبات</label><input type="text" id="mealDosesChange" placeholder="مثال: تقليل معامل الفطار"></div>
-        </div>
-
-        <div class="field"><label>فحوصات مطلوبة (افصلها بفواصل)</label><input type="text" id="labsRequested" placeholder="HbA1c, Lipid Profile, TSH"></div>
-        
-        <div class="grid2">
-          <div class="field"><label>موعد المتابعة القادمة</label><input type="date" id="followUpDate"></div>
-          <div class="field"><label>حالة تطبيق التعليمات</label>
-            <select id="applied"><option value="false">⏳ بانتظار التطبيق</option><option value="true">✅ تم التطبيق</option></select>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>إرفاق ملفات (روشتة / تحاليل)</label>
-          <input type="file" id="attachments" multiple accept=".png,.jpg,.jpeg,.pdf">
-          <div id="selectedFiles" class="files-wrap"></div>
-        </div>
-        <div class="field hidden" id="existingWrap"><label>المرفقات الحالية</label><div id="existingFiles" class="files-wrap"></div></div>
-
-        <div class="form-actions" style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+        <div class="modal-footer">
           <button type="button" id="cancelVisitBtn" class="btn ghost">إلغاء</button>
           <button type="submit" id="saveVisitBtn" class="btn primary">💾 حفظ الزيارة</button>
         </div>
@@ -210,6 +225,21 @@
     </div>
   </div>
 
-  <script type="module" src="js/visits.js?v=9"></script>
+  <!-- عارض المرفقات: يعرض PDF والصور دون الدخول لتعديل الزيارة -->
+  <div id="fileViewer" class="modal hidden" role="dialog" aria-modal="true" aria-label="عرض المرفقات">
+    <div class="viewer-body">
+      <div class="viewer-header">
+        <div class="viewer-title" id="viewerTitle">—</div>
+        <div class="viewer-tools">
+          <a id="viewerOpen" class="viewer-open" href="#" target="_blank" rel="noopener">↗ <span>فتح في تبويب جديد</span></a>
+          <button id="viewerClose" class="close-btn" type="button" aria-label="إغلاق">✕</button>
+        </div>
+      </div>
+      <div class="viewer-tabs" id="viewerTabs"></div>
+      <div class="viewer-stage" id="viewerStage"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/visits.js?v=10"></script>
 </body>
 </html>
