@@ -189,7 +189,22 @@ onAuthStateChanged(auth, async (user) => {
     if ($('printList')) $('printList').onclick = () => window.print();
 
     if ($('attachments')) {
-      $('attachments').onchange = (e) => { selectedFiles = Array.from(e.target.files); renderSelectedFiles(); };
+      $('attachments').onchange = async (e) => {
+        const input = e.target;
+        const picked = Array.from(input.files || []);
+        input.value = '';   // للسماح باختيار نفس الملف مرة أخرى
+        if (!picked.length) return;
+        const hint = $('uploadHint');
+        if (hint) hint.textContent = '⏳ جاري تجهيز الملفات...';
+        try {
+          const { ready, rejected } = await prepareFiles(picked);
+          selectedFiles = selectedFiles.concat(ready);
+          renderSelectedFiles();
+          if (rejected.length) alert('تعذّر إضافة بعض الملفات:\n' + rejected.join('\n'));
+        } finally {
+          if (hint) hint.textContent = '';
+        }
+      };
     }
     if ($('visitForm')) {
       $('visitForm').onsubmit = handleSaveVisit;
@@ -449,7 +464,7 @@ function renderVisits() {
           ${isApplied ? '✅ تم التطبيق' : '⏳ بانتظار التطبيق'}
         </button>
         <div class="vc-actions">
-          ${r.attachments?.length ? `<span style="font-size:12px; color:#64748b; margin-left:10px;">📎 ${r.attachments.length} ملف</span>` : ''}
+          ${r.attachments?.length ? `<button type="button" class="attach-chip act-files" title="عرض المرفقات">📎 ${r.attachments.length} ملف</button>` : ''}
           <button class="btn small secondary act-edit">تعديل</button>
           <button class="btn small ghost act-del" style="color:#dc2626; border-color:#fecaca;">حذف</button>
         </div>
@@ -459,6 +474,7 @@ function renderVisits() {
     card.querySelector('[data-toggle]').onclick = () => toggleApplied(r);
     card.querySelector('.act-edit').onclick = () => openModal(r);
     card.querySelector('.act-del').onclick = () => deleteVisit(r.id);
+    card.querySelector('.act-files')?.addEventListener('click', () => openFileViewer(r.attachments || [], 0));
 
     card.querySelectorAll('.lab-chip').forEach(chip => {
       chip.onclick = async () => {
@@ -526,6 +542,74 @@ function openModal(v = null) {
   $('visitModal')?.classList.remove('hidden');
 }
 
+// حدود المرفقات: 10 ميجا لكل ملف (نفس سقف قواعد Storage)، والصور تُضغط تلقائياً قبل الرفع
+const MAX_UPLOAD_MB = 10;
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+const MAX_IMAGE_RAW_BYTES = 30 * 1024 * 1024;   // صورة خام أكبر من هذا ترفض (قبل الضغط)
+const MAX_FILES_PER_VISIT = 5;
+const IMG_COMPRESS_OVER = 1 * 1024 * 1024;       // نضغط الصور الأكبر من 1 ميجا
+const IMG_MAX_DIM = 2000;                        // أطول ضلع بالبكسل (يكفي لقراءة الروشتة والتحاليل)
+const IMG_QUALITY = 0.85;
+
+// يصغّر الصورة ويحوّلها JPEG (عادةً من عدة ميجا إلى أقل من 1 ميجا)، وإن فشل يرجع الملف الأصلي
+async function compressImage(file) {
+  if (!/^image\//.test(file.type) || file.size <= IMG_COMPRESS_OVER) return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, IMG_MAX_DIM / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);   // خلفية بيضاء (PNG شفاف)
+    ctx.drawImage(bmp, 0, 0, w, h);
+    if (bmp.close) bmp.close();
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', IMG_QUALITY));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg', lastModified: Date.now() });
+  } catch (e) {
+    console.warn('compressImage:', e);
+    return file;
+  }
+}
+
+// يفحص الملفات المختارة ويجهّزها: النوع، العدد، الحجم، وضغط الصور
+async function prepareFiles(rawList) {
+  const rejected = [];
+  const ready = [];
+  const room = MAX_FILES_PER_VISIT - existingAttachments.length - selectedFiles.length;
+  for (const f of rawList) {
+    const isImg = /^image\//.test(f.type);
+    const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+    if (!isImg && !isPdf) { rejected.push(`${f.name}: نوع غير مدعوم (PDF أو صور فقط)`); continue; }
+    if (ready.length >= room) { rejected.push(`${f.name}: الحد الأقصى ${MAX_FILES_PER_VISIT} ملفات لكل زيارة`); continue; }
+    if (isImg && f.size > MAX_IMAGE_RAW_BYTES) { rejected.push(`${f.name}: الصورة كبيرة جداً (أكثر من 30 ميجا)`); continue; }
+
+    let file = f;
+    if (isImg) file = await compressImage(f);
+    else if (!f.type) file = new File([f], f.name, { type: 'application/pdf' });   // قواعد Storage تشترط نوعاً صريحاً
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      rejected.push(`${f.name}: أكبر من ${MAX_UPLOAD_MB} ميجا${isPdf ? ' (جرّب ضغط الملف أو تصويره كصورة)' : ''}`);
+      continue;
+    }
+    const dup = x => x.name === file.name && x.size === file.size;
+    if (selectedFiles.some(dup) || ready.some(dup)) continue;
+    ready.push(file);
+  }
+  return { ready, rejected };
+}
+
+const fmtSize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+function fileKind(f) {
+  const n = String((f && (f.name || f.path)) || '').toLowerCase();
+  if (/\.pdf$/.test(n)) return 'pdf';
+  if (/\.(png|jpe?g|gif|webp)$/.test(n)) return 'image';
+  return 'other';
+}
+const fileIcon = f => ({ pdf: '📕', image: '🖼️', other: '📄' }[fileKind(f)]);
+
 function renderSelectedFiles() {
   const w = $('selectedFiles');
   if (!w) return;
@@ -533,8 +617,8 @@ function renderSelectedFiles() {
   selectedFiles.forEach((f, i) => {
     const div = document.createElement('div');
     div.className = 'file-item';
-    div.innerHTML = `<span>${escapeHtml(f.name)}</span> <button type="button" data-i="${i}">✕</button>`;
-    div.querySelector('button').onclick = () => { selectedFiles.splice(i, 1); renderSelectedFiles(); };
+    div.innerHTML = `<span>${fileIcon(f)}</span><span class="fi-name">${escapeHtml(f.name)}</span><span class="fi-size">${fmtSize(f.size)}</span><button type="button" class="fi-del" title="إزالة">✕</button>`;
+    div.querySelector('.fi-del').onclick = () => { selectedFiles.splice(i, 1); renderSelectedFiles(); };
     w.appendChild(div);
   });
 }
@@ -547,11 +631,139 @@ function renderExisting() {
   existingAttachments.forEach((f, i) => {
     const div = document.createElement('div');
     div.className = 'file-item';
-    div.innerHTML = `<a href="${escapeHtml(f.url)}" target="_blank">📄 ${escapeHtml(f.name)}</a> <button type="button" data-i="${i}">✕</button>`;
-    div.querySelector('button').onclick = () => { attachmentsToDelete.push(f.path); existingAttachments.splice(i, 1); renderExisting(); };
+    div.innerHTML = `<button type="button" class="fi-open" title="عرض الملف">${fileIcon(f)} <span class="fi-name">${escapeHtml(f.name)}</span></button><button type="button" class="fi-del" title="حذف المرفق">✕</button>`;
+    div.querySelector('.fi-open').onclick = () => openFileViewer(existingAttachments, i);
+    div.querySelector('.fi-del').onclick = () => { attachmentsToDelete.push(f.path); existingAttachments.splice(i, 1); renderExisting(); };
     w.appendChild(div);
   });
 }
+
+/* ================= عارض المرفقات (PDF / صور) ================= */
+// يعمل من بطاقة الزيارة مباشرة لولي الأمر والطبيب والأدمن، دون فتح نافذة التعديل.
+let viewerFiles = [], viewerIndex = 0, viewerToken = 0;
+const viewerUrlCache = new Map();
+
+// نقبل فقط روابط https من خدمات تخزين Firebase/Google (حماية من روابط خبيثة مخزّنة في بيانات الزيارة)
+function isSafeFileUrl(u) {
+  try {
+    const x = new URL(u);
+    return x.protocol === 'https:' && /(^|\.)(firebasestorage\.googleapis\.com|storage\.googleapis\.com|firebasestorage\.app)$/.test(x.hostname);
+  } catch (e) { return false; }
+}
+
+// نطلب رابطاً جديداً عند العرض (يخضع لقواعد Storage حسب المستخدم)، وإن فشل نستخدم الرابط المخزّن
+async function resolveFileUrl(f) {
+  const key = f.path || f.url || '';
+  if (viewerUrlCache.has(key)) return viewerUrlCache.get(key);
+  let url = '';
+  if (f.path) {
+    try { url = await getDownloadURL(sRef(getStorage(), f.path)); }
+    catch (e) { console.warn('getDownloadURL:', e?.code || e); }
+  }
+  if (!url) url = f.url || '';
+  if (!isSafeFileUrl(url)) return '';
+  viewerUrlCache.set(key, url);
+  return url;
+}
+
+function openFileViewer(files, start = 0) {
+  viewerFiles = (files || []).filter(f => f && (f.path || f.url));
+  if (!viewerFiles.length) return;
+  viewerIndex = Math.min(Math.max(start, 0), viewerFiles.length - 1);
+  renderViewerTabs();
+  $('fileViewer')?.classList.remove('hidden');
+  showViewerFile(viewerIndex);
+}
+
+function closeFileViewer() {
+  viewerToken++;
+  $('fileViewer')?.classList.add('hidden');
+  const stage = $('viewerStage');
+  if (stage) stage.innerHTML = '';   // يوقف تحميل الـ PDF
+}
+
+function renderViewerTabs() {
+  const tabs = $('viewerTabs');
+  if (!tabs) return;
+  tabs.innerHTML = '';
+  if (viewerFiles.length < 2) return;
+  viewerFiles.forEach((f, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'viewer-tab' + (i === viewerIndex ? ' active' : '');
+    b.textContent = `${fileIcon(f)} ${f.name || ('ملف ' + (i + 1))}`;
+    b.onclick = () => { viewerIndex = i; renderViewerTabs(); showViewerFile(i); };
+    tabs.appendChild(b);
+  });
+}
+
+function viewerMessage(stage, text, url) {
+  stage.innerHTML = '';
+  const box = document.createElement('div');
+  box.className = 'viewer-msg';
+  box.appendChild(document.createTextNode(text));
+  if (url) {
+    box.appendChild(document.createElement('br'));
+    const a = document.createElement('a');
+    a.className = 'btn primary';
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = '↗ فتح الملف';
+    box.appendChild(a);
+  }
+  stage.appendChild(box);
+}
+
+async function showViewerFile(i) {
+  const f = viewerFiles[i];
+  const stage = $('viewerStage');
+  if (!f || !stage) return;
+  const token = ++viewerToken;
+  setText($('viewerTitle'), f.name || 'مرفق');
+  stage.innerHTML = '<div class="viewer-spin"><span class="spinner"></span><span>جاري تحميل الملف...</span></div>';
+
+  const url = await resolveFileUrl(f);
+  if (token !== viewerToken) return;   // تغيّر الاختيار أو أُغلق العارض أثناء التحميل
+  const openLink = $('viewerOpen');
+
+  if (!url) {
+    if (openLink) openLink.removeAttribute('href');
+    viewerMessage(stage, '⚠️ تعذّر فتح الملف. قد لا تملك صلاحية عرضه أو تم حذفه.');
+    return;
+  }
+  if (openLink) openLink.href = url;
+
+  const kind = fileKind(f);
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  stage.innerHTML = '';
+  if (kind === 'image') {
+    const img = document.createElement('img');
+    img.className = 'viewer-img';
+    img.alt = f.name || 'مرفق';
+    img.onerror = () => viewerMessage(stage, '⚠️ تعذّر تحميل الصورة.', url);
+    img.src = url;
+    stage.appendChild(img);
+  } else if (kind === 'pdf' && !isMobile) {
+    const fr = document.createElement('iframe');
+    fr.className = 'viewer-frame';
+    fr.title = f.name || 'PDF';
+    fr.src = url;
+    stage.appendChild(fr);
+  } else if (kind === 'pdf') {
+    viewerMessage(stage, 'ملفات PDF تُفتح بشكل أفضل في تبويب مستقل على الهاتف.', url);
+  } else {
+    viewerMessage(stage, 'لا يمكن معاينة هذا النوع من الملفات هنا.', url);
+  }
+}
+
+function initFileViewer() {
+  $('viewerClose')?.addEventListener('click', closeFileViewer);
+  $('fileViewer')?.addEventListener('click', (e) => { if (e.target === $('fileViewer')) closeFileViewer(); });
+  document.addEventListener('keydown', (e) => {
+    const v = $('fileViewer');
+    if (e.key === 'Escape' && v && !v.classList.contains('hidden')) { e.stopPropagation(); closeFileViewer(); }
+  }, true);
+}
+initFileViewer();
 
 async function handleSaveVisit(e) {
   e.preventDefault();
