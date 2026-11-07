@@ -27,7 +27,7 @@
           <h3 class="section-title">👤 الهوية والتاريخ المرضي</h3>
           <div class="grid2">
             <div class="field"><label>اسم الطفل</label><input id="f_name" type="text" /></div>
-            <div class="field"><label>الرقم المدني (اختياري)</label><input id="f_civil" type="text" /></div>
+            <div class="field"><label>الرقم المدني (اختياري — يراه الطبيب المعالج والإدارة فقط)</label><input id="f_civil" type="text" inputmode="numeric" autocomplete="off" /></div>
             <div class="field"><label>تاريخ الميلاد</label><input id="f_dob" type="date" /></div>
             <div class="field">
               <label>الجنس</label>
@@ -195,7 +195,7 @@
  
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
  
-  <script type="module" src="js/child-edit.js?v=5"></script>
+  <script type="module" src="js/child-edit.js?v=6"></script>
   <script type="module" src="js/header.js"></script>
 </body>
 </html>
