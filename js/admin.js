@@ -232,6 +232,7 @@ async function loadChildren() {
         parentId, 
         childId, 
         name: d?.name || '—', 
+        civilId: String(d?.identity?.civilId || d?.civilId || d?.nationalId || '').trim(),
         parentName: parentName, 
         assignedDoctor: docUid,
         assignedDoctorName: docName,
@@ -352,6 +353,17 @@ function renderApprovedDoctors(list) {
   }
 }
 
+// الرقم المدني: مُقنَّع افتراضياً (آخر 4 أرقام) مع زر إظهار
+function maskCivil(v) { return v.length > 4 ? '•'.repeat(v.length - 4) + v.slice(-4) : v; }
+window.toggleCivil = function(btn) {
+  const span = btn.parentElement.querySelector('.civil-val');
+  const full = span.dataset.civil;
+  const show = span.dataset.shown !== '1';
+  span.dataset.shown = show ? '1' : '0';
+  span.textContent = show ? full : maskCivil(full);
+  btn.textContent = show ? 'إخفاء' : 'إظهار';
+};
+
 function renderChildrenTable(list) {
   const tbody = $('childrenTbody'); 
   if (!tbody) return;
@@ -367,6 +379,11 @@ function renderChildrenTable(list) {
       <td>
         <div style="font-weight:bold; font-size:15px;">${escapeHtml(c.name)}</div>
         <div style="font-size:12px; color:var(--muted); margin-top:3px;">ولي الأمر: ${escapeHtml(c.parentName || 'غير مسجل')}</div>
+        ${c.civilId ? `<div style="font-size:12px; color:var(--muted); margin-top:3px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span>🪪 الرقم المدني:</span>
+          <span class="civil-val" dir="ltr" data-civil="${escapeHtml(c.civilId)}" data-shown="0" style="font-family:ui-monospace,Consolas,monospace; letter-spacing:1px; font-weight:700; color:var(--text);">${escapeHtml(maskCivil(c.civilId))}</span>
+          <button type="button" class="btn-sm" onclick="toggleCivil(this)">إظهار</button>
+        </div>` : ''}
         ${c.assignedDoctor ? `
           <div style="font-size:12px; color:var(--primary); margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <span>👨‍⚕️ <b>${escapeHtml(c.assignedDoctorName || 'طبيب مسند')}</b></span>
