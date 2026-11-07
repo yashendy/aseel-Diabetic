@@ -1,6 +1,6 @@
 // js/child-edit.js
 import { auth, db } from "./firebase-config.js";
-import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { doc, getDoc, setDoc, serverTimestamp, deleteField } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
  
 const $ = sel => document.querySelector(sel);
@@ -220,6 +220,8 @@ async function loadChildData() {
 // === 6. الحفظ بالهيكل الجديد المُحسّن ===
 // التحقق من منطقية الإعدادات قبل الحفظ
 function validateBeforeSave() {
+  const civil = normalizeCivil($('#f_civil')?.value);
+  if (civil && !/^\d{6,20}$/.test(civil)) return { error: 'الرقم المدني يجب أن يكون أرقاماً فقط (من 6 إلى 20 رقماً)، أو اتركه فارغاً.' };
   const n = id => { const v = parseFloat($(id)?.value); return Number.isFinite(v) && v > 0 ? v : null; };
   const lim = [['حرج منخفض', n('#gl_crit_low')], ['منخفض', n('#gl_low')], ['الهدف', n('#gl_target')], ['مرتفع', n('#gl_high')], ['حرج مرتفع', n('#gl_crit_high')]].filter(x => x[1] !== null);
   for (let i = 1; i < lim.length; i++) {
@@ -235,6 +237,11 @@ function validateBeforeSave() {
   return { missing };
 }
  
+// الرقم المدني: أرقام فقط (تُحوَّل الأرقام العربية)، ويُخزَّن في مكان واحد: identity.civilId
+function normalizeCivil(v) {
+  return String(v || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[\s\-]/g, '');
+}
+
 async function saveChildData() {
   const v = validateBeforeSave();
   if (v.error) { alert('⛔ ' + v.error); return; }
@@ -246,11 +253,14 @@ async function saveChildData() {
       // 1. الهوية
       identity: {
         name: $('#f_name').value,
-        civilId: $('#f_civil').value,
+        civilId: normalizeCivil($('#f_civil').value),
         dob: $('#f_dob').value,
         gender: $('#f_gender').value
       },
       name: $('#f_name').value, // لسهولة العرض في الكروت السريعة
+      // نسخ قديمة من الرقم المدني كانت مخزّنة خارج identity: نحذفها (مكان واحد فقط)
+      civilId: deleteField(),
+      nationalId: deleteField(),
       
       // 2. التاريخ المرضي
       medical_history: {
