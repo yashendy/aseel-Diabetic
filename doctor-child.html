@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>محطة رعاية المريض السريرية | بوابة الطبيب</title>
-  <link rel="stylesheet" href="./css/doctor-child.css?v=6" />
+  <link rel="stylesheet" href="./css/doctor-child.css?v=7" />
   <link rel="icon" href="favicon.ico" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -20,6 +20,12 @@
           <span class="badge-tag" id="patientRegimen">حقن MDI</span>
         </div>
         <span id="patientMeta" class="muted-text tiny">—</span>
+        <div id="civilRow" class="civil-row hidden">
+          <span class="civil-label">🪪 الرقم المدني:</span>
+          <span id="patientCivil" class="civil-val" dir="ltr">—</span>
+          <button type="button" id="civilToggle" class="civil-btn">إظهار</button>
+          <button type="button" id="civilCopy" class="civil-btn">نسخ</button>
+        </div>
       </div>
     </div>
 
@@ -252,6 +258,6 @@
 
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="./js/doctor-child.js?v=9"></script>
+  <script type="module" src="./js/doctor-child.js?v=10"></script>
 </body>
 </html>
