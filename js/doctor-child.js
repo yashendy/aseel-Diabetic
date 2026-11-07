@@ -131,6 +131,25 @@ async function loadChildProfile() {
   const genderStr = childData.gender === 'female' ? 'أنثى' : 'ذكر';
   if ($('patientMeta')) $('patientMeta').textContent = `${genderStr} • ${ageStr} • الوحدة: ${sysUnit}`;
 
+  // الرقم المدني: مُقنَّع افتراضياً (آخر 4 أرقام) مع زر إظهار ونسخ
+  const civil = String(childData.identity?.civilId || childData.civilId || childData.nationalId || '').trim();
+  if (civil && $('civilRow')) {
+    let shown = false;
+    const masked = civil.length > 4 ? '•'.repeat(civil.length - 4) + civil.slice(-4) : civil;
+    const paint = () => {
+      $('patientCivil').textContent = shown ? civil : masked;
+      $('civilToggle').textContent = shown ? 'إخفاء' : 'إظهار';
+    };
+    $('civilToggle').onclick = () => { shown = !shown; paint(); };
+    $('civilCopy').onclick = async () => {
+      try { await navigator.clipboard.writeText(civil); $('civilCopy').textContent = 'تم النسخ ✓'; }
+      catch (e) { window.prompt('انسخ الرقم المدني:', civil); }
+      setTimeout(() => { $('civilCopy').textContent = 'نسخ'; }, 1500);
+    };
+    paint();
+    $('civilRow').classList.remove('hidden');
+  }
+
   const regimenType = childData.insulin?.basal ? 'حقن MDI' : (childData.regimen || 'بروتوكول علاجي');
   if ($('patientRegimen')) $('patientRegimen').textContent = regimenType;
   if ($('lblUnit')) $('lblUnit').textContent = sysUnit;
