@@ -6,7 +6,7 @@ import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/
 
 import {
 
-  collection, getDocs, query, where, orderBy, limit, doc, getDoc, setDoc, deleteDoc, onSnapshot, serverTimestamp
+  collection, getDocs, query, where, orderBy, limit, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp
 
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
@@ -889,7 +889,12 @@ async function initBasalTracker(uid, child) {
 
 // ---------------- بطاقة الطوارئ والمدرسة ----------------
 
-function initEmergencyCard(user, child) {
+// رقم الهاتف: أرقام فقط (تُحوَّل الأرقام العربية ويُزال الفراغ والشرطات)
+function normalizePhone(v) {
+  return String(v || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[\s\-().]/g, '').replace(/^00/, '+');
+}
+
+function initEmergencyCard(user, child, ctx = {}) {
 
   const dialog = $('emergencyCardDialog');
 
@@ -931,51 +936,48 @@ function initEmergencyCard(user, child) {
 
 
 
-  // ولي الأمر
-
-  const parentName = user.displayName || 'ولي الأمر';
-
+  // ولي الأمر: من بيانات الطفل (emergencyContact) ثم رقم حسابه من التسجيل
+  const ec = child.emergencyContact || {};
+  const parentName = ec.name || child.parentName || user.displayName || 'ولي الأمر';
   setText($('emParentName'), parentName);
-
-  const parentPhone = child.parentPhone || user.phoneNumber || '';
-
+  const parentPhone = ec.phone || child.parentPhone || user.phoneNumber || '';
   const pPhoneBtn = $('emParentPhoneBtn');
-
-  if (pPhoneBtn) {
-
-    if (parentPhone) {
-
-      pPhoneBtn.href = `tel:${parentPhone}`;
-
-      pPhoneBtn.textContent = `📞 ${parentPhone}`;
-
-    } else {
-
-      pPhoneBtn.href = '#';
-
-      pPhoneBtn.textContent = '📞 غير مسجل';
-
-      pPhoneBtn.onclick = (e) => {
-
-        e.preventDefault();
-
-        const p = prompt('أدخل رقم هاتف ولي الأمر للتواصل في الطوارئ:');
-
-        if (p) {
-
-          pPhoneBtn.href = `tel:${p}`;
-
-          pPhoneBtn.textContent = `📞 ${p}`;
-
-        }
-
-      };
-
+  const showParentPhone = (p) => {
+    pPhoneBtn.href = `tel:${p}`;
+    pPhoneBtn.textContent = `📞 ${p}`;
+    pPhoneBtn.onclick = null;
+  };
+  // إن لم يوجد رقم: نطلبه مرة واحدة ونحفظه في بيانات الطفل وحساب ولي الأمر (بدل السؤال في كل مرة)
+  const askParentPhone = async (e) => {
+    e.preventDefault();
+    const raw = prompt('أدخل رقم هاتف ولي الأمر للتواصل في الطوارئ (سيُحفظ في بيانات الطفل):');
+    if (!raw) return;
+    const p = normalizePhone(raw);
+    if (!/^\+?\d{7,15}$/.test(p)) { alert('رقم غير صحيح. اكتب أرقاماً فقط (من 7 إلى 15 رقماً).'); return; }
+    showParentPhone(p);
+    try {
+      if (ctx.parentId && ctx.childId) {
+        await updateDoc(doc(db, 'parents', ctx.parentId, 'children', ctx.childId), { 'emergencyContact.phone': p, 'emergencyContact.name': parentName });
+      }
+      await setDoc(doc(db, 'users', user.uid), { phone: p }, { merge: true });
+    } catch (err) {
+      console.warn('save parent phone:', err);
+      alert('تعذّر حفظ الرقم، وسيظهر الآن فقط. يمكنك إضافته من صفحة إعدادات الطفل.');
     }
-
+  };
+  if (pPhoneBtn) {
+    if (parentPhone) {
+      showParentPhone(parentPhone);
+    } else {
+      pPhoneBtn.href = '#';
+      pPhoneBtn.textContent = '📞 غير مسجل — اضغط للإضافة';
+      pPhoneBtn.onclick = askParentPhone;
+      // رقم محفوظ في حساب ولي الأمر (من صفحة التسجيل)
+      getDoc(doc(db, 'users', user.uid))
+        .then(s => { const p = s.exists() ? s.data().phone : ''; if (p) showParentPhone(p); })
+        .catch(() => {});
+    }
   }
-
-
 
   // الطبيب المعالج
 
@@ -1382,7 +1384,7 @@ onAuthStateChanged(auth, async (user)=>{
 
     await initBasalTracker(parentId, c);
 
-    initEmergencyCard(user, c);
+    initEmergencyCard(user, c, { parentId, childId });
 
     setHref($('radarAddMeasBtn'), `measurements.html${qDocParams}`);
 
