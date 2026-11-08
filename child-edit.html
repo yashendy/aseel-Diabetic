@@ -46,6 +46,20 @@
           </div>
         </section>
  
+        <!-- 1-ب. بيانات ولي الأمر للتواصل في الطوارئ -->
+        <section class="card">
+          <h3 class="section-title">📞 بيانات ولي الأمر للتواصل في الطوارئ</h3>
+          <p style="margin:0 0 12px; font-size:12px; color:#64748b;">تظهر في بطاقة الطوارئ والمدرسة، وللطبيب المعالج المرتبط بالطفل.</p>
+          <div class="grid2">
+            <div class="field"><label>اسم ولي الأمر</label><input id="f_em_name" type="text" autocomplete="name" /></div>
+            <div class="field"><label>رقم الهاتف</label><input id="f_em_phone" type="tel" inputmode="tel" dir="ltr" placeholder="مثال: 96512345678" autocomplete="tel" /></div>
+            <div class="field">
+              <label>صلة القرابة (اختياري)</label>
+              <select id="f_em_rel"><option value="">—</option><option>أب</option><option>أم</option><option>جدّ / جدّة</option><option>آخر</option></select>
+            </div>
+          </div>
+        </section>
+
         <!-- 2. المقاييس الحيوية (النمو) -->
         <section class="card">
           <h3 class="section-title">📈 المقاييس الحيوية (النمو)</h3>
@@ -195,7 +209,7 @@
  
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
  
-  <script type="module" src="js/child-edit.js?v=6"></script>
+  <script type="module" src="js/child-edit.js?v=7"></script>
   <script type="module" src="js/header.js"></script>
 </body>
 </html>
