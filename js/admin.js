@@ -233,6 +233,7 @@ async function loadChildren() {
         childId, 
         name: d?.name || '—', 
         civilId: String(d?.identity?.civilId || d?.civilId || d?.nationalId || '').trim(),
+        parentPhone: String(d?.emergencyContact?.phone || '').trim(),
         parentName: parentName, 
         assignedDoctor: docUid,
         assignedDoctorName: docName,
@@ -378,7 +379,7 @@ function renderChildrenTable(list) {
     tr.innerHTML = `
       <td>
         <div style="font-weight:bold; font-size:15px;">${escapeHtml(c.name)}</div>
-        <div style="font-size:12px; color:var(--muted); margin-top:3px;">ولي الأمر: ${escapeHtml(c.parentName || 'غير مسجل')}</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:3px;">ولي الأمر: ${escapeHtml(c.parentName || 'غير مسجل')}${c.parentPhone ? ` — 📞 <span dir="ltr">${escapeHtml(c.parentPhone)}</span>` : ''}</div>
         ${c.civilId ? `<div style="font-size:12px; color:var(--muted); margin-top:3px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
           <span>🪪 الرقم المدني:</span>
           <span class="civil-val" dir="ltr" data-civil="${escapeHtml(c.civilId)}" data-shown="0" style="font-family:ui-monospace,Consolas,monospace; letter-spacing:1px; font-weight:700; color:var(--text);">${escapeHtml(maskCivil(c.civilId))}</span>
