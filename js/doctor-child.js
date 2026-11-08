@@ -131,6 +131,21 @@ async function loadChildProfile() {
   const genderStr = childData.gender === 'female' ? 'أنثى' : 'ذكر';
   if ($('patientMeta')) $('patientMeta').textContent = `${genderStr} • ${ageStr} • الوحدة: ${sysUnit}`;
 
+  // بيانات ولي الأمر للتواصل (من بيانات الطفل)
+  const em = childData.emergencyContact || {};
+  if (em.phone && $('parentRow')) {
+    const box = $('parentContact');
+    box.textContent = '';
+    if (em.name) box.appendChild(document.createTextNode(em.name + (em.relation ? ` (${em.relation})` : '') + ' — '));
+    const a = document.createElement('a');
+    a.href = `tel:${em.phone}`;
+    a.textContent = em.phone;
+    a.dir = 'ltr';
+    a.style.color = '#93c5fd';
+    box.appendChild(a);
+    $('parentRow').classList.remove('hidden');
+  }
+
   // الرقم المدني: مُقنَّع افتراضياً (آخر 4 أرقام) مع زر إظهار ونسخ
   const civil = String(childData.identity?.civilId || childData.civilId || childData.nationalId || '').trim();
   if (civil && $('civilRow')) {
