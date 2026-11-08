@@ -156,6 +156,19 @@ async function loadChildData() {
     // الهوية والنمو
     $('#f_name').value = d.identity?.name || d.name || '';
     $('#f_civil').value = d.identity?.civilId || d.nationalId || '';
+
+    // بيانات ولي الأمر للطوارئ (وإن لم تكن محفوظة نستخدم رقم الحساب من التسجيل)
+    const ec = d.emergencyContact || {};
+    $('#f_em_name').value = ec.name || d.parentName || currentUser.displayName || '';
+    $('#f_em_rel').value = ec.relation || '';
+    let ph = ec.phone || d.parentPhone || '';
+    if (!ph) {
+      try {
+        const us = await getDoc(doc(db, 'users', currentUser.uid));
+        ph = us.exists() ? (us.data().phone || '') : '';
+      } catch (err) { /* نتجاهل */ }
+    }
+    $('#f_em_phone').value = ph;
     $('#f_dob').value = d.identity?.dob || d.birthDate || '';
     $('#f_gender').value = d.identity?.gender || d.gender || 'female';
     $('#f_diagnosis_date').value = d.medical_history?.diagnosisDate || '';
@@ -221,6 +234,8 @@ async function loadChildData() {
 // التحقق من منطقية الإعدادات قبل الحفظ
 function validateBeforeSave() {
   const civil = normalizeCivil($('#f_civil')?.value);
+  const emPhone = normalizePhone($('#f_em_phone')?.value);
+  if (emPhone && !/^\+?\d{7,15}$/.test(emPhone)) return { error: 'رقم هاتف ولي الأمر غير صحيح. اكتب أرقاماً فقط (من 7 إلى 15 رقماً) ويمكن أن يبدأ بـ +.' };
   if (civil && !/^\d{6,20}$/.test(civil)) return { error: 'الرقم المدني يجب أن يكون أرقاماً فقط (من 6 إلى 20 رقماً)، أو اتركه فارغاً.' };
   const n = id => { const v = parseFloat($(id)?.value); return Number.isFinite(v) && v > 0 ? v : null; };
   const lim = [['حرج منخفض', n('#gl_crit_low')], ['منخفض', n('#gl_low')], ['الهدف', n('#gl_target')], ['مرتفع', n('#gl_high')], ['حرج مرتفع', n('#gl_crit_high')]].filter(x => x[1] !== null);
@@ -237,6 +252,11 @@ function validateBeforeSave() {
   return { missing };
 }
  
+// رقم الهاتف: أرقام فقط، يبدأ اختيارياً بـ + (تُحوَّل الأرقام العربية ويُزال الفراغ والشرطات)
+function normalizePhone(v) {
+  return String(v || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[\s\-().]/g, '').replace(/^00/, '+');
+}
+
 // الرقم المدني: أرقام فقط (تُحوَّل الأرقام العربية)، ويُخزَّن في مكان واحد: identity.civilId
 function normalizeCivil(v) {
   return String(v || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[\s\-]/g, '');
@@ -258,6 +278,12 @@ async function saveChildData() {
         gender: $('#f_gender').value
       },
       name: $('#f_name').value, // لسهولة العرض في الكروت السريعة
+      // 1-ب. بيانات ولي الأمر للتواصل في الطوارئ
+      emergencyContact: {
+        name: ($('#f_em_name').value || '').trim(),
+        phone: normalizePhone($('#f_em_phone').value),
+        relation: $('#f_em_rel').value
+      },
       // نسخ قديمة من الرقم المدني كانت مخزّنة خارج identity: نحذفها (مكان واحد فقط)
       civilId: deleteField(),
       nationalId: deleteField(),
@@ -320,6 +346,12 @@ async function saveChildData() {
  
     const ref = doc(db, "parents", currentUser.uid, "children", childId);
     await setDoc(ref, payload, { merge: true }); 
+    // نحفظ الهاتف أيضاً في حساب ولي الأمر ليُملأ تلقائياً لأي طفل جديد
+    const savedPhone = payload.emergencyContact.phone;
+    if (savedPhone) {
+      try { await setDoc(doc(db, 'users', currentUser.uid), { phone: savedPhone, updatedAt: serverTimestamp() }, { merge: true }); }
+      catch (err) { console.warn('users phone sync:', err); }
+    }
     
     alert('تم حفظ الملف الطبي بنجاح! 🚀');
     window.location.href = `child.html?child=${childId}`;
