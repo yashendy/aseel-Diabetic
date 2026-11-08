@@ -11,6 +11,7 @@ import {
 /* عناصر */
 const suName  = document.getElementById("suName");
 const suEmail = document.getElementById("suEmail");
+const suPhone = document.getElementById("suPhone");
 const suPass  = document.getElementById("suPass");
 const btnSignup = document.getElementById("btnSignup");
 
@@ -86,10 +87,17 @@ btnSignup?.addEventListener("click", async ()=>{
   const name  = (suName.value || "").trim();
   const email = (suEmail.value || "").trim();
   const pass  = (suPass.value || "").trim();
+  // الهاتف: أرقام فقط (تُحوَّل الأرقام العربية ويُزال الفراغ والشرطات)
+  const phone = String((suPhone && suPhone.value) || "")
+    .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
+    .replace(/[\s\-().]/g, "")
+    .replace(/^00/, "+");
   const acct  = document.querySelector('input[name="acctType"]:checked')?.value || "parent";
 
   if (!email || !pass) { show(signupErr, "أدخل البريد وكلمة المرور."); return; }
   if (!name) { show(signupErr, "أدخل الاسم."); return; }
+  if (phone && !/^\+?\d{7,15}$/.test(phone)) { show(signupErr, "رقم الهاتف غير صحيح. اكتب أرقاماً فقط (من 7 إلى 15 رقماً)."); return; }
+  if (acct === "parent" && !phone) { show(signupErr, "أدخل رقم الهاتف (يظهر في بطاقة الطوارئ للطفل)."); return; }
   if (!["parent","doctor"].includes(acct)) { show(signupErr, "اختر نوع الحساب."); return; }
 
   // ✅ تفعيل وضع التحميل وإيقاف التوجيه التلقائي
@@ -110,6 +118,7 @@ btnSignup?.addEventListener("click", async ()=>{
       email,
       name,
       displayName: name,
+      phone: phone || null,
       role,
       createdAt: serverTimestamp()
     }, { merge: true });
