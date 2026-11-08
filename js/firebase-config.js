@@ -1,4 +1,4 @@
-// js/firebase-config.js — نسخة نهائية مع تهيئة فورية لـ App Check
+// js/firebase-config.js — نسخة نهائية مع تهيئة فورية لـ App Check قبل Auth
 import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app-check.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
