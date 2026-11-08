@@ -1,5 +1,6 @@
-// js/firebase-config.js — نسخة نهائية مجهزة بـ App Check ومفتاح reCAPTCHA Enterprise
+// js/firebase-config.js — نسخة نهائية مع تهيئة فورية لـ App Check
 import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app-check.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
@@ -18,21 +19,13 @@ const firebaseConfig = {
   measurementId: "G-L7YGX3PHLB"
 };
 
-// تهيئة تطبيق Firebase
+// 1. تهيئة تطبيق Firebase أولاً
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
 
-// تهيئة App Check بأمان
+// 2. تهيئة App Check فوراً قبل استدعاء Auth و Firestore
 export let appCheck = null;
-
 if (APP_CHECK_SITE_KEY && APP_CHECK_SITE_KEY.trim() !== "") {
   try {
-    const { initializeAppCheck, ReCaptchaEnterpriseProvider } = await import(
-      "https://www.gstatic.com/firebasejs/12.1.0/firebase-app-check.js"
-    );
-
     appCheck = initializeAppCheck(app, {
       provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY),
       isTokenAutoRefreshEnabled: true
@@ -42,3 +35,8 @@ if (APP_CHECK_SITE_KEY && APP_CHECK_SITE_KEY.trim() !== "") {
     console.warn("App Check failed to initialize, continuing without it:", error);
   }
 }
+
+// 3. تهيئة باقي خدمات Firebase بعد ربط الحماية
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);
