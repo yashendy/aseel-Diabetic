@@ -6,7 +6,7 @@ import { getFirestore } from "https://www.gstatic.com/firebasejs/12.1.0/firebase
 import { getStorage } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
 // مفتاح reCAPTCHA Enterprise (Site Key)
-const APP_CHECK_SITE_KEY = "6LeLoBYuAAAAAIb-j99hHQTuEEVUPJVYmbmu-mvY";
+const APP_CHECK_SITE_KEY = "6LeLoBYuAAAAAIb-j99hHQTUeEVUPJVYmbmu-mvY";
 
 // إعدادات مشروع Firebase
 const firebaseConfig = {
