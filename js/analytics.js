@@ -1,45 +1,59 @@
+// js/analytics.js
 import { auth, db } from './firebase-config.js';
 import { collection, doc, getDoc, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { MGDL_PER_MMOL, STANDARD_LIMITS, getProtocol, normalizeUnit } from './child-protocol.js';
 
 const $ = id => document.getElementById(id);
 const round1 = n => Math.round((+n||0)*10)/10;
-const mgdl2mmol = v => v / 18.0182;
-const mmol2mgdl = v => v * 18.0182;
+const mgdl2mmol = v => v / MGDL_PER_MMOL;
+const mmol2mgdl = v => v * MGDL_PER_MMOL;
 
 function toast(m) { const t=$('toast'); t.textContent=m; t.style.display='block'; clearTimeout(t._t); t._t=setTimeout(()=>t.style.display='none',2200); }
 
 let childId = new URLSearchParams(location.search).get('child') || '';
-let childRef, child, unitSel, fromDate, toDate, lineChart, pieChart;
+let childRef, child, childProto, unitSel, fromDate, toDate, lineChart, pieChart;
 
-// --- 1. جلب النطاقات الديناميكية للطفل (بدل الثابتة القديمة) ---
+// --- 1. جلب النطاقات الديناميكية للطفل عبر البروتوكول الموحد ---
 function getLimits(u) {
-  if (child?.glucose_limits) {
+  const normU = normalizeUnit(u) || 'mg/dL';
+  if (childProto) {
+    const l = childProto.limits;
     return {
-      critLow: Number(child.glucose_limits.critical_low) || (u.includes('mmol')? 3.0 : 54),
-      low: Number(child.glucose_limits.low) || (u.includes('mmol')? 3.9 : 70),
-      target: Number(child.glucose_limits.target) || (u.includes('mmol')? 5.5 : 100),
-      high: Number(child.glucose_limits.high) || (u.includes('mmol')? 10.0 : 180),
-      critHigh: Number(child.glucose_limits.critical_high) || (u.includes('mmol')? 13.9 : 250)
+      critLow: l.critical_low,
+      low: l.low,
+      target: childProto.target || (normU === 'mmol/L' ? 5.5 : 100),
+      high: l.high,
+      critHigh: l.critical_high
     };
   }
-  return u.includes('mmol')
-    ? { critLow: 3.0, low: 3.9, target: 5.5, high: 10.0, critHigh: 13.9 }
-    : { critLow: 54, low: 70, target: 100, high: 180, critHigh: 250 };
+  const std = STANDARD_LIMITS[normU] || STANDARD_LIMITS['mg/dL'];
+  return {
+    critLow: std.critical_low,
+    low: std.low,
+    target: normU === 'mmol/L' ? 5.5 : 100,
+    high: std.high,
+    critHigh: std.critical_high
+  };
 }
 
 onAuthStateChanged(auth, async (u) => {
   if(!u){ location.href='index.html'; return; }
   
-  // إذا كان المستخدم طبيباً وفتح التقرير، قد نحتاج لمعرفة parentId، لكن حالياً نفترض أن الهيكل كالتالي:
   const parentId = new URLSearchParams(location.search).get('parentId') || u.uid;
   childRef = doc(db, 'parents', parentId, 'children', childId);
   
   const s = await getDoc(childRef); 
   child = s.data();
+  childProto = getProtocol(child);
   
-  $('childName').textContent = child?.displayName || child?.name || '—';
-  $('childMeta').textContent = `وحدة: ${child.glucoseUnit||'mg/dL'} • CF: ${child.cf||child.correctionFactor||'—'} • CR: ${child.cr?.breakfast||child.carbRatio||'—'}`;
+  const protoUnit = childProto.unit;
+  const cf = childProto.CF ?? '—';
+  const crObj = childProto.CR || {};
+  const crStr = crObj.breakfast || crObj.lunch || '—';
+
+  $('childName').textContent = child?.identity?.name || child?.name || '—';
+  $('childMeta').textContent = `وحدة: ${protoUnit} • CF: ${cf} • CR: ${crStr}`;
   
   wire(); 
   initDefault(); 
@@ -56,7 +70,7 @@ function wire() {
 }
 
 function initDefault() {
-  unitSel.value = child?.glucoseUnit || 'mg/dL';
+  unitSel.value = childProto?.unit || 'mg/dL';
   const now = new Date(); const to = now.toISOString().slice(0,10); 
   const from = new Date(now); from.setDate(from.getDate()-13);
   
@@ -87,7 +101,7 @@ function fillThresholdChips() {
   `;
 }
 
-// --- 2. جلب البيانات (مع تعديل لجلب الإنسولين للذكاء الاصطناعي) ---
+// --- 2. جلب البيانات ---
 async function fetchRange(fromISO, toISO) {
   const col = collection(childRef, 'measurements');
   const qy = query(col, where('when','>=',new Date(fromISO+'T00:00:00')), where('when','<=',new Date(toISO+'T23:59:59')), orderBy('when','asc'));
@@ -99,7 +113,7 @@ async function fetchRange(fromISO, toISO) {
   snap.forEach(s => {
     const x = s.data();
     let v = u.includes('mmol') ? (x.value_mmol ?? (x.unit==='mg/dL'? mgdl2mmol(x.value): x.value))
-                               : (x.value_mgdl ?? (x.unit==='mmol/L'? mmol2mgdl(x.value): x.value));
+                              : (x.value_mgdl ?? (x.unit==='mmol/L'? mmol2mgdl(x.value): x.value));
     if(!Number.isFinite(+v)) return;
     arr.push({
       t: x.when.toDate(), 
@@ -202,7 +216,6 @@ function buildAI(list, u) {
 
   const SLOT_NAMES = { FASTING:'صائم', WAKE:'الاستيقاظ', PRE_BREAKFAST:'ق. الفطار', POST_BREAKFAST:'ب. الفطار', PRE_LUNCH:'ق. الغداء', POST_LUNCH:'ب. الغداء', PRE_DINNER:'ق. العشاء', POST_DINNER:'ب. العشاء', SNACK:'سناك', BEDTIME:'قبل النوم', DURING_SLEEP:'أثناء النوم' };
 
-  // 1. تقييم النسب العامة
   const total = valid.length;
   const pctTBR = Math.round((valid.filter(x => x.v < L.low).length / total) * 100);
   const pctTAR = Math.round((valid.filter(x => x.v > L.high).length / total) * 100);
@@ -212,7 +225,6 @@ function buildAI(list, u) {
   if (pctTAR > 25) patt.push({ name: 'كثرة الارتفاعات (TAR)', desc: `نسبة الارتفاع (${pctTAR}%) تتخطى 25%.`, rec: 'قد يحتاج لتعديل المعاملات (CR/CF).', conf: 'عالي 🔴', color: '#b45309' });
   if (pctTIR < 60 && pctTBR <= 15 && pctTAR <= 25) patt.push({ name: 'ضعف السيطرة (TIR)', desc: `نسبة البقاء في النطاق (${pctTIR}%) أقل من 60%.`, rec: 'مراجعة شاملة للخطة.', conf: 'متوسط 🟡', color: '#d97706' });
 
-  // 2. تحليل التذبذب الجلايسيمي (CV)
   const vals = valid.map(x => x.v);
   const mean = vals.reduce((a, b) => a + b, 0) / total;
   const variance = vals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / total;
@@ -222,7 +234,8 @@ function buildAI(list, u) {
     patt.push({ name: 'تذبذب عالي (CV)', desc: `تأرجح شديد (CV: ${Math.round(cv)}%).`, rec: 'التركيز على الاستقرار قبل محاولة خفض المتوسط.', conf: 'عالي 🔴', color: '#b45309' });
   }
 
-  // 3. الإفراط في علاج الهبوط & كفاءة التصحيح
+  const hypoGrams = childProto?.safety?.hypoCarbs || 15;
+  const diaHrs = childProto?.safety?.diaHours || 4;
   let reboundCount = 0;
   let weakCFCount = 0;
   
@@ -232,13 +245,12 @@ function buildAI(list, u) {
     const diffHours = (next.t - curr.t) / (1000 * 60 * 60);
     
     if (curr.v < L.low && next.v > L.high && diffHours <= 6) reboundCount++;
-    if (curr.v > L.high && curr.ins > 0 && next.v > L.high && diffHours <= 4) weakCFCount++;
+    if (curr.v > L.high && curr.ins > 0 && next.v > L.high && diffHours <= diaHrs) weakCFCount++;
   }
   
-  if (reboundCount >= 2) patt.push({ name: 'إفراط علاج الهبوط', desc: `تم رصد ارتداد عكسي بعد الهبوط ${reboundCount} مرات.`, rec: 'توعية بقاعدة الـ 15 لتجنب الإفراط بالسكريات.', conf: 'حرج 🚨', color: '#dc2626' });
+  if (reboundCount >= 2) patt.push({ name: 'إفراط علاج الهبوط', desc: `تم رصد ارتداد عكسي بعد الهبوط ${reboundCount} مرات.`, rec: `توعية بقاعدة الـ ${hypoGrams} جم لتجنب الإفراط بالسكريات.`, conf: 'حرج 🚨', color: '#dc2626' });
   if (weakCFCount >= 3) patt.push({ name: 'ضعف معامل التصحيح', desc: `جرعات التصحيح لا تخفض السكر.`, rec: 'قد يحتاج الـ CF للتقليل لزيادة الجرعة.', conf: 'متوسط 🟡', color: '#d97706' });
 
-  // 4. الكاشف الديناميكي للفترات
   const slotsData = {};
   valid.forEach(m => {
     if(!slotsData[m.slot]) slotsData[m.slot] = [];
@@ -257,7 +269,6 @@ function buildAI(list, u) {
     }
   }
 
-  // طباعة النتائج في الجدول (مكون من 4 أعمدة رئيسية)
   if(!patt.length) patt.push({name:'✅ استقرار ممتاز', desc:'المؤشرات الحيوية ضمن الحدود المطلوبة.', rec:'استمر على نفس الخطة الرائعة!', conf:'ممتاز 🟢', color: '#16a34a'});
 
   const uniquePatt = Array.from(new Set(patt.map(p => JSON.stringify(p)))).map(str => JSON.parse(str));
