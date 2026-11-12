@@ -1,940 +1,472 @@
 // js/child.js 
 
 import { app, auth, db } from './firebase-config.js';
-
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-
 import {
-
   collection, getDocs, query, where, orderBy, limit, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp
-
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
-
-
+import { MGDL_PER_MMOL, getProtocol, labelOf } from './child-protocol.js';
 
 /* ---- childId ---- */
-
 const params  = new URLSearchParams(location.search);
-
 const parentIdParam = params.get('parentId');
-
 let   childId = params.get('child') || localStorage.getItem('lastChildId');
-
 if (!childId) { location.replace('parent.html?pickChild=1'); throw new Error('Missing child id'); }
-
 localStorage.setItem('lastChildId', childId);
 
-
-
 /* ---- DOM ---- */
-
 const $ = id => document.getElementById(id);
-
 const loaderEl        = $('loader');
-
 const childNameEl     = $('childName');
-
 const childMetaEl     = $('childMeta');
-
 const chipRangeEl     = $('chipRange');
-
 const chipCREl        = $('chipCR');
-
 const chipCFEl        = $('chipCF');
-
 const todayMeasuresEl = $('todayMeasures');
-
 const todayMealsEl    = $('todayMeals');
-
 const nextVisitEl     = $('nextVisit');
-
 const goMeasurements  = $('goMeasurements');
-
 const goMeals         = $('goMeals');
-
 const goReports       = $('goReports');
-
 const goVisits        = $('goVisits');
-
 const goChildEdit     = $('goChildEdit');
 
-
-
 // روشتة الطبيب
-
 const doctorNoteAlert = $('doctorNoteAlert');
-
 const doctorNoteText  = $('doctorNoteText');
 
-
-
 // كارت التحاليل
-
 const labCard         = $('labCard');
-
 const labHba1cVal     = $('labHba1cVal');
-
 const labHba1cDelta   = $('labHba1cDelta');
-
 const labLastSince    = $('labLastSince');
-
 const labLastDate     = $('labLastDate');
-
 const labDueBadge     = $('labDueBadge');
-
 const openLabsBtn     = $('openLabsBtn');
-
 const openLastPdfBtn  = $('openLastPdfBtn');
-
 const addLabBtn       = $('addLabBtn');
-
 const progressFill    = $('progressFill');
-
 const progressLabel   = $('progressLabel');
 
-
-
 /* ---- أدوات ---- */
-
 function pad(n){ return String(n).padStart(2,'0'); }
-
 function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
-
 function calcAge(bd){
-
   if(!bd) return '-';
-
   const b=new Date(bd),t=new Date(); let a=t.getFullYear()-b.getFullYear();
-
   const m=t.getMonth()-b.getMonth();
-
   if(m<0||(m===0&&t.getDate()<b.getDate())) a--; return a;
-
 }
-
 function loader(show){ loaderEl?.classList.toggle('hidden',!show); }
-
 function setText(el,v){ if(el) el.textContent=(v==null||v==='')?'—':v; }
-
 function setHref(el,url){ if(el) el.href=url; }
-
 function fmt(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${d.getDate().toString().padStart(2,'0')}`; }
-
 function dayDiff(a,b){ return Math.ceil((a-b)/86400000); }
-
 function addMonths(date,m=4){
-
   const d=new Date(date); const day=d.getDate();
-
   d.setMonth(d.getMonth()+m);
-
   if(d.getDate()<day) d.setDate(0); return d;
-
 }
-
 function monthsDaysBetween(from,to){
-
   let m=(to.getFullYear()-from.getFullYear())*12+(to.getMonth()-from.getMonth());
-
   let anchor=addMonths(from,m);
-
   if(to.getDate()<from.getDate()){m-=1;anchor=addMonths(from,m);}
-
   const d=Math.max(0,dayDiff(to,anchor)); return {months:Math.max(0,m),days:d};
-
 }
-
 function formatCountdown(baseDate,dueDate){
-
   const dLeft=dayDiff(dueDate,baseDate);
-
   if(dLeft<0) return `متأخر ${Math.abs(dLeft)} يوم`;
-
   if(dLeft===0) return 'اليوم';
-
   const md=monthsDaysBetween(baseDate,dueDate); const parts=[];
-
   if(md.months>0) parts.push(`${md.months} شهر`);
-
   if(md.days>0) parts.push(`${md.days} يوم`);
-
   return `باقي ${parts.join(' و ')}`;
-
 }
-
-
 
 function currentMeal(){
-
   const h = new Date().getHours();
-
   if(h >= 5  && h < 11) return { key: 'breakfast', label: 'الفطور' };
-
   if(h >= 11 && h < 16) return { key: 'lunch', label: 'الغداء' };
-
   if(h >= 16 && h < 22) return { key: 'dinner', label: 'العشاء' };
-
   return { key: 'snack', label: 'سناك' };
-
 }
-
-
 
 function timeAgo(date) {
-
   if (!date) return '';
-
   const now = new Date();
-
   const diffMs = now - date;
-
   const diffMins = Math.floor(diffMs / 60000);
-
   if (diffMins < 1) return 'الآن';
-
   if (diffMins < 60) return `منذ ${diffMins} دقيقة`;
-
   const diffHours = Math.floor(diffMins / 60);
-
   if (diffHours < 24) return `منذ ${diffHours} ساعة`;
-
   const diffDays = Math.floor(diffHours / 24);
-
   return `منذ ${diffDays} يوم`;
-
 }
-
-
 
 function glucoseState(v, child){
-
   if(v == null) return null;
-
-  const unit = child.glucoseUnit || 'mg/dL';
-
-  const limits = child.glucose_limits || {};
-
-  const critLow  = Number(limits.critical_low) || (unit === 'mmol/L' ? 3.0 : 54);
-
-  const low      = Number(limits.low) || (unit === 'mmol/L' ? 3.9 : 70);
-
-  const high     = Number(limits.high) || (unit === 'mmol/L' ? 10.0 : 180);
-
-  const critHigh = Number(limits.critical_high) || (unit === 'mmol/L' ? 13.9 : 250);
-
-
+  const proto = getProtocol(child);
+  const { critical_low: critLow, low, high, critical_high: critHigh } = proto.limits;
 
   if(v <= critLow)  return { cls: 'crit-low',  label: 'حرج منخفض 🚨', color: '#dc2626' };
-
   if(v >= critHigh) return { cls: 'crit-high', label: 'حرج مرتفع 🚨', color: '#dc2626' };
-
   if(v < low)       return { cls: 'low',       label: 'منخفض ↓',     color: '#3b82f6' };
-
   if(v > high)      return { cls: 'high',      label: 'مرتفع ↑',     color: '#f59e0b' };
-
   return            { cls: 'ok',        label: 'في النطاق ✅', color: '#10b981' };
-
 }
-
-
 
 function pointColors(readings, child){
-
   return readings.map(r => glucoseState(r, child)?.color ?? '#10b981');
-
 }
-
-
 
 async function renderGlucoseSparkline(uid, child){
-
   const container = $('glucoseSparkContainer');
-
   if(!container) return;
 
-
-
   const ref  = collection(db,`parents/${uid}/children/${childId}/measurements`);
-
   const snap = await getDocs(query(ref, orderBy('when','desc'), limit(50)));
 
-
-
   if(snap.empty){
-
     container.innerHTML = '<p style="color:#94a3b8;font-size:13px;padding:12px 0;text-align:center">لا توجد قراءات مسجلة بعد. ابدأ بتسجيل أول قراءة اليوم!</p>';
-
     return;
-
   }
 
-
-
-  const unit = child.glucoseUnit || 'mg/dL';
-
+  const proto = getProtocol(child);
+  const unit = proto.unit;
   const isMmol = unit === 'mmol/L';
 
-
-
   const points = snap.docs.map(d=>{
-
     const data = d.data();
-
     let val = null;
-
     if (isMmol) {
-
       if (data.value_mmol != null) val = Number(data.value_mmol);
-
       else if (data.unit === 'mmol/L' && data.value != null) val = Number(data.value);
-
-      else if (data.value_mgdl != null) val = +(Number(data.value_mgdl) / 18).toFixed(1);
-
-      else if (data.value != null) val = +(Number(data.value) / 18).toFixed(1);
-
+      else if (data.value_mgdl != null) val = +(Number(data.value_mgdl) / MGDL_PER_MMOL).toFixed(1);
+      else if (data.value != null) val = +(Number(data.value) / MGDL_PER_MMOL).toFixed(1);
     } else {
-
       if (data.value_mgdl != null) val = Math.round(Number(data.value_mgdl));
-
       else if (data.unit === 'mg/dL' && data.value != null) val = Math.round(Number(data.value));
-
-      else if (data.value_mmol != null) val = Math.round(Number(data.value_mmol) * 18);
-
-      else if (data.value != null) val = Math.round(Number(data.value) * 18);
-
+      else if (data.value_mmol != null) val = Math.round(Number(data.value_mmol) * MGDL_PER_MMOL);
+      else if (data.value != null) val = Math.round(Number(data.value) * MGDL_PER_MMOL);
     }
-
     const when = data.when?.toDate ? data.when.toDate() : (data.when ? new Date(data.when) : null);
-
     return { val, when, slotKey: data.slotKey, state: data.state };
-
   }).filter(p=>p.val != null && !isNaN(p.val) && p.when).reverse();
 
-
-
   if(!points.length){
-
     container.innerHTML = '<p style="color:#94a3b8;font-size:13px;padding:8px 0;text-align:center">لا توجد قراءات صالحة للعرض</p>';
-
     return;
-
   }
-
-
 
   const now = new Date();
-
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
   const todayPoints = points.filter(p => p.when >= startOfToday);
 
-
-
   const last = points[points.length-1];
-
   const gs   = glucoseState(last.val, child);
-
   const timeAgoText = timeAgo(last.when);
 
-
-
   const vals   = points.map(p=>p.val);
-
   const minVal = isMmol ? Math.min(...vals).toFixed(1) : Math.min(...vals);
-
   const maxVal = isMmol ? Math.max(...vals).toFixed(1) : Math.max(...vals);
-
   
-
-  const limits = child.glucose_limits || {};
-
-  const low    = Number(limits.low) || (isMmol ? 3.9 : 70);
-
-  const high   = Number(limits.high) || (isMmol ? 10.0 : 180);
-
-
+  const low  = proto.limits.low;
+  const high = proto.limits.high;
 
   const todayVals = todayPoints.map(p => p.val);
-
   const todayAvg = todayVals.length
-
     ? (isMmol ? (todayVals.reduce((a,b)=>a+b,0)/todayVals.length).toFixed(1) : Math.round(todayVals.reduce((a,b)=>a+b,0)/todayVals.length))
-
     : (isMmol ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : Math.round(vals.reduce((a,b)=>a+b,0)/vals.length));
 
-
-
   const relevantPoints = todayPoints.length ? todayPoints : points;
-
   const inRange = relevantPoints.filter(p=>p.val>=low && p.val<=high).length;
-
   const tir = Math.round(inRange / relevantPoints.length * 100);
 
-
-
   container.innerHTML = `
-
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-
         <span style="font-size:14px;font-weight:700;color:#0f172a">📊 تحليل الجلوكوز الحي</span>
-
         <span style="background:${gs?.color??'#10b981'}22;color:${gs?.color??'#10b981'};border:1px solid ${gs?.color??'#10b981'}55;
-
               padding:3px 12px;border-radius:999px;font-size:13px;font-weight:700">
-
           آخر قراءة: ${last.val} ${unit} (${gs?.label??''}) • ${timeAgoText}
-
         </span>
-
       </div>
-
     </div>
-
-
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px">
-
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px;text-align:center">
-
         <div style="font-size:18px;font-weight:800;color:#0f172a">${todayAvg}</div>
-
         <div style="font-size:11px;color:#64748b">${todayVals.length ? 'متوسط اليوم' : 'المتوسط العام'} (${unit})</div>
-
       </div>
-
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:10px;text-align:center">
-
         <div style="font-size:18px;font-weight:800;color:#15803d">${tir}%</div>
-
         <div style="font-size:11px;color:#64748b">داخل النطاق (TIR)</div>
-
       </div>
-
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:10px;text-align:center">
-
         <div style="font-size:18px;font-weight:800;color:#1e40af">${minVal}</div>
-
         <div style="font-size:11px;color:#64748b">الأدنى (${unit})</div>
-
       </div>
-
       <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:10px;text-align:center">
-
         <div style="font-size:18px;font-weight:800;color:#9a3412">${maxVal}</div>
-
         <div style="font-size:11px;color:#64748b">الأعلى (${unit})</div>
-
       </div>
-
     </div>
-
-
 
     <div style="position:relative;height:120px;width:100%">
-
       <canvas id="glucoseSparkCanvas"></canvas>
-
     </div>
-
   `;
 
-
-
   const colors = pointColors(vals, child);
-
   const ctx = $('glucoseSparkCanvas')?.getContext('2d');
-
   if(!ctx) return;
 
-
-
   const labels = points.map(p=>{
-
     const d=p.when;
-
     return `${pad(d.getDate())}/${pad(d.getMonth()+1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-
   });
-
-
 
   if (window._glucoseChart) {
-
     try { window._glucoseChart.destroy(); } catch(e){}
-
   }
-
-
 
   const minGraphVal = Math.max(0, Math.min(...vals, low) - (isMmol ? 0.5 : 10));
-
   const maxGraphVal = Math.max(...vals, high) + (isMmol ? 0.5 : 15);
 
-
-
   window._glucoseChart = new Chart(ctx,{
-
     type:'line',
-
     data:{
-
       labels,
-
       datasets:[
-
         {
-
           label: `الحد الأدنى (${low} ${unit})`,
-
           data: Array(vals.length).fill(low),
-
           borderColor: '#10b981',
-
           borderWidth: 1.5,
-
           borderDash: [5, 5],
-
           pointRadius: 0,
-
           pointHoverRadius: 0,
-
           fill: false,
-
           order: 3
-
         },
-
         {
-
           label: `الحد الأعلى (${high} ${unit})`,
-
           data: Array(vals.length).fill(high),
-
           borderColor: '#10b981',
-
           borderWidth: 1.5,
-
           borderDash: [5, 5],
-
           pointRadius: 0,
-
           pointHoverRadius: 0,
-
           fill: '-1',
-
           backgroundColor: 'rgba(16, 185, 129, 0.07)',
-
           order: 2
-
         },
-
         {
-
           label: 'رادار الجلوكوز',
-
           data: vals,
-
           borderColor: '#3b82f6',
-
           borderWidth: 2.2,
-
           pointBackgroundColor: colors,
-
           pointBorderColor: colors,
-
           pointRadius: vals.length>30 ? 2 : 4,
-
           pointHoverRadius: 6,
-
           tension: 0.3,
-
           fill: { target: 'origin', above: 'rgba(59,130,246,0.06)' },
-
           order: 1
-
         }
-
       ]
-
     },
-
     options:{
-
       responsive: true, maintainAspectRatio: false,
-
       plugins:{
-
         legend: { display: false },
-
         tooltip: {
-
           callbacks: {
-
             label: ctx => {
-
               if (ctx.dataset.label && ctx.dataset.label.includes('الحد')) return ctx.dataset.label;
-
               return `${ctx.parsed.y} ${unit}`;
-
             },
-
             title: ctx => labels[ctx[0].dataIndex]
-
           }
-
         }
-
       },
-
       scales:{
-
         x:{ display: false },
-
         y:{
-
           min: minGraphVal,
-
           max: maxGraphVal,
-
           ticks:{ font: { size: 10 }, color: '#94a3b8' },
-
           grid:{ color: '#f1f5f9' },
-
           border:{ display: false }
-
         }
-
       }
-
     }
-
   });
-
 }
 
-
-
 // ---------------- متابعة الأنسولين القاعدي اليومي (Basal Tracker) ----------------
-
 async function initBasalTracker(uid, child) {
-
   const basalCard = $('basalCard');
-
   if (!basalCard) return;
 
-
-
-  const basalName = child.insulin?.basal || child.basalType || 'الأنسولين القاعدي';
-
-  const basalDose = child.basalDose || child.insulin?.basalDose || null;
-
+  const proto = getProtocol(child);
+  const basalName = proto.insulin.basal || 'الأنسولين القاعدي';
+  const basalDose = proto.insulin.basalDose;
   const basalTime = child.basalTime || child.insulin?.basalTime || 'مساءً';
 
-
-
   setText($('basalTypeName'), basalName);
-
   setText($('basalDoseRec'), basalDose ? `${basalDose} وحدة` : 'حسب الوصفة');
-
   setText($('basalTimeRec'), basalTime || 'مساءً');
 
-
-
   const today = todayStr();
-
   const cacheKey = `basal_${childId}_${today}`;
-
   let loggedData = null;
 
-
-
   try {
-
     const cached = localStorage.getItem(cacheKey);
-
     if (cached) {
-
       const parsed = JSON.parse(cached);
-
       if (parsed.taken && parsed.date === today) loggedData = parsed;
-
     }
-
   } catch(e){}
 
-
-
   if (!loggedData) {
-
     try {
-
       const snap = await getDoc(doc(db, `parents/${uid}/children/${childId}/basalLogs/${today}`));
-
       if (snap.exists() && snap.data().taken) {
-
         loggedData = snap.data();
-
         localStorage.setItem(cacheKey, JSON.stringify(loggedData));
-
       }
-
     } catch(e) {
-
       console.warn('Could not read basal log:', e);
-
     }
-
   }
-
-
 
   function renderBasalState(data) {
-
     const badge = $('basalStatusBadge');
-
     const btnConfirm = $('btnConfirmBasal');
-
     const loggedInfo = $('basalLoggedInfo');
-
     const loggedText = $('basalLoggedText');
-
     const form = $('basalConfirmForm');
 
-
-
     if (data && data.taken) {
-
       if (badge) {
-
         badge.className = 'basal-status-badge done';
-
         badge.textContent = '✅ تم أخذ جرعة اليوم';
-
       }
-
       if (btnConfirm) btnConfirm.classList.add('hidden');
-
       if (loggedInfo) loggedInfo.classList.remove('hidden');
-
       if (loggedText) loggedText.textContent = `✅ تم التسجيل: ${data.dose} وحدة (${data.time || '—'})`;
-
       if (form) form.classList.add('hidden');
-
     } else {
-
       if (badge) {
-
         badge.className = 'basal-status-badge pending';
-
         badge.textContent = '⏳ لم تُسجّل جرعة اليوم بعد';
-
       }
-
       if (btnConfirm) btnConfirm.classList.remove('hidden');
-
       if (loggedInfo) loggedInfo.classList.add('hidden');
-
       if (form) form.classList.add('hidden');
-
     }
-
   }
-
-
 
   renderBasalState(loggedData);
 
-
-
   // زر فتح النموذج
-
   $('btnConfirmBasal')?.addEventListener('click', () => {
-
     const form = $('basalConfirmForm');
-
     if (!form) return;
-
     form.classList.toggle('hidden');
-
     if (!form.classList.contains('hidden')) {
-
       const now = new Date();
-
       if ($('basalTimeInput')) $('basalTimeInput').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-
       if ($('basalDoseInput') && !$('basalDoseInput').value) {
-
-        $('basalDoseInput').value = basalDose || 10;
-
+        $('basalDoseInput').value = basalDose ?? '';
       }
-
       $('basalDoseInput')?.focus();
-
     }
-
   });
-
-
 
   // زر إلغاء النموذج
-
   $('btnCancelBasalDose')?.addEventListener('click', () => {
-
     $('basalConfirmForm')?.classList.add('hidden');
-
   });
-
-
 
   // زر حفظ وتأكيد الجرعة
-
   $('btnSaveBasalDose')?.addEventListener('click', async () => {
-
     const doseVal = parseFloat($('basalDoseInput')?.value);
-
     const timeVal = $('basalTimeInput')?.value || `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`;
-
     if (!doseVal || doseVal <= 0) {
-
       alert('يرجى إدخال عدد وحدات الجرعة بشكل صحيح');
-
       return;
-
     }
-
-
 
     loader(true);
-
     try {
-
       const payload = {
-
         taken: true,
-
         date: today,
-
         dose: doseVal,
-
         time: timeVal,
-
         insulin: basalName,
-
         recordedAt: serverTimestamp()
-
       };
-
       await setDoc(doc(db, `parents/${uid}/children/${childId}/basalLogs/${today}`), payload, { merge: true });
-
       localStorage.setItem(cacheKey, JSON.stringify(payload));
-
       loggedData = payload;
-
       renderBasalState(loggedData);
-
     } catch(err) {
-
       console.error(err);
-
       alert('تعذر حفظ جرعة القاعدي، يرجى المحاولة مرة أخرى.');
-
     } finally {
-
       loader(false);
-
     }
-
   });
-
-
 
   // زر التراجع
-
   $('btnUndoBasal')?.addEventListener('click', async () => {
-
     if (!confirm('هل أنت متأكد من إلغاء تأكيد جرعة القاعدي لليوم؟')) return;
-
     loader(true);
-
     try {
-
       await setDoc(doc(db, `parents/${uid}/children/${childId}/basalLogs/${today}`), { taken: false }, { merge: true });
-
       localStorage.removeItem(cacheKey);
-
       loggedData = null;
-
       renderBasalState(null);
-
     } catch(err) {
-
       console.error(err);
-
       alert('تعذر إلغاء التسجيل.');
-
     } finally {
-
       loader(false);
-
     }
-
   });
-
 }
 
-
-
 // ---------------- بطاقة الطوارئ والمدرسة ----------------
-
-// رقم الهاتف: أرقام فقط (تُحوَّل الأرقام العربية ويُزال الفراغ والشرطات)
 function normalizePhone(v) {
   return String(v || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[\s\-().]/g, '').replace(/^00/, '+');
 }
 
 function initEmergencyCard(user, child, ctx = {}) {
-
   const dialog = $('emergencyCardDialog');
-
   const btnOpen = $('btnEmergencyCard');
-
   const btnClose = $('btnCloseEmergencyCard');
-
   const btnPrint = $('btnPrintEmergencyCard');
-
-
 
   if (!dialog) return;
 
-
-
+  const proto = getProtocol(child);
   const name = child.identity?.name || child.name || 'الطفل';
-
   const gender = child.identity?.gender || child.gender || '-';
-
   const dob = child.identity?.dob || child.birthDate || null;
-
   const ageStr = `${gender === 'female' ? 'أنثى' : (gender === 'male' ? 'ذكر' : gender)} • ${calcAge(dob)} سنة`;
-
-  const unit = child.glucoseUnit || 'mg/dL';
-
-  const limits = child.glucose_limits || {};
-
-  const min = limits.low ?? (unit === 'mmol/L' ? 3.9 : 70);
-
-  const max = limits.high ?? (unit === 'mmol/L' ? 10.0 : 180);
-
-
+  const unit = proto.unit;
+  const min = proto.limits.low;
+  const max = proto.limits.high;
 
   setText($('emChildName'), name);
-
   setText($('emChildAge'), ageStr);
-
   setText($('emGlucoseRange'), `${min} - ${max} ${unit}`);
-
-
 
   // ولي الأمر: من بيانات الطفل (emergencyContact) ثم رقم حسابه من التسجيل
   const ec = child.emergencyContact || {};
@@ -947,7 +479,6 @@ function initEmergencyCard(user, child, ctx = {}) {
     pPhoneBtn.textContent = `📞 ${p}`;
     pPhoneBtn.onclick = null;
   };
-  // إن لم يوجد رقم: نطلبه مرة واحدة ونحفظه في بيانات الطفل وحساب ولي الأمر (بدل السؤال في كل مرة)
   const askParentPhone = async (e) => {
     e.preventDefault();
     const raw = prompt('أدخل رقم هاتف ولي الأمر للتواصل في الطوارئ (سيُحفظ في بيانات الطفل):');
@@ -972,7 +503,6 @@ function initEmergencyCard(user, child, ctx = {}) {
       pPhoneBtn.href = '#';
       pPhoneBtn.textContent = '📞 غير مسجل — اضغط للإضافة';
       pPhoneBtn.onclick = askParentPhone;
-      // رقم محفوظ في حساب ولي الأمر (من صفحة التسجيل)
       getDoc(doc(db, 'users', user.uid))
         .then(s => { const p = s.exists() ? s.data().phone : ''; if (p) showParentPhone(p); })
         .catch(() => {});
@@ -980,256 +510,129 @@ function initEmergencyCard(user, child, ctx = {}) {
   }
 
   // الطبيب المعالج
-
   const docInfo = child.assignedDoctorInfo || {};
-
   const docName = docInfo.name || child.assignedDoctorName || 'غير مسند بعد';
-
   setText($('emDoctorName'), docName);
-
   const docPhoneBtn = $('emDoctorPhoneBtn');
-
   if (docPhoneBtn) {
-
     const docPhone = docInfo.phone || child.doctorPhone || '';
-
     if (docPhone) {
-
       docPhoneBtn.href = `tel:${docPhone}`;
-
       docPhoneBtn.textContent = `📞 ${docPhone}`;
-
       docPhoneBtn.classList.remove('hidden');
-
     } else {
-
       docPhoneBtn.textContent = '📞 بدون هاتف';
-
       docPhoneBtn.classList.add('hidden');
-
     }
-
   }
 
-
-
-  // الأنسولين
-
-  const basal = child.insulin?.basal || child.basalType || 'طويل المفعول';
-
-  const bolus = child.insulin?.bolus || child.bolusType || 'سريع المفعول';
-
-  const cf = child.cf ?? child.correctionFactor ?? '—';
-
-  const hypoCarbs = child.hypoCarbs || 15;
-
-
+  // الأنسولين (من البروتوكول الموحد)
+  const basal = proto.insulin.basal || 'طويل المفعول';
+  const bolus = proto.insulin.bolus || 'سريع المفعول';
+  const cf = proto.CF ?? '—';
+  const hypoCarbs = proto.safety.hypoCarbs;
 
   setText($('emBasalText'), basal);
-
   setText($('emBolusText'), bolus);
-
   setText($('emCFText'), String(cf));
-
   setText($('emHypoCarbsText'), `${hypoCarbs} جرام`);
 
-
-
   btnOpen?.addEventListener('click', () => dialog.showModal());
-
   btnClose?.addEventListener('click', () => dialog.close());
-
   btnPrint?.addEventListener('click', () => window.print());
 
-
-
-  // فتح تلقائي إذا تم تمرير openEmergency=1 في الرابط
-
   if (params.get('openEmergency') === '1' || params.get('emergency') === '1') {
-
     setTimeout(() => {
-
       try { dialog.showModal(); } catch(e){}
-
     }, 300);
-
   }
-
 }
-
-
 
 document.getElementById('logoutBtn')?.addEventListener('click',()=>signOut(auth).catch(()=>{}));
 
-
-
 onAuthStateChanged(auth, async (user)=>{
-
   if(!user){ location.href='index.html'; return; }
-
   try{
-
     loader(true);
-
     let parentId = parentIdParam || localStorage.getItem('selectedParentId') || user.uid;
-
     let childRef = doc(db,`parents/${parentId}/children/${childId}`);
-
     let snap = await getDoc(childRef);
 
-
-
-    // إذا لم يوجد وكان parentId مختلف عن user.uid، نحاول بحساب المستخدم الحالي
-
     if (!snap.exists() && parentId !== user.uid) {
-
       const fallbackRef = doc(db, `parents/${user.uid}/children/${childId}`);
-
       const fallbackSnap = await getDoc(fallbackRef);
-
       if (fallbackSnap.exists()) {
-
         parentId = user.uid;
-
         childRef = fallbackRef;
-
         snap = fallbackSnap;
-
       }
-
     }
-
-
-
-    // إذا لم يوجد وكان المستخدم طبيباً، نبحث في سجل مرضى الطبيب لاستخراج parentId
 
     if (!snap.exists()) {
-
       try {
-
         const docPatientSnap = await getDoc(doc(db, `doctors/${user.uid}/patients/${childId}`));
-
         if (docPatientSnap.exists() && docPatientSnap.data()?.parentId) {
-
           const docParentId = docPatientSnap.data().parentId;
-
           const docChildRef = doc(db, `parents/${docParentId}/children/${childId}`);
-
           const docChildSnap = await getDoc(docChildRef);
-
           if (docChildSnap.exists()) {
-
             parentId = docParentId;
-
             childRef = docChildRef;
-
             snap = docChildSnap;
-
           }
-
         }
-
       } catch (e) {
-
         console.warn('Doctor patient fallback error:', e);
-
       }
-
     }
-
-
 
     if(!snap.exists()){
-
       alert('لم يتم العثور على ملف الطفل');
-
       if (parentIdParam && parentIdParam !== user.uid) { location.href = 'doctor-dashboard.html'; }
-
       else { localStorage.removeItem('lastChildId'); location.replace('parent.html?pickChild=1'); }
-
       return;
-
     }
-
     const c = snap.data();
-
+    const proto = getProtocol(c);
     const isDoctor = parentId !== user.uid;
-
     localStorage.setItem('selectedParentId', parentId);
-
     localStorage.setItem('lastChildId', childId);
-
     localStorage.setItem('selectedChildId', childId);
 
-
-
     /* ---- إظهار تعليمات الطبيب المباشرة ---- */
-
     if (c.doctor_note && c.doctor_note.trim() !== '') {
-
       if(doctorNoteText) doctorNoteText.textContent = c.doctor_note;
-
       if(doctorNoteAlert) doctorNoteAlert.classList.remove('hidden');
-
     } else {
-
       if(doctorNoteAlert) doctorNoteAlert.classList.add('hidden');
-
     }
 
-
-
     const name = c.identity?.name || c.name || 'طفل';
-
     const gender = c.identity?.gender || c.gender || '-';
-
     const dob = c.identity?.dob || c.birthDate || null;
-
     const ageStr = `${gender === 'female' ? 'أنثى' : (gender === 'male' ? 'ذكر' : gender)} • ${calcAge(dob)} سنة`;
-
     
-
-    // --- تحديث الـ Vitals Header القديم ---
-
     setText(childNameEl, name);
-
     setText(childMetaEl, ageStr);
 
-
-
-    // --- تحديث الـ Topbar والـ Breadcrumbs الجديد ---
-
     const topAvatar = $('topAvatar');
-
     if(topAvatar) topAvatar.textContent = name.charAt(0);
-
     
-
     const topChildName = $('topChildName');
-
     if(topChildName) topChildName.textContent = name;
-
     
-
     const topChildMeta = $('topChildMeta');
-
     if(topChildMeta) topChildMeta.textContent = ageStr;
-
     
-
     const breadChildName = $('breadChildName');
-
     if(breadChildName) breadChildName.textContent = name;
-
     
-
     // --- تحديث روابط وأزرار الشريط العلوي وفق دور المستخدم ---
     const safeChild = encodeURIComponent(childId);
     const safeParent = encodeURIComponent(parentId);
     const qDoc = `?child=${safeChild}&parentId=${safeParent}`;
     const qChild = `?child=${safeChild}`;
     const qDocParams = isDoctor ? qDoc : qChild;
-    const qParams = qDocParams;
     const workstationUrl = `doctor-child.html${qDoc}`;
 
     const parentNav = $('parentNav');
@@ -1284,266 +687,133 @@ onAuthStateChanged(auth, async (user)=>{
       }
     }
 
-
-
-    const unit = c.glucoseUnit || 'mg/dL';
-
-    const limits = c.glucose_limits || {};
-
-    const min = limits.low ?? (unit === 'mmol/L' ? 3.9 : 70);
-
-    const max = limits.high ?? (unit === 'mmol/L' ? 10.0 : 180);
-
-    
-
-    const cf = c.cf ?? c.correctionFactor ?? null;
-
-    
-
+    const unit = proto.unit;
+    const min = proto.limits.low;
+    const max = proto.limits.high;
+    const cf = proto.CF;
     const meal = currentMeal();
-
-    const crNow = c.cr?.[meal.key] ?? c.carbRatio ?? '—';
-
-
+    const crNow = proto.CR[meal.key] ?? '—';
 
     setText(chipRangeEl, `النطاق الطبيعي: ${min}–${max} ${unit}`);
-
     setText(chipCREl,    `CR (${meal.label}): ${crNow}`);
-
     setText(chipCFEl,    `CF: ${cf != null ? cf : '—'}`);
 
-
-
     setHref(goMeasurements,`measurements.html${qDocParams}`);
-
     setHref(goMeals,       `meals.html${qDocParams}`);
-
     setHref(goReports,     `reports.html${qDocParams}`);
-
     setHref(goVisits,      `visits.html${qDocParams}`);
-
     setHref(goChildEdit,   `child-edit.html?parentId=${encodeURIComponent(parentId)}&id=${encodeURIComponent(childId)}`);
 
-
-
     const now = new Date();
-
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
     const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-
     const todayStrFormat = todayStr();
 
-
-
     const measRef  = collection(db,`parents/${parentId}/children/${childId}/measurements`);
-
     const mealsRef = collection(db,`parents/${parentId}/children/${childId}/meals`);
-
     const visRef   = collection(db,`parents/${parentId}/children/${childId}/visits`);
 
-
-
     onSnapshot(query(measRef, where('when', '>=', startOfDay), where('when', '<', endOfDay)), (snap) => {
-
       setText(todayMeasuresEl, snap.size);
-
     });
-
-
 
     onSnapshot(query(mealsRef, where('date', '==', todayStrFormat)), (snap) => {
-
       setText(todayMealsEl, snap.size);
-
     });
-
-
 
     const snapVisit = await getDocs(query(visRef, where('date','>=',todayStrFormat), orderBy('date','asc'), limit(1)));
-
     let displayFollow = '—';
-
     if(!snapVisit.empty){
-
       const nf  = snapVisit.docs[0].data().date||'—';
-
       const due = new Date(nf);
-
       displayFollow = `${nf} — ${formatCountdown(new Date(), due)}`;
-
     }
-
     setText(nextVisitEl, displayFollow);
 
-
-
     await renderGlucoseSparkline(parentId, c);
-
     await renderLabCard(parentId);
-
     await initBasalTracker(parentId, c);
-
     initEmergencyCard(user, c, { parentId, childId });
-
     setHref($('radarAddMeasBtn'), `measurements.html${qDocParams}`);
-
     await initAiAssistant(parentId, c);
 
-
-
     addLabBtn?.addEventListener('click',e=>{ e.stopPropagation(); location.href=`labs.html${qDocParams}`; });
-
     openLabsBtn?.addEventListener('click',e=>{ e.stopPropagation(); location.href=`labs.html${qDocParams}`; });
-
     openLastPdfBtn?.addEventListener('click',async e=>{
-
       e.stopPropagation();
-
       const lastId=await getLastLabId(parentId);
-
       if(lastId) window.open(`labs.html${qDocParams}&lab=${encodeURIComponent(lastId)}`,'_blank');
-
       else location.href=`labs.html${qDocParams}`;
-
     });
 
-
-
   }catch(err){ console.error(err); alert('حدث خطأ غير متوقع'); }
-
   finally{ loader(false); }
-
 });
 
-
-
 async function getLastLabId(uid){
-
   const sn=await getDocs(query(collection(db,`parents/${uid}/children/${childId}/labs`),orderBy('when','desc'),limit(1)));
-
   return sn.empty?null:sn.docs[0].id;
-
 }
 
-
-
 async function renderLabCard(uid){
-
   if(!labCard) return;
-
   const sn=await getDocs(query(collection(db,`parents/${uid}/children/${childId}/labs`),orderBy('when','desc'),limit(4)));
-
   const labs=sn.docs.map(d=>({id:d.id,...d.data()}));
 
-
-
   if(!labs.length){
-
     setText(labHba1cVal,'—'); if(labHba1cVal) labHba1cVal.className='value tone';
-
     setText(labHba1cDelta,'لا توجد بيانات');
-
     setText(labLastSince,'—'); setText(labLastDate,'—');
-
     setText(labDueBadge,'لا توجد تقارير بعد'); if(labDueBadge) labDueBadge.className='pill tiny';
-
     if(progressFill) progressFill.style.width='0%'; setText(progressLabel,'—');
-
     if(window._spark) window._spark.destroy(); return;
-
   }
 
-
-
   const last=labs[0], prev=labs[1]||null;
-
   const when=last.when?.toDate?last.when.toDate():(last.date?new Date(last.date):new Date());
-
   setText(labLastDate,fmt(when));
-
   setText(labLastSince,`${dayDiff(new Date(),when)} يوم`);
-
   const hba=last?.hba1c?.value;
   window._aiLastHba1c = (hba!=null && !Number.isNaN(Number(hba))) ? { value: Number(hba).toFixed(1), date: fmt(when) } : null;
 
   if(hba==null||Number.isNaN(Number(hba))){
-
     setText(labHba1cVal,'—'); if(labHba1cVal) labHba1cVal.className='value tone';
-
   } else {
-
     const v=Number(hba); setText(labHba1cVal,`${v.toFixed(1)}%`);
-
     let tone='good'; if(v>=7.5&&v<=9) tone='mid'; if(v>9) tone='bad';
-
     if(labHba1cVal) labHba1cVal.className=`value tone ${tone}`;
-
   }
-
   if(prev?.hba1c?.value!=null&&hba!=null){
-
     const pv=Number(prev.hba1c.value);
-
     if(!Number.isNaN(pv)){
-
       const diff=Number(hba)-pv; const sign=diff>0?'+':(diff<0?'−':'±');
-
       setText(labHba1cDelta,`مقارنة بالسابق: ${sign}${Math.abs(diff).toFixed(1)}%`);
-
       if(labHba1cVal) labHba1cVal.title=`السابق: ${pv.toFixed(1)}% • الفرق: ${sign}${Math.abs(diff).toFixed(1)}%`;
-
     }
-
   } else { setText(labHba1cDelta,'—'); if(labHba1cVal) labHba1cVal.title='—'; }
 
-
-
   const nextDue=last.nextDue?.toDate?last.nextDue.toDate():addMonths(when,4);
-
   const daysToDue=dayDiff(nextDue,new Date());
-
   if(daysToDue<0){ setText(labDueBadge,`متأخر — ${fmt(nextDue)}`); if(labDueBadge) labDueBadge.className='pill tiny bad'; }
-
   else if(daysToDue<=14){ setText(labDueBadge,`قرب الموعد — ${fmt(nextDue)}`); if(labDueBadge) labDueBadge.className='pill tiny warn'; }
-
   else { setText(labDueBadge,`التحليل القادم: ${fmt(nextDue)}`); if(labDueBadge) labDueBadge.className='pill tiny ok'; }
 
-
-
   const sorted=[...labs].reverse();
-
   const chartLabels=sorted.map(l=>{const d=l.when?.toDate?l.when.toDate():(l.date?new Date(l.date):new Date());return fmt(d);});
-
   const chartData=sorted.map(l=>{const v=l?.hba1c?.value;return(v==null||Number.isNaN(Number(v)))?null:Number(v);});
-
   if(window._spark) window._spark.destroy();
-
   const ctx=document.getElementById('hbaSpark')?.getContext('2d');
-
   if(!ctx) return;
-
   window._spark=new Chart(ctx,{
-
     type:'line',
-
     data:{ labels:chartLabels, datasets:[{data:chartData,borderColor:'#8E24AA',backgroundColor:'rgba(142,36,170,0.08)',pointRadius:1.5,tension:.25,fill:false,spanGaps:true}] },
-
     options:{ responsive:true, plugins:{legend:{display:false},tooltip:{enabled:true}}, elements:{point:{hitRadius:6}}, scales:{x:{display:false},y:{display:false,suggestedMin:5,suggestedMax:12}} }
-
   });
-
 }
-
-
-
 
 /* ============================================================================
    🤖 مساعد أسيل الطبي الذكي (Context-Aware AI Medical Chat Assistant)
-   - يقرأ ملف الطفل ومعاملاته وقراءاته الحية تلقائياً
-   - يلتزم التزاماً تاماً بوحدة القياس المختارة للطفل (mg/dL أو mmol/L)
-   - يدعم محرك مزدوج: Google Gemini Cloud AI + المحرك السريري الذكي المدمج
-   - يضيف تنبيهاً طبياً استرشادياً إلزامياً بعد كل رسالة
+   - يقرأ ملف الطفل عبر البروتوكول الموحد (child-protocol.js) بدون قيم افتراضية صامتة
 ============================================================================ */
 
 const AI_DISCLAIMER_TEXT = '⚠️ تنبيه طبي هام: هذا الشات استرشادي وتعليمي فقط بناءً على المعطيات المسجلة لطفلك، ولا يُغني بأي حال عن استشارة الطبيب المعالج قبل اتخاذ أي قرار طبي أو تعديل في جرعات الأنسولين.';
@@ -1552,8 +822,6 @@ let _aiChatHistory = [];
 let _aiCurrentChild = null;
 let _aiParentId = null;
 let _aiMealBolusAvg = 0;
-// المساعد الذكي يعمل عبر الدالة الآمنة askGemini (المفتاح محفوظ على الخادم ولا يصل للمتصفح).
-// تنظيف أي مفتاح قديم كان مخزّناً في هذا المتصفح:
 try { localStorage.removeItem('aseel_gemini_key'); } catch (e) {}
 const askGemini = httpsCallable(getFunctions(app, 'europe-west1'), 'askGemini', { timeout: 25000 });
 
@@ -1576,7 +844,6 @@ async function computeRecentBolusStats(uid) {
         const dose = Number(m.totalDose ?? m.insulinUnits ?? m.recommendedDose ?? 0) || 0;
         byDate[dt] = (byDate[dt] || 0) + dose;
 
-        // استخراج الأصناف الأكثر تكراراً في وجبات الطفل
         const items = m.items || m.foodItems || [];
         if (Array.isArray(items)) {
           items.forEach(it => {
@@ -1599,7 +866,6 @@ async function computeRecentBolusStats(uid) {
     _aiMealBolusAvg = 0;
   }
 
-  // تحميل الوجبات المفضلة والمحفوظة (Preset Meals)
   try {
     const presetsSnap = await getDocs(collection(db, `parents/${uid}/children/${childId}/presetMeals`));
     if (!presetsSnap.empty) {
@@ -1607,7 +873,6 @@ async function computeRecentBolusStats(uid) {
     }
   } catch(e){}
 
-  // تحميل المفضلات من التخزين المحلي إن وجدت
   try {
     const favsRaw = localStorage.getItem(`fav_foods_${childId}`);
     if (favsRaw) {
@@ -1617,44 +882,34 @@ async function computeRecentBolusStats(uid) {
   } catch(e){}
 }
 
+// يقرأ البروتوكول عبر getProtocol الموحد دون تخمين أي معامل علاجي ناقص
 function getChildClinicalProfile(child) {
-  const unit = child.glucoseUnit || 'mg/dL';
+  const proto = getProtocol(child);
+  const unit = proto.unit;
   const isMmol = unit === 'mmol/L';
   const name = child.identity?.name || child.name || 'الطفل';
   const dob = child.identity?.dob || child.birthDate || null;
   const age = calcAge(dob);
   const genderRaw = child.identity?.gender || child.gender || '';
   const gender = genderRaw === 'female' ? 'أنثى' : (genderRaw === 'male' ? 'ذكر' : 'غير محدد');
-  const weight = Number(child.weight || child.identity?.weight || 0) || null;
+  const weight = proto.weightKg;
 
-  const limits = child.glucose_limits || {};
-  const low = Number(limits.low) || (isMmol ? 3.9 : 70);
-  const high = Number(limits.high) || (isMmol ? 10.0 : 180);
-  const critLow = Number(limits.critical_low) || (isMmol ? 3.0 : 54);
-  const critHigh = Number(limits.critical_high) || (isMmol ? 13.9 : 250);
-  const target = Number(limits.target || child.targetGlucose) || (isMmol ? 6.5 : 120);
+  const { critical_low: critLow, low, high, critical_high: critHigh } = proto.limits;
+  const target = proto.target; // null إذا كان غير محدد (لا نخمّن)
 
-  const crObj = child.cr || {};
-  const crBreakfast = Number(crObj.breakfast || child.carbRatio || 0) || null;
-  const crLunch = Number(crObj.lunch || child.carbRatio || 0) || null;
-  const crDinner = Number(crObj.dinner || child.carbRatio || 0) || null;
-  const crSnack = Number(crObj.snack || child.carbRatio || 0) || null;
+  const crBreakfast = proto.CR.breakfast;
+  const crLunch = proto.CR.lunch;
+  const crDinner = proto.CR.dinner;
+  const crSnack = proto.CR.snack;
   const mealNow = currentMeal();
-  const activeCR = Number(crObj[mealNow.key] || child.carbRatio || crLunch || crBreakfast || 15);
+  const activeCR = proto.CR[mealNow.key] ?? null; // null إذا لم يُحدد لهذه الوجبة
 
-  let cf = Number(child.cf ?? child.correctionFactor ?? 0) || null;
-  // مواءمة معامل التصحيح مع وحدة القياس
-  if (cf) {
-    if (isMmol && cf > 15) cf = +(cf / 18).toFixed(1);
-    if (!isMmol && cf < 10) cf = Math.round(cf * 18);
-  } else {
-    cf = isMmol ? 2.8 : 50;
-  }
+  const cf = proto.CF; // null إذا كان غير محدد
 
-  const basalType = child.insulin?.basal || child.basalType || 'طويل المفعول (قاعدي)';
-  const basalDose = Number(child.basalDose || child.insulin?.basalDose || 0) || null;
-  const bolusType = child.insulin?.bolus || child.bolusType || 'سريع المفعول';
-  const hypoCarbs = Number(child.hypoCarbs || 15);
+  const basalType = proto.insulin.basal || 'طويل المفعول (قاعدي)';
+  const basalDose = proto.insulin.basalDose;
+  const bolusType = proto.insulin.bolus || 'سريع المفعول';
+  const hypoCarbs = proto.safety.hypoCarbs;
   const doctorNote = child.doctor_note || '';
 
   const tdd = basalDose ? +(basalDose + (_aiMealBolusAvg || basalDose)).toFixed(1) : null;
@@ -1663,10 +918,12 @@ function getChildClinicalProfile(child) {
 
   return {
     name, age, gender, weight,
-    unit, isMmol,
+    unit, isMmol, unitMissing: proto.unitMissing,
     low, high, critLow, critHigh, target,
     crBreakfast, crLunch, crDinner, crSnack, activeCR, mealNowKey: mealNow.key, mealNowLabel: mealNow.label,
     cf, basalType, basalDose, bolusType, hypoCarbs, doctorNote,
+    missingKeys: proto.missing,
+    missingLabels: proto.missing.map(labelOf),
     bolusAvg: _aiMealBolusAvg, tdd, tddPerKg, basalPct,
     stats: window._aiGlucoseStats || { hasData: false },
     hba1c: window._aiLastHba1c || null,
@@ -1685,10 +942,8 @@ function formatAiMarkdown(text) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // إزالة أي تكرار لنص التنبيه إذا كتبه النموذج داخل المتن لأننا نضيفه في صندوق مستقل
   safe = safe.replace(/⚠️\s*تنبيه طبي هام:[\s\S]*$/g, '').trim();
 
-  // تحويل العناوين والخط العريض والقوائم إلى HTML أنيق
   safe = safe.replace(/^###\s+(.+)$/gm, '<h5>$1</h5>');
   safe = safe.replace(/^##\s+(.+)$/gm, '<h5>$1</h5>');
   safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -1783,27 +1038,18 @@ function buildGeminiSystemPrompt(p) {
   return `أنت "مساعد أسيل الطبي الذكي"، مستشار طبي افتراضي متخصص في سكري الأطفال من النوع الأول (Type 1 Diabetes) داخل منصة أسيل.
 مهمتك: الإجابة على أسئلة ولي الأمر بدقة طبية عالية، بلغة عربية واضحة ومطمئنة، مع ربط الإجابة مباشرة ببيانات وتحليلات الطفل المذكورة أدناه.
 
-[قاعدة صارمة جداً بخصوص وحدة القياس]:
+[قاعدة صارمة جداً بخصوص وحدة القياس وعدم تخمين المعاملات]:
 - وحدة القياس المختارة في إعدادات هذا الطفل هي: **${p.unit}** فقط.
-- يجب أن تكون جميع الأرقام، النطاقات، الأمثلة، والحسابات في ردك بوحدة **${p.unit}** حصراً.
-- النطاق المستهدف لهذا الطفل هو: **${p.low} إلى ${p.high} ${p.unit}**، والهدف التصحيحي: **${p.target} ${p.unit}**.
-- حد الهبوط هو أقل من **${p.low} ${p.unit}**، والهبوط الحرج أقل من **${p.critLow} ${p.unit}**.
-- حد الارتفاع هو أعلى من **${p.high} ${p.unit}**، والارتفاع الحرج أعلى من **${p.critHigh} ${p.unit}**.
-- إذا ذكر ولي الأمر رقماً يبدو بالوحدة الأخرى (مثلاً ذكر رقم مثل 240 بينما الوحدة mmol/L، أو ذكر 5.5 بينما الوحدة mg/dL)، قم بتحويله فوراً لوحدة الطفل (${p.unit}) باستخدام المعامل 18 ووضّح له ذلك بلطف.
-
-[النظام الغذائي والمفضلات المسجلة للطفل]:
-- الوجبة الحالية بحسب التوقيت: ${p.mealNowLabel} (معامل الكارب: 1:${p.activeCR})
-- الأصناف الشائعة في سجل وجبات الطفل: ${p.dietary?.commonFoods?.length ? p.dietary.commonFoods.join('، ') : 'لم تسجل بعد (استخدم المطبخ العربي/المصري الصحي المعتاد)'}
-- الوجبات الجاهزة المحفوظة (Presets): ${p.dietary?.presetMeals?.length ? p.dietary.presetMeals.map(m=>m.name).join('، ') : 'لا توجد'}
-- عند اقتراح وجبات: اقترح دائماً وجبات صحية شهية تناسب سكري الأطفال، تراعي مفضلات الطفل المسجلة، الأطعمة المتاحة في البيت (مثل الخبز البلدي، البيض، الفول، الجبن القريش، الأرز، المكرونة، الفراخ، التونة، الشوفان، الفواكه والخضار الطازج)، مع كتابة تفاصيل كل مكون بالجرام، إجمالي جرامات الكارب، وجرعة الأنسولين السريع (${p.bolusType}) المحسوبة بمعامل وجبة ${p.mealNowLabel} (1 وحدة لكل ${p.activeCR} جرام كارب)، وتذكير بالقياس بوحدة ${p.unit}.
+- النطاق المستهدف لهذا الطفل هو: **${p.low} إلى ${p.high} ${p.unit}**، والهدف التصحيحي: **${p.target ? p.target + ' ' + p.unit : 'غير محدد بعد في الإعدادات'}**.
+- معاملات ناقصة في ملف الطفل حالياً: ${p.missingLabels.length ? p.missingLabels.join('، ') : 'لا يوجد (جميع المعاملات مكتملة)'}.
+- تحذير حاسم: إذا كان معامل الكارب للوجبة أو معامل التصحيح (CF) أو هدف السكر (target) "غير محدد"، لا تخمّن أي رقم افتراضي ولا تحسب جرعة افتراضية أبداً، بل أخبر ولي الأمر بلطف بضرورة تحديده في صفحة إعدادات الطفل أو مع الطبيب المعالج أولاً.
 
 [ملف الطفل الطبي الحالي]:
 - الاسم: ${p.name} | العمر: ${p.age} سنة | النوع: ${p.gender} | الوزن: ${p.weight ? p.weight + ' كجم' : 'غير مسجل'}
 - الأنسولين القاعدي: ${p.basalType} | الجرعة اليومية: ${p.basalDose ? p.basalDose + ' وحدة' : 'غير محددة'}
 - الأنسولين السريع: ${p.bolusType} | متوسط جرعات الوجبات اليومي: ${p.bolusAvg ? p.bolusAvg + ' وحدة' : 'غير محدد'}
-- إجمالي الأنسولين اليومي التقديري (TDD): ${p.tdd ? p.tdd + ' وحدة' : 'غير محدد'} ${p.tddPerKg ? `(${p.tddPerKg} وحدة/كجم/يوم - نسبة القاعدي ${p.basalPct}%)` : ''}
-- معامل الكارب (CR): الفطور=${p.crBreakfast || '—'}، الغداء=${p.crLunch || '—'}، العشاء=${p.crDinner || '—'}، السناك=${p.crSnack || '—'} (المعامل النشط الآن لوجبة ${p.mealNowLabel}: 1 وحدة لكل ${p.activeCR} جرام كارب)
-- معامل التصحيح (CF): 1 وحدة تخفض السكر بمقدار ${p.cf} ${p.unit}
+- معامل الكارب (CR): الفطور=${p.crBreakfast || 'غير محدد'}، الغداء=${p.crLunch || 'غير محدد'}، العشاء=${p.crDinner || 'غير محدد'}، السناك=${p.crSnack || 'غير محدد'} (المعامل النشط الآن لوجبة ${p.mealNowLabel}: ${p.activeCR ? '1 وحدة لكل ' + p.activeCR + ' جرام كارب' : 'غير محدد'})
+- معامل التصحيح (CF): ${p.cf ? '1 وحدة تخفض السكر بمقدار ' + p.cf + ' ' + p.unit : 'غير محدد'}
 - كارب علاج الهبوط المعتمد للطفل: ${p.hypoCarbs} جرام سكريات سريعة
 - آخر تحليل تراكمي (HbA1c): ${p.hba1c ? `${p.hba1c.value}% (بتاريخ ${p.hba1c.date})` : 'غير مسجل'}
 - ملاحظة الطبيب المعالج المباشرة: ${p.doctorNote || 'لا توجد'}
@@ -1812,14 +1058,9 @@ function buildGeminiSystemPrompt(p) {
 ${statsSummary}
 
 [قواعد الرد الإلزامية]:
-- أنت "مساعد أسيل الطبي الذكي" للطفل/الطفلة (${p.name}).
-- الأسلوب: كلّم ولي الأمر بلغته (عامية مصرية مبسّطة أو عربية ميسّرة)، وابدأ بالإجابة المباشرة في سطر أو سطرين. كن مرناً وطبيعياً وافهم الأسئلة غير المرتبة. لا تكرر ملف الطفل ولا تعرض جداول ولا شرحاً طويلاً إلا إذا طلب ولي الأمر صراحة (تفاصيل / اشرح / ليه / بالتفصيل).
-- إن كانت معلومة أساسية ناقصة لا يمكن الإجابة بدونها، اسأل سؤالاً واحداً قصيراً بدل التخمين.
-- فهم الأرقام (مهم جداً): الرقم المقترن بـ(جرام/جم/غ) بجوار اسم صنف أو عبوة (مثل: علبة زبادي 170 جرام، كوب أرز 150 جرام) هو **وزن الصنف** وليس كمية الكارب. لا تعتبر الرقم كارباً إلا إذا قال ولي الأمر صراحة (كارب / كربوهيدرات / نشويات).
-- عند السؤال عن كمية الكارب في صنف أو وزن: احسب كارب الوزن = الوزن × (جرام الكارب في كل 100 جم من الصنف) ÷ 100، وأجب بسطر واحد (مثال: "170 جم زبادي سادة ≈ 8 جم كارب") واذكر أنه تقدير ويُفضّل مراجعة الملصق الغذائي. لا تحسب جرعة إلا إذا سأل عن الجرعة أو قال إن الطفل سيأكلها الآن؛ ويمكنك اختتام الرد بعرض: "تحب أحسبلك الجرعة؟".
-- عند السؤال عن الجرعة: جرام الكارب ÷ ${p.activeCR} (معامل الكارب الحالي لـ ${p.name}) = الوحدات من ${p.bolusType}، في سطرين مختصرين، ثم تذكير واحد قصير بقياس السكر بوحدة (${p.unit}) والحقن قبل الأكل بـ 10-15 دقيقة. لا تقترح تعديل الجرعات الثابتة أو القاعدي؛ التعديل للطبيب.
-- إذا كان الرقم أو الجرعة الناتجة كبيرة بشكل غير معتاد أو لم تتأكد من الصنف أو الكمية، اسأل بدل أن تخمّن.
-- في أي سؤال طبي أو عام: أجب في 2 إلى 4 أسطر كحد أقصى ما لم يُطلب تفصيل.
+- كلّم ولي الأمر بلغته (عامية مصرية مبسّطة أو عربية ميسّرة)، وابدأ بالإجابة المباشرة في سطر أو سطرين.
+- إن كانت معلومة أساسية ناقصة لا يمكن الإجابة بدونها، اسأل سؤالاً واحداً قصيراً أو وجّه لاستكمال الإعداد الناقص بدل التخمين.
+- الرقم المقترن بـ(جرام/جم/غ) بجوار اسم صنف أو عبوة هو **وزن الصنف** وليس كمية الكارب.
 - لا تكتب نص التحذير الطبي في ردك لأن النظام يضيفه تلقائياً.`;
 }
 
@@ -1827,7 +1068,6 @@ async function callGeminiCloudApi(userText, profile) {
   const sysInstruction = buildGeminiSystemPrompt(profile);
   const contents = [];
 
-  // إضافة آخر 6 رسائل من المحادثة للحفاظ على السياق (مع تقصير الطويل منها ليقبله الخادم)
   const recentHistory = _aiChatHistory.slice(-6);
   for (const item of recentHistory) {
     contents.push({
@@ -1835,7 +1075,7 @@ async function callGeminiCloudApi(userText, profile) {
       parts: [{ text: String(item.text || '').slice(0, 5500) }]
     });
   }
-  while (contents.length && contents[0].role === 'model') contents.shift();   // Gemini يبدأ بدور المستخدم
+  while (contents.length && contents[0].role === 'model') contents.shift();
   contents.push({
     role: 'user',
     parts: [{ text: String(userText || '').slice(0, 5500) }]
@@ -1852,144 +1092,72 @@ async function callGeminiCloudApi(userText, profile) {
     const reply = out?.data?.text;
     if (reply && reply.trim()) return reply.trim();
   } catch (e) {
-    console.warn('askGemini:', e?.code || e);   // نستخدم المحرك المحلي المدمج
+    console.warn('askGemini:', e?.code || e);
   }
   return null;
 }
 
-/* ---- المحرك السريري الذكي المدمج (Built-in Clinical Expert Engine) ----
-   يعمل تلقائياً 100% بدون الحاجة لأي إعدادات، ويحلل السؤال + أرقام الطفل الحية
-   مع التزام كامل بوحدة القياس (mg/dL أو mmol/L) */
+/* ---- المحرك السريري الذكي المدمج (Built-in Clinical Expert Engine) ---- */
 
 function generateSmartMealSuggestions(qLower, p) {
-  const cr = p.activeCR;
   const u = p.unit;
-  const isMmol = p.isMmol;
   const bolusType = p.bolusType;
-  const mealName = p.mealNowLabel;
+  let slotTitle = p.mealNowLabel;
+  let activeRatio = p.activeCR;
 
-  // فحص نوع الوجبة المطلوبة في السؤال
-  let slotTitle = mealName;
-  let activeRatio = cr;
   if (/فطور|فطار|صباح/.test(qLower)) {
     slotTitle = 'الفطور';
-    activeRatio = p.crBreakfast || cr;
+    activeRatio = p.crBreakfast;
   } else if (/غداء|غدا/.test(qLower)) {
     slotTitle = 'الغداء';
-    activeRatio = p.crLunch || cr;
+    activeRatio = p.crLunch;
   } else if (/عشاء|عشا|مساء/.test(qLower)) {
     slotTitle = 'العشاء';
-    activeRatio = p.crDinner || cr;
+    activeRatio = p.crDinner;
   } else if (/سناك|خفيف|تصبيرة|بين الوجبات/.test(qLower)) {
     slotTitle = 'السناك الخفيف';
-    activeRatio = p.crSnack || cr;
+    activeRatio = p.crSnack;
   }
 
-  // 1. فحص المفضلات والوجبات الجاهزة المحفوظة مسبقاً للطفل (Presets)
-  const presets = p.dietary?.presetMeals || [];
-  let presetNote = '';
-  if (presets.length > 0) {
-    const pSample = presets[0];
-    const pCarbs = Number(pSample.totalCarbs || pSample.carbs || 30);
-    const pDose = +(pCarbs / activeRatio).toFixed(1);
-    presetNote = `- ⭐ **من وجبات ${p.name} الجاهزة المحفوظة ("${pSample.name}"):** تحتوي على حوالي **${pCarbs}g كارب** ⬅️ الجرعة المحسوبة: **${pDose} وحدة** (${bolusType}).\n\n`;
-  }
+  const doseLabel = (carbs) => activeRatio ? ` ⬅️ جرعة ${+(carbs / activeRatio).toFixed(1)} وحدة ${bolusType}` : ' (حدد معامل الكارب CR في الإعدادات لحساب الجرعة)';
 
-  // 2. فحص الأصناف الأكثر تكراراً في تاريخ وجبات الطفل
-  const commonFoods = p.dietary?.commonFoods || [];
-  let commonNote = '';
-  if (commonFoods.length > 0) {
-    commonNote = `💡 *أصناف يفضلها ويتناولها ${p.name} كثيراً في سجلاته:* (${commonFoods.slice(0, 5).join('، ')}).\n\n`;
-  }
-
-  // 3. فحص ما إذا كان ولي الأمر ذكر مكونات محددة متوفرة في بيته
-  const hasEggs = /(بيض|بيضه|بيضة)/.test(qLower);
-  const hasCheese = /(جبن|جبنة|قريش|شيدر|رومي)/.test(qLower);
-  const hasFul = /(فول)/.test(qLower);
-  const hasOats = /(شوفان)/.test(qLower);
-  const hasChicken = /(فراخ|دجاج|صدور)/.test(qLower);
-  const hasMeat = /(لحم|لحمة|كفتة|برجر)/.test(qLower);
-  const hasFish = /(سمك|تونا|تونة|جمبري)/.test(qLower);
-  const hasRice = /(رز|أرز|ارز)/.test(qLower);
-  const hasPasta = /(مكرون|مكرونة)/.test(qLower);
-  const hasPotato = /(بطاطس)/.test(qLower);
-
-  let customOption = '';
-  if (hasChicken || hasMeat || hasFish || hasRice || hasPasta || hasPotato) {
-    const carbBase = hasRice ? '5 ملاعق أرز مطبوخ (25g كارب)' : (hasPasta ? 'كوب مكرونة مسلوقة (35g كارب)' : (hasPotato ? 'حبة بطاطس متوسطة مشوية (25g كارب)' : 'نصف رغيف بلدي أو حبة بطاطس (25g كارب)'));
-    const carbCount = hasPasta ? 40 : 30;
-    const doseCustom = +(carbCount / activeRatio).toFixed(1);
-    customOption = `#### 🌟 خيار مخصص بالمتاح لديك (${carbCount} جرام كارب ⬅️ الجرعة: ${doseCustom} وحدة):\n` +
-      `- ${carbBase}\n` +
-      `- قطعة بروتين مشوي أو مسلوق (${hasFish ? 'سمك أو تونة' : (hasChicken ? 'صدور دجاج' : 'لحم خالي الدهن')}) (0g كارب - بروتين عالي يمنع هبوط السكر).\n` +
-      `- طبق خضار مطبوخ أو شوربة خضار + سلطة خضراء غنية بالألياف (خيار، طماطم، خس، جرجير) (5g كارب).\n\n`;
-  } else if (hasEggs || hasCheese || hasFul || hasOats) {
-    const carbBase = hasOats ? '4 ملاعق شوفان كامل الحبة مطبوخ بحليب (25g كارب)' : (hasFul ? '4 ملاعق فول بزيت زيتون وليمون (15g كارب) + نصف رغيف بلدي (20g كارب)' : 'نصف رغيف خبز بلدي أو 2 شريحة توست بني (25g كارب)');
-    const carbCount = hasFul ? 35 : (hasOats ? 30 : 25);
-    const doseCustom = +(carbCount / activeRatio).toFixed(1);
-    customOption = `#### 🌟 خيار مخصص بالمتاح لديك (${carbCount} جرام كارب ⬅️ الجرعة: ${doseCustom} وحدة):\n` +
-      `- ${carbBase}\n` +
-      `- بروتين مشبع: ${hasEggs ? '2 بيضة مسلوقة أو أومليت خفيف' : (hasCheese ? 'قطعة جبن قريش بزيت زيتون أو جبن أبيض قليل الدسم' : 'فول بزيت زيتون')} (0g كارب).\n` +
-      `- خضار طازج مقطع (خيار وخس وفلفل رومي) (0–3g كارب).\n\n`;
-  }
-
-  // 4. خيارات الوجبات المتوازنة الشائعة والمعتمدة لسكري الأطفال
   let suggestionsBody = '';
   if (slotTitle === 'الفطور') {
-    const d1 = +(25 / activeRatio).toFixed(1);
-    const d2 = +(35 / activeRatio).toFixed(1);
-    const d3 = +(15 / activeRatio).toFixed(1);
     suggestionsBody = `
-- **الخيار 1: الفطور الشعبي المتوازن (25g كارب ⬅️ جرعة ${d1} وحدة ${bolusType})**
+- **الخيار 1: الفطور الشعبي المتوازن (25g كارب${doseLabel(25)})**
   - نصف رغيف خبز بلدي أسمر (20g كارب) + 2 بيضة مسلوقة أو قطعة جبن قريش بزيت زيتون (0g) + طبق شرائح خيار وخس وطماطم (5g).
-- **الخيار 2: فطور الفول المشبع بالألياف (35g كارب ⬅️ جرعة ${d2} وحدة ${bolusType})**
+- **الخيار 2: فطور الفول المشبع بالألياف (35g كارب${doseLabel(35)})**
   - 4 ملاعق كبيرة فول مدمس بالكمون والليمون (15g) + نصف رغيف بلدي (20g) + بيضة مسلوقة (0g).
-- **الخيار 3: وعاء الشوفان والحليب الدافئ (25g كارب ⬅️ جرعة ${d1} وحدة ${bolusType})**
+- **الخيار 3: وعاء الشوفان والحليب الدافئ (25g كارب${doseLabel(25)})**
   - 3 ملاعق شوفان حبة كاملة (15g) + نصف كوب حليب قليل الدسم (6g) + رشة قرفة ونصف تفاحة مقطعة (8g) ومكسرات نيئة.`;
   } else if (slotTitle === 'الغداء') {
-    const d1 = +(35 / activeRatio).toFixed(1);
-    const d2 = +(45 / activeRatio).toFixed(1);
-    const d3 = +(30 / activeRatio).toFixed(1);
     suggestionsBody = `
-- **الخيار 1: الأرز مع الدجاج والملوخية (35g كارب ⬅️ جرعة ${d1} وحدة ${bolusType})**
+- **الخيار 1: الأرز مع الدجاج والملوخية (35g كارب${doseLabel(35)})**
   - 6 ملاعق أرز أبيض أو بسمتي مطبوخ (25g كارب) + طبق ملوخية بيتي بدون سكر (4g) + ربع دجاجة مشوية أو مسلوقة (0g) + طبق سلطة ملونة بزيت زيتون (6g).
-- **الخيار 2: صينية السمك المشوي والخضار (30g كارب ⬅️ جرعة ${d3} وحدة ${bolusType})**
+- **الخيار 2: صينية السمك المشوي والخضار (30g كارب${doseLabel(30)})**
   - سمكة بلطي أو بوري مشوية بالردة (0g) + 5 ملاعق أرز صيادية (22g) + طبق سلطة خضراء وطحينة خفيفة (8g).
-- **الخيار 3: مكرونة مع كفتة مشوية (45g كارب ⬅️ جرعة ${d2} وحدة ${bolusType})**
+- **الخيار 3: مكرونة مع كفتة مشوية (45g كارب${doseLabel(45)})**
   - طبق مكرونة مسلوقة بصلصة الطماطم الخفيفة (35g) + 3 أصابع كفتة لحم مشوية بالفرن (2g) + سلطة جرجير وخيار وفجل (5g).`;
   } else if (slotTitle === 'العشاء') {
-    const d1 = +(20 / activeRatio).toFixed(1);
-    const d2 = +(30 / activeRatio).toFixed(1);
-    const d3 = +(15 / activeRatio).toFixed(1);
     suggestionsBody = `
-- **الخيار 1: عشاء خفيف يحمي من هبوط الفجر (20g كارب ⬅️ جرعة ${d1} وحدة ${bolusType})**
+- **الخيار 1: عشاء خفيف يحمي من هبوط الفجر (20g كارب${doseLabel(20)})**
   - كوب زبادي طبيعي أو لبن رايب (10g) + ملعقة بذور شيا أو شوفان (5g) + ربع رغيف بلدي مع بيضة مسلوقة أو قطعة جبن (10g).
-- **الخيار 2: سندوتش توست الحبوب الكاملة (25g كارب ⬅️ جرعة ${+(25/activeRatio).toFixed(1)} وحدة ${bolusType})**
-  - 2 شريحة توست بني بحبوب كاملة (20g) + شرائح جبن شيدر أو بيض أومليت (0g) + شرائح خيار وجزر (5g).
-- **الخيار 3: سلطة تونة بالذرة والخضار (20g كارب ⬅️ جرعة ${d1} وحدة ${bolusType})**
-  - علبة تونة مصفاة من الزيت + 3 ملاعق ذرة حلوة (12g) + خس وخيار وفلفل ألوان + ربع رغيف بلدي (10g).`;
+- **الخيار 2: سندوتش توست الحبوب الكاملة (25g كارب${doseLabel(25)})**
+  - 2 شريحة توست بني بحبوب كاملة (20g) + شرائح جبن شيدر أو بيض أومليت (0g) + شرائح خيار وجزر (5g).`;
   } else {
-    const d1 = +(15 / activeRatio).toFixed(1);
     suggestionsBody = `
-- **سناك 1 (15g كارب ⬅️ جرعة ${d1} وحدة):** كوب ونصف فشار منزلي بزيت خفيف (15g) + حفنة سوداني أو مكسرات نيئة.
-- **سناك 2 (15g كارب ⬅️ جرعة ${d1} وحدة):** ثمرة تفاح متوسطة أو برتقالة (15g) مع ملعقة صغيرة زبدة فول سوداني طبيعية.
-- **سناك 3 (10g كارب):** علبة زبادي صغيرة (8g) مع شرائح فراولة طازجة (5g).`;
+- **سناك 1 (15g كارب${doseLabel(15)}):** كوب ونصف فشار منزلي بزيت خفيف (15g) + حفنة سوداني أو مكسرات نيئة.
+- **سناك 2 (15g كارب${doseLabel(15)}):** ثمرة تفاح متوسطة أو برتقالة (15g) مع ملعقة صغيرة زبدة فول سوداني طبيعية.`;
   }
 
   return `### 🥗 مقترحات وجبات متوازنة لـ ${p.name} (${slotTitle})\n` +
-    `**معامل الكارب المعتمد لهذه الوجبة:** 1 وحدة أنسولين (${bolusType}) لكل **${activeRatio} جرام كارب**.\n\n` +
-    presetNote +
-    commonNote +
-    customOption +
-    `#### 📋 خيارات وجبات صحية محسوبة ومجربة:\n` +
+    `**معامل الكارب المعتمد لهذه الوجبة:** ${activeRatio ? `1 وحدة أنسولين (${bolusType}) لكل **${activeRatio} جرام كارب**` : '⚠️ غير محدد بعد في إعدادات الطفل'}.\n\n` +
     suggestionsBody +
     `\n\n### 🩺 إرشادات ذهبية لحماية سكر ${p.name} بعد الوجبة:\n` +
     `1. **القياس قبل الأكل:** قِس السكر بوحدة **${u}**؛ إذا كان في النطاق (${p.low}–${p.high} ${u}) احقن جرعة الوجبة فقط قبل الأكل بـ 10–15 دقيقة.\n` +
-    `2. **ترتيب الأكل:** ابدأ بالخضار والسلطة والبروتين، ثم النشويات؛ هذا الترتيب يبطئ امتصاص السكر ويمنع الارتفاعات المفاجئة.\n` +
-    `3. **إذا كان السكر مرتفعاً قبل الوجبة:** يُضاف تصحيح السكر بمعامل الطفل (${p.cf} ${u}/وحدة) إلى جرعة الوجبة بعد التأكد من عدم وجود تكدس أنسولين.`;
+    `2. **ترتيب الأكل:** ابدأ بالخضار والسلطة والبروتين، ثم النشويات.`;
 }
 
-/* ---- فهم الأرقام في رسالة ولي الأمر (كارب مقابل وزن صنف) ---- */
 function aiNormalizeDigits(t) {
   return String(t || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 }
@@ -1999,7 +1167,6 @@ function aiNormAr(t) {
     .replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
 }
 
-// جرامات الكارب في كل 100 جرام (قيم تقريبية شائعة للأطعمة المطبوخة/الجاهزة)
 const AI_FOOD_CARBS = [
   { keys: ['زبادي', 'روب'], name: 'زبادي سادة', c: 5, alt: { when: /(فواكه|فاكهه|نكهه|فراوله|محلي|عسل|بالسكر)/, name: 'زبادي بنكهة/محلى', c: 14 } },
   { keys: ['لبن', 'حليب'], name: 'لبن', c: 5 },
@@ -2035,7 +1202,6 @@ const AI_FOOD_CARBS = [
   { keys: ['بيض', 'فراخ', 'دجاج', 'لحمه', 'لحم', 'سمك', 'جبنه', 'جبن'], name: 'بروتين (بدون كارب تقريباً)', c: 1 },
 ].map(f => ({ ...f, keys: f.keys.map(aiNormAr) }));
 
-// الكارب يُعتبر مذكوراً فقط إذا ظهرت كلمة كارب/كربوهيدرات/نشويات بجوار الرقم
 function aiExtractExplicitCarbs(q) {
   const t = aiNormalizeDigits(q).replace(/،/g, ' ');
   const word = '(?:كارب|جارب|كربوهيدرات|كربو|نشويات|carbs?)';
@@ -2046,14 +1212,12 @@ function aiExtractExplicitCarbs(q) {
   return null;
 }
 
-// رقم بالجرام بدون كلمة كارب = وزن صنف. نحاول التعرف على الصنف لتقدير كارب الوزن.
 function aiExtractFoodWeight(q) {
   const t = aiNormalizeDigits(q);
   const m = t.match(/(\d+(?:\.\d+)?)\s*(?:جرامات|جرام|جم|غرام|غ|gm|gr|g)(?![\u0600-\u06FFA-Za-z])/i);
   if (!m) return null;
   const grams = +m[1];
   const nq = aiNormAr(t);
-  // مطابقة بالكلمة الكاملة (مع إزالة أدوات مثل ال/و/ب/ل) لتفادي التقاط حروف من كلمات أخرى
   const tokens = nq.split(/[^\u0600-\u06FFa-z0-9]+/).filter(Boolean);
   const stripPrefix = w => {
     let x = w.replace(/^(وال|بال|لل|فال|كال|ال)/, '');
@@ -2082,9 +1246,6 @@ function generateSmartClinicalReply(userText, p) {
   const u = p.unit;
   const isMmol = p.isMmol;
 
-  const fmtVal = (mgVal) => isMmol ? +(mgVal / 18).toFixed(1) : Math.round(mgVal);
-
-  // 1. فحص ما إذا كان ولي الأمر يسأل عن رقم قراءة سكر محدد أو كمية كارب في الرسالة
   const numMatches = q.match(/(\d+(?:\.\d+)?)/g);
   const hasCarbWord = /(كارب|نشويات|جرام|غ|وجب|اكل|أكل|ياكل|يأكل)/.test(qLower);
   const hasBgWord = /(سكر|قراء|قياس|لقيته|وصل|دلوقتي|الان|الآن|تصحيح|جرع|هبوط|عالي|مرتفع|منخفض)/.test(qLower);
@@ -2092,17 +1253,13 @@ function generateSmartClinicalReply(userText, p) {
   if (numMatches && numMatches.length > 0 && (hasBgWord || hasCarbWord)) {
     const nums = numMatches.map(Number).filter(n => !isNaN(n) && n > 0);
     let bgVal = null;
-    let carbVal = null;
+    let carbVal = aiExtractExplicitCarbs(q);
     let convertedNote = '';
-
-    // أ) كمية الكارب: فقط إذا ذُكرت صراحةً بجوار كلمة كارب/كربوهيدرات/نشويات
-    carbVal = aiExtractExplicitCarbs(q);
     const usedNums = new Set();
     let foodInfo = null;
     let weightOnly = null;
     if (carbVal !== null) usedNums.add(carbVal);
 
-    // ب) رقم بالجرام بدون كلمة كارب = وزن صنف (وليس كارباً): نقدّر الكارب من الصنف إن عُرف
     if (carbVal === null) {
       const fw = aiExtractFoodWeight(q);
       if (fw) {
@@ -2116,219 +1273,120 @@ function generateSmartClinicalReply(userText, p) {
       }
     }
 
-    // ج) قراءة السكر: فقط مع وجود كلمة تدل عليها، ومن الأرقام التي لم تُستخدم للكارب/الوزن
     if (hasBgWord) {
       for (const n of nums) {
         if (!usedNums.has(n)) { bgVal = n; break; }
       }
     }
 
-    // وزن بدون صنف معروف ولا سكر: لا نخمّن جرعة، نسأل
     if (weightOnly && carbVal === null && bgVal === null) {
       return `الرقم **${weightOnly.grams} جرام** ده وزن الصنف مش كمية الكارب. 🙂\nقولّي اسم الصنف وأقدّر الكارب، أو اكتب الكارب صراحةً (مثال: \`كارب 15\`) وأحسبلك الجرعة.`;
     }
 
-    // التحقق من تطابق الرقم مع وحدة قياس الطفل (mg/dL مقابل mmol/L)
     if (bgVal !== null) {
       if (isMmol && bgVal >= 35) {
-        const converted = +(bgVal / 18).toFixed(1);
+        const converted = +(bgVal / MGDL_PER_MMOL).toFixed(1);
         convertedNote = `💡 *ملاحظة وحدة القياس:* الرقم المدخل (${bgVal}) يبدو بوحدة \`mg/dL\`، وبما أن ملف **${p.name}** مضبوط على وحدة **\`mmol/L\`** فقد قمت بتحويله تلقائياً إلى **${converted} mmol/L**.\n\n`;
         bgVal = converted;
       } else if (!isMmol && bgVal > 0 && bgVal <= 28 && !hasCarbWord) {
-        const converted = Math.round(bgVal * 18);
+        const converted = Math.round(bgVal * MGDL_PER_MMOL);
         convertedNote = `💡 *ملاحظة وحدة القياس:* الرقم المدخل (${bgVal}) يبدو بوحدة \`mmol/L\`، وبما أن ملف **${p.name}** مضبوط على وحدة **\`mg/dL\`** فقد قمت بتحويله تلقائياً إلى **${converted} mg/dL**.\n\n`;
         bgVal = converted;
       }
 
-      // تقييم القراءة المدخلة وحساب التصحيح أو إسعاف الهبوط
       let resp = convertedNote + `### 🩺 تحليل القراءة الفورية لـ ${p.name} (${bgVal} ${u})\n`;
       if (bgVal < p.low) {
         const isCrit = bgVal <= p.critLow;
         resp += `- **الحالة:** ${isCrit ? '🚨 **هبوط حرج في السكر!**' : '⚠️ **هبوط في السكر (أقل من ' + p.low + ' ' + u + ')**'}\n`;
         resp += `- **يُمنع إعطاء أنسولين الآن منعاً باتاً.**\n`;
-        resp += `- **الخطوة 1 (قاعدة 15-15):** أعطِ الطفل فوراً **${p.hypoCarbs} جرام سكريات سريعة الامتصاص** (نصف كوب عصير محلى أو ملعقة كبيرة سكر/عسل مذابة في ماء).\n`;
-        resp += `- **الخطوة 2:** انتظر **15 دقيقة** ثم أعد القياس؛ إذا ظل السكر أقل من **${p.low} ${u}** كرر إعطاء **${p.hypoCarbs} جرام** سكريات سريعة.\n`;
-        resp += `- **الخطوة 3:** بمجرد ارتفاع السكر فوق **${p.low} ${u}**، أعطِ وجبة خفيفة تحتوي على نشويات معقدة وبروتين لتثبيت السكر.\n`;
-        if (isCrit) {
-          resp += `- ⛔ **تحذير هام:** إذا كان الطفل يعاني من تشنجات أو عدم قدرة على البلع، لا تعطه شيئاً بالفم واحقن **الجلوكاجون** فوراً وتواصل مع الطوارئ (123).`;
-        }
+        resp += `- **الخطوة 1 (قاعدة 15-15):** أعطِ الطفل فوراً **${p.hypoCarbs} جرام سكريات سريعة الامتصاص**.\n`;
+        resp += `- **الخطوة 2:** انتظر **15 دقيقة** ثم أعد القياس؛ إذا ظل السكر أقل من **${p.low} ${u}** كرر إعطاء **${p.hypoCarbs} جرام**.\n`;
         return resp;
       }
 
       if (bgVal > p.high) {
+        resp += `- **الحالة:** ${bgVal >= p.critHigh ? '🚨 **ارتفاع شديد يحتاج متابعة الكيتون**' : '⬆️ **ارتفاع فوق النطاق المستهدف (' + p.low + '–' + p.high + ' ' + u + ')**'}\n`;
+        if (!p.cf || !p.target) {
+          const miss = [!p.cf ? 'معامل التصحيح (CF)' : null, !p.target ? 'هدف السكر' : null].filter(Boolean).join(' و');
+          resp += `- ⚠️ **لا يمكن حساب جرعة التصحيح تلقائياً:** ينقص تحديد **${miss}** في إعدادات ملف الطفل. يرجى استكماله من إعدادات الطفل أو مراجعة الطبيب.\n`;
+          return resp;
+        }
         const diff = Math.max(0, bgVal - p.target);
         const rawCorr = diff / p.cf;
         const corrRounded = Math.round(rawCorr * 2) / 2;
-        const mealDose = carbVal ? +(carbVal / p.activeCR).toFixed(1) : 0;
+        const mealDose = (carbVal && p.activeCR) ? +(carbVal / p.activeCR).toFixed(1) : 0;
         const totalSuggested = +(rawCorr + mealDose).toFixed(1);
 
-        resp += `- **الحالة:** ${bgVal >= p.critHigh ? '🚨 **ارتفاع شديد يحتاج متابعة الكيتون**' : '⬆️ **ارتفاع فوق النطاق المستهدف (' + p.low + '–' + p.high + ' ' + u + ')**'}\n`;
         resp += `- **الهدف التصحيحي في ملف الطفل:** ${p.target} ${u} | **معامل التصحيح (CF):** 1 وحدة لكل ${p.cf} ${u}\n`;
         resp += `- **جرعة التصحيح الحسابية:** \`(${bgVal} - ${p.target}) ÷ ${p.cf}\` = **${rawCorr.toFixed(1)} وحدة** (تُقرّب إلى **${corrRounded} وحدة** من ${p.bolusType}).\n`;
         if (carbVal) {
-          resp += `- **جرعة الوجبة (${carbVal} جرام كارب على معامل ${p.activeCR}):** **${mealDose} وحدة**.\n`;
-          resp += `- **إجمالي الجرعة المقترحة (وجبة + تصحيح):** **${totalSuggested} وحدة** تقريباً.\n`;
-        }
-        resp += `- **تنبيه منع تكدس الأنسولين (Insulin Stacking):** تأكد من مرور **3 ساعات على الأقل** منذ آخر جرعة أنسولين سريع قبل إعطاء جرعة تصحيح جديدة.\n`;
-        if (bgVal >= p.critHigh) {
-          resp += `- 🧪 **فحص الكيتون:** لأن القراءة أعلى من **${p.critHigh} ${u}**، يُنصح بفحص الكيتون في البول أو الدم وتشجيع الطفل على شرب الماء بكثرة.`;
+          if (p.activeCR) {
+            resp += `- **جرعة الوجبة (${carbVal} جرام كارب على معامل ${p.activeCR}):** **${mealDose} وحدة**.\n`;
+            resp += `- **إجمالي الجرعة المقترحة (وجبة + تصحيح):** **${totalSuggested} وحدة** تقريباً.\n`;
+          } else {
+            resp += `- ⚠️ نسبة الكارب لوجبة ${p.mealNowLabel} غير محددة في الإعدادات لحساب جرعة الأكل.\n`;
+          }
         }
         return resp;
       }
 
-      // القراءة داخل النطاق الطبيعي
       resp += `- **الحالة:** ✅ **ممتاز! القراءة داخل النطاق المستهدف (${p.low}–${p.high} ${u}).**\n`;
       resp += `- **جرعة التصحيح:** **0 وحدة** (لا يحتاج لتصحيح).\n`;
       if (carbVal) {
-        const mealDose = +(carbVal / p.activeCR).toFixed(1);
-        resp += `- **جرعة الوجبة (${carbVal} جرام كارب ÷ معامل ${p.mealNowLabel} ${p.activeCR}):** **${mealDose} وحدة** من ${p.bolusType}.`;
-      } else {
-        resp += `- إذا كان سيتناول وجبة الآن، اقسم جرامات الكارب على معامل ${p.mealNowLabel} (**${p.activeCR}**) لحساب جرعة الوجبة.`;
+        if (p.activeCR) {
+          const mealDose = +(carbVal / p.activeCR).toFixed(1);
+          resp += `- **جرعة الوجبة (${carbVal} جرام كارب ÷ معامل ${p.mealNowLabel} ${p.activeCR}):** **${mealDose} وحدة** من ${p.bolusType}.`;
+        } else {
+          resp += `- ⚠️ يرجى تحديد نسبة الكارب (CR) لوجبة ${p.mealNowLabel} في إعدادات الطفل لحساب جرعة الوجبة.`;
+        }
       }
       return resp;
     }
 
     if (carbVal !== null) {
-      const mealDose = +(carbVal / p.activeCR).toFixed(1);
-      const mealRounded = Math.round(mealDose * 2) / 2;
-      const wantsDetails = /(تفصيل|بالتفصيل|اشرح|شرح|ليه|لماذا|وضح)/.test(qLower);
-      const asksDose = /(جرعه|جرعة|وحده|وحدة|وحدات|انسولين|أنسولين|ياخد|ياخذ|اخد|آخذ|نوفو|حقن)/.test(qLower);
-
-      // حماية: رقم كبير غير معتاد لوجبة واحدة
-      if (carbVal > 150 || mealDose > 15) {
-        return `⚠️ **${carbVal} جرام كارب** (جرعة ≈ ${mealDose} وحدة) رقم كبير جداً لوجبة واحدة.\nتأكد أن الرقم **كارب فعلاً** وليس وزن الصنف، وراجع الطبيب قبل أي جرعة.`;
-      }
-
       const head = foodInfo
         ? `**${foodInfo.grams} جم ${foodInfo.name} ≈ ${carbVal} جم كارب** _(تقدير، راجع الملصق الغذائي)_`
         : `**${carbVal} جم كارب**`;
 
-      // سؤال عن كمية الكارب فقط: نجيب بالكارب مع سطر الجرعة مختصراً
-      if (foodInfo && !asksDose && !wantsDetails) {
-        return `${head}\nجرعتها لـ ${p.name}: ${carbVal} ÷ ${p.activeCR} = **${mealDose} وحدة** (≈ ${mealRounded}) ${p.bolusType}.`;
+      if (!p.activeCR) {
+        return `${head}\n⚠️ لم يتم تحديد **نسبة الكارب (CR) لوجبة ${p.mealNowLabel}** في إعدادات ${p.name} بعد؛ أكمليها من إعدادات الطفل لأحسب لكِ الجرعة بدقة.`;
       }
 
-      const dose = `الجرعة: ${carbVal} ÷ ${p.activeCR} = **${mealDose} وحدة** (≈ ${mealRounded}) ${p.bolusType}.`;
-      if (!wantsDetails) {
-        return `${head}\n${dose}\n💡 قِس السكر قبل الأكل بـ ${u}؛ لو فوق **${p.high} ${u}** تُضاف جرعة تصحيح.`;
+      const mealDose = +(carbVal / p.activeCR).toFixed(1);
+      const mealRounded = Math.round(mealDose * 2) / 2;
+      if (carbVal > 150 || mealDose > 15) {
+        return `⚠️ **${carbVal} جرام كارب** (جرعة ≈ ${mealDose} وحدة) رقم كبير جداً لوجبة واحدة.\nتأكد أن الرقم **كارب فعلاً** وليس وزن الصنف، وراجع الطبيب قبل أي جرعة.`;
       }
-      return `### 🥗 حساب جرعة الكارب لـ ${p.name}\n` +
-        `- ${head}\n` +
-        `- **معامل الكارب النشط الآن (${p.mealNowLabel}):** 1 وحدة لكل **${p.activeCR} جرام كارب**\n` +
-        `- **${dose}**\n` +
-        `- 💡 قِس سكر الطفل قبل الوجبة بوحدة **${u}**؛ إذا كان أعلى من **${p.high} ${u}** تُضاف جرعة التصحيح، وإذا كان داخل النطاق (${p.low}–${p.high} ${u}) تكتفي بجرعة الوجبة فقط. الحقن قبل الأكل بـ 10–15 دقيقة.`;
+
+      return `${head}\nالجرعة لـ ${p.name}: ${carbVal} ÷ ${p.activeCR} = **${mealDose} وحدة** (≈ ${mealRounded}) ${p.bolusType}.\n💡 قِس السكر قبل الأكل بـ ${u}؛ لو فوق **${p.high} ${u}** تُضاف جرعة تصحيح.`;
     }
   }
 
-  // 2. سؤال عن تقييم جرعة القاعدي والوزن (Basal & Weight / TDD)
   if (/(قاعدي|ترسيبا|لانتوس|توجيو|وزن|كجم|تراكم|tdd|طويل المفعول)/.test(qLower)) {
     let resp = `### ⚖️ تقييم الأنسولين القاعدي ومقارنته بوزن ${p.name}\n`;
     resp += `- **نوع القاعدي المسجل:** ${p.basalType}\n`;
     resp += `- **جرعة القاعدي اليومية:** ${p.basalDose ? `**${p.basalDose} وحدة/يوم**` : 'غير مسجلة بعد في الإعدادات'}\n`;
     resp += `- **وزن الطفل:** ${p.weight ? `**${p.weight} كجم**` : 'غير مسجل بعد في الإعدادات'}\n`;
-
     if (p.basalDose && p.weight) {
       const basalPerKg = +(p.basalDose / p.weight).toFixed(2);
-      const minExpectedTdd = +(p.weight * 0.5).toFixed(1);
-      const maxExpectedTdd = +(p.weight * 1.0).toFixed(1);
-      resp += `- **نسبة القاعدي للوزن:** **${basalPerKg} وحدة/كجم/يوم** (المعدل المعتاد للقاعدي وحده يتراوح غالباً بين \`0.25\` إلى \`0.45\` وحدة/كجم حسب عمر الطفل ومرحلة السكر).\n`;
-      resp += `- **إجمالي الأنسولين اليومي المتوقع للوزن (TDD):** بين **${minExpectedTdd} إلى ${maxExpectedTdd} وحدة/يوم** (حيث يمثل القاعدي عادةً **40% إلى 50%** منها).\n`;
-      if (p.tdd) {
-        resp += `- **إجمالي الأنسولين الفعلي المسجل (قاعدي + وجبات):** **${p.tdd} وحدة/يوم** (**${p.tddPerKg} وحدة/كجم** — القاعدي يمثل **${p.basalPct}%**).\n`;
-      }
-      if (s.hasData) {
-        if (s.nightHypos > 0 || (p.basalPct && p.basalPct > 55 && s.tbr > 4)) {
-          resp += `- ⚠️ **ملاحظة سريرية هامة (احتمال زيادة القاعدي Over-basalization):** نلاحظ وجود **${s.nightHypos} قراءات هبوط ليلي** (< ${p.low} ${u}) مع نسبة هبوط عامة **${s.tbr}%**. قد تكون جرعة القاعدي (${p.basalDose} وحدة) أعلى قليلاً من احتياج الطفل الليلي، ويُنصح بمراجعة الطبيب لتخفيضها بمقدار 10%–15%.\n`;
-        } else if (s.morningHighs >= 2 && s.nightHypos === 0) {
-          resp += `- 📈 **ملاحظة سريرية (احتمال نقص القاعدي أو ظاهرة الفجر):** توجد **${s.morningHighs} قراءات مرتفعة صباحاً** (> ${p.high} ${u}) دون هبوط ليلي، مما قد يشير إلى أن جرعة القاعدي تحتاج ضبطاً بسيطاً مع الطبيب.\n`;
-        } else if (p.tddPerKg && p.tddPerKg > 1.0 && s.tar > 30) {
-          resp += `- 🔍 **تنبيه فحص أماكن الحقن (Lipohypertrophy):** إجمالي الجرعات مرتفع نسبياً للوزن (${p.tddPerKg} وحدة/كجم) مع استمرار ارتفاع السكر فوق ${p.high} ${u} بنسبة ${s.tar}%؛ يُرجى فحص أماكن الحقن للتأكد من عدم وجود تكتلات دهنية تمنع امتصاص الأنسولين.\n`;
-        } else {
-          resp += `- ✅ **التوازن الحالي:** جرعة القاعدي تبدو متناسقة مع وزن الطفل ومع قراءاته المسجلة في نطاق **${p.low}–${p.high} ${u}**.`;
-        }
-      }
-    } else {
-      resp += `- 💡 *توصية:* تأكد من إدخال **وزن الطفل بالكيلوجرام** و**جرعة القاعدي اليومية** في صفحة (إعدادات الطفل) أو (صفحة الطبيب) ليقوم النظام بحساب معادلة \`وحدة/كجم/يوم\` بدقة.`;
+      resp += `- **نسبة القاعدي للوزن:** **${basalPerKg} وحدة/كجم/يوم**.\n`;
     }
     return resp;
   }
 
-  // 3. سؤال عن طوارئ الهبوط أو الارتفاع
-  if (/(طوارئ|هبوط|انخفاض|دوخ|عرق|رجف|كيتون|اسيتون|أسيتون|عالي جدا|مرتفع جدا)/.test(qLower)) {
-    return `### 🚨 بروتوكول التعامل السريع لـ ${p.name} (بوحدة ${u})\n` +
-      `#### 1️⃣ في حالة هبوط السكر (أقل من **${p.low} ${u}**):\n` +
-      `- **قاعدة 15-15 الفورية:** أعطِ **${p.hypoCarbs} جرام سكريات سريعة** فوراً (نصف كوب عصير محلى أو 3 ملاعق صغيرة سكر مذابة في ماء).\n` +
-      `- **لا تعطِ شوكولاتة أو أطعمة دهنية** في لحظة الهبوط لأن الدهون تبطئ رفع السكر.\n` +
-      `- **أعد القياس بعد 15 دقيقة:** إذا كان لا يزال أقل من **${p.low} ${u}**، كرر نفس الكمية (${p.hypoCarbs} جرام).\n` +
-      `- إذا كان الهبوط حرجاً (أقل من **${p.critLow} ${u}**) مع فقدان وعي أو تشنجات: **يُمنع إعطاء أي شيء بالفم**، ويُحقن الجلوكاجون فوراً.\n\n` +
-      `#### 2️⃣ في حالة الارتفاع الشديد (أعلى من **${p.critHigh} ${u}**):\n` +
-      `- احسب جرعة التصحيح بمعامل الطفل (**1 وحدة لكل ${p.cf} ${u}** للوصول إلى الهدف **${p.target} ${u}**)، بشرط مرور أكثر من 3 ساعات على آخر جرعة سريع.\n` +
-      `- افحص **الكيتون (الأسيتون)** في البول أو الدم وقدم الماء بكثرة للطفل.\n` +
-      `- إذا وُجد كيتون متوسط/كبير أو قيء مستمر أو ألم بالبطن، توجه فوراً للمستشفى أو تواصل مع الطبيب.`;
-  }
-
-  // 4. سؤال عن ضبط سكر الليل والفجر (Dawn vs Somogyi)
-  if (/(ليل|نوم|فجر|صباح|صائم|سوموجي|dawn)/.test(qLower)) {
-    let nightAnalysis = '';
-    if (s.hasData) {
-      nightAnalysis = `- **في سجل ${p.name} الأخير:** تم رصد **${s.nightHypos} مرات هبوط ليلي** (< ${p.low} ${u}) و**${s.morningHighs} مرات ارتفاع صباحي** (> ${p.high} ${u}).\n`;
-    }
-    return `### 🌙 تفسير وضبط سكر الليل والفجر لـ ${p.name} (${u})\n` +
-      nightAnalysis +
-      `- **الفرق بين السببين الرئيسيين لارتفاع سكر الصباح (أعلى من ${p.high} ${u}):**\n` +
-      `  1. **ظاهرة الفجر (Dawn Phenomenon):** يرتفع السكر بين الساعة 4 و8 صباحاً بسبب هرمونات النمو والكورتيزول الطبيعية دون حدوث هبوط ليلي، ويكون السكر عند الساعة 3 فجراً طبيعياً أو مرتفعاً.\n` +
-      `  2. **تأثير سوموجي (Somogyi Effect / ارتفاع ارتدادي):** يحدث هبوط خفي أثناء النوم (أقل من **${p.low} ${u}**، غالباً بين 1 و3 فجراً) فيفرز الجسم هرمونات ترفع السكر بشدة صباحاً.\n` +
-      `- **خطة الفحص الذكية لليلة القادمة:**\n` +
-      `  - قِس السكر قبل النوم، وعند الساعة **3:00 فجراً**، وعند الاستيقاظ بوحدة **${u}**.\n` +
-      `  - إذا كان قياس 3 فجراً أقل من **${p.low} ${u}** فالسبب زيادة في القاعدي (${p.basalType}) أو جرعة العشاء، أما إذا كان مرتفعاً طوال الليل فالسبب نقص في الجرعة أو كارب متأخر في العشاء.`;
-  }
-
-  // 5. سؤال عن اقتراح وجبة صحية محسوبة الكارب والجرعة والمفضلات والمتاح
-  if (/(وجب|اقترح|فطور|غداء|عشاء|سناك|طعام|أكل|اكل|تغذية|مفضل|متاح|شيوع|اكثر شيوعا|ارز|أرز|رز|مكرون|مكرونة|خبز|عيش|توست|بطاطس|فول|بيض|شوفان|فراخ|دجاج|لحم|سمك|تونة|كارب)/.test(qLower)) {
+  if (/(وجب|اقترح|فطور|غداء|عشاء|سناك|طعام|أكل|اكل|تغذية)/.test(qLower)) {
     return generateSmartMealSuggestions(qLower, p);
   }
 
-  // 6. الرد المختصر المباشر
   let reply = `### 💡 إجابة مباشرة لـ **${p.name}**:\n`;
   if (s.hasData && s.lastVal != null) {
     reply += `- آخر قراءة مسجلة: **${s.lastVal} ${u}** (${s.lastLabel} • ${s.lastTimeAgo}).\n`;
   }
-  reply += `- **معامل الكارب الحالي (${p.mealNowLabel}):** 1 وحدة لكل **${p.activeCR}g كارب** | **التصحيح:** 1 وحدة لكل **${p.cf} ${u}**.\n` +
-    `- لحساب أي وجبة أو تصحيح: اكتبي الصنف والكمية أو قراءة السكر وسأحسب لك الجرعة فوراً وبإيجاز!`;
-  return reply;
-}
-function dummyOldReply() {
-  if (s.hasData) {
-    reply += `- **آخر قراءة مسجلة:** **${s.lastVal} ${u}** (${s.lastLabel} — ${s.lastTimeAgo})\n`;
-    reply += `- **متوسط السكر:** **${s.allMean} ${u}** | **النطاق المستهدف للطفل:** **${p.low}–${p.high} ${u}**\n`;
-    reply += `- **الوقت داخل النطاق (TIR):** **${s.tir}%** (الهدف العالمي > 70%)\n`;
-    reply += `- **نسبة الهبوط (< ${p.low} ${u}):** **${s.tbr}%** | **نسبة الارتفاع (> ${p.high} ${u}):** **${s.tar}%**\n`;
-    reply += `- **استقرار السكر (CV%):** **${s.cvPct}%** (${s.cvPct <= 36 ? 'مستقر وممتاز ✅' : 'يوجد تذبذب يحتاج مراجعة الأوقات والجرعات ⚠️'})\n\n`;
-
-    reply += `### 🔍 أهم الملاحظات والتوصيات لحالة ${p.name}:\n`;
-    if (s.tbr > 4) {
-      reply += `- **أولوية أولى (منع الهبوط المتكرر):** نسبة الهبوط لديكم **${s.tbr}%** (أقل من **${p.low} ${u}**). تذكروا قاعدة التدرج الطبي: ضبط الهبوط يسبق دائماً علاج الارتفاع. راقبوا أوقات الهبوط (${s.nightHypos > 0 ? `خاصة الهبوط الليلي المسجل ${s.nightHypos} مرات` : 'خاصة بعد الوجبات أو المجهود البدني'}).\n`;
-    }
-    if (s.tar > 25) {
-      reply += `- **تحسين قراءات الارتفاع:** نسبة الارتفاع فوق **${p.high} ${u}** هي **${s.tar}%**. تأكدوا من إعطاء جرعة ${p.bolusType} قبل الوجبة بـ **10–15 دقيقة** وحساب الكارب بدقة على معامل **${p.activeCR} جرام/وحدة**.\n`;
-    }
-    if (s.tir >= 70 && s.tbr <= 4) {
-      reply += `- **تحكم ممتاز:** ما شاء الله! نسبة البقاء في النطاق (**${s.tir}%**) ضمن المستهدف العالمي وبأمان عالٍ.\n`;
-    }
-  } else {
-    reply += `- لا توجد قراءات مسجلة كافية في آخر 7 أيام. ابدأ بتسجيل قراءات السكر اليومية بوحدة **${u}** ليقوم المساعد بتحليل المنحنى بدقة.\n`;
+  reply += `- **معامل الكارب الحالي (${p.mealNowLabel}):** ${p.activeCR ? `1 وحدة لكل **${p.activeCR}g كارب**` : 'غير محدد'} | **التصحيح:** ${p.cf ? `1 وحدة لكل **${p.cf} ${u}**` : 'غير محدد'}.\n`;
+  if (p.missingLabels.length) {
+    reply += `- ⚠️ **إعدادات تحتاج استكمالاً في ملف الطفل:** (${p.missingLabels.join('، ')}).\n`;
   }
-
-  reply += `\n### ⚙️ المعاملات المعتمدة حالياً في حسابات ${p.name}:\n`;
-  reply += `- **وحدة القياس المعتمدة:** \`${u}\` (النطاق: **${p.low}–${p.high} ${u}** | الهدف: **${p.target} ${u}**)\n`;
-  reply += `- **معامل الكارب النشط الآن (${p.mealNowLabel}):** 1 وحدة لكل **${p.activeCR} جرام كارب**\n`;
-  reply += `- **معامل التصحيح (CF):** 1 وحدة تخفض السكر بمقدار **${p.cf} ${u}**\n`;
-  reply += `- **القاعدي:** ${p.basalType} (${p.basalDose ? p.basalDose + ' وحدة' : 'غير محدد'}) ${p.weight ? `| **الوزن:** ${p.weight} كجم` : ''}\n`;
-  if (p.doctorNote) {
-    reply += `- **تعليمات الطبيب المسجلة:** "${p.doctorNote}"\n`;
-  }
-  reply += `- 💬 *يمكنك كتابة أي قراءة سكر (بوحدة ${u}) أو كمية كارب في الشات مباشرة وسأحسب لك التصحيح أو الجرعة فوراً!*`;
-
+  reply += `- لحساب أي وجبة أو تصحيح: اكتبي الصنف والكمية أو قراءة السكر وسأحسب لك الجرعة فوراً!`;
   return reply;
 }
 
@@ -2338,11 +1396,15 @@ function buildWelcomeMessage(p) {
   if (s.hasData) {
     statusLine = `📊 **ملخص سريع الآن:** آخر قراءة لـ **${p.name}** هي **${s.lastVal} ${p.unit}** (${s.lastLabel} • ${s.lastTimeAgo})، ونسبة البقاء في النطاق المستهدف (**${p.low}–${p.high} ${p.unit}**) هي **${s.tir}%** بمتوسط **${s.allMean} ${p.unit}**.`;
   } else {
-    statusLine = `📊 النطاق المستهدف المضبوط لـ **${p.name}** هو **${p.low}–${p.high} ${p.unit}**، ومعامل الكارب الحالي لوجبة ${p.mealNowLabel} هو **1:${p.activeCR}**.`;
+    statusLine = `📊 النطاق المستهدف المضبوط لـ **${p.name}** هو **${p.low}–${p.high} ${p.unit}**${p.activeCR ? `، ومعامل الكارب الحالي لوجبة ${p.mealNowLabel} هو **1:${p.activeCR}**` : ''}.`;
   }
 
+  const missingNote = p.missingLabels.length
+    ? `\n\n⚠️ *ملاحظة:* ينقص في إعدادات ${p.name} تحديد (**${p.missingLabels.join('، ')}**) لتفعيل حسابات الجرعات والتصحيح كاملة.`
+    : '';
+
   return `أهلاً بك! أنا **مساعد أسيل الطبي الذكي** 🤖، متصل الآن بملف **${p.name}** الطبي وأتحدث معك بوحدة القياس المختارة لديكم (**\`${p.unit}\`**).\n\n` +
-    `${statusLine}\n\n` +
+    `${statusLine}${missingNote}\n\n` +
     `يمكنك سؤالي عن أي استفسار طبي، أو الضغط على أحد الأزرار بالأسفل، أو كتابة قراءة السكر/جرامات الكارب مباشرة لحساب الجرعة والتصحيح!`;
 }
 
@@ -2393,9 +1455,6 @@ async function initAiAssistant(parentId, child) {
   const resetBtn = $('aiBtnReset');
   const settingsBtn = $('aiBtnSettings');
   const settingsPanel = $('aiSettingsPanel');
-  const keyInput = $('aiGeminiKeyInput');
-  const saveKeyBtn = $('aiSaveKeyBtn');
-  const keyStatus = $('aiKeyStatusMsg');
   const unitBadge = $('aiUnitBadge');
   const subText = $('aiChildContextSub');
   const form = $('aiChatForm');
@@ -2426,7 +1485,6 @@ async function initAiAssistant(parentId, child) {
     widget.classList.add('hidden');
   }
 
-  // ربط أحداث الفتح والإغلاق فوراً دون انتظار أي تحميل
   fab?.addEventListener('click', (e) => {
     e.preventDefault();
     if (widget.classList.contains('hidden')) openChat();
@@ -2448,12 +1506,10 @@ async function initAiAssistant(parentId, child) {
     settingsPanel?.classList.toggle('hidden');
   });
 
-  // تحديث الشارات الأولية
   const initialProfile = getChildClinicalProfile(child);
   if (unitBadge) unitBadge.textContent = `📏 ${initialProfile.unit}`;
   if (subText) subText.textContent = `متصل بملف: ${initialProfile.name} • الوحدة: ${initialProfile.unit}`;
 
-  // تحميل الإعدادات الخلفية بالتوازي
   Promise.all([
     computeRecentBolusStats(parentId)
   ]).then(() => {
@@ -2462,12 +1518,6 @@ async function initAiAssistant(parentId, child) {
     if (subText) subText.textContent = `متصل بملف: ${fresh.name} • الوحدة: ${fresh.unit}`;
   }).catch(e => console.warn('Background init warning:', e));
 
-  const profile = getChildClinicalProfile(child);
-  if (unitBadge) unitBadge.textContent = `📏 ${profile.unit}`;
-  if (subText) subText.textContent = `متصل بملف: ${profile.name} • الوحدة: ${profile.unit}`;
-
-
-  // لوحة إعدادات المفتاح لم تعد لازمة (الذكاء الاصطناعي يعمل عبر الخادم الآمن) فنخفيها
   if (settingsBtn) settingsBtn.style.display = 'none';
   if (settingsPanel) settingsPanel.style.display = 'none';
 
