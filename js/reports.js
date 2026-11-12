@@ -4,6 +4,7 @@ import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { MGDL_PER_MMOL, STANDARD_LIMITS, getProtocol } from './child-protocol.js';
 
 function formatDecHour(dec) {
   const h = Math.floor(dec);
@@ -14,7 +15,7 @@ function formatDecHour(dec) {
 const $ = id => document.getElementById(id);
 const setText = (el, v) => { if (el) el.textContent = (v == null || v === '') ? '—' : v; };
 const round1 = n => Math.round((+n || 0) * 10) / 10;
-const mgdl2mmol = v => v / 18.0182, mmol2mgdl = v => v * 18.0182;
+const mgdl2mmol = v => v / MGDL_PER_MMOL, mmol2mgdl = v => v * MGDL_PER_MMOL;
 
 function calcAge(bd) {
   if (!bd) return '-';
@@ -47,14 +48,13 @@ function showLoader(v) { const l = $('appLoader'); if (l) l.style.display = v ? 
 const urlParams = new URLSearchParams(location.search);
 let currentUser;
 let childId = urlParams.get('child') || localStorage.getItem('selectedChildId') || localStorage.getItem('lastChildId');
-let childRef, child;
+let childRef, child, childProto;
 let unitSel, fromDate, toDate, reportGrid, emptyGrid, pie, cmpElems, aiTable, modalDayChart;
 let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
 let sysUnit = 'mg/dL';
 let reportDays = [];
 let parentIdForQuery = null;
 let lastLabHba1cVal = null;
-
 
 function setupRoleNavigation(isDoc, pId, cId) {
   const safeChild = encodeURIComponent(cId || childId || '');
@@ -232,26 +232,27 @@ async function loadChild(parentId) {
 
   if (!snap.exists()) throw new Error('child-not-found');
   child = snap.data();
+  childProto = getProtocol(child);
 
-  sysUnit = child.glucoseUnit || 'mg/dL';
-  if (child.glucose_limits) {
-    sysLimits.low = Number(child.glucose_limits.low) || (sysUnit === 'mmol/L' ? 3.9 : 70);
-    sysLimits.high = Number(child.glucose_limits.high) || (sysUnit === 'mmol/L' ? 10.0 : 180);
-    sysLimits.critLow = Number(child.glucose_limits.critical_low) || (sysUnit === 'mmol/L' ? 3.0 : 54);
-    sysLimits.critHigh = Number(child.glucose_limits.critical_high) || (sysUnit === 'mmol/L' ? 13.9 : 250);
-  } else if (sysUnit === 'mmol/L') {
-    sysLimits = { critLow: 3.0, low: 3.9, high: 10.0, critHigh: 13.9 };
-  }
+  sysUnit = childProto.unit;
+  sysLimits = {
+    critLow: childProto.limits.critical_low,
+    low: childProto.limits.low,
+    high: childProto.limits.high,
+    critHigh: childProto.limits.critical_high
+  };
 
   const isDoc = (parentIdForQuery !== currentUser?.uid) || urlParams.has('parentId');
   setupRoleNavigation(isDoc, parentIdForQuery, childId);
 
-  setText($('breadChildName'), child.name || 'الطفل');
-  setText($('topChildName'), child.name || 'الطفل');
-  if ($('topAvatar')) $('topAvatar').textContent = (child.name || 'أ').trim().charAt(0);
+  const cName = child.identity?.name || child.name || 'الطفل';
+  setText($('breadChildName'), cName);
+  setText($('topChildName'), cName);
+  if ($('topAvatar')) $('topAvatar').textContent = (cName || 'أ').trim().charAt(0);
 
-  const age = calcAge(child.birthDate);
-  const genderStr = child.gender === 'female' ? 'أنثى' : (child.gender === 'male' ? 'ذكر' : '');
+  const age = calcAge(child.identity?.dob || child.birthDate);
+  const gVal = child.identity?.gender || child.gender;
+  const genderStr = gVal === 'female' ? 'أنثى' : (gVal === 'male' ? 'ذكر' : '');
   const regimenStr = child.regimen === 'pump' ? 'مضخة إنسولين' : 'حقن يومية (MDI)';
   const metaParts = [];
   if (age !== '-') metaParts.push(`العمر: ${age} سنة`);
@@ -283,6 +284,11 @@ async function loadChild(parentId) {
 
 function limitsInUnit(targetUnit) {
   if (targetUnit === sysUnit) return { ...sysLimits };
+  // إذا كانت حدود الطفل قياسية عالمية غير مخصصة، نستخدم الأرقام القياسية الدقيقة للوحدة المختارة
+  if (childProto && !childProto.limitsCustom && STANDARD_LIMITS[targetUnit]) {
+    const std = STANDARD_LIMITS[targetUnit];
+    return { critLow: std.critical_low, low: std.low, high: std.high, critHigh: std.critical_high };
+  }
   if (targetUnit === 'mmol/L' && sysUnit === 'mg/dL') {
     return { critLow: round1(mgdl2mmol(sysLimits.critLow)), low: round1(mgdl2mmol(sysLimits.low)), high: round1(mgdl2mmol(sysLimits.high)), critHigh: round1(mgdl2mmol(sysLimits.critHigh)) };
   }
@@ -381,7 +387,7 @@ async function fetchBasalLogs(fromISO, toISO) {
 
 function groupByDaySlot(list, basalMap = {}) {
   const days = {};
-  const defaultBasal = Number(child?.insulin?.basalDose || child?.basalDose) || 0;
+  const defaultBasal = childProto?.insulin?.basalDose || 0;
   for (const r of list) {
     const key = r.date;
     days[key] = days[key] || {
@@ -396,7 +402,7 @@ function groupByDaySlot(list, basalMap = {}) {
       basalRatio: 0,
       bolusRatio: 0
     };
-    const slotKey = r.slot === 'WAKE' ? 'FASTING' : r.slot; // توحيد صائم واستيقاظ في عمود واحد
+    const slotKey = r.slot === 'WAKE' ? 'FASTING' : r.slot;
     days[key].slots[slotKey] = days[key].slots[slotKey] || [];
     days[key].slots[slotKey].push(r);
     days[key].dailyCarbs += (r.carbs || 0);
@@ -580,7 +586,7 @@ function updateStats(list, days = []) {
   setText($('statAvg'), `${round1(mean)} ${unit}`);
   setText($('statCount'), String(n));
 
-  const weight = Number(child?.vitals?.weight || child?.weight) || null;
+  const weight = childProto?.weightKg || null;
   setText($('statChildWeight'), weight ? `${weight}` : '—');
 
   const daysList = (days && days.length) ? days : (reportDays || []);
@@ -588,7 +594,6 @@ function updateStats(list, days = []) {
   if (activeDays.length > 0) {
     const sumTDD = activeDays.reduce((acc, d) => acc + (d.dailyTDD || 0), 0);
     const sumBasal = activeDays.reduce((acc, d) => acc + (d.dailyBasal || 0), 0);
-    const sumBolus = activeDays.reduce((acc, d) => acc + (d.dailyBolus || 0), 0);
     const avgTDD = sumTDD / activeDays.length;
     const avgBasal = sumBasal / activeDays.length;
     const basalRatio = avgTDD > 0 ? Math.round((avgBasal / avgTDD) * 100) : 0;
@@ -888,7 +893,7 @@ function buildAI(list, unit, days = []) {
     const sumBasal = activeDays.reduce((acc, d) => acc + (d.dailyBasal || 0), 0);
     const avgTDD = sumTDD / activeDays.length;
     const basalRatio = avgTDD > 0 ? Math.round((sumBasal / sumTDD) * 100) : 0;
-    const weight = Number(child?.vitals?.weight || child?.weight) || null;
+    const weight = childProto?.weightKg || null;
     const tddPerKg = weight && avgTDD > 0 ? (avgTDD / weight).toFixed(2) : null;
 
     const nocturnalLows = valid.filter(x => (x.slot === 'FASTING' || x.slot === 'DURING_SLEEP' || x.slot === 'BEDTIME') && x.val < L.low).length;
@@ -937,15 +942,17 @@ function buildAI(list, unit, days = []) {
     patt.push({ name: 'تذبذب عالي (Glycemic Variability)', desc: `السكر يتأرجح بشدة (CV: ${Math.round(cv)}%).`, rec: 'تثبيت مواعيد الوجبات، وتجنب الإفراط في تصحيح الهبوط، وإعطاء الأنسولين قبل الأكل بوقت كافٍ.', conf: 'أهمية عالية', color: '#b45309' });
   }
 
+  const hypoGrams = childProto?.safety?.hypoCarbs || 15;
+  const diaHrs = childProto?.safety?.diaHours || 4;
   let reboundCount = 0, weakCFCount = 0, stackingCount = 0;
   for (let i = 0; i < valid.length - 1; i++) {
     const curr = valid[i], next = valid[i + 1];
     const diffHours = (next.when - curr.when) / (1000 * 60 * 60);
     if (curr.val < L.low && next.val > L.high && diffHours <= 6) reboundCount++;
-    if (curr.val > L.high && curr.ins > 0 && next.val > L.high && diffHours <= 4) weakCFCount++;
+    if (curr.val > L.high && curr.ins > 0 && next.val > L.high && diffHours <= diaHrs) weakCFCount++;
     if (curr.ins > 0 && next.ins > 0 && diffHours <= 3 && next.val < L.low) stackingCount++;
   }
-  if (reboundCount >= 2) patt.push({ name: 'إفراط علاج الهبوط (Rebound)', desc: `تم رصد ارتداد عكسي بعد الهبوط ${reboundCount} مرات، مما يشير لاستهلاك سكريات سريعة أكثر من قاعدة 15.`, rec: 'الالتزام الصارم بـ "قاعدة 15" (15 جم كارب سريع والانتظار 15 دقيقة) وتجنب تناول كميات عشوائية.', conf: 'أهمية عالية', color: '#ea580c' });
+  if (reboundCount >= 2) patt.push({ name: 'إفراط علاج الهبوط (Rebound)', desc: `تم رصد ارتداد عكسي بعد الهبوط ${reboundCount} مرات، مما يشير لاستهلاك سكريات سريعة أكثر من الموصى به.`, rec: `الالتزام بـ (${hypoGrams} جم كارب سريع والانتظار 15 دقيقة) وتجنب تناول كميات عشوائية.`, conf: 'أهمية عالية', color: '#ea580c' });
   if (weakCFCount >= 3) patt.push({ name: 'ضعف معامل التصحيح (CF)', desc: `جرعات التصحيح لا تخفض السكر للمعدل الطبيعي بشكل ملحوظ في أوقات متكررة.`, rec: 'استشارة الطبيب لتحديث وتعديل معامل التصحيح CF وجعله أكثر فعالية.', conf: 'تنبيه سريري', color: '#2563eb' });
   if (stackingCount >= 1) patt.push({ name: 'تراكم الإنسولين (Insulin Stacking)', desc: `تم رصد جرعات إنسولين سريعة متقاربة (أقل من 3 ساعات) تلاها هبوط حاد.`, rec: 'احرص على مراعاة مدة عمل الإنسولين النشط (IOB) والانتظار 3 ساعات على الأقل قبل إعطاء جرعة تصحيحية جديدة.', conf: 'أهمية قصوى', color: '#dc2626' });
 
