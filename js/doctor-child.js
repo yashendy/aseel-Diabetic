@@ -2,12 +2,13 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy, limit, addDoc, serverTimestamp
+  doc, getDoc, updateDoc, deleteField, collection, query, where, getDocs, limit, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { MGDL_PER_MMOL, getProtocol, buildProtocolPatch, toUpdateData, labelOf } from './child-protocol.js';
 
 const $ = id => document.getElementById(id);
-const mgdl2mmol = v => v / 18.0182;
-const mmol2mgdl = v => v * 18.0182;
+const mgdl2mmol = v => v / MGDL_PER_MMOL;
+const mmol2mgdl = v => v * MGDL_PER_MMOL;
 
 const params = new URLSearchParams(location.search);
 const childId = params.get('child');
@@ -17,7 +18,7 @@ let currentUser = null;
 let currentDoctorName = 'الطبيب المعالج';
 let childData = {};
 let sysUnit = 'mg/dL';
-let sysLimits = { critLow: 54, low: 70, target: 100, high: 180, critHigh: 250 };
+let sysLimits = { critLow: 54, low: 70, target: null, high: 180, critHigh: 250 };
 let measurementsData = [];
 
 function showLoader(show) {
@@ -91,44 +92,42 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-// --- 1. تحميل بروفايل المريض وإعداد الروابط ---
+// --- 1. تحميل بروفايل المريض وإعداد الروابط عبر البروتوكول الموحد ---
 async function loadChildProfile() {
   const childRef = doc(db, "parents", parentId, "children", childId);
   const snap = await getDoc(childRef);
   if (!snap.exists()) throw new Error("لم يتم العثور على ملف المريض أو أن الأسرة أوقفت مشاركة البيانات.");
 
   childData = snap.data();
-  sysUnit = childData.glucoseUnit || 'mg/dL';
-
-  if (childData.glucose_limits) {
-    sysLimits = {
-      critLow: Number(childData.glucose_limits.critical_low) || (sysUnit === 'mmol/L' ? 3.0 : 54),
-      low: Number(childData.glucose_limits.low) || (sysUnit === 'mmol/L' ? 3.9 : 70),
-      target: Number(childData.glucose_limits.target) || (sysUnit === 'mmol/L' ? 5.5 : 100),
-      high: Number(childData.glucose_limits.high) || (sysUnit === 'mmol/L' ? 10.0 : 180),
-      critHigh: Number(childData.glucose_limits.critical_high) || (sysUnit === 'mmol/L' ? 13.9 : 250)
-    };
-  } else if (sysUnit === 'mmol/L') {
-    sysLimits = { critLow: 3.0, low: 3.9, target: 5.5, high: 10.0, critHigh: 13.9 };
-  }
+  const proto = getProtocol(childData);
+  sysUnit = proto.unit;
+  sysLimits = {
+    critLow: proto.limits.critical_low,
+    low: proto.limits.low,
+    target: proto.target,
+    high: proto.limits.high,
+    critHigh: proto.limits.critical_high
+  };
 
   // رأس الصفحة والهوية البصرية
-  const patientName = childData.name || 'المريض';
+  const patientName = childData.identity?.name || childData.name || 'المريض';
   if ($('patientName')) $('patientName').textContent = patientName;
   if ($('breadPatientName')) $('breadPatientName').textContent = patientName;
   if ($('patientAvatar')) $('patientAvatar').textContent = patientName.charAt(0);
 
   // حساب العمر الدقيق
   let ageStr = '—';
-  if (childData.birthDate) {
-    const b = new Date(childData.birthDate);
+  const dob = childData.identity?.dob || childData.birthDate;
+  if (dob) {
+    const b = new Date(dob);
     const t = new Date();
     let age = t.getFullYear() - b.getFullYear();
     const m = t.getMonth() - b.getMonth();
     if (m < 0 || (m === 0 && t.getDate() < b.getDate())) age--;
     ageStr = `${Math.max(0, age)} سنة`;
   }
-  const genderStr = childData.gender === 'female' ? 'أنثى' : 'ذكر';
+  const genderVal = childData.identity?.gender || childData.gender;
+  const genderStr = genderVal === 'female' ? 'أنثى' : 'ذكر';
   if ($('patientMeta')) $('patientMeta').textContent = `${genderStr} • ${ageStr} • الوحدة: ${sysUnit}`;
 
   // بيانات ولي الأمر للتواصل (من بيانات الطفل)
@@ -165,11 +164,11 @@ async function loadChildProfile() {
     $('civilRow').classList.remove('hidden');
   }
 
-  const regimenType = childData.insulin?.basal ? 'حقن MDI' : (childData.regimen || 'بروتوكول علاجي');
+  const regimenType = proto.insulin.basal ? 'حقن MDI' : (childData.regimen || 'بروتوكول علاجي');
   if ($('patientRegimen')) $('patientRegimen').textContent = regimenType;
   if ($('lblUnit')) $('lblUnit').textContent = sysUnit;
 
-// روابط التنقل الموحدة لمحطة الطبيب
+  // روابط التنقل الموحدة لمحطة الطبيب
   const safeChild = encodeURIComponent(childId);
   const safeParent = encodeURIComponent(parentId);
   const qDoc = `?child=${safeChild}&parentId=${safeParent}`;
@@ -184,24 +183,25 @@ async function loadChildProfile() {
     };
   }
 
-  // تعبئة حقول البروتوكول الطبي
-  if ($('f_target')) $('f_target').value = sysLimits.target;
-  if ($('f_critLow')) $('f_critLow').value = sysLimits.critLow;
-  if ($('f_low')) $('f_low').value = sysLimits.low;
-  if ($('f_high')) $('f_high').value = sysLimits.high;
-  if ($('f_critHigh')) $('f_critHigh').value = sysLimits.critHigh;
+  // تعبئة حقول البروتوكول الطبي من البروتوكول الموحد
+  if ($('f_target')) $('f_target').value = proto.target ?? '';
+  if ($('f_critLow')) $('f_critLow').value = sysLimits.critLow ?? '';
+  if ($('f_low')) $('f_low').value = sysLimits.low ?? '';
+  if ($('f_high')) $('f_high').value = sysLimits.high ?? '';
+  if ($('f_critHigh')) $('f_critHigh').value = sysLimits.critHigh ?? '';
 
-  const cr = childData.cr || {};
-  if ($('f_cf')) $('f_cf').value = childData.cf || childData.correctionFactor || '';
-  if ($('f_cr_b')) $('f_cr_b').value = cr.breakfast || '';
-  if ($('f_cr_l')) $('f_cr_l').value = cr.lunch || '';
-  if ($('f_cr_d')) $('f_cr_d').value = cr.dinner || '';
-  if ($('f_cr_s')) $('f_cr_s').value = cr.snack || '';
+  if ($('f_cf')) $('f_cf').value = proto.CF ?? '';
+  if ($('f_cr_b')) $('f_cr_b').value = proto.CR.breakfast ?? '';
+  if ($('f_cr_l')) $('f_cr_l').value = proto.CR.lunch ?? '';
+  if ($('f_cr_d')) $('f_cr_d').value = proto.CR.dinner ?? '';
+  if ($('f_cr_s')) $('f_cr_s').value = proto.CR.snack ?? '';
 
-  if ($('f_basal')) $('f_basal').value = childData.insulin?.basal || childData.basalType || '';
-  if ($('f_basal_dose')) $('f_basal_dose').value = childData.insulin?.basalDose || childData.basalDose || '';
-  if ($('f_bolus')) $('f_bolus').value = childData.insulin?.bolus || childData.bolusType || '';
-  if ($('f_child_weight')) $('f_child_weight').value = childData.vitals?.weight || childData.weight || '';
+  if ($('f_basal')) $('f_basal').value = proto.insulin.basal || '';
+  if ($('f_basal_dose')) $('f_basal_dose').value = proto.insulin.basalDose ?? '';
+  if ($('f_bolus')) $('f_bolus').value = proto.insulin.bolus || '';
+  if ($('f_child_weight')) $('f_child_weight').value = proto.weightKg ?? '';
+  if ($('f_maxdose')) $('f_maxdose').value = proto.safety.maxDose ?? '';
+  if ($('f_step')) $('f_step').value = String(proto.safety.step || 0.5);
 
   // خريطة الحقن (مع توحيد القيمة الافتراضية normal ودعم ok السابقة)
   const imap = childData.injection_map || {};
@@ -329,7 +329,7 @@ function evaluateClinicalPatterns() {
   }
 
   const patterns = [];
-  const chrono = [...valid].reverse(); // ترتيب تصاعدي زمني للتحليل التسلسلي
+  const chrono = [...valid].reverse();
 
   // 1. ظاهرة الفجر (Dawn Phenomenon)
   const fastingHighThreshold = sysUnit === 'mmol/L' ? 7.2 : 130;
@@ -485,7 +485,6 @@ function evaluateClinicalPatterns() {
     });
   }
 
-  // في حال كانت جميع المؤشرات ممتازة
   if (patterns.length === 0) {
     patterns.push({
       title: 'استقرار المؤشرات والأنماط السريرية ✅',
@@ -496,7 +495,6 @@ function evaluateClinicalPatterns() {
     });
   }
 
-  // رندر الكروت
   grid.innerHTML = patterns.map(p => `
     <div class="ai-pattern-card ${p.cls}">
       <div class="ai-pat-header">
@@ -590,7 +588,6 @@ async function sendLabOrder() {
       createdAt: serverTimestamp()
     };
 
-    // حفظ في سجل طلبات الفحوصات للمريض وتحديث ملف الطفل بالتوازي
     const labOrdersCol = collection(db, "parents", parentId, "children", childId, "lab_orders");
     const childRef = doc(db, "parents", parentId, "children", childId);
 
@@ -609,7 +606,6 @@ async function sendLabOrder() {
 
     alert(`تم إرسال طلب الفحوصات (${selectedTests.length} فحص) بنجاح إلى ملف الطفل والأسرة! 🔬📨`);
 
-    // تفريغ الحقول
     checkboxes.forEach(cb => cb.checked = false);
     if ($('labOrderNote')) $('labOrderNote').value = '';
   } catch (e) {
@@ -620,24 +616,40 @@ async function sendLabOrder() {
   }
 }
 
-// --- 7. حفظ واعتماد البروتوكول العلاجي وسجل التعديلات (Audit Trail) ---
+// --- 7. حفظ واعتماد البروتوكول العلاجي الموحد وسجل التعديلات (Audit Trail) ---
 async function saveMedicalProtocol() {
-  showLoader(true);
-
-  const crData = {
-    breakfast: parseFloat($('f_cr_b')?.value) || null,
-    lunch: parseFloat($('f_cr_l')?.value) || null,
-    dinner: parseFloat($('f_cr_d')?.value) || null,
-    snack: parseFloat($('f_cr_s')?.value) || null
+  const protocolInput = {
+    glucoseUnit: sysUnit,
+    cf: $('f_cf')?.value,
+    cr: {
+      breakfast: $('f_cr_b')?.value,
+      lunch: $('f_cr_l')?.value,
+      dinner: $('f_cr_d')?.value,
+      snack: $('f_cr_s')?.value
+    },
+    limits: {
+      target: $('f_target')?.value,
+      critical_low: $('f_critLow')?.value,
+      low: $('f_low')?.value,
+      high: $('f_high')?.value,
+      critical_high: $('f_critHigh')?.value
+    },
+    insulin: {
+      basal: $('f_basal')?.value?.trim(),
+      bolus: $('f_bolus')?.value?.trim()
+    },
+    basalDose: $('f_basal_dose')?.value,
+    weight: $('f_child_weight')?.value
   };
+  if ($('f_maxdose')) protocolInput.maxDose = $('f_maxdose').value;
+  if ($('f_step')) protocolInput.insulinStep = $('f_step').value;
 
-  const limitsData = {
-    target: parseFloat($('f_target')?.value) || null,
-    critical_low: parseFloat($('f_critLow')?.value) || null,
-    low: parseFloat($('f_low')?.value) || null,
-    high: parseFloat($('f_high')?.value) || null,
-    critical_high: parseFloat($('f_critHigh')?.value) || null
-  };
+  // التحقق من البروتوكول عبر child-protocol.js
+  const patch = buildProtocolPatch(childData, protocolInput);
+  if (patch.errors.length > 0) {
+    alert('⛔ ' + patch.errors.join('\n'));
+    return;
+  }
 
   const mapIds = ['abd_top_right', 'abd_top_left', 'abd_bottom_right', 'abd_bottom_left', 'arm_right', 'arm_left', 'thigh_right', 'thigh_left'];
   const injectionMapData = {};
@@ -646,40 +658,42 @@ async function saveMedicalProtocol() {
     if (el) injectionMapData[id] = el.value || 'normal';
   });
 
+  const doctorNote = $('doctorPrescription')?.value?.trim() || null;
+
+  // تجهيز البيانات الموحدة للحفظ عبر updateDoc (تكتب النسخ المرآة لـ weight و basalDose تلقائياً)
   const payload = {
-    cf: parseFloat($('f_cf')?.value) || null,
-    cr: crData,
-    glucose_limits: limitsData,
-    insulin: {
-      basal: $('f_basal')?.value?.trim() || null,
-      basalDose: parseFloat($('f_basal_dose')?.value) || null,
-      bolus: $('f_bolus')?.value?.trim() || null
-    },
-    basalDose: parseFloat($('f_basal_dose')?.value) || null,
-    weight: parseFloat($('f_child_weight')?.value) || null,
+    ...toUpdateData(patch, deleteField),
     injection_map: injectionMapData,
-    doctor_note: $('doctorPrescription')?.value?.trim() || null,
+    doctor_note: doctorNote,
     lastMedicalUpdate: serverTimestamp(),
     updatedAt: serverTimestamp()
   };
 
+  showLoader(true);
   try {
     const childRef = doc(db, "parents", parentId, "children", childId);
     const historyCol = collection(db, "parents", parentId, "children", childId, "regimen_history");
 
+    const updatedProto = getProtocol({ ...childData, ...patch.flat });
+
     await Promise.all([
       updateDoc(childRef, payload),
       addDoc(historyCol, {
+        at: serverTimestamp(),
         timestamp: serverTimestamp(),
         dateStr: localDateTimeStr(),
+        by: currentUser.uid,
+        byRole: 'doctor',
+        byName: currentDoctorName,
         doctorId: currentUser.uid,
         doctorName: currentDoctorName,
-        doctorNote: payload.doctor_note,
-        target: limitsData.target,
-        targetBg: limitsData.target,
-        cf: payload.cf,
-        cr: payload.cr,
-        insulin: payload.insulin
+        doctorNote,
+        target: updatedProto.target,
+        targetBg: updatedProto.target,
+        cf: updatedProto.CF,
+        cr: updatedProto.CR,
+        insulin: updatedProto.insulin,
+        changes: patch.changes
       })
     ]);
 
@@ -697,44 +711,61 @@ async function saveMedicalProtocol() {
   }
 }
 
-// --- 8. جلب سجل التعديلات التاريخية (Audit Trail) ---
+// --- 8. جلب سجل التعديلات التاريخية (يدعم تعديلات الطبيب وولي الأمر والترحيل) ---
 async function loadRegimenHistory() {
   const listEl = $('regimenHistoryList');
   if (!listEl) return;
 
   try {
     const historyCol = collection(db, "parents", parentId, "children", childId, "regimen_history");
-    const qy = query(historyCol, orderBy("timestamp", "desc"), limit(10));
-    const snap = await getDocs(qy);
+    const snap = await getDocs(query(historyCol, limit(25)));
 
     if (snap.empty) {
       listEl.innerHTML = '<div class="tiny muted" style="padding:10px 0;">لا توجد تعديلات مسجلة سابقاً في السجل السريري.</div>';
       return;
     }
 
-    let html = '';
+    // نرتب محلياً لدعم السجلات التي تستخدم timestamp أو at معاً
+    const docs = [];
     snap.forEach(d => {
       const h = d.data();
-      const dt = h.dateStr || (h.timestamp?.toDate ? h.timestamp.toDate().toLocaleString('ar-EG') : '—');
-      const docName = (h.doctorName || 'الطبيب المعالج').replace(/^د\.\s*/, '');
+      const ts = h.timestamp?.toMillis?.() || h.at?.toMillis?.() || (h.dateStr ? new Date(h.dateStr).getTime() : 0);
+      docs.push({ h, ts });
+    });
+    docs.sort((a, b) => b.ts - a.ts);
+
+    let html = '';
+    docs.slice(0, 10).forEach(({ h }) => {
+      const dtObj = h.timestamp?.toDate?.() || h.at?.toDate?.();
+      const dt = h.dateStr || (dtObj ? dtObj.toLocaleString('ar-EG') : '—');
+      const actor = h.doctorName
+        ? `👨‍⚕️ د. ${h.doctorName.replace(/^د\.\s*/, '')}`
+        : (h.byRole === 'parent' ? `👪 ${h.byName || 'ولي الأمر'}` : `⚙️ ${h.byName || 'تحديث النظام'}`);
       const note = h.doctorNote ? `<div style="color:#1d4ed8; font-weight:600; margin-top:3px;">📝 ${escapeHtml(h.doctorNote)}</div>` : '';
 
-      const cr = h.cr || {};
-      const crParts = [];
-      if (cr.breakfast) crParts.push(`فطار: ${escapeHtml(cr.breakfast)}`);
-      if (cr.lunch) crParts.push(`غداء: ${escapeHtml(cr.lunch)}`);
-      if (cr.dinner) crParts.push(`عشاء: ${escapeHtml(cr.dinner)}`);
-
-      const targetVal = h.target ?? h.targetBg ?? '—';
+      let detailsHtml = '';
+      if (h.cf || h.target || h.targetBg || h.cr) {
+        const cr = h.cr || {};
+        const crParts = [];
+        if (cr.breakfast) crParts.push(`فطار: ${escapeHtml(cr.breakfast)}`);
+        if (cr.lunch) crParts.push(`غداء: ${escapeHtml(cr.lunch)}`);
+        if (cr.dinner) crParts.push(`عشاء: ${escapeHtml(cr.dinner)}`);
+        if (cr.snack) crParts.push(`سناك: ${escapeHtml(cr.snack)}`);
+        const targetVal = h.target ?? h.targetBg ?? '—';
+        detailsHtml = `<span>🎯 الهدف: <b>${escapeHtml(targetVal)}</b> | CF: <b>${escapeHtml(h.cf || '—')}</b> | CR: [${crParts.join('، ') || '—'}]</span>`;
+      } else if (Array.isArray(h.changes) && h.changes.length) {
+        const chParts = h.changes.map(c => `${escapeHtml(labelOf(c.field))}: <b>${escapeHtml(c.to ?? 'حُذف')}</b>`);
+        detailsHtml = `<span>🔄 التغييرات: ${chParts.join(' ، ')}</span>`;
+      }
 
       html += `
         <div class="history-item">
           <div class="history-meta">
-            <b>👨‍⚕️ د. ${escapeHtml(docName)}</b>
+            <b>${escapeHtml(actor)}</b>
             <span>🕒 ${escapeHtml(dt)}</span>
           </div>
           <div class="history-changes">
-            <span>🎯 الهدف: <b>${escapeHtml(targetVal)}</b> | CF: <b>${escapeHtml(h.cf || '—')}</b> | CR: [${crParts.join('، ') || '—'}]</span>
+            ${detailsHtml}
             ${note}
           </div>
         </div>
