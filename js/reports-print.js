@@ -2,6 +2,7 @@
 import { auth, db } from './firebase-config.js';
 import { collection, doc, getDoc, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+import { MGDL_PER_MMOL, STANDARD_LIMITS, getProtocol, normalizeUnit } from './child-protocol.js';
 
 const params = new URLSearchParams(location.search);
 const childId = params.get('child') || localStorage.getItem('selectedChildId') || localStorage.getItem('lastChildId');
@@ -14,8 +15,8 @@ const urlUnit = params.get('unit');
 const SLOT_KEYS = ['FASTING','PRE_BREAKFAST','POST_BREAKFAST','PRE_LUNCH','POST_LUNCH','PRE_DINNER','POST_DINNER','SNACK','BEDTIME','DURING_SLEEP'];
 const SLOT_LABELS = ['صائم/استيقاظ','ق.الفطار','ب.الفطار','ق.الغداء','ب.الغداء','ق.العشاء','ب.العشاء','سناك','ق.النوم','أثناء النوم'];
 
-const mgdl2mmol = v => v / 18.0182;
-const mmol2mgdl = v => v * 18.0182;
+const mgdl2mmol = v => v / MGDL_PER_MMOL;
+const mmol2mgdl = v => v * MGDL_PER_MMOL;
 const round1 = n => Math.round((+n || 0) * 10) / 10;
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -37,9 +38,20 @@ function calcAge(bd) {
 
 let sysLimits = { critLow: 54, low: 70, high: 180, critHigh: 250 };
 let sysUnit = 'mg/dL';
+let childProto = null;
 
 function limitsInUnit(targetUnit) {
   if (targetUnit === sysUnit) return { ...sysLimits };
+  // إذا كانت حدود الطفل قياسية عالمية غير مخصصة، نستخدم الأرقام القياسية الدقيقة للوحدة المختارة
+  if (childProto && !childProto.limitsCustom && STANDARD_LIMITS[targetUnit]) {
+    const std = STANDARD_LIMITS[targetUnit];
+    return {
+      critLow: std.critical_low,
+      low: std.low,
+      high: std.high,
+      critHigh: std.critical_high
+    };
+  }
   if (targetUnit === 'mmol/L' && sysUnit === 'mg/dL') {
     return {
       critLow: round1(mgdl2mmol(sysLimits.critLow)),
@@ -94,17 +106,16 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const childData = childSnap.data();
-    sysUnit = childData.glucoseUnit || 'mg/dL';
-    if (childData.glucose_limits) {
-      sysLimits.low = Number(childData.glucose_limits.low) || (sysUnit === 'mmol/L' ? 3.9 : 70);
-      sysLimits.high = Number(childData.glucose_limits.high) || (sysUnit === 'mmol/L' ? 10.0 : 180);
-      sysLimits.critLow = Number(childData.glucose_limits.critical_low) || (sysUnit === 'mmol/L' ? 3.0 : 54);
-      sysLimits.critHigh = Number(childData.glucose_limits.critical_high) || (sysUnit === 'mmol/L' ? 13.9 : 250);
-    } else if (sysUnit === 'mmol/L') {
-      sysLimits = { critLow: 3.0, low: 3.9, high: 10.0, critHigh: 13.9 };
-    }
+    childProto = getProtocol(childData);
+    sysUnit = childProto.unit;
+    sysLimits = {
+      critLow: childProto.limits.critical_low,
+      low: childProto.limits.low,
+      high: childProto.limits.high,
+      critHigh: childProto.limits.critical_high
+    };
 
-    const displayUnit = urlUnit || sysUnit;
+    const displayUnit = normalizeUnit(urlUnit) || sysUnit;
 
     // تحديد نطاق التواريخ
     const today = new Date();
@@ -207,13 +218,16 @@ function chunkIntoWeeks(start, end) {
 function createPageStructure(child, start, end, pageNum, totalPages, displayUnit) {
   const div = document.createElement('div');
   div.className = 'print-page';
-  const cf = child.cf || child.correctionFactor || '—';
-  const crObj = child.cr || {};
-  const crStr = (crObj.breakfast || crObj.lunch || crObj.dinner)
-    ? `ف:${crObj.breakfast || '-'} / غ:${crObj.lunch || '-'} / ع:${crObj.dinner || '-'}`
-    : (child.carbRatio || '—');
-  const basalDose = child.insulin?.basalDose || child.basalDose || '—';
+  const p = childProto || getProtocol(child);
+  const cf = p.CF ?? '—';
+  const crObj = p.CR || {};
+  const crStr = (crObj.breakfast || crObj.lunch || crObj.dinner || crObj.snack)
+    ? `ف:${crObj.breakfast || '-'} / غ:${crObj.lunch || '-'} / ع:${crObj.dinner || '-'}${crObj.snack ? ` / س:${crObj.snack}` : ''}`
+    : '—';
+  const basalDose = p.insulin.basalDose ?? '—';
   const docName = child.assignedDoctorInfo?.name || '—';
+  const childName = child.identity?.name || child.name || '—';
+  const dob = child.identity?.dob || child.birthDate;
 
   div.innerHTML = `
     <div>
@@ -223,7 +237,7 @@ function createPageStructure(child, start, end, pageNum, totalPages, displayUnit
           <div class="muted">الفترة: من <b>${esc(start)}</b> إلى <b>${esc(end)}</b> • الطبيب المتابع: <b>${esc(docName)}</b></div>
         </div>
         <div class="header-left">
-          <b>اسم الطفل:</b> ${esc(child.name || '—')} (${calcAge(child.birthDate)} سنة) | <b>الوحدة:</b> ${esc(displayUnit)}<br>
+          <b>اسم الطفل:</b> ${esc(childName)} (${calcAge(dob)} سنة) | <b>الوحدة:</b> ${esc(displayUnit)}<br>
           <b>معامل الكارب (CR):</b> ${esc(crStr)} | <b>التصحيح (CF):</b> ${esc(cf)} | <b>القاعدي:</b> ${esc(basalDose)}U
         </div>
       </header>
@@ -253,7 +267,8 @@ function createDayRow(dateStr, dayData, child, displayUnit, basalMap = {}) {
     dailyBolus += Number(m.totalInsulin || m.correctionDose || m.totalDose || m.dose) || 0;
   });
 
-  const defaultBasal = Number(child?.insulin?.basalDose || child?.basalDose) || 0;
+  const p = childProto || getProtocol(child);
+  const defaultBasal = p.insulin.basalDose || 0;
   const dailyBasal = basalMap[dateStr] != null ? basalMap[dateStr] : defaultBasal;
   const dailyTDD = round1(dailyBasal + dailyBolus);
 
@@ -311,8 +326,11 @@ function createDayRow(dateStr, dayData, child, displayUnit, basalMap = {}) {
 }
 
 function createSummaryPage(child, allData, displayUnit, basalMap, allDates, totalPages, fromDate, toDate) {
-  const defaultBasal = Number(child?.insulin?.basalDose || child?.basalDose) || 0;
-  const childWeight = Number(child?.vitals?.weight || child?.weight) || null;
+  const p = childProto || getProtocol(child);
+  const defaultBasal = p.insulin.basalDose || 0;
+  const childWeight = p.weightKg || null;
+  const childName = child.identity?.name || child.name || '—';
+  const dob = child.identity?.dob || child.birthDate;
 
   let totalBasalSum = 0, totalBolusSum = 0, tddDaysCount = 0;
   allDates.forEach(dStr => {
@@ -372,7 +390,7 @@ function createSummaryPage(child, allData, displayUnit, basalMap, allDates, tota
           <div class="muted">تحليل الفترة من <b>${esc(fromDate)}</b> إلى <b>${esc(toDate)}</b> • وفق معايير (ADA / ISPAD)</div>
         </div>
         <div class="header-left">
-          <b>اسم الطفل:</b> ${esc(child.name || '—')} (${calcAge(child.birthDate)} سنة)<br>
+          <b>اسم الطفل:</b> ${esc(childName)} (${calcAge(dob)} سنة)<br>
           <b>النظام العلاجي:</b> ${child.regimen === 'pump' ? 'مضخة إنسولين' : 'حقن يومية (MDI)'} | <b>الوزن:</b> ${childWeight ? childWeight + ' كجم' : '—'}
         </div>
       </header>
@@ -532,6 +550,8 @@ function renderSmartChildReport(summaryPage, list, displayUnit, child, basalMap,
     return;
   }
 
+  const p = childProto || getProtocol(child);
+  const hypoGrams = p.safety.hypoCarbs || 15;
   const patterns = [];
   const n = valid.length;
   const lows = valid.filter(x => x.displayValue < L.low).length;
@@ -548,7 +568,7 @@ function renderSmartChildReport(summaryPage, list, displayUnit, child, basalMap,
       cls: 'crit',
       name: `🚨 أولوية علاجية: رصد نوبات هبوط متكررة (${tbrPct}% من القراءات تحت ${L.low} ${displayUnit})`,
       desc: `سجل الطفل ${lows} قراءة منخفضة خلال هذه الفترة. طبياً، منع الهبوط له الأولوية القصوى قبل خفض الارتفاعات.`,
-      rec: 'مراجعة أوقات الهبوط وتخفيف الجرعة المسببة لها (القاعدي أو معامل الوجبة السابقة للهبوط) مع الالتزام بقاعدة 15 جرام سكريات سريعة.'
+      rec: `مراجعة أوقات الهبوط وتخفيف الجرعة المسببة لها (القاعدي أو معامل الوجبة السابقة للهبوط) مع الالتزام بإعطاء ${hypoGrams} جرام سكريات سريعة.`
     });
   } else if (tirPct >= 70) {
     patterns.push({
