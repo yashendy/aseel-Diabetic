@@ -1,0 +1,60 @@
+// اختبار سكربت الترحيل بقاعدة بيانات وهمية (دون لمس Firestore الحقيقي)
+// التشغيل:  node tests/migrate.test.mjs
+import assert from 'node:assert/strict';
+import { runMigration } from '../tools/protocol/migrate.mjs';
+
+const realChild = () => ({
+  name: 'أسيل', glucoseUnit: 'mmol/L', unit: 'mmol/L', unitType: 'mmol/L',
+  cr: { breakfast: 11, lunch: 10, dinner: 12, snack: 12 }, carbRatio: 10, cf: 3, correctionFactor: 3,
+  carbRatioByMeal: { b: 11 }, cf_breakfast: 3, longActingDose: { units: 15 }, weightKg: 37.6, weight: 43.25,
+  vitals: { weight: 43.25, height: 143 }, basalDose: 18, insulin: { basalDose: 18 },
+  glucose_limits: { target: 5.5 }, createdAt: { toDate: () => new Date('2025-09-05T00:00:00Z') }
+});
+const older = () => ({ name: 'قديم', unit: 'mg/dL', carbRatio: 15, correctionFactor: 50, weight: 30, vitals: { weight: 32 } });
+
+function fakeDb(children) {
+  const calls = { updates: [], history: [] };
+  const docs = children.map(([pid, id, data]) => ({
+    id, data: () => data,
+    ref: { parent: { parent: { id: pid } }, update: async u => { calls.updates.push([pid, id, u]); }, collection: n => ({ add: async x => { calls.history.push([pid, id, n, x]); } }) }
+  }));
+  return { db: { collectionGroup: () => ({ get: async () => ({ docs }) }) }, calls };
+}
+const FV = { delete: () => 'DEL', serverTimestamp: () => 'TS' };
+const quiet = () => {};
+
+// 1) تجربة جافة: لا كتابة ولا نسخ احتياطي
+let { db, calls } = fakeDb([['P1', 'C1', realChild()], ['P2', 'C2', older()]]);
+const written = [];
+let s = await runMigration({ db, FieldValue: FV, apply: false, log: quiet, write: (f, c) => written.push(f), mkdir: () => {} });
+assert.equal(s.total, 2); assert.equal(s.changed, 2); assert.equal(calls.updates.length, 0); assert.equal(written.length, 0);
+assert.equal(s.notReady, 1);                                    // الطفل القديم ينقصه هدف السكر وغيره
+
+// 2) تطبيق: نسخة احتياطية أولاً ثم تحديث بحذف الحقول اليتيمة (المؤقتة فقط)
+({ db, calls } = fakeDb([['P1', 'C1', realChild()]]));
+const files = [];
+s = await runMigration({ db, FieldValue: FV, apply: true, log: quiet, write: (f, c) => files.push([f, c]), mkdir: () => {}, now: () => new Date('2026-11-12T10:00:00Z') });
+assert.equal(s.applied, 1); assert.equal(files.length, 1);
+assert.ok(files[0][0].includes('P1_C1_2026-11-12T10-00-00-000Z.json'));
+assert.ok(JSON.parse(files[0][1]).carbRatioByMeal, 'النسخة الاحتياطية تحوي الحقول قبل الحذف');
+assert.ok(JSON.parse(files[0][1]).createdAt.__timestamp, 'التواريخ تُحفظ بشكل مقروء');
+const u = calls.updates[0][2];
+assert.equal(u.carbRatioByMeal, 'DEL'); assert.equal(u.longActingDose, 'DEL'); assert.equal(u.weightKg, 'DEL'); assert.equal(u.cf_breakfast, 'DEL');
+assert.equal(u.carbRatio, undefined, 'carbRatio لا يُحذف بدون --final');
+assert.equal(u.protocolVersion, 2); assert.equal(u.protocolMigratedAt, 'TS');
+assert.equal(calls.history.length, 0, 'لا سجل تاريخ لأن لا قيم كُتبت');
+
+// 3) --final يحذف الاحتياطيات القديمة، والطفل القديم تُكمَّل قيمه ويُسجَّل في التاريخ
+({ db, calls } = fakeDb([['P2', 'C2', older()]]));
+s = await runMigration({ db, FieldValue: FV, apply: true, final: true, log: quiet, write: () => {}, mkdir: () => {} });
+const u2 = calls.updates[0][2];
+assert.equal(u2.glucoseUnit, 'mg/dL'); assert.equal(u2['cr.lunch'], 15); assert.equal(u2.cf, 50); assert.equal(u2.weight, 32);
+assert.equal(u2.carbRatio, 'DEL'); assert.equal(u2.correctionFactor, 'DEL'); assert.equal(u2.unit, 'DEL');
+assert.equal(calls.history.length, 1); assert.equal(calls.history[0][3].by, 'migration');
+
+// 4) --child يقصر التنفيذ على طفل واحد
+({ db, calls } = fakeDb([['P1', 'C1', realChild()], ['P2', 'C2', older()]]));
+s = await runMigration({ db, FieldValue: FV, apply: true, only: 'C2', log: quiet, write: () => {}, mkdir: () => {} });
+assert.equal(s.total, 1); assert.equal(calls.updates[0][1], 'C2');
+
+console.log('اختبارات سكربت الترحيل نجحت ✅');
