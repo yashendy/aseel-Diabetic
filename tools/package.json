@@ -1,0 +1,12 @@
+{
+  "name": "aseel-protocol-tools",
+  "private": true,
+  "description": "أدوات صيانة بيانات البروتوكول العلاجي (تُشغَّل من Cloud Shell)",
+  "scripts": {
+    "dry-run": "node migrate.mjs",
+    "apply": "node migrate.mjs --apply"
+  },
+  "dependencies": {
+    "firebase-admin": "14.5.0"
+  }
+}
