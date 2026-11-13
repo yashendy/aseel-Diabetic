@@ -42,7 +42,6 @@ let childProto = null;
 
 function limitsInUnit(targetUnit) {
   if (targetUnit === sysUnit) return { ...sysLimits };
-  // إذا كانت حدود الطفل قياسية عالمية غير مخصصة، نستخدم الأرقام القياسية الدقيقة للوحدة المختارة
   if (childProto && !childProto.limitsCustom && STANDARD_LIMITS[targetUnit]) {
     const std = STANDARD_LIMITS[targetUnit];
     return {
@@ -117,7 +116,6 @@ onAuthStateChanged(auth, async (user) => {
 
     const displayUnit = normalizeUnit(urlUnit) || sysUnit;
 
-    // تحديد نطاق التواريخ
     const today = new Date();
     const defaultFrom = new Date();
     defaultFrom.setDate(today.getDate() - 6);
@@ -139,7 +137,6 @@ onAuthStateChanged(auth, async (user) => {
           ? (x.value_mmol ?? (x.unit === 'mg/dL' ? mgdl2mmol(x.value) : x.value))
           : (x.value_mgdl ?? (x.unit === 'mmol/L' ? mmol2mgdl(x.value) : x.value));
         x.displayValue = Number.isFinite(+v) ? round1(+v) : null;
-        // توحيد الاستيقاظ مع الصائم
         x.normalizedSlot = (x.slotKey === 'WAKE' || x.slot === 'WAKE') ? 'FASTING' : (x.slotKey || x.slot || 'OTHER');
         data.push(x);
       });
@@ -155,7 +152,6 @@ onAuthStateChanged(auth, async (user) => {
       }
     }
 
-    // في السجل الفارغ نطبع صفحة واحدة أنيقة لـ 7 أيام، وفي التقرير المليان نقسم الأسابيع + صفحة الملخص الأخيرة
     const weeks = isBlank ? [buildBlankSevenDays()] : chunkIntoWeeks(fromDate, toDate);
     const allDates = weeks.flat();
     const totalPagesCount = isBlank ? weeks.length : (weeks.length + 1);
@@ -172,7 +168,6 @@ onAuthStateChanged(auth, async (user) => {
       container.appendChild(page);
     });
 
-    // إضافة الصفحة الأخيرة (الدائرة + نسب الهبوط والارتفاع والعادي + التقرير الذكي عن حالة الطفل)
     if (!isBlank) {
       const summaryPage = createSummaryPage(childData, data, displayUnit, basalMap, allDates, totalPagesCount, fromDate, toDate);
       container.appendChild(summaryPage);
@@ -188,7 +183,6 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-// بناء 7 أيام للسجل الفارغ تبدأ من اليوم
 function buildBlankSevenDays() {
   const arr = [];
   const curr = new Date();
@@ -228,6 +222,32 @@ function createPageStructure(child, start, end, pageNum, totalPages, displayUnit
   const docName = child.assignedDoctorInfo?.name || '—';
   const childName = child.identity?.name || child.name || '—';
   const dob = child.identity?.dob || child.birthDate;
+  const L = limitsInUnit(displayUnit);
+
+  const legendHtml = isBlank
+    ? `<div class="print-legend">
+         <span>📌 <b>دليل التسجيل اليدوي لولي الأمر:</b></span>
+         <span><b>الخط العلوي المنقط (........):</b> قراءة السكر (${esc(displayUnit)})</span>
+         <span>•</span>
+         <span><b>كارب:</b> كمية النشويات بالجرام (g)</span>
+         <span>•</span>
+         <span><b>جرعة:</b> وحدات الأنسولين السريع (U)</span>
+         <span>•</span>
+         <span><b>النطاق المستهدف للطفل:</b> ${L.low} – ${L.high} ${esc(displayUnit)}</span>
+       </div>`
+    : `<div class="print-legend">
+         <span>📌 <b>دليل الألوان والرموز:</b></span>
+         <span>🟢 <b>أخضر:</b> في النطاق (${L.low}–${L.high} ${esc(displayUnit)})</span>
+         <span>🟠 <b>كهرماني:</b> ارتفاع (&gt; ${L.high})</span>
+         <span>🔵 <b>أزرق:</b> هبوط (&lt; ${L.low})</span>
+         <span>🔴 <b>أحمر:</b> حرج (&lt; ${L.critLow} أو &gt; ${L.critHigh})</span>
+         <span>•</span>
+         <span>🍔 <b>جرامات الكارب (g)</b></span>
+         <span>•</span>
+         <span>💉 <b>جرعة الأنسولين السريع (U)</b></span>
+         <span>•</span>
+         <span>⚡ <b>إجمالي أنسولين اليوم (ق=قاعدي | س=سريع)</b></span>
+       </div>`;
 
   div.innerHTML = `
     <div>
@@ -249,6 +269,7 @@ function createPageStructure(child, start, end, pageNum, totalPages, displayUnit
         </div>
         <div class="grid-body"></div>
       </div>
+      ${legendHtml}
     </div>
     <div class="footer">صفحة ${pageNum} من ${totalPages} — تم الإنشاء بواسطة منصة أسيل الطبية لمتابعة سكري الأطفال</div>
   `;
@@ -275,7 +296,7 @@ function createDayRow(dateStr, dayData, child, displayUnit, basalMap = {}) {
   let html = `<div class="cell"><b>${esc(dateStr)}</b><small style="color:#475569">${esc(dayName)}</small></div>`;
 
   if (isBlank) {
-    html += `<div class="cell" style="background:#f8fafc; font-size:9px; color:#94a3b8;">كارب: ......<br>قاعدي: ......</div>`;
+    html += `<div class="cell" style="background:#f8fafc; font-size:9.5px; color:#64748b; line-height:1.6;">كارب: .........<br>قاعدي: .........</div>`;
   } else if (dailyCarbs > 0 || dailyTDD > 0 || dailyBolus > 0) {
     html += `<div class="cell" style="background:#f8fafc; font-size:10px; line-height:1.25;">
       ${dailyCarbs > 0 ? `<div style="color:#6d28d9; font-weight:700;">🍔 ${round1(dailyCarbs)}g</div>` : ''}
@@ -292,9 +313,9 @@ function createDayRow(dateStr, dayData, child, displayUnit, basalMap = {}) {
     if (isBlank) {
       html += `<div class="cell">
         <div class="blank-guide">
-          <div class="blank-line" title="السكر"></div>
-          <div style="display:flex; justify-content:space-between; width:100%; padding-top:2px;">
-            <span>ك:</span><span>ج:</span>
+          <div class="blank-line" title="قراءة السكر"></div>
+          <div class="blank-sub">
+            <span>كارب:</span><span>جرعة:</span>
           </div>
         </div>
       </div>`;
@@ -395,7 +416,6 @@ function createSummaryPage(child, allData, displayUnit, basalMap, allDates, tota
         </div>
       </header>
 
-      <!-- 1. جدول المؤشرات السريرية المعيارية -->
       <table class="agp-metrics-table">
         <thead>
           <tr>
@@ -442,7 +462,6 @@ function createSummaryPage(child, allData, displayUnit, basalMap, allDates, tota
         </tbody>
       </table>
 
-      <!-- 2. الدائرة البيانية + التقرير الذكي عن حالة الطفل -->
       <div class="summary-grid-layout">
         <div class="chart-card">
           <h4 style="margin:0 0 6px 0; color:#0f172a; font-size:13px;">📊 دائرة توزيع القراءات (العادي / الهبوط / الارتفاع)</h4>
@@ -480,7 +499,6 @@ function createSummaryPage(child, allData, displayUnit, basalMap, allDates, tota
         </div>
       </div>
 
-      <!-- 3. توقيع الطبيب -->
       <div class="doctor-sign-row">
         <div style="flex:1;">
           <b>توصيات الطبيب المعالج وخطة التعديل بعد مراجعة التقرير:</b>
@@ -562,7 +580,6 @@ function renderSmartChildReport(summaryPage, list, displayUnit, child, basalMap,
   const tbrPct = Math.round((lows / n) * 100);
   const tarPct = Math.round((highs / n) * 100);
 
-  // 1. التقييم العام للتحكم السكري
   if (tbrPct >= 4) {
     patterns.push({
       cls: 'crit',
@@ -586,7 +603,6 @@ function renderSmartChildReport(summaryPage, list, displayUnit, child, basalMap,
     });
   }
 
-  // 2. تحليل فترة النوم والصباح (ظاهرة الفجر مقابل سوموجي)
   const slots = {};
   valid.forEach(m => {
     const k = m.normalizedSlot || m.slotKey || 'OTHER';
@@ -620,7 +636,6 @@ function renderSmartChildReport(summaryPage, list, displayUnit, child, basalMap,
     }
   }
 
-  // 3. تحليل كفاءة جرعات الوجبات (الإفطار / الغداء / العشاء)
   const mealsCheck = [
     { name: 'الإفطار', arr: slots['POST_BREAKFAST'] },
     { name: 'الغداء', arr: slots['POST_LUNCH'] },
@@ -648,7 +663,6 @@ function renderSmartChildReport(summaryPage, list, displayUnit, child, basalMap,
     }
   });
 
-  // نكتفي بأهم 4 ملاحظات سريرية لتناسب مساحة الصفحة الواحدة بأناقة
   const topPatterns = patterns.slice(0, 4);
   aiContainer.innerHTML = topPatterns.map(p => `
     <div class="ai-pattern-row ${p.cls}">
