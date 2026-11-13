@@ -463,10 +463,20 @@ function initEmergencyCard(user, child, ctx = {}) {
   const unit = proto.unit;
   const min = proto.limits.low;
   const max = proto.limits.high;
+  const hypoCarbs = proto.safety.hypoCarbs;
 
   setText($('emChildName'), name);
   setText($('emChildAge'), ageStr);
   setText($('emGlucoseRange'), `${min} - ${max} ${unit}`);
+
+  // تحديث أرقام بروتوكول الهبوط داخل الصندوق الأصفر حسب وحدة الطفل وإعداداته
+  const lowWithUnit = `${min} ${unit}`;
+  const hypoText = `${hypoCarbs} جرام`;
+  setText($('emLowLimit1'), lowWithUnit);
+  setText($('emLowLimit2'), lowWithUnit);
+  setText($('emLowLimit3'), lowWithUnit);
+  setText($('emHypoGrams1'), hypoText);
+  setText($('emHypoGrams2'), hypoText);
 
   // ولي الأمر: من بيانات الطفل (emergencyContact) ثم رقم حسابه من التسجيل
   const ec = child.emergencyContact || {};
@@ -530,12 +540,11 @@ function initEmergencyCard(user, child, ctx = {}) {
   const basal = proto.insulin.basal || 'طويل المفعول';
   const bolus = proto.insulin.bolus || 'سريع المفعول';
   const cf = proto.CF ?? '—';
-  const hypoCarbs = proto.safety.hypoCarbs;
 
   setText($('emBasalText'), basal);
   setText($('emBolusText'), bolus);
   setText($('emCFText'), String(cf));
-  setText($('emHypoCarbsText'), `${hypoCarbs} جرام`);
+  setText($('emHypoCarbsText'), hypoText);
 
   btnOpen?.addEventListener('click', () => dialog.showModal());
   btnClose?.addEventListener('click', () => dialog.close());
