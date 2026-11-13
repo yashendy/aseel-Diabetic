@@ -6,6 +6,7 @@ import {
   serverTimestamp, limit
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
+import { MGDL_PER_MMOL, getProtocol } from './child-protocol.js';
 
 const $ = id => document.getElementById(id);
 
@@ -25,6 +26,30 @@ function avatarColor(i) { const c = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#e
 function pad(n) { return String(n).padStart(2, '0'); }
 function todayStr() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 
+// تحويل أي قراءة مسجلة إلى وحدة الطفل المعتمدة في البروتوكول
+function readingInChildUnit(meas, targetUnit) {
+  if (!meas) return null;
+  const isMmol = targetUnit === 'mmol/L';
+  if (isMmol) {
+    if (meas.value_mmol != null && Number.isFinite(+meas.value_mmol)) return +(+meas.value_mmol).toFixed(1);
+    if (meas.unit === 'mmol/L' && meas.value != null && Number.isFinite(+meas.value)) return +(+meas.value).toFixed(1);
+    if (meas.value_mgdl != null && Number.isFinite(+meas.value_mgdl)) return +(+meas.value_mgdl / MGDL_PER_MMOL).toFixed(1);
+    if (meas.value != null && Number.isFinite(+meas.value)) {
+      const v = +meas.value;
+      return v > 35 ? +(v / MGDL_PER_MMOL).toFixed(1) : +v.toFixed(1);
+    }
+  } else {
+    if (meas.value_mgdl != null && Number.isFinite(+meas.value_mgdl)) return Math.round(+meas.value_mgdl);
+    if (meas.unit === 'mg/dL' && meas.value != null && Number.isFinite(+meas.value)) return Math.round(+meas.value);
+    if (meas.value_mmol != null && Number.isFinite(+meas.value_mmol)) return Math.round(+meas.value_mmol * MGDL_PER_MMOL);
+    if (meas.value != null && Number.isFinite(+meas.value)) {
+      const v = +meas.value;
+      return v <= 30 ? Math.round(v * MGDL_PER_MMOL) : Math.round(v);
+    }
+  }
+  return null;
+}
+
 $('logoutBtn').onclick = async () => {
   await signOut(auth);
   localStorage.clear();
@@ -35,7 +60,6 @@ onAuthStateChanged(auth, async (u) => {
   if (!u) { location.href = 'index.html'; return; }
   currentUser = u;
   
-  // تحديث بيانات ولي الأمر في الهيدر بذكاء
   const parentName = u.displayName || (u.email ? u.email.split('@')[0] : 'ولي الأمر');
   if($('parentNameDisplay')) $('parentNameDisplay').textContent = `مرحباً، ${parentName}`;
   if($('parentAvatar')) $('parentAvatar').textContent = parentName.charAt(0).toUpperCase();
@@ -57,60 +81,50 @@ async function loadKids() {
     
     kids = snap.docs.map(d => {
       const data = d.data();
-      const unit = data.glucoseUnit || 'mg/dL';
+      const proto = getProtocol(data);
+      const unit = proto.unit;
       
-      // 1. استخراج الحدود (Limits)
-      let limits = {
-          critLow: unit === 'mmol/L' ? 3.0 : 54,
-          low: unit === 'mmol/L' ? 3.9 : 70,
-          high: unit === 'mmol/L' ? 10.0 : 180,
-          critHigh: unit === 'mmol/L' ? 13.9 : 250,
-          target: unit === 'mmol/L' ? 5.5 : 100
+      const limits = {
+        critLow: proto.limits.critical_low,
+        low: proto.limits.low,
+        high: proto.limits.high,
+        critHigh: proto.limits.critical_high,
+        target: proto.target ?? '—'
       };
-      if (data.glucose_limits) {
-          limits = {
-              critLow: Number(data.glucose_limits.critical_low) || limits.critLow,
-              low: Number(data.glucose_limits.low) || limits.low,
-              high: Number(data.glucose_limits.high) || limits.high,
-              critHigh: Number(data.glucose_limits.critical_high) || limits.critHigh,
-              target: Number(data.glucose_limits.target) || limits.target
-          };
-      }
       
-      // 2. استخراج المعاملات
-      const cf = data.cf || data.correctionFactor || '-';
-      let crStr = '-';
-      if (data.cr) {
-          crStr = `${data.cr.breakfast||'-'}/${data.cr.lunch||'-'}/${data.cr.dinner||'-'}`; // عرض (فطار/غدا/عشا)
-      } else if (data.carbRatio) {
-          crStr = data.carbRatio;
-      }
+      const cf = proto.CF ?? '—';
+      const crObj = proto.CR || {};
+      const crStr = (crObj.breakfast || crObj.lunch || crObj.dinner)
+        ? `${crObj.breakfast || '-'}/${crObj.lunch || '-'}/${crObj.dinner || '-'}`
+        : '—';
 
-      return { id: d.id, ...data, _limits: limits, _cf: cf, _crStr: crStr, _unit: unit };
+      return { id: d.id, ...data, _proto: proto, _limits: limits, _cf: cf, _crStr: crStr, _unit: unit };
     });
 
-    // جلب آخر قراءة وتأكيد القاعدي لكل طفل
+    // جلب آخر قراءة (مرتبة بالأحدث) وتأكيد القاعدي لكل طفل
     const tStr = todayStr();
     await Promise.all(kids.map(async k => {
       try {
-        const mSnap = await getDocs(query(collection(db, `parents/${currentUser.uid}/children/${k.id}/measurements`), limit(5)));
-        if (!mSnap.empty) {
-          const sorted = mSnap.docs.map(d => d.data()).sort((a,b) => {
-            const ta = a.when?.toDate ? a.when.toDate() : new Date(a.when||0);
-            const tb = b.when?.toDate ? b.when.toDate() : new Date(b.when||0);
-            return tb - ta;
-          });
-          const d = sorted[0];
-          k._lastGlucoseNorm = d.normalizedValue || d.value;
-          k._lastGlucoseDisplay = d.value;
-          k._lastGlucoseUnit = d.unit || k._unit;
+        const mRef = collection(db, `parents/${currentUser.uid}/children/${k.id}/measurements`);
+        let mSnap;
+        try {
+          mSnap = await getDocs(query(mRef, orderBy('when', 'desc'), limit(5)));
+        } catch (eOrder) {
+          mSnap = await getDocs(query(mRef, limit(10)));
         }
         if (!mSnap.empty) {
-          const d = mSnap.docs[0].data();
-          // نستخدم القيمة الموحدة للون، والقيمة المعروضة للعرض
-          k._lastGlucoseNorm = d.normalizedValue || d.value;
-          k._lastGlucoseDisplay = d.value;
-          k._lastGlucoseUnit = d.unit || k._unit;
+          const sorted = mSnap.docs.map(d => d.data()).sort((a,b) => {
+            const ta = a.when?.toDate ? a.when.toDate() : new Date(a.when || a.date || 0);
+            const tb = b.when?.toDate ? b.when.toDate() : new Date(b.when || b.date || 0);
+            return tb - ta;
+          });
+          const latest = sorted[0];
+          const valInUnit = readingInChildUnit(latest, k._unit);
+          if (valInUnit !== null) {
+            k._lastGlucoseNorm = valInUnit;
+            k._lastGlucoseDisplay = valInUnit;
+            k._lastGlucoseUnit = k._unit;
+          }
         }
       } catch (e) {}
 
@@ -140,13 +154,13 @@ async function loadKids() {
   finally { loader(false); }
 }
 
-// دالة التلوين المحدثة بناءً على الإعدادات الذكية
+// دالة التلوين المحدثة بناءً على وحدة الطفل الموحدة
 function getGlucoseStatus(valDisplay, valNorm, child) {
-  if (!valDisplay) return null;
+  if (valDisplay == null) return null;
   const L = child._limits;
-  const v = valNorm || valDisplay; 
-  const u = child._lastGlucoseUnit;
-  const disp = `${valDisplay} <span style="font-size:11px;font-weight:normal">${u}</span>`;
+  const v = valNorm ?? valDisplay; 
+  const u = child._unit;
+  const disp = `<span dir="ltr">${valDisplay} <span style="font-size:11px;font-weight:normal">${u}</span></span>`;
 
   if (v <= L.critLow) return { text: `هبوط حرج 🚨 ${disp}`, cls: 'g-danger', alert: true };
   if (v < L.low) return { text: `هبوط ↓ ${disp}`, cls: 'g-sev', alert: true }; 
@@ -171,14 +185,18 @@ function render() {
       ? `<div class="basal-pill done" title="تم تسجيل أخذ جرعة القاعدي اليوم">💉 القاعدي اليوم: تم (${k._basalStatus.dose}U في ${k._basalStatus.time || '—'}) ✓</div>`
       : `<div class="basal-pill pending" title="لم يتم تسجيل جرعة القاعدي اليوم بعد">⏳ القاعدي اليوم: لم يُسجّل بعد</div>`;
 
+    const cName = k.identity?.name || k.name || 'الطفل';
+    const cGender = (k.identity?.gender || k.gender) === 'female' ? 'أنثى' : 'ذكر';
+    const cDob = k.identity?.dob || k.birthDate;
+
     const card = document.createElement('div');
     card.className = 'kid-card';
     card.innerHTML = `
       <div class="kc-head">
-        <div class="avatar" style="background:${avatarColor(idx)}">${(k.name||'?').charAt(0)}</div>
+        <div class="avatar" style="background:${avatarColor(idx)}">${(cName||'?').charAt(0)}</div>
         <div class="kc-info">
-          <h3>${k.name || 'الطفل'}</h3>
-          <span class="kc-meta">${k.gender==='female'?'أنثى':'ذكر'} • ${calcAge(k.birthDate)} سنة</span><br>
+          <h3>${cName}</h3>
+          <span class="kc-meta">${cGender} • ${calcAge(cDob)} سنة</span><br>
           ${docBadge}
         </div>
       </div>
@@ -212,7 +230,7 @@ function showCriticalAlert(child, gs) {
   
   const div = document.createElement('div');
   div.style.cssText = `position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#dc2626; color:#fff; padding:15px 24px; border-radius:12px; font-weight:bold; z-index:9999; box-shadow:0 10px 25px rgba(220,38,38,0.5); cursor:pointer;`;
-  div.textContent = `🚨 تحذير: قراءة سكر حرجة لـ (${child.name})`; 
+  div.textContent = `🚨 تحذير: قراءة سكر حرجة لـ (${child.identity?.name || child.name})`; 
   div.onclick = () => div.remove();
   document.body.appendChild(div);
   setTimeout(() => div.remove(), 8000);
@@ -235,7 +253,6 @@ $('linkSubmit').onclick = async () => {
     const d = s.data();
     if (!d.doctorId) { $('linkMsg').textContent = 'الكود غير صحيح أو مستخدم.'; return; }
 
-    // انتهاء الصلاحية (الأكواد القديمة التي لا تحمل expiresAt تبقى صالحة)
     const expMs = d.expiresAt && typeof d.expiresAt.toMillis === 'function' ? d.expiresAt.toMillis() : null;
     if (expMs !== null && expMs < Date.now()) {
       $('linkMsg').textContent = 'انتهت صلاحية هذا الكود. اطلب كوداً جديداً من الطبيب.';
@@ -246,13 +263,10 @@ $('linkSubmit').onclick = async () => {
     kids.forEach(k => {
       batch.update(doc(db, `parents/${currentUser.uid}/children/${k.id}`), {
         assignedDoctor: d.doctorId,
-        // بيانات عرض فقط (الاسم والمركز يأتيان من الكود إن وُجدا). الصلاحية الفعلية تعتمد على assignedDoctor
         assignedDoctorInfo: { uid: d.doctorId, name: d.doctorName || null, center: d.doctorCenter || null },
         parentId: currentUser.uid,
         sharingConsent: { doctor: true }
       });
-      // فهرس مرضى الطبيب (doctors/{id}/patients/{childId}) تنشئه وتحدّثه Cloud Function تلقائياً،
-      // ولا يُكتب من الواجهة (القواعد الجديدة تمنع ذلك).
     });
     batch.update(codeRef, { used: true, parentId: currentUser.uid, usedAt: serverTimestamp() });
     await batch.commit();
@@ -263,8 +277,6 @@ $('linkSubmit').onclick = async () => {
 };
 
 // ------ المساعد الذكي المتطور (Parent AI Assistant) ------
-// المساعد الذكي يعمل عبر الدالة الآمنة askGemini (المفتاح محفوظ على الخادم ولا يصل للمتصفح).
-// تنظيف أي مفتاح قديم كان مخزّناً في هذا المتصفح:
 try { localStorage.removeItem('aseel_gemini_key'); } catch (e) {}
 const askGemini = httpsCallable(getFunctions(app, 'europe-west1'), 'askGemini', { timeout: 15000 });
 
@@ -284,9 +296,9 @@ function openAIForChild(child) {
   $('aiKeyWarn').classList.add('hidden');
   
   if (child) {
-    $('aiContext').textContent = `الطفل: ${child.name} (${child._unit})`;
-    const crDisplay = typeof child._crStr === 'string' && child._crStr.includes('/') ? child._crStr : (child._crStr || '10');
-    appendMsg('sys', `أهلاً بك! أنا مساعد أسيل الطبي الخاص بـ **${child.name}** 🤖.\n- **وحدة القياس:** ${child._unit}\n- **معامل الكارب (CR):** ${crDisplay}\n- **معامل التصحيح (CF):** ${child._cf} ${child._unit}\n- **الهدف المستهدف:** ${child._limits.target} ${child._unit}\n\nكيف أساعدك اليوم في حساب الوجبات أو ضبط الجرعات؟`);
+    const cName = child.identity?.name || child.name;
+    $('aiContext').textContent = `الطفل: ${cName} (${child._unit})`;
+    appendMsg('sys', `أهلاً بك! أنا مساعد أسيل الطبي الخاص بـ **${cName}** 🤖.\n- **وحدة القياس:** ${child._unit}\n- **معامل الكارب (CR):** ${child._crStr}\n- **معامل التصحيح (CF):** ${child._cf} ${child._unit}\n- **الهدف المستهدف:** ${child._limits.target} ${child._unit}\n\nكيف أساعدك اليوم في حساب الوجبات أو ضبط الجرعات؟`);
   } else {
     $('aiContext').textContent = 'استشارة عامة';
     appendMsg('sys', 'مرحباً بك! أنا مساعد أسيل الطبي الذكي. اسألني أي سؤال عن جرعات الأنسولين، حساب الكارب، أو تغذية السكري.');
@@ -297,7 +309,6 @@ function appendMsg(role, txt, isDisclaimer = false) {
   const div = document.createElement('div');
   div.className = `msg ${role === 'user' ? 'user' : role === 'sys' ? 'sys' : 'assistant'}`;
   
-  // تنسيق بسيط للخط العريض والأسطر
   let html = txt
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\n/g, '<br>');
@@ -314,21 +325,18 @@ function appendMsg(role, txt, isDisclaimer = false) {
 
 function generateLocalParentReply(text, child) {
   const q = text.toLowerCase();
-  const cName = child ? child.name : 'الطفل';
+  const cName = child ? (child.identity?.name || child.name) : 'الطفل';
   const unit = child ? child._unit : 'mg/dL';
-  
-  // استخراج معامل الكارب النشط
-  let activeCR = 10;
-  if (child) {
-    if (typeof child.carbRatio === 'number') activeCR = child.carbRatio;
-    else if (child.cr) activeCR = Number(child.cr.lunch || child.cr.breakfast || child.cr.dinner || 10);
-    else if (typeof child._crStr === 'string' && !child._crStr.includes('/')) activeCR = Number(child._crStr) || 10;
+  const proto = child?._proto;
+  const activeCR = proto ? (proto.CR.lunch || proto.CR.breakfast || proto.CR.dinner) : null;
+
+  if (!activeCR) {
+    return `⚠️ لم يتم تحديد **معامل الكارب (CR)** في إعدادات **${cName}** بعد. يرجى تحديده من صفحة إعدادات الطفل لأتمكن من حساب جرعة الوجبة بدقة.`;
   }
 
-  // سؤال عن الأرز / النشويات والوجبات
   if (/(ارز|أرز|رز)/.test(q)) {
-    const carbsSmall = 30; // 5 ملاعق أرز
-    const carbsMed = 45;   // طبق أرز متوسط (حوالي 150 جرام)
+    const carbsSmall = 30;
+    const carbsMed = 45;
     const doseSmall = +(carbsSmall / activeCR).toFixed(1);
     const doseMed = +(carbsMed / activeCR).toFixed(1);
 
@@ -338,35 +346,26 @@ function generateLocalParentReply(text, child) {
       `### 💉 الجرعة المقترحة بناءً على معامل الكارب (1 وحدة لكل ${activeCR}g):\n` +
       `- **لطبق الأرز المتوسط (45g كارب):** \`45 ÷ ${activeCR}\` = **${doseMed} وحدة** أنسولين سريع.\n` +
       `- **لطبق الأرز الصغير (30g كارب):** \`30 ÷ ${activeCR}\` = **${doseSmall} وحدة** أنسولين سريع.\n\n` +
-      `💡 **نصائح هامة:**\n` +
-      `1. قيسي سكر الطفل قبل الوجبة بوحدة **${unit}**؛ إذا كان مرتفعاً يتم إضافة جرعة تصحيح.\n` +
-      `2. يُفضل إعطاء الأنسولين قبل تناول الأرز بـ **10 إلى 15 دقيقة** لتجنب الارتفاع المفاجئ بعد الأكل.\n` +
-      `3. إضافة خضار وسلطة وبروتين مع الأرز يبطئ امتصاص النشويات ويمنع تذبذب السكر.`;
+      `💡 قيسي سكر الطفل قبل الوجبة بوحدة **${unit}**؛ إذا كان مرتفعاً يتم إضافة جرعة تصحيح.`;
   }
 
-  // سؤال عن المكرونة
   if (/(مكرون|مكرونة)/.test(q)) {
     const carbs = 40;
     const dose = +(carbs / activeCR).toFixed(1);
     return `### 🍝 حساب جرعة المكرونة لـ **${cName}**:\n` +
-      `- طبق المكرونة المسلوقة المتوسط (حوالي كوب مسلوق) يحتوي على حوالي **35 إلى 40 جرام كارب**.\n` +
-      `- **الجرعة المقترحة بمعامل الكارب (${activeCR}):** \`${carbs} ÷ ${activeCR}\` = **${dose} وحدة** أنسولين سريع.\n` +
-      `- يُحقن الأنسولين قبل الأكل بـ 15 دقيقة ويُفضل تناول سلطة خضراء أولاً.`;
+      `- طبق المكرونة المسلوقة المتوسط يحتوي على حوالي **35 إلى 40 جرام كارب**.\n` +
+      `- **الجرعة المقترحة بمعامل الكارب (${activeCR}):** \`${carbs} ÷ ${activeCR}\` = **${dose} وحدة** أنسولين سريع.`;
   }
 
-  // سؤال عن الخبز / العيش
   if (/(خبز|عيش|توست|سندوتش)/.test(q)) {
     const doseBaladi = +(25 / activeCR).toFixed(1);
     return `### 🍞 حساب جرعة الخبز لـ **${cName}**:\n` +
-      `- **نصف رغيف بلدي:** حوالي **25 إلى 28 جرام كارب** (الجرعة: **${doseBaladi} وحدة**).\n` +
-      `- **شريحة توست بني:** حوالي **12 إلى 15 جرام كارب**.\n` +
+      `- **نصف رغيف بلدي:** حوالي **25 جرام كارب** (الجرعة: **${doseBaladi} وحدة**).\n` +
       `- احسبي إجمالي الكارب واقسميه على معامل الكارب (${activeCR}).`;
   }
 
-  // سؤال عام عن حساب الوجبة
   return `### 🧮 طريقة حساب جرعة الوجبة لـ **${cName}**:\n` +
     `- **القاعدة:** \`جرعة الأنسولين = إجمالي جرامات الكارب ÷ معامل الكارب (${activeCR})\`.\n` +
-    `- **معامل الكارب الحالي للطفل:** 1 وحدة لكل **${activeCR} جرام نشويات**.\n` +
     `- اكتبي لي اسم الطعام أو عدد جرامات الكارب وسأحسب لك الجرعة فوراً!`;
 }
 
@@ -381,18 +380,17 @@ async function sendAI() {
   try {
     let reply = null;
 
-    // محاولة الاتصال بـ Gemini عبر الدالة الآمنة (وإلا نستخدم المحرك المحلي أدناه)
     if (currentUser) {
       const child = aiState.child;
-      const cName = child ? child.name : 'الطفل';
+      const cName = child ? (child.identity?.name || child.name) : 'الطفل';
       const cUnit = child ? child._unit : 'mg/dL';
-      const cTarget = child ? child._limits.target : (cUnit === 'mmol/L' ? '6.0' : '110');
-      const cCf = child ? child._cf : (cUnit === 'mmol/L' ? '2.8' : '50');
-      const cCr = child ? child._crStr : '10';
+      const cTarget = child ? child._limits.target : 'غير محدد';
+      const cCf = child ? child._cf : 'غير محدد';
+      const cCr = child ? child._crStr : 'غير محدد';
 
       const sysPrompt = `أنت مساعد أسيل الطبي المتخصص في سكري الأطفال.
 معطيات الطفل الحالية: الاسم (${cName})، وحدة القياس (${cUnit})، السكر المستهدف (${cTarget} ${cUnit})، معامل التصحيح (${cCf})، ومعامل الكارب (${cCr}).
-أجب باللغة العربية بدقة وحسابات واضحة لجرامات الكارب وجرعة الأنسولين المطلوبة بوحدة ${cUnit}.`;
+إذا كان أي معامل "غير محدد" لا تخمنه بل نبه ولي الأمر لتحديده في الإعدادات. أجب باللغة العربية بدقة وبوحدة ${cUnit} حصراً.`;
 
       try {
         const out = await askGemini({
@@ -404,11 +402,10 @@ async function sendAI() {
         });
         reply = out?.data?.text || null;
       } catch (err) {
-        console.warn('askGemini:', err?.code || err);   // نستخدم المحرك المحلي
+        console.warn('askGemini:', err?.code || err);
       }
     }
 
-    // إذا لم يتوفر مفتاح أو فشل الاتصال الخارجي، نستخدم المحرك السريري الذكي المدمج
     if (!reply) {
       await new Promise(r => setTimeout(r, 350));
       reply = generateLocalParentReply(text, aiState.child);
