@@ -148,13 +148,10 @@
         </div>
         <a href="measurements.html" id="radarAddMeasBtn" class="btn ghost btn-sm">➕ إضافة قراءة سكر</a>
       </div>
-      <div id="glucoseSparkContainer">
-        <!-- يتم ملؤه ديناميكياً بواسطة renderGlucoseSparkline -->
-      </div>
+      <div id="glucoseSparkContainer"></div>
     </section>
 
     <section class="dashboard-grid">
-      <!-- كارت القياسات -->
       <a class="dash-card link-blue" id="goMeasurements">
         <div class="icon">🩸</div>
         <div class="content">
@@ -163,7 +160,6 @@
         </div>
       </a>
 
-      <!-- كارت الوجبات -->
       <a class="dash-card link-green" id="goMeals">
         <div class="icon">🥗</div>
         <div class="content">
@@ -172,7 +168,6 @@
         </div>
       </a>
 
-      <!-- كارت التقارير -->
       <a class="dash-card link-purple" id="goReports">
         <div class="icon">📊</div>
         <div class="content">
@@ -181,7 +176,6 @@
         </div>
       </a>
 
-      <!-- كارت الزيارات -->
       <a class="dash-card link-teal" id="goVisits">
         <div class="icon">🩺</div>
         <div class="content">
@@ -190,7 +184,6 @@
         </div>
       </a>
 
-      <!-- كارت التحاليل -->
       <article class="dash-card link-indigo lab-card" id="labCard">
         <div class="lab-header">
           <div class="row"><div class="icon">🔬</div><h3>التحاليل الطبية</h3></div>
@@ -209,7 +202,6 @@
         </div>
       </article>
 
-      <!-- كارت الإعدادات -->
       <a class="dash-card link-red" id="goChildEdit">
         <div class="icon">⚙️</div>
         <div class="content">
@@ -224,7 +216,6 @@
   <dialog id="emergencyCardDialog" class="emergency-dialog">
     <div class="em-dialog-content">
       <div class="em-card-badge" id="printableEmergencyCard">
-        <!-- الشريط العلوي للبطاقة الطبية -->
         <header class="em-card-header">
           <div class="em-cross">🏥</div>
           <div class="em-title-box">
@@ -234,7 +225,6 @@
           <div class="em-flag">عاجل ⚠️</div>
         </header>
 
-        <!-- بيانات الطفل الأساسية -->
         <div class="em-card-body">
           <div class="em-section em-profile-grid">
             <div class="em-info-item">
@@ -255,7 +245,6 @@
             </div>
           </div>
 
-          <!-- أرقام الاتصال بالطوارئ وولي الأمر والطبيب -->
           <div class="em-section em-contacts-box">
             <h4 class="em-section-title">📞 جهات الاتصال الفورية للطوارئ:</h4>
             <div class="em-contacts-grid">
@@ -277,7 +266,6 @@
             </div>
           </div>
 
-          <!-- الأنسولين والمعاملات السريعة -->
           <div class="em-section em-regimen-box">
             <h4 class="em-section-title">💉 نظام الأنسولين المسجل:</h4>
             <div class="em-regimen-chips">
@@ -288,24 +276,23 @@
             </div>
           </div>
 
-          <!-- بروتوكول إسعاف هبوط السكر المدرسي (قاعدة 15-15) -->
+          <!-- بروتوكول إسعاف هبوط السكر المدرسي (يتغير ديناميكياً حسب وحدة الطفل وإعداداته) -->
           <div class="em-section em-protocol-box">
-            <h4 class="em-section-title em-pulse">🚨 بروتوكول التعامل الفوري مع هبوط السكر (أقل من 70 mg/dL):</h4>
+            <h4 class="em-section-title em-pulse">🚨 بروتوكول التعامل الفوري مع هبوط السكر (أقل من <span id="emLowLimit1">70 mg/dL</span>):</h4>
             <ol class="em-steps-list">
               <li><b>الأعراض:</b> عرق بارد، رجفة بالأيدي، دوخة، زغللة، شحوب، جوع شديد مفاجئ، أو نوبات بكاء وتشتت.</li>
-              <li><b>الإسعاف الفوري (قاعدة 15):</b> إعطاء 15 جرام سكريات سريعة فوراً:
+              <li><b>الإسعاف الفوري (قاعدة 15):</b> إعطاء <b id="emHypoGrams1">15 جرام</b> سكريات سريعة فوراً:
                 <span>(نصف كوب عصير محلى 125 مل، أو 3 أقراص سكر/جلوكوز، أو ملعقة كبيرة عسل/سكر).</span>
               </li>
               <li><b>الانتظار 15 دقيقة:</b> اترك الطفل يرتاح مع إعادة قياس السكر بعد 15 دقيقة بالضبط.</li>
-              <li><b>إذا ظل السكر أقل من 70 mg/dL:</b> تُكرر نفس كمية العصير السريع (15 جرام) مرة ثانية فوراً.</li>
-              <li><b>عند استقرار السكر ووصوله لأكثر من 70 mg/dL:</b> يُعطى الطفل وجبة خفيفة نشوية (سندوتش أو بسكويت) لحمايته.</li>
+              <li><b>إذا ظل السكر أقل من <span id="emLowLimit2">70 mg/dL</span>:</b> تُكرر نفس كمية العصير السريع (<span id="emHypoGrams2">15 جرام</span>) مرة ثانية فوراً.</li>
+              <li><b>عند استقرار السكر ووصوله لأكثر من <span id="emLowLimit3">70 mg/dL</span>:</b> يُعطى الطفل وجبة خفيفة نشوية (سندوتش أو بسكويت) لحمايته.</li>
               <li class="em-danger-rule">⛔ <b>تحذير عاجل لإدارة المدرسة والمشرفين:</b> في حالة فقدان الوعي أو التشنجات، يُمنع منعاً باتاً إعطاء أي طعام أو شراب بالفم! يُحقن الجلوكاجون فوراً في العضل ويتم الاتصال بالإسعاف (123) وولي الأمر فوراً.</li>
             </ol>
           </div>
         </div>
       </div>
 
-      <!-- أزرار التحكم بالبطاقة (لا تظهر عند الطباعة) -->
       <div class="em-dialog-actions no-print">
         <button id="btnPrintEmergencyCard" type="button" class="btn primary">🖨️ طباعة البطاقة المدرسية</button>
         <button id="btnCloseEmergencyCard" type="button" class="btn ghost">❌ إغلاق</button>
@@ -321,7 +308,6 @@
   </button>
 
   <aside id="aiChatWidget" class="ai-chat-widget hidden no-print" aria-label="مساعد أسيل الذكي">
-    <!-- هيدر الشات -->
     <header class="ai-chat-header">
       <div class="ai-header-right">
         <div class="ai-BotAvatar">🤖</div>
@@ -340,7 +326,6 @@
       </div>
     </header>
 
-    <!-- شريط إعدادات Gemini API الاختياري -->
     <div id="aiSettingsPanel" class="ai-settings-panel hidden">
       <div class="ai-settings-title">🔑 ربط مفتاح Google Gemini API (اختياري لذكاء سحابي موسّع):</div>
       <p class="ai-settings-hint">يعمل المساعد تلقائياً بمحرك أسيل السريري الذكي، ويمكنك إضافة مفتاح Gemini المجاني لتفعيل النموذج اللغوي السحابي.</p>
@@ -351,7 +336,6 @@
       <div id="aiKeyStatusMsg" class="ai-key-status"></div>
     </div>
 
-    <!-- أزرار الأسئلة السريعة الذكية -->
     <div class="ai-quick-chips" id="aiQuickChips">
       <button type="button" class="ai-chip" data-prompt="اقترح وجبة صحية متوازنة لطفلي حسب المفضلات لديه والمتاح في البيت والأكثر شيوعاً مع حساب الكارب والجرعة">🥗 وجبة بالمفضلات والمتاح والأكثر شيوعاً</button>
       <button type="button" class="ai-chip" data-prompt="حلل قراءات طفلي في آخر 7 أيام وأخبرني بأهم الملاحظات وأسباب الهبوط أو الارتفاع">📊 تحليل شامل لحالة طفلي</button>
@@ -362,10 +346,8 @@
       <button type="button" class="ai-chip" data-prompt="ما سبب ارتفاع أو هبوط السكر أثناء النوم والفجر وكيف نضبطه؟">🌙 ضبط سكر الليل والفجر</button>
     </div>
 
-    <!-- منطقة الرسائل -->
     <div id="aiChatMessages" class="ai-chat-messages"></div>
 
-    <!-- شريط الإدخال -->
     <form id="aiChatForm" class="ai-chat-input-bar">
       <input
         type="text"
@@ -381,7 +363,7 @@
 
   <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
-  <script type="module" src="js/child.js?v=13"></script>
+  <script type="module" src="js/child.js?v=14"></script>
   
 </body>
 </html>
