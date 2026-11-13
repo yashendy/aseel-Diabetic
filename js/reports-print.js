@@ -39,14 +39,14 @@ import { MGDL_PER_MMOL, STANDARD_LIMITS, getProtocol, normalizeUnit } from './ch
 
     /* صفحات التقرير A4 */
     #printContainer { max-width: 285mm; margin: 18px auto; display: flex; flex-direction: column; gap: 20px; }
-    .print-page { background: #ffffff; width: 100%; min-height: 192mm; padding: 10mm 12mm; border-radius: 12px; box-shadow: 0 6px 24px rgba(15, 23, 42, 0.12); position: relative; display: flex; flex-direction: column; justify-content: space-between; page-break-after: always; break-after: page; }
+    .print-page { background: #ffffff; width: 100%; min-height: 192mm; padding: 8mm 10mm; border-radius: 12px; box-shadow: 0 6px 24px rgba(15, 23, 42, 0.12); position: relative; display: flex; flex-direction: column; justify-content: space-between; page-break-after: always; break-after: page; }
     .print-page:last-child { page-break-after: auto; break-after: auto; }
 
     /* الهيدر */
-    .header { display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg, #eff6ff 0%, #f8fafc 60%, #eff6ff 100%); border: 1.5px solid var(--brand-border); border-right: 6px solid var(--brand-primary); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
-    .header-right h2 { margin: 0 0 3px 0; color: var(--brand-dark); font-size: 16.5px; font-weight: 800; }
-    .header-right .muted { font-size: 11.5px; color: var(--text-muted); }
-    .header-left { text-align: left; font-size: 11.5px; line-height: 1.65; background: #ffffff; padding: 6px 12px; border-radius: 8px; border: 1px solid #e2e8f0; color: var(--text-main); }
+    .header { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: linear-gradient(90deg, #eff6ff 0%, #f8fafc 60%, #eff6ff 100%); border: 1.5px solid var(--brand-border); border-right: 6px solid var(--brand-primary); border-radius: 10px; padding: 9px 14px; margin-bottom: 10px; }
+    .header-right h2 { margin: 0 0 3px 0; color: var(--brand-dark); font-size: 16px; font-weight: 800; }
+    .header-right .muted { font-size: 11px; color: var(--text-muted); }
+    .header-left { text-align: right; font-size: 11px; line-height: 1.65; background: #ffffff; padding: 6px 12px; border-radius: 8px; border: 1px solid #e2e8f0; color: var(--text-main); }
     .header-left b { color: var(--brand-dark); }
 
     /* الجدول الأسبوعي */
@@ -55,7 +55,7 @@ import { MGDL_PER_MMOL, STANDARD_LIMITS, getProtocol, normalizeUnit } from './ch
     .grid-head { background: linear-gradient(180deg, #1e3a8a 0%, #1d4ed8 100%); color: #ffffff; font-weight: 700; border-bottom: 1.5px solid #1e3a8a; }
     .grid-head > div { padding: 7px 3px; border-inline-start: 1px solid rgba(255, 255, 255, 0.18); text-align: center; font-size: 10.5px; display: flex; align-items: center; justify-content: center; }
     .grid-head > div:first-child, .grid-row > .cell:first-child { border-inline-start: none; }
-    .grid-row { border-bottom: 1px solid var(--border); min-height: 49px; }
+    .grid-row { border-bottom: 1px solid var(--border); min-height: 47px; }
     .grid-row:last-child { border-bottom: none; }
     .grid-row:nth-child(even) { background: var(--bg-alt); }
     .cell { padding: 4px 3px; border-inline-start: 1px solid var(--border); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -74,9 +74,10 @@ import { MGDL_PER_MMOL, STANDARD_LIMITS, getProtocol, normalizeUnit } from './ch
 
     /* السجل اليدوي الفارغ + الشريط التوضيحي */
     .blank-guide { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 2px 6px; }
-    .blank-line { border-bottom: 1px dashed #94a3b8; height: 18px; width: 100%; }
+    .blank-line { border-bottom: 1px dashed #94a3b8; height: 17px; width: 100%; }
     .blank-sub { display: flex; justify-content: space-between; width: 100%; padding-top: 3px; font-size: 9.5px; font-weight: 700; color: #64748b; }
-    .print-legend { margin-top: 8px; padding: 6px 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-right: 4px solid var(--brand-primary); border-radius: 8px; font-size: 10.5px; color: #334155; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .print-legend { margin-top: 8px; padding: 6px 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-right: 4px solid var(--brand-primary); border-radius: 8px; font-size: 10px; line-height: 1.6; color: #334155; display: flex; flex-direction: column; gap: 3px; }
+    .print-legend-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .print-legend b { color: var(--brand-dark); }
 
     /* صفحة الملخص السريري AGP */
@@ -105,7 +106,7 @@ import { MGDL_PER_MMOL, STANDARD_LIMITS, getProtocol, normalizeUnit } from './ch
     .ai-pattern-row.good { background: #f0fdf4; border-color: #bbf7d0; border-right-color: #16a34a; }
 
     .doctor-sign-row { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 8px; padding: 8px 12px; background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 8px; font-size: 11px; page-break-inside: avoid; }
-    .footer { width: 100%; font-size: 9.5px; font-weight: 600; color: #64748b; text-align: center; padding-top: 6px; border-top: 1px solid #e2e8f0; margin-top: 8px; }
+    .footer { width: 100%; font-size: 9.5px; font-weight: 600; color: #64748b; text-align: center; padding-top: 5px; border-top: 1px solid #e2e8f0; margin-top: 6px; }
     .print-loader { position: fixed; inset: 0; background: rgba(255, 255, 255, 0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; font-weight: 700; color: var(--brand-dark); }
     .spinner { width: 34px; height: 34px; border: 3.5px solid #dbeafe; border-top: 3.5px solid var(--brand-primary); border-radius: 50%; animation: spin 0.9s linear infinite; margin-bottom: 10px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -332,9 +333,9 @@ function createPageStructure(child, start, end, pageNum, totalPages, displayUnit
   const cf = p.CF ?? '—';
   const crObj = p.CR || {};
   const crStr = (crObj.breakfast || crObj.lunch || crObj.dinner || crObj.snack)
-    ? `ف:${crObj.breakfast || '-'} / غ:${crObj.lunch || '-'} / ع:${crObj.dinner || '-'}${crObj.snack ? ` / س:${crObj.snack}` : ''}`
+    ? `فطار: ${crObj.breakfast || '-'} / غداء: ${crObj.lunch || '-'} / عشاء: ${crObj.dinner || '-'}${crObj.snack ? ` / سناك: ${crObj.snack}` : ''}`
     : '—';
-  const basalDose = p.insulin.basalDose ?? '—';
+  const basalDose = p.insulin.basalDose != null ? `${p.insulin.basalDose} وحدة (U)` : '—';
   const docName = child.assignedDoctorInfo?.name || '—';
   const childName = child.identity?.name || child.name || '—';
   const dob = child.identity?.dob || child.birthDate;
@@ -342,27 +343,55 @@ function createPageStructure(child, start, end, pageNum, totalPages, displayUnit
 
   const legendHtml = isBlank
     ? `<div class="print-legend">
-         <span>📌 <b>دليل الاختصارات للتسجيل اليدوي:</b></span>
-         <span><b>الخط العلوي المنقط (........):</b> قراءة السكر (${esc(displayUnit)})</span>
-         <span>•</span>
-         <span><b>ك:</b> كمية الكارب بالجرام (g)</span>
-         <span>•</span>
-         <span><b>ج:</b> جرعة الأنسولين السريع بالوحدات (U)</span>
-         <span>•</span>
-         <span><b>النطاق المستهدف للطفل:</b> ${L.low} – ${L.high} ${esc(displayUnit)}</span>
+         <div class="print-legend-row">
+           <span>📌 <b>دليل التسجيل اليدوي داخل المربعات:</b></span>
+           <span><b>الخط العلوي المنقط (........):</b> قراءة السكر (${esc(displayUnit)})</span>
+           <span>•</span>
+           <span><b>ك:</b> كمية الكارب بالجرام (g)</span>
+           <span>•</span>
+           <span><b>ج:</b> جرعة الأنسولين السريع بالوحدات (U)</span>
+           <span>•</span>
+           <span><b>النطاق المستهدف للطفل:</b> ${L.low} – ${L.high} ${esc(displayUnit)}</span>
+         </div>
+         <div class="print-legend-row">
+           <span>📖 <b>شرح رموز الجدول والملف الطبي:</b></span>
+           <span><b>ق.</b> = قبل الوجبة</span>
+           <span>•</span>
+           <span><b>ب.</b> = بعد الوجبة بساعتين</span>
+           <span>•</span>
+           <span><b>CR (معامل الكارب):</b> جرامات الكارب لكل 1 وحدة أنسولين</span>
+           <span>•</span>
+           <span><b>CF (معامل التصحيح):</b> مقدار انخفاض السكر (${esc(displayUnit)}) لكل 1 وحدة أنسولين</span>
+           <span>•</span>
+           <span><b>U:</b> وحدة أنسولين</span>
+         </div>
        </div>`
     : `<div class="print-legend">
-         <span>📌 <b>دليل الألوان والرموز:</b></span>
-         <span>🟢 <b>أخضر:</b> في النطاق (${L.low}–${L.high} ${esc(displayUnit)})</span>
-         <span>🟠 <b>كهرماني:</b> ارتفاع (&gt; ${L.high})</span>
-         <span>🔵 <b>أزرق:</b> هبوط (&lt; ${L.low})</span>
-         <span>🔴 <b>أحمر:</b> حرج (&lt; ${L.critLow} أو &gt; ${L.critHigh})</span>
-         <span>•</span>
-         <span>🍔 <b>جرامات الكارب (g)</b></span>
-         <span>•</span>
-         <span>💉 <b>جرعة الأنسولين السريع (U)</b></span>
-         <span>•</span>
-         <span>⚡ <b>إجمالي أنسولين اليوم (ق=قاعدي | س=سريع)</b></span>
+         <div class="print-legend-row">
+           <span>📌 <b>دليل الألوان والرموز:</b></span>
+           <span>🟢 <b>أخضر:</b> في النطاق (${L.low}–${L.high} ${esc(displayUnit)})</span>
+           <span>🟠 <b>كهرماني:</b> ارتفاع (&gt; ${L.high})</span>
+           <span>🔵 <b>أزرق:</b> هبوط (&lt; ${L.low})</span>
+           <span>🔴 <b>أحمر:</b> حرج (&lt; ${L.critLow} أو &gt; ${L.critHigh})</span>
+           <span>•</span>
+           <span>🍔 <b>جرامات الكارب (g)</b></span>
+           <span>•</span>
+           <span>💉 <b>جرعة الأنسولين السريع (U)</b></span>
+           <span>•</span>
+           <span>⚡ <b>إجمالي أنسولين اليوم (ق=قاعدي | س=سريع)</b></span>
+         </div>
+         <div class="print-legend-row">
+           <span>📖 <b>شرح اختصارات الجدول والملف الطبي:</b></span>
+           <span><b>ق.</b> = قبل الوجبة</span>
+           <span>•</span>
+           <span><b>ب.</b> = بعد الوجبة بساعتين</span>
+           <span>•</span>
+           <span><b>CR (معامل الكارب):</b> جرامات الكارب لكل 1 وحدة أنسولين</span>
+           <span>•</span>
+           <span><b>CF (معامل التصحيح):</b> مقدار انخفاض السكر (${esc(displayUnit)}) لكل 1 وحدة أنسولين</span>
+           <span>•</span>
+           <span><b>U:</b> وحدة أنسولين</span>
+         </div>
        </div>`;
 
   div.innerHTML = `
@@ -373,8 +402,8 @@ function createPageStructure(child, start, end, pageNum, totalPages, displayUnit
           <div class="muted">الفترة: من <b>${esc(start)}</b> إلى <b>${esc(end)}</b> • الطبيب المتابع: <b>${esc(docName)}</b></div>
         </div>
         <div class="header-left">
-          <b>اسم الطفل:</b> ${esc(childName)} (${calcAge(dob)} سنة) | <b>الوحدة:</b> ${esc(displayUnit)}<br>
-          <b>معامل الكارب (CR):</b> ${esc(crStr)} | <b>التصحيح (CF):</b> ${esc(cf)} | <b>القاعدي:</b> ${esc(basalDose)}U
+          <b>اسم الطفل:</b> ${esc(childName)} (${calcAge(dob)} سنة) | <b>وحدة القياس:</b> ${esc(displayUnit)} | <b>القاعدي اليومي:</b> ${esc(basalDose)}<br>
+          <b>معامل الكارب (CR):</b> ${esc(crStr)} | <b>معامل التصحيح (CF):</b> ${esc(cf)}
         </div>
       </header>
       <div class="grid-wrap">
