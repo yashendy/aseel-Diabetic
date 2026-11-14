@@ -1,8 +1,8 @@
-// js/firebase-config.js — نسخة نهائية مع تهيئة فورية لـ App Check قبل Auth
+// js/firebase-config.js — نسخة نهائية مع تهيئة فورية لـ App Check واتصال Firestore مستقر
 import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app-check.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { initializeFirestore, getFirestore } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
 // مفتاح reCAPTCHA Enterprise (Site Key)
@@ -36,7 +36,17 @@ if (APP_CHECK_SITE_KEY && APP_CHECK_SITE_KEY.trim() !== "") {
   }
 }
 
-// 3. تهيئة باقي خدمات Firebase بعد ربط الحماية
+// 3. تهيئة باقي خدمات Firebase بعد ربط الحماية (مع دعم Long Polling للشبكات البطيئة)
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+let firestoreInstance;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true
+  });
+} catch (e) {
+  firestoreInstance = getFirestore(app);
+}
+export const db = firestoreInstance;
+
 export const storage = getStorage(app);
