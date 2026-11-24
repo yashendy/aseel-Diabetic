@@ -1,0 +1,25 @@
+// اختبار حفاظ النموذج على الفئة/المصدر القديمين. التشغيل: node tests/food-items-form.test.mjs
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'js', 'food-items.js'), 'utf8');
+const grab = n => { const m = src.match(new RegExp(`(?:^|\\n)((?:const|function) ${n}\\b[\\s\\S]*?\\n\\})`)); return m ? m[1] : null; };
+const fnSrc = ['ensureOption', 'addCustomCategoryOption', 'onCategoryPick'].map(grab);
+assert.ok(fnSrc.every(Boolean), 'helpers present');
+const mkSel = (vals) => { const sel = { options: vals.map(v => ({ value: v })), value: vals[0], appendChild(o) { this.options.push(o); } }; return sel; };
+const env = { cat: mkSel(['فواكه', 'أخرى']), asked: null };
+const $ = id => env[id];
+const document = { createElement: () => ({ dataset: {} }) };
+const prompt = () => env.asked;
+env.category = env.cat;
+const api = new Function('$', 'document', 'prompt', `const CUSTOM_CAT='__custom__';${fnSrc.join('\n')}; return {ensureOption, addCustomCategoryOption, onCategoryPick, CUSTOM_CAT};`)($, document, prompt);
+let n = 0; const t = (name, fn) => { try { fn(); n++; } catch (e) { console.error('✗', name, e.message); process.exitCode = 1; } };
+t('legacy category kept verbatim', () => { api.ensureOption(env.cat, 'لحوم', 'لحوم'); assert.ok(env.cat.options.some(o => o.value === 'لحوم')); });
+t('no duplicate option', () => { const k = env.cat.options.length; api.ensureOption(env.cat, 'لحوم', 'لحوم'); assert.equal(env.cat.options.length, k); });
+t('custom option added once', () => { api.addCustomCategoryOption(); api.addCustomCategoryOption(); assert.equal(env.cat.options.filter(o => o.value === '__custom__').length, 1); });
+t('exact string "اخرى" via custom pick', () => { env.cat.value = '__custom__'; env.asked = '  اخرى '; api.onCategoryPick('فواكه'); assert.equal(env.cat.value, 'اخرى'); });
+t('cancel restores previous', () => { env.cat.value = '__custom__'; env.asked = ''; api.onCategoryPick('لحوم'); assert.equal(env.cat.value, 'لحوم'); });
+t('openEditor no longer forces manual for existing', () => { assert.ok(!/SOURCES\.some\(s => s\.key === f\.source\) \? f\.source/.test(src)); });
+t('blank source option exists', () => { assert.ok(src.includes('<option value="">— بدون مصدر —</option>')); });
+console.log(`${n} passed`);
