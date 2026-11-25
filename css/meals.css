@@ -505,3 +505,8 @@ a { text-decoration: none; }
 .food-lib-item .macros-grid { gap: 4px; }
 .food-lib-item .m-box { min-width: 40px; padding: 3px 5px; }
 .food-lib-item .details { min-width: 0; }
+@media (max-width: 480px) {
+  .food-lib-item { flex-wrap: wrap; gap: 8px; }
+  .food-lib-item .details { flex: 1 1 100%; order: 3; }
+  .food-lib-item .add-btn { order: 2; margin-inline-start: auto; }
+}
