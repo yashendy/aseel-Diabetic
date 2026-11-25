@@ -16,7 +16,7 @@ onAuthStateChanged(auth, async (user) => {
 
   if (!snap.exists() || snap.data().role !== "admin") {
     alert("🚫 ليس لديك صلاحية الدخول إلى لوحة الأدمن");
-    location.href = "dashboard.html";
+    location.href = "index.html";
   }
 });
 
