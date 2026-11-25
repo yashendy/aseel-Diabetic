@@ -1289,7 +1289,7 @@ function generateSmartClinicalReply(userText, p) {
     }
 
     if (weightOnly && carbVal === null && bgVal === null) {
-      return `الرقم **${weightOnly.grams} جرام** ده وزن الصنف مش كمية الكارب. 🙂\nقولّي اسم الصنف وأقدّر الكارب، أو اكتب الكارب صراحةً (مثال: \`كارب 15\`) وأحسبلك الجرعة.`;
+      return `الرقم **${weightOnly.grams} جرام** ده وزن الصنف مش كمية الكارب. 🙂\nقل لي اسم الصنف وأقدّر الكارب، أو اكتب الكارب صراحةً (مثال: \`كارب 15\`) وأحسبلك الجرعة.`;
     }
 
     if (bgVal !== null) {
@@ -1358,7 +1358,7 @@ function generateSmartClinicalReply(userText, p) {
         : `**${carbVal} جم كارب**`;
 
       if (!p.activeCR) {
-        return `${head}\n⚠️ لم يتم تحديد **نسبة الكارب (CR) لوجبة ${p.mealNowLabel}** في إعدادات ${p.name} بعد؛ أكمليها من إعدادات الطفل لأحسب لكِ الجرعة بدقة.`;
+        return `${head}\n⚠️ لم يتم تحديد **نسبة الكارب (CR) لوجبة ${p.mealNowLabel}** في إعدادات ${p.name} بعد؛ أكملها من إعدادات الطفل لأحسب لك الجرعة بدقة.`;
       }
 
       const mealDose = +(carbVal / p.activeCR).toFixed(1);
@@ -1395,7 +1395,7 @@ function generateSmartClinicalReply(userText, p) {
   if (p.missingLabels.length) {
     reply += `- ⚠️ **إعدادات تحتاج استكمالاً في ملف الطفل:** (${p.missingLabels.join('، ')}).\n`;
   }
-  reply += `- لحساب أي وجبة أو تصحيح: اكتبي الصنف والكمية أو قراءة السكر وسأحسب لك الجرعة فوراً!`;
+  reply += `- لحساب أي وجبة أو تصحيح: اكتب الصنف والكمية أو قراءة السكر وسأحسب لك الجرعة فوراً!`;
   return reply;
 }
 
