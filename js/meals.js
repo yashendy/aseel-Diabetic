@@ -220,7 +220,7 @@ onAuthStateChanged(auth, async (u) => {
     if (passedBg) calculateBolus();
     initMealAiChef();
 
-  } catch (e) { console.error(e); alert("تعذر تحميل بيانات الطفل. تأكدي من الاتصال وحاولي مرة أخرى."); }
+  } catch (e) { console.error(e); alert("تعذر تحميل بيانات الطفل. تأكد من الاتصال وحاول مرة أخرى."); }
 
   finally { showLoader(false); }
 
@@ -335,7 +335,7 @@ async function loadChildData() {
 
   if (c.calorieGoal) els.dailyCalorieTarget.value = c.calorieGoal;
 
-  if (els.hypoRescueText) els.hypoRescueText.textContent = `الطفل في حالة هبوط! الجرعة صُفرت. عالجي بـ ${state.therapy.hypoCarbs} جرام كارب سريع (اكتبي العلاج يدوياً أو دعِي المنصة تحسب الكمية من المكتبة) ثم أعيدي القياس بعد 15 دقيقة.`;
+  if (els.hypoRescueText) els.hypoRescueText.textContent = `الطفل في حالة هبوط! الجرعة صُفرت. عالج بـ ${state.therapy.hypoCarbs} جرام كارب سريع (اكتب العلاج يدوياً أو دع المنصة تحسب الكمية من المكتبة) ثم أعد القياس بعد 15 دقيقة.`;
 
   const miss = [...state.therapy.missing];
 
@@ -659,7 +659,7 @@ async function loadIOB() {
 
     console.error(e);
 
-    iobNote.textContent = 'تعذر حساب IOB تلقائياً — أدخليه يدوياً.';
+    iobNote.textContent = 'تعذر حساب IOB تلقائياً — أدخله يدوياً.';
 
   }
 
@@ -715,7 +715,7 @@ function renderLibrary() {
 
     if (!state.presetMeals.length) {
 
-      els.itemsGrid.innerHTML = `<div style="text-align:center; padding:30px 20px; color:#94a3b8; font-size:14px;">لا توجد وجبات محفوظة بعد.<br><br>ركبي أي وجبة في الجدول واضغطي على زر "⭐ حفظ كوصفة / وجبة جاهزة" لتظهر هنا!</div>`;
+      els.itemsGrid.innerHTML = `<div style="text-align:center; padding:30px 20px; color:#94a3b8; font-size:14px;">لا توجد وجبات محفوظة بعد.<br><br>ركّب أي وجبة في الجدول واضغط على زر "⭐ حفظ كوصفة / وجبة جاهزة" لتظهر هنا!</div>`;
 
       return;
 
@@ -793,7 +793,7 @@ function renderLibrary() {
 
     if (state.isRescueMode) emptyMsg = 'لا توجد أصناف مخصصة لعلاج الهبوط في المكتبة.';
 
-    else if (state.libTab === 'favorites') emptyMsg = 'لا توجد أصناف في المفضلة بعد. اضغطي على النجمة ⭐ بجانب أي صنف لإضافته للمفضلة!';
+    else if (state.libTab === 'favorites') emptyMsg = 'لا توجد أصناف في المفضلة بعد. اضغط على النجمة ⭐ بجانب أي صنف لإضافته للمفضلة!';
 
     else if (state.libTab === 'most-used') emptyMsg = 'لم يتم تسجيل وجبات سابقة بعد لاستنتاج الأصناف الأكثر استخداماً.';
 
@@ -891,7 +891,7 @@ function addItemToMeal(id) {
 
     const carbsPer100 = Number(food.per100?.carbs_g) || 0;
 
-    if (carbsPer100 <= 0) { alert('هذا الصنف لا يحتوي على كارب فلا يصلح لرفع السكر. اختاري صنفاً آخر.'); return; }
+    if (carbsPer100 <= 0) { alert('هذا الصنف لا يحتوي على كارب فلا يصلح لرفع السكر. اختر صنفاً آخر.'); return; }
 
     const target = state.therapy?.hypoCarbs || 15;
 
@@ -1123,7 +1123,7 @@ function calculateBolus() {
 
     if (fpu >= 1.5 || fat >= 20 || pro >= 30) {
 
-      html += `<div style="margin-top:6px; padding:6px 10px; background:#fef3c7; border:1px solid #fde68a; border-radius:6px; color:#92400e; font-size:12px;">🧀🥩 <b>تنبيه وجبة غنية بالدهون والبروتين (${round(fat, 1)}g دهون، ${round(pro, 1)}g بروتين ≈ ${round(fpu, 1)} FPU):</b> الدهون والبروتين تؤخر إفراغ المعدة وقد تؤدي لارتفاع متأخر في السكر بعد 3 إلى 5 ساعات. انتبهي لقياس السكر بعد ساعتين وبعد 4 ساعات واستشيري الطبيب بشأن جرعة ممتدة.</div>`;
+      html += `<div style="margin-top:6px; padding:6px 10px; background:#fef3c7; border:1px solid #fde68a; border-radius:6px; color:#92400e; font-size:12px;">🧀🥩 <b>تنبيه وجبة غنية بالدهون والبروتين (${round(fat, 1)}g دهون، ${round(pro, 1)}g بروتين ≈ ${round(fpu, 1)} FPU):</b> الدهون والبروتين تؤخر إفراغ المعدة وقد تؤدي لارتفاع متأخر في السكر بعد 3 إلى 5 ساعات. انتبه لقياس السكر بعد ساعتين وبعد 4 ساعات واستشر الطبيب بشأن جرعة ممتدة.</div>`;
 
     }
 
@@ -1423,7 +1423,7 @@ async function loadTodayMeals() {
 
               <span style="font-size:11px; color:#dc2626; font-weight:bold;">⏰ حان موعد القياس!</span>
 
-              <a href="${measUrl}" class="btn-measure-pill alert-pulse">🩸 سجلي القياس الآن</a>
+              <a href="${measUrl}" class="btn-measure-pill alert-pulse">🩸 سجّل القياس الآن</a>
 
             </div>`;
 
@@ -1563,13 +1563,13 @@ els.btnSaveMeal.onclick = async () => {
 
   if (t.maxDose && totalDose > t.maxDose) {
 
-    alert(`⛔ الجرعة (${totalDose}U) أعلى من الحد الأقصى المحدد للطفل (${t.maxDose}U). عدّلي الجرعة أو راجعي الطبيب لتعديل الحد.`);
+    alert(`⛔ الجرعة (${totalDose}U) أعلى من الحد الأقصى المحدد للطفل (${t.maxDose}U). عدّل الجرعة أو راجع الطبيب لتعديل الحد.`);
 
     return;
 
   }
 
-  if (calc?.isHypo && totalDose > 0 && !confirm("⚠️ السكر منخفض الآن! هل أنت متأكدة من إعطاء أنسولين؟")) return;
+  if (calc?.isHypo && totalDose > 0 && !confirm("⚠️ السكر منخفض الآن! هل أنت متأكد من إعطاء أنسولين؟")) return;
 
   if (suggested === null && totalDose > 0 && !confirm("الجرعة مُدخلة يدوياً بدون حساب من الحاسبة (إعدادات ناقصة). هل راجعتِها مع الطبيب؟")) return;
 
@@ -2337,7 +2337,7 @@ let _mealAiHistory = [];
 let _mealAiInitialized = false;
 let _mealAiCurrentTopicSlot = null; // يتتبع نوع الوجبة التي يدور حولها النقاش حالياً
 
-// اكتشاف نوع الوجبة تلقائياً من كلام الأم وتحديث الحاسبة عليها فوراً
+// اكتشاف نوع الوجبة تلقائياً من كلام ولي الأمر وتحديث الحاسبة عليها فوراً
 function detectAndSyncSlotFromText(userText) {
   if (!userText) return;
   const q = normAr(userText);
@@ -2588,13 +2588,13 @@ ${matchedFoods.join('\n')}
 
 قواعد الحوار التفاعلي الإلزامية (التزم بها حرفياً):
 1. **المرحلة الأولى (النقاش والسؤال عن التفضيلات):**
-   - إذا قالت الأم جملة عامة مثل: ("عايزة نحضر غداء"، "اقترح فطار"، "عايزة عشاء"، "تحضير سناك") **ممنوع** أن تعطيها وجبة جاهزة فوراً في options!
-   - بدلاً من ذلك: ابدأ بنقاش ودود ومختصر، اذكر لها 3 أو 4 من الأصناف التي يحبها ${childName} المناسبة لوجبة (${ctx.slotLabel})، واسألها: "إيه اللي ${childName} نفسها تاكله النهاردة في ${ctx.slotLabel} أو المتاح عندكم في المطبخ؟ (مثلاً للغداء: أرز وخضار وفراخ/لحمة، ولا مكرونة وكفتة، ولا عيش وسمك؟)".
-   - وفي هذه المرحلة الأولى اجعل "options": [] فارغة تماماً، وضع في "replies" 4 اختيارات تفاعلية متنوعة ومناسبة لوجبة (${ctx.slotLabel}) لتضغط عليها الأم أو تكتب ردها!
+   - إذا قال ولي الأمر جملة عامة مثل: ("عايز نحضر غداء"، "اقترح فطار"، "عايز عشاء"، "تحضير سناك") **ممنوع** أن تعطيه وجبة جاهزة فوراً في options!
+   - بدلاً من ذلك: ابدأ بنقاش ودود ومختصر، اذكر له 3 أو 4 من الأصناف التي يحبها ${childName} المناسبة لوجبة (${ctx.slotLabel})، واسأله: "إيه اللي ${childName} نفسها تاكله النهاردة في ${ctx.slotLabel} أو المتاح عندكم في المطبخ؟ (مثلاً للغداء: أرز وخضار وفراخ/لحمة، ولا مكرونة وكفتة، ولا عيش وسمك؟)".
+   - وفي هذه المرحلة الأولى اجعل "options": [] فارغة تماماً، وضع في "replies" 4 اختيارات تفاعلية متنوعة ومناسبة لوجبة (${ctx.slotLabel}) ليضغط عليها ولي الأمر أو يكتب رده!
 
 2. **المرحلة الثانية (تحديد الأصناف ومناقشة الكمية ثم إعطاء خيار الإضافة):**
-   - بعد أن ترد الأم وتختار الأصناف التي تريدها (مثلاً: "أرز وبامية ولحمة" أو "مكرونة وبانيه" أو "فول وعيش"):
-   - ناقشها باختصار في المقادير المناسبة لـ ${childName}، واعرض لها في "options" الوجبة بمقاديرها الدقيقة من المكتبة (أو خيارين: كمية خفيفة وكمية متوسطة مشبعة) حتى يظهر لها زر (✅ اعتماد وإضافة للجدول)، وضع في "replies" أزرار تعديل سريعة مثل: ["➕ زود كمية النشويات شوية", "➖ قلل الكارب والجرعة", "🥗 ضيف سلطة خضراء معاهم", "🔄 غيّر صنف من الوجبة"].
+   - بعد أن يرد ولي الأمر ويختار الأصناف التي يريدها (مثلاً: "أرز وبامية ولحمة" أو "مكرونة وبانيه" أو "فول وعيش"):
+   - ناقشه باختصار في المقادير المناسبة لـ ${childName}، واعرض له في "options" الوجبة بمقاديرها الدقيقة من المكتبة (أو خيارين: كمية خفيفة وكمية متوسطة مشبعة) حتى يظهر له زر (✅ اعتماد وإضافة للجدول)، وضع في "replies" أزرار تعديل سريعة مثل: ["➕ زود كمية النشويات شوية", "➖ قلل الكارب والجرعة", "🥗 ضيف سلطة خضراء معاهم", "🔄 غيّر صنف من الوجبة"].
 
 3. **قواعد ضبط الأرقام في الـ JSON:**
    - إذا كانت الوحدة "رغيف" (100 جم) وتريد نصف رغيف: "qty": 0.5, "unitLabel": "رغيف", "gramsPerUnit": 100.
@@ -2677,7 +2677,7 @@ function buildLocalMealChefFallback(userText) {
   if (isGeneralStart && !mentionedSpecificFood) {
     if (ctx.slot === 'PRE_LUNCH') {
       return {
-        cleanText: `أهلاً بكِ! يلا نرتب **وجبة الغداء** لـ **${childName}** مع بعض 🍲 (تم ضبط الحاسبة على الغداء — معامل الكارب 1:${ctx.activeCR}).${favHint}\n\nقوليلي الأول: **إيه اللي ${childName} نفسها تاكله النهاردة على الغداء أو إيه اللي طابخينه في البيت؟**\nاختاري الفكرة الأقرب أو اكتبي لي الأصناف المتاحة عندك:`,
+        cleanText: `أهلاً بك! يلا نرتب **وجبة الغداء** لـ **${childName}** مع بعض 🍲 (تم ضبط الحاسبة على الغداء — معامل الكارب 1:${ctx.activeCR}).${favHint}\n\nقل لي الأول: **إيه اللي ${childName} نفسها تاكله النهاردة على الغداء أو إيه اللي طابخينه في البيت؟**\nاختر الفكرة الأقرب أو اكتب لي الأصناف المتاحة عندك:`,
         actionData: {
           autoApply: false,
           replies: [
@@ -2693,7 +2693,7 @@ function buildLocalMealChefFallback(userText) {
 
     if (ctx.slot === 'PRE_BREAKFAST' || ctx.slot === 'FASTING') {
       return {
-        cleanText: `صباح النشاط! ☀️ يلا نجهز **وجبة الفطار** لـ **${childName}** (معامل الكارب للفطار 1:${ctx.activeCR}).${favHint}\n\n**تحبي فطار ${childName} النهاردة يكون إيه؟**\nاختاري من التفضيلات دي أو اكتبي لي اللي تحبه:`,
+        cleanText: `صباح النشاط! ☀️ يلا نجهز **وجبة الفطار** لـ **${childName}** (معامل الكارب للفطار 1:${ctx.activeCR}).${favHint}\n\n**تحب فطار ${childName} النهاردة يكون إيه؟**\nاختر من التفضيلات دي أو اكتب لي اللي تحبه:`,
         actionData: {
           autoApply: false,
           replies: [
@@ -2755,7 +2755,7 @@ function buildLocalMealChefFallback(userText) {
     const dose = round(netC / ctx.activeCR, 1);
 
     return {
-      cleanText: `اختيار رائع ومن الأكلات المفضلة لـ **${childName}**! 🍲👌\nالبامية مع البروتين هتبطئ امتصاص الأرز وتمنع ارتفاع السكر بعد الغداء.\n\nجهزت لك مقادير متوازنة (**${riceSpooons} ملاعق أرز + كوب بامية + قطعة بروتين** = **${netC} جم كارب** ⬅️ **${dose} وحدة**).\n\nإيه رأيك في الكمية دي لشهيتها النهاردة؟ تحبي نعدل عدد ملاعق الأرز ولا نضيفها للجدول؟`,
+      cleanText: `اختيار رائع ومن الأكلات المفضلة لـ **${childName}**! 🍲👌\nالبامية مع البروتين هتبطئ امتصاص الأرز وتمنع ارتفاع السكر بعد الغداء.\n\nجهزت لك مقادير متوازنة (**${riceSpooons} ملاعق أرز + كوب بامية + قطعة بروتين** = **${netC} جم كارب** ⬅️ **${dose} وحدة**).\n\nإيه رأيك في الكمية دي لشهيتها النهاردة؟ تحب نعدل عدد ملاعق الأرز ولا نضيفها للجدول؟`,
       actionData: {
         autoApply: false,
         replaceExisting: true,
@@ -2779,7 +2779,7 @@ function buildLocalMealChefFallback(userText) {
     const netC = 44;
     const dose = round(netC / ctx.activeCR, 1);
     return {
-      cleanText: `وجبة مكرونة لذيذة لـ **${childName}**! 🍝\nنصيحة سريعة: ابدئي بطبق السلطة والبروتين الأول قبل المكرونة عشان السكر يفضل مستقر.\n\nالمقادير المقترحة بالأسفل (**${netC} جم كارب** ⬅️ **${dose} وحدة**). هل الكمية مناسبة ولا تحبي نقلل المكرونة لنصف كوب؟`,
+      cleanText: `وجبة مكرونة لذيذة لـ **${childName}**! 🍝\nنصيحة سريعة: ابدأ بطبق السلطة والبروتين الأول قبل المكرونة عشان السكر يفضل مستقر.\n\nالمقادير المقترحة بالأسفل (**${netC} جم كارب** ⬅️ **${dose} وحدة**). هل الكمية مناسبة ولا تحب نقلل المكرونة لنصف كوب؟`,
       actionData: {
         autoApply: false,
         replaceExisting: true,
@@ -2802,7 +2802,7 @@ function buildLocalMealChefFallback(userText) {
     const netC = 42.6;
     const dose = round(netC / ctx.activeCR, 1);
     return {
-      cleanText: `يا سلام على الفطار المصري المشبع لـ **${childName}**! 🥙\nالفول والطعمية مع نصف رغيف بلدي بيدوا شبع طويل الأمد.\n\nإليك المقادير المقترحة (**${netC} جم كارب** ⬅️ **${dose} وحدة**). لو حابة تضيفيها للجدول اضغطي على الزر الأخضر، أو قوليلي لو حابة نبدل الطعمية ببيضة مسلوقة:`,
+      cleanText: `يا سلام على الفطار المصري المشبع لـ **${childName}**! 🥙\nالفول والطعمية مع نصف رغيف بلدي بيدوا شبع طويل الأمد.\n\nإليك المقادير المقترحة (**${netC} جم كارب** ⬅️ **${dose} وحدة**). لو حابب تضيفها للجدول اضغط على الزر الأخضر، أو قل لي لو حابب نبدل الطعمية ببيضة مسلوقة:`,
       actionData: {
         autoApply: false,
         replaceExisting: true,
@@ -2825,7 +2825,7 @@ function buildLocalMealChefFallback(userText) {
     const netC = 37.5;
     const dose = round(netC / ctx.activeCR, 1);
     return {
-      cleanText: `فطيرة البطاطس من الأكلات المفضلة جداً لـ **${childName}**! 🥔⭐\nنسقتها لك مع ربع رغيف وجبنة بالخيار عشان تكون وجبة متكاملة (**${netC} جم كارب** ⬅️ **${dose} وحدة**).\n\nتحبي نعتمدها في الجدول ولا بدون عيش؟`,
+      cleanText: `فطيرة البطاطس من الأكلات المفضلة جداً لـ **${childName}**! 🥔⭐\nنسقتها لك مع ربع رغيف وجبنة بالخيار عشان تكون وجبة متكاملة (**${netC} جم كارب** ⬅️ **${dose} وحدة**).\n\nتحب نعتمدها في الجدول ولا بدون عيش؟`,
       actionData: {
         autoApply: false,
         replaceExisting: true,
@@ -2839,7 +2839,7 @@ function buildLocalMealChefFallback(userText) {
     };
   }
 
-  // البحث في مكتبة الأصناف عن أي صنف ذكرته الأم
+  // البحث في مكتبة الأصناف عن أي صنف ذكره ولي الأمر
   const foundFoods = [];
   for (const f of state.globalFoods) {
     const fn = normAr(f.name);
@@ -2869,7 +2869,7 @@ function buildLocalMealChefFallback(userText) {
     const dose = round(totalCarbs / ctx.activeCR, 1);
 
     return {
-      cleanText: `تمام جداً! جهزت لك الأصناف دي لوجبة **${ctx.slotLabel}** لـ **${childName}** من المكتبة:\nإجمالي الكارب الصافي: **${round(totalCarbs, 1)} جم** ⬅️ الجرعة المقدرة: **${dose} وحدة**.\n\nتحبي نضيفهم للجدول بالمقادير دي ولا نعدل فيهم حاجة؟`,
+      cleanText: `تمام جداً! جهزت لك الأصناف دي لوجبة **${ctx.slotLabel}** لـ **${childName}** من المكتبة:\nإجمالي الكارب الصافي: **${round(totalCarbs, 1)} جم** ⬅️ الجرعة المقدرة: **${dose} وحدة**.\n\nتحب نضيفهم للجدول بالمقادير دي ولا نعدل فيهم حاجة؟`,
       actionData: {
         autoApply: false,
         replaceExisting: true,
@@ -2885,14 +2885,14 @@ function buildLocalMealChefFallback(userText) {
 
   // إذا كان السؤال عاماً، نفتح النقاش التفاعلي حسب الوجبة الحالية بدون فرض كارت
   return {
-    cleanText: `أنا معكِ لتحضير وجبة **${ctx.slotLabel}** لـ **${childName}** (معامل الكارب 1:${ctx.activeCR})! 👩‍🍳${favHint}\n\nقولي لي: إيه الأصناف اللي ${childName} نفسها فيها دلوقتي أو المتوفرة عندك في المطبخ عشان نظبط مقاديرها سوا؟`,
+    cleanText: `أنا معك لتحضير وجبة **${ctx.slotLabel}** لـ **${childName}** (معامل الكارب 1:${ctx.activeCR})! 👩‍🍳${favHint}\n\nقل لي: إيه الأصناف اللي ${childName} نفسها فيها دلوقتي أو المتوفرة عندك في المطبخ عشان نظبط مقاديرها سوا؟`,
     actionData: {
       autoApply: false,
       replies: [
-        '🍳 عايزة نحضر فطار مع بعض',
-        '🍲 عايزة نحضر غداء على ذوقها',
-        '🥪 عايزة نحضر عشاء خفيف وآمن',
-        '🍎 عايزة سناك محسوب الكارب'
+        '🍳 عايز نحضر فطار مع بعض',
+        '🍲 عايز نحضر غداء على ذوقها',
+        '🥪 عايز نحضر عشاء خفيف وآمن',
+        '🍎 عايز سناك محسوب الكارب'
       ],
       options: []
     }
@@ -3012,7 +3012,7 @@ async function handleMealAiUserPrompt(userText) {
   const q = (userText || '').trim();
   if (!q) return;
 
-  // أول خطوة: اكتشاف نوع الوجبة من كلام الأم (فطار / غداء / عشاء / سناك) ومزامنته فوراً!
+  // أول خطوة: اكتشاف نوع الوجبة من كلام ولي الأمر (فطار / غداء / عشاء / سناك) ومزامنته فوراً!
   detectAndSyncSlotFromText(q);
 
   const input = $('mealAiInput');
@@ -3082,14 +3082,14 @@ function initMealAiChef() {
 
       appendMealAiMessage(
         'bot',
-        `أهلاً بكِ في شات مطبخ **${childName}** التفاعلي! 👩‍🍳🍽️${favText}\n\nتحبي نحضر وجبة إيه مع بعض دلوقتي؟ اختاري نوع الوجبة عشان نتناقش في الأصناف اللي ${childName} بتحبها والمتاحة عندك:`,
+        `أهلاً بك في شات مطبخ **${childName}** التفاعلي! 👩‍🍳🍽️${favText}\n\nتحب نحضر وجبة إيه مع بعض دلوقتي؟ اختر نوع الوجبة عشان نتناقش في الأصناف اللي ${childName} بتحبها والمتاحة عندك:`,
         {
           autoApply: false,
           replies: [
-            '🍳 عايزة نحضر فطار مع بعض',
-            '🍲 عايزة نحضر غداء على ذوقها',
-            '🥪 عايزة نحضر عشاء خفيف وآمن',
-            '🍎 عايزة سناك محسوب الكارب'
+            '🍳 عايز نحضر فطار مع بعض',
+            '🍲 عايز نحضر غداء على ذوقها',
+            '🥪 عايز نحضر عشاء خفيف وآمن',
+            '🍎 عايز سناك محسوب الكارب'
           ],
           options: []
         }

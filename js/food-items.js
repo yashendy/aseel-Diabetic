@@ -128,7 +128,7 @@ function startLive() {
 
     renderAll();
 
-  }, err => { console.error(err); toast('تعذر تحميل المكتبة — راجعي الصلاحيات'); });
+  }, err => { console.error(err); toast('تعذر تحميل المكتبة — راجع الصلاحيات'); });
 
 
 
@@ -586,9 +586,9 @@ async function setActive(ids, active) {
 
 async function bulk(kind) {
 
-  const ids = [...selected]; if (!ids.length) { toast('حددي أصنافاً أولاً'); return; }
+  const ids = [...selected]; if (!ids.length) { toast('حدد أصنافاً أولاً'); return; }
 
-  if (kind === 'verify' && !confirm(`توثيق ${ids.length} صنف؟ تأكدي أنك راجعتِ قيمها فعلاً.`)) return;
+  if (kind === 'verify' && !confirm(`توثيق ${ids.length} صنف؟ تأكد أنك راجعت قيمها فعلاً.`)) return;
 
   if (kind === 'archive' && !confirm(`أرشفة ${ids.length} صنف؟`)) return;
 
@@ -1030,7 +1030,7 @@ function wireEditor() {
 
     const p = collectForm().per100;
 
-    if ([p.carbs_g, p.protein_g, p.fat_g].some(v => v === null)) { toast('أدخلي الكارب والبروتين والدهون أولاً'); return; }
+    if ([p.carbs_g, p.protein_g, p.fat_g].some(v => v === null)) { toast('أدخل الكارب والبروتين والدهون أولاً'); return; }
 
     setVal('cal_kcal', Math.round(kcalFromMacros(p))); validateLive();
 
@@ -1046,7 +1046,7 @@ function wireEditor() {
 
     try { editing.thumb = await makeThumb(file); updatePreview(); toast('تم تجهيز الصورة المصغرة'); }
 
-    catch (err) { console.error(err); toast('تعذر معالجة الصورة — جرّبي صيغة JPG/PNG أو رابطاً خارجياً'); }
+    catch (err) { console.error(err); toast('تعذر معالجة الصورة — جرّب صيغة JPG/PNG أو رابطاً خارجياً'); }
 
     e.target.value = '';
 
@@ -1144,7 +1144,7 @@ function recomputeRecipe() {
 
   const rc = recipeToPer100(editing.ingredients, toNum($('rc-cooked').value));
 
-  if (!rc.per100) { $('rc-summary').textContent = 'أضيفي مكونات لحساب القيم.'; return; }
+  if (!rc.per100) { $('rc-summary').textContent = 'أضف مكونات لحساب القيم.'; return; }
 
   ['carbs_g', 'fiber_g', 'protein_g', 'fat_g', 'cal_kcal', 'gi'].forEach(k => setVal(k, rc.per100[k]));
 
@@ -1170,13 +1170,13 @@ async function onSave(e) {
 
   if (dup) warnings.push(`يوجد صنف بنفس الاسم بالفعل ("${dup.name}").`);
 
-  if (editing.kind === 'recipe' && editing.ingredients.length === 0) errors.push('أضيفي مكوناً واحداً على الأقل للوصفة.');
+  if (editing.kind === 'recipe' && editing.ingredients.length === 0) errors.push('أضف مكوناً واحداً على الأقل للوصفة.');
 
   showValidation(errors, warnings);
 
-  if (errors.length) { toast('صححي الأخطاء أولاً'); return; }
+  if (errors.length) { toast('صحّح الأخطاء أولاً'); return; }
 
-  if (warnings.length && !confirm('تنبيهات:\n- ' + warnings.join('\n- ') + '\n\nهل تريدين الحفظ رغم ذلك؟')) return;
+  if (warnings.length && !confirm('تنبيهات:\n- ' + warnings.join('\n- ') + '\n\nهل تريد الحفظ رغم ذلك؟')) return;
 
 
 
@@ -1282,9 +1282,9 @@ async function onDelete() {
 
   const f = editing?.existing; if (!f) return;
 
-  if (!isArchived(f)) { toast('أرشفي الصنف أولاً'); return; }
+  if (!isArchived(f)) { toast('أرشف الصنف أولاً'); return; }
 
-  const ans = prompt(`حذف "${f.name}" نهائياً؟ اكتبي كلمة: حذف`);
+  const ans = prompt(`حذف "${f.name}" نهائياً؟ اكتب كلمة: حذف`);
 
   if (ans !== 'حذف') return;
 

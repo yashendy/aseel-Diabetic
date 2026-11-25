@@ -122,7 +122,7 @@ btnSave.addEventListener('click', async ()=>{
 
 /* إزالة الربط بالكامل */
 btnUnlink.addEventListener('click', async ()=>{
-  if(!confirm('هل تريدين إزالة الربط بالكامل؟ سيتم أيضًا إيقاف الموافقة.')) return;
+  if(!confirm('هل تريد إزالة الربط بالكامل؟ سيتم أيضًا إيقاف الموافقة.')) return;
   busy(true);
   try{
     const ref = doc(db, `parents/${USER.uid}/children/${childId}`);
