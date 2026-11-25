@@ -670,7 +670,7 @@ function createUnitRow(u = { label: '', grams: '' }) {
 
   const l = document.createElement('input'); l.type = 'text'; l.className = 'u-lbl'; l.placeholder = 'الاسم (مثال: كوب)'; l.value = u.label || '';
 
-  const g = document.createElement('input'); g.type = 'number'; g.className = 'u-gr'; g.placeholder = 'جرام'; g.style.width = '90px'; g.min = '1'; g.value = u.grams ?? '';
+  const g = document.createElement('input'); g.type = 'number'; g.className = 'u-gr'; g.placeholder = 'جرام'; g.style.width = '90px'; g.min = '0.1'; g.step = 'any'; g.value = u.grams ?? '';
 
   const d = document.createElement('button'); d.type = 'button'; d.className = 'btn danger sm'; d.textContent = '✕';
 
@@ -1134,7 +1134,7 @@ function renderIngredients() {
 
   $('rc-list').innerHTML = editing.ingredients.map((i, idx) =>
 
-    `<div class="rc-row"><span class="nm">${esc(i.name)}</span><input type="number" min="1" step="1" data-i="${idx}" value="${esc(i.grams)}" inputmode="decimal"> <span class="muted">جم</span><button type="button" class="btn danger sm" data-rm="${idx}">✕</button></div>`).join('');
+    `<div class="rc-row"><span class="nm">${esc(i.name)}</span><input type="number" min="0.1" step="any" data-i="${idx}" value="${esc(i.grams)}" inputmode="decimal"> <span class="muted">جم</span><button type="button" class="btn danger sm" data-rm="${idx}">✕</button></div>`).join('');
 
 }
 
