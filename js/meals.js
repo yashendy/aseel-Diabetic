@@ -2525,14 +2525,14 @@ function buildMealChefSystemPrompt(userText) {
     const isMatch = qWords.some(w => fn.includes(w)) || state.favorites.has(f.id) || state.mostUsedIds.includes(f.id);
     if (isMatch && matchedFoods.length < 22) {
       const unitsStr = (f.units || []).slice(0, 2).map(u => `${u.label}=${u.grams}g`).join(', ');
-      matchedFoods.push(`- ${f.name} [كارب/100جم: ${f.carbs}g, ألياف: ${f.fiber || 0}g, الوحدات: ${unitsStr || '100 جرام=100g'}]`);
+      matchedFoods.push(`- ${f.name} [كارب/100جم: ${f.per100?.carbs_g ?? '—'}g, ألياف: ${f.per100?.fiber_g || 0}g, الوحدات: ${unitsStr || '100 جرام=100g'}]`);
     }
   }
   if (matchedFoods.length < 15) {
     for (const f of state.globalFoods.slice(0, 20)) {
       if (matchedFoods.length >= 22) break;
       const unitsStr = (f.units || []).slice(0, 2).map(u => `${u.label}=${u.grams}g`).join(', ');
-      const line = `- ${f.name} [كارب/100جم: ${f.carbs}g, الوحدات: ${unitsStr || '100 جرام=100g'}]`;
+      const line = `- ${f.name} [كارب/100جم: ${f.per100?.carbs_g ?? '—'}g, الوحدات: ${unitsStr || '100 جرام=100g'}]`;
       if (!matchedFoods.includes(line)) matchedFoods.push(line);
     }
   }
@@ -2825,11 +2825,11 @@ function buildLocalMealChefFallback(userText) {
         qty,
         unitLabel: u.label,
         gramsPerUnit: u.grams || 100,
-        carbsPer100g: f.carbs || 0,
-        fiberPer100g: f.fiber || 0,
-        proteinPer100g: f.protein || 0,
-        fatPer100g: f.fat || 0,
-        kcalPer100g: f.calories || 0
+        carbsPer100g: f.per100?.carbs_g || 0,
+        fiberPer100g: f.per100?.fiber_g || 0,
+        proteinPer100g: f.per100?.protein_g || 0,
+        fatPer100g: f.per100?.fat_g || 0,
+        kcalPer100g: f.per100?.cal_kcal || 0
       };
     });
     const totalCarbs = items.reduce((s, it) => s + ((it.carbsPer100g - it.fiberPer100g) * (it.gramsPerUnit * it.qty) / 100), 0);
