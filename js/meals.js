@@ -807,39 +807,6 @@ function renderLibrary() {
 
     return libCardHtml(f);
 
-    const isFav = state.favorites.has(f.id);
-
-    const imgUrl = f.image?.thumb || f.image?.url || f.imageUrl || SAFE_PLACEHOLDER;
-
-    return `
-
-      <div class="food-lib-item" data-id="${esc(f.id)}">
-
-        <button class="fav-btn ${isFav ? 'is-fav' : ''}" type="button" data-act="toggle-fav" title="${isFav ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}">${isFav ? '★' : '☆'}</button>
-
-        <div class="food-img-col"><img src="${esc(imgUrl)}" onerror="this.src='${SAFE_PLACEHOLDER}';" alt="${esc(f.name)}" loading="lazy">${giStr}</div>
-
-        <div class="details">
-
-          <div class="food-title">${esc(f.name)}</div>
-
-          <div class="macros-grid">
-
-            <div class="m-box"><span class="m-val">${esc(f.per100?.carbs_g || 0)}g</span><span class="m-lbl">كارب</span></div>
-
-            <div class="m-box"><span class="m-val">${esc(f.per100?.protein_g || 0)}g</span><span class="m-lbl">بروتين</span></div>
-
-            <div class="m-box"><span class="m-val">${esc(f.per100?.fat_g || 0)}g</span><span class="m-lbl">دهون</span></div>
-
-            <div class="m-box"><span class="m-val" style="color:#f59e0b">${esc(f.per100?.cal_kcal || 0)}</span><span class="m-lbl">kcal</span></div>
-
-          </div>
-
-        </div>
-
-        <button class="btn primary sm add-btn" data-act="add">${state.isRescueMode ? 'اختيار للرفع' : 'إضافة'}</button>
-
-      </div>`;
 
   }).join('');
 
