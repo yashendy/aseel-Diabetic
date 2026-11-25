@@ -805,7 +805,7 @@ function renderLibrary() {
 
   els.itemsGrid.innerHTML = list.map(f => {
 
-    const giStr = f.per100?.gi ? `<span class="gi-badge ${f.per100.gi > 70 ? 'high' : ''}">GI: ${esc(f.per100.gi)}</span>` : '';
+    return libCardHtml(f);
 
     const isFav = state.favorites.has(f.id);
 
@@ -907,7 +907,7 @@ function addItemToMeal(id) {
 
   }
 
-  state.mealItems.push({ uid: Date.now().toString(), ...food, mealQty: 1, selectedUnitIndex: 0, availableUnits: food.units?.length ? food.units : [{ label: '100 جرام', grams: 100 }] });
+  const _sel = takeLibSel(food); state.mealItems.push({ uid: Date.now().toString(), ...food, mealQty: _sel.qty, selectedUnitIndex: _sel.unitIdx, availableUnits: food.units?.length ? food.units : [{ label: '100 جرام', grams: 100 }] });
 
   state.manualCarbDirty = false;
 
@@ -3118,3 +3118,67 @@ function initMealAiChef() {
     });
   });
 }
+// ===== بطاقة مكتبة الطعام: الأرقام حسب الكمية والوحدة المختارة (عرض فقط، لا تغيير في حساب الجرعة) =====
+var LIB_DEFAULT_UNITS = [{ label: '100 جرام', grams: 100 }];
+function libUnits(f) { return f.units?.length ? f.units : LIB_DEFAULT_UNITS; }
+function libSelMap() { return state.libSel || (state.libSel = {}); }
+function libSel(f) { return libSelMap()[f.id] || { qty: 1, unitIdx: 0 }; }
+function takeLibSel(f) {
+  const s = libSel(f); delete libSelMap()[f.id];
+  return { qty: s.qty > 0 ? s.qty : 1, unitIdx: libUnits(f)[s.unitIdx] ? s.unitIdx : 0 };
+}
+function libScaled(f, qty, unitIdx) {
+  const u = libUnits(f)[unitIdx] || libUnits(f)[0];
+  const grams = (Number(qty) || 0) * (Number(u.grams) || 100);
+  const p = f.per100 || {};
+  const sc = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? null : Number(v) * grams / 100;
+  return { grams, carbs: sc(p.carbs_g), fiber: sc(p.fiber_g), protein: sc(p.protein_g), fat: sc(p.fat_g), kcal: sc(p.cal_kcal) };
+}
+function libNum(v, d = 1) { return v === null ? '—' : (+v).toFixed(d); }
+function libCardHtml(f) {
+  const isFav = state.favorites.has(f.id);
+  const imgUrl = f.image?.thumb || f.image?.url || f.imageUrl || SAFE_PLACEHOLDER;
+  const gi = Number(f.per100?.gi);
+  const giHtml = gi > 0
+    ? `<span class="lib-gi ${gi > 70 ? 'high' : ''}">GI: ${esc(gi)} <small>غير موثّق</small></span>`
+    : `<span class="lib-gi unknown">GI: غير معروف</span>`;
+  const rescue = state.isRescueMode;
+  const s = rescue ? { qty: 1, unitIdx: 0 } : libSel(f);
+  const m = rescue ? libScaled({ ...f, units: LIB_DEFAULT_UNITS }, 1, 0) : libScaled(f, s.qty, s.unitIdx);
+  const mm = m;
+  const opts = libUnits(f).map((u, i) => `<option value="${i}" ${s.unitIdx == i ? 'selected' : ''}>${esc(u.label)}</option>`).join('');
+  const sel = rescue
+    ? `<div class="lib-sel"><span class="lib-grams">القيم لكل 100 جم</span></div>`
+    : `<div class="lib-sel"><input type="number" class="lib-qty input" min="0.1" step="any" value="${esc(s.qty)}" inputmode="decimal"><select class="lib-unit input">${opts}</select><span class="lib-grams">= ${libNum(m.grams)} جم</span></div>`;
+  return `
+      <div class="food-lib-item" data-id="${esc(f.id)}">
+        <button class="fav-btn ${isFav ? 'is-fav' : ''}" type="button" data-act="toggle-fav" title="${isFav ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}">${isFav ? '★' : '☆'}</button>
+        <div class="food-img-col"><img src="${esc(imgUrl)}" onerror="this.src='${SAFE_PLACEHOLDER}';" alt="${esc(f.name)}" loading="lazy"></div>
+        <div class="details">
+          <div class="food-title">${esc(f.name)}</div>
+          ${sel}
+          <div class="macros-grid">
+            <div class="m-box"><span class="m-val" data-k="carbs">${libNum(mm.carbs)}${mm.carbs === null ? '' : 'g'}</span><span class="m-lbl">كارب</span></div>
+            <div class="m-box"><span class="m-val" data-k="fiber">${libNum(mm.fiber)}${mm.fiber === null ? '' : 'g'}</span><span class="m-lbl">ألياف</span></div>
+            <div class="m-box"><span class="m-val" data-k="protein">${libNum(mm.protein)}${mm.protein === null ? '' : 'g'}</span><span class="m-lbl">بروتين</span></div>
+            <div class="m-box"><span class="m-val" data-k="fat">${libNum(mm.fat)}${mm.fat === null ? '' : 'g'}</span><span class="m-lbl">دهون</span></div>
+            <div class="m-box"><span class="m-val" data-k="kcal" style="color:#f59e0b">${libNum(mm.kcal, 0)}</span><span class="m-lbl">kcal</span></div>
+          </div>
+          <div class="lib-gi-row">${giHtml}</div>
+        </div>
+        <button class="btn primary sm add-btn" data-act="add">${rescue ? 'اختيار للرفع' : 'إضافة'}</button>
+      </div>`;
+}
+function libRefreshCard(card) {
+  const f = state.globalFoods.find(x => x.id === card.dataset.id); if (!f) return;
+  const qty = Number(card.querySelector('.lib-qty').value);
+  const unitIdx = Number(card.querySelector('.lib-unit').value) || 0;
+  libSelMap()[f.id] = { qty, unitIdx };
+  const m = libScaled(f, qty > 0 ? qty : 0, unitIdx);
+  const put = (k, v, d = 1) => { const el = card.querySelector(`[data-k="${k}"]`); if (el) el.textContent = libNum(v, d) + (v === null || k === 'kcal' ? '' : 'g'); };
+  put('carbs', m.carbs); put('fiber', m.fiber); put('protein', m.protein); put('fat', m.fat); put('kcal', m.kcal, 0);
+  card.querySelector('.lib-grams').textContent = `= ${libNum(m.grams)} جم`;
+  const btn = card.querySelector('.add-btn'); if (btn) btn.disabled = !(qty > 0);
+}
+document.addEventListener('input', e => { const c = e.target.closest?.('.food-lib-item'); if (c && e.target.matches('.lib-qty')) libRefreshCard(c); });
+document.addEventListener('change', e => { const c = e.target.closest?.('.food-lib-item'); if (c && e.target.matches('.lib-unit')) libRefreshCard(c); });
