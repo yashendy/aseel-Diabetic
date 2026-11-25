@@ -291,7 +291,7 @@ async function saveChildData() {
   if (!n('#f_cf')) missing.push('معامل التصحيح CF');
   if (!n('#gl_target')) missing.push('هدف السكر');
   [['#cr_b', 'CR الفطار'], ['#cr_l', 'CR الغداء'], ['#cr_d', 'CR العشاء'], ['#cr_s', 'CR السناك']].forEach(([id, l]) => { if (!n(id)) missing.push(l); });
-  if (missing.length && !confirm(`⚠️ بيانات ناقصة: ${missing.join('، ')}.\nحاسبة الجرعات لن تقترح جرعة للبيانات الناقصة حتى تكتمل.\nهل تريدين الحفظ رغم ذلك؟`)) return;
+  if (missing.length && !confirm(`⚠️ بيانات ناقصة: ${missing.join('، ')}.\nحاسبة الجرعات لن تقترح جرعة للبيانات الناقصة حتى تكتمل.\nهل تريد الحفظ رغم ذلك؟`)) return;
 
   $('#loader').classList.remove('hidden');
   try {
