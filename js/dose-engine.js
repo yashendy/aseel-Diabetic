@@ -123,17 +123,17 @@ export function calcBolus({ therapy: t, slotKey, bg = 0, bgUnit, carbs = 0, iob 
   // 1) الهبوط أولاً — يعمل حتى لو إعدادات الجرعة ناقصة (بشرط معرفة وحدة السكر)
   if (hasBg && !unitMissing && eff < t.limits.low) {
     out.isHypo = true;
-    alert('danger', `<strong>🚨 هبوط:</strong> عالجي أولاً (${t.hypoCarbs} جم كارب سريع) وأعيدي القياس بعد 15 دقيقة قبل أي أنسولين.`);
+    alert('danger', `<strong>🚨 هبوط:</strong> عالج أولاً (${t.hypoCarbs} جم كارب سريع) وأعد القياس بعد 15 دقيقة قبل أي أنسولين.`);
     return out;
   }
 
   // 2) إعدادات ناقصة → لا نخمّن
   if (carbs > 0 && !cr) {
-    out.blocked = 'لم يتم تحديد نسبة الكارب (CR) لهذه الوجبة. أكمليها من إعدادات الطفل، أو أدخلي الجرعة يدوياً بعد مراجعة الطبيب.';
+    out.blocked = 'لم يتم تحديد نسبة الكارب (CR) لهذه الوجبة. أكملها من إعدادات الطفل، أو أدخل الجرعة يدوياً بعد مراجعة الطبيب.';
     return out;
   }
   if (hasBg && (unitMissing || !t.CF || !t.target)) {
-    out.blocked = `إعدادات ناقصة (${t.missing.join('، ')}). أكمليها من إعدادات الطفل، أو أدخلي الجرعة يدوياً بعد مراجعة الطبيب.`;
+    out.blocked = `إعدادات ناقصة (${t.missing.join('، ')}). أكملها من إعدادات الطفل، أو أدخل الجرعة يدوياً بعد مراجعة الطبيب.`;
     return out;
   }
 
@@ -147,7 +147,7 @@ export function calcBolus({ therapy: t, slotKey, bg = 0, bgUnit, carbs = 0, iob 
 
   if (t.maxDose && final > t.maxDose) {
     final = t.maxDose; out.capped = true;
-    alert('danger', `<strong>⛔ تجاوز الحد الأقصى:</strong> الجرعة المحسوبة أعلى من الحد المحدد (${t.maxDose}U) فتم تحديدها به. راجعي الإعدادات أو الطبيب.`);
+    alert('danger', `<strong>⛔ تجاوز الحد الأقصى:</strong> الجرعة المحسوبة أعلى من الحد المحدد (${t.maxDose}U) فتم تحديدها به. راجع الإعدادات أو الطبيب.`);
   }
   out.finalDose = final;
 
@@ -156,8 +156,8 @@ export function calcBolus({ therapy: t, slotKey, bg = 0, bgUnit, carbs = 0, iob 
   if (out.iobUsed > 0) alert('info', `<strong>⏳ أنسولين نشط:</strong> تم خصم ${round(out.iobUsed, 2)}U من الجرعة.`);
   if (out.negativeCorrection) alert('info', `<strong>💡 تصحيح عكسي:</strong> السكر أقل من الهدف، تم خصم (${Math.abs(out.correction).toFixed(1)} U) من جرعة الأكل.`);
   if (trend < 0) alert('warn', '<strong>⬇️ سهم هبوط:</strong> تم خفض الجرعة لتفادي الهبوط المتوقع.');
-  if (hasBg && !unitMissing && bgC >= t.limits.critHigh) alert('warn', '<strong>🧪 ارتفاع حرج:</strong> اتبعي تعليمات الطبيب بشأن فحص الكيتونات وطلب المساعدة.');
-  if ((stats.fat || 0) > 30 || (stats.pro || 0) > 40) alert('info', '<strong>🍕 وجبة دسمة:</strong> قد تحتاجين لتقسيم الجرعة لتجنب الارتفاع المتأخر (بحسب تعليمات الطبيب).');
+  if (hasBg && !unitMissing && bgC >= t.limits.critHigh) alert('warn', '<strong>🧪 ارتفاع حرج:</strong> اتبع تعليمات الطبيب بشأن فحص الكيتونات وطلب المساعدة.');
+  if ((stats.fat || 0) > 30 || (stats.pro || 0) > 40) alert('info', '<strong>🍕 وجبة دسمة:</strong> قد تحتاج لتقسيم الجرعة لتجنب الارتفاع المتأخر (بحسب تعليمات الطبيب).');
   if ((stats.avgGI || 0) >= 70) alert('info', '<strong>📈 مؤشر جلايسيمي مرتفع:</strong> يُفضل حقن الأنسولين قبل الأكل.');
   return out;
 }
