@@ -51,7 +51,7 @@ function setLoading(btn, isLoading, originalText) {
 function roleToDest(role){
   switch(role){
     case "admin": return "admin.html";
-    case "doctor": return "doctor.html"; // تم التعديل
+    case "doctor": return "doctor-dashboard.html"; // تم التعديل
     case "doctor-pending": return "pending.html";
     case "parent": return "parent.html"; // تم التعديل
     default: return "register.html"; 
