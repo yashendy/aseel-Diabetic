@@ -33,7 +33,7 @@
     <div class="row">
       <span class="muted">حالة الدخول:</span>
       <b id="authState">جارِ الفحص…</b>
-      <span class="muted" id="authHint">افتحي admin.html وسجّلي دخولك كأدمن في نفس الدومين.</span>
+      <span class="muted" id="authHint">افتح admin.html وسجّل دخولك كأدمن في نفس الدومين.</span>
     </div>
   </div>
 
@@ -72,7 +72,7 @@
 
   <!-- Firebase (يستخدم نفس firebase-config.js بتاعك) -->
   <script type="module">
-    // ✅ مهم: تأكدي أن هذا المسار صحيح ويُصدّر { db, auth }
+    // ✅ مهم: تأكد أن هذا المسار صحيح ويُصدّر { db, auth }
     import { db, auth } from "./js/firebase-config.js";
     import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
     import { collection, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
@@ -165,7 +165,7 @@
 
     async function ensureAuth(){
       if(!currentUser){
-        alert("سجّلي دخولك كأدمن أولًا من admin.html (نفس الدومين) ثم ارجعي هنا.");
+        alert("سجّل دخولك كأدمن أولًا من admin.html (نفس الدومين) ثم ارجع هنا.");
         throw new Error("AUTH_REQUIRED");
       }
     }
@@ -175,7 +175,7 @@
       await ensureAuth();
 
       const f = $file.files?.[0];
-      if(!f){ alert("اختاري ملف أولاً"); return; }
+      if(!f){ alert("اختر ملف أولاً"); return; }
 
       const text = await f.text();
       const rows = f.name.endsWith('.json') ? JSON.parse(text) : parseCSV(text);
@@ -217,7 +217,7 @@
     document.getElementById('save').addEventListener('click', ()=> runImport({dryRun:false, flagsOnly:true}));
 
     // ملاحظة: رسائل "A listener indicated an asynchronous response..." جاية من إضافات المتصفح.
-    // لو ظهرت، جرّبي Incognito أو عطّلي الإضافات—مش خطأ من الصفحة.
+    // لو ظهرت، جرّب Incognito أو عطّل الإضافات—مش خطأ من الصفحة.
   </script>
 </body>
 </html>
