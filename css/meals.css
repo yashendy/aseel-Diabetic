@@ -502,3 +502,6 @@ a { text-decoration: none; }
 .lib-gi.high { background: var(--danger); }
 .lib-gi.unknown { background: #e2e8f0; color: #475569; }
 .food-lib-item .add-btn:disabled { opacity: .5; }
+.food-lib-item .macros-grid { gap: 4px; }
+.food-lib-item .m-box { min-width: 40px; padding: 3px 5px; }
+.food-lib-item .details { min-width: 0; }
