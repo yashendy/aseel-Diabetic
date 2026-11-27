@@ -435,8 +435,9 @@ function createDayRow(dateStr, dayData, child, displayUnit, basalMap = {}) {
 
   const p = childProto || getProtocol(child);
   const defaultBasal = p.insulin.basalDose || 0;
-  const dailyBasal = basalMap[dateStr] != null ? basalMap[dateStr] : defaultBasal;
-  const dailyTDD = round1(dailyBasal + dailyBolus);
+  const basalConfirmed = basalMap[dateStr] != null;
+  const dailyBasal = basalConfirmed ? basalMap[dateStr] : 0;
+  const dailyTDD = basalConfirmed ? round1(dailyBasal + dailyBolus) : 0;
 
   let html = `<div class="cell"><b>${esc(dateStr)}</b><small style="color:#475569">${esc(dayName)}</small></div>`;
 
@@ -448,7 +449,10 @@ function createDayRow(dateStr, dayData, child, displayUnit, basalMap = {}) {
       ${dailyTDD > 0 ? `
         <div style="color:#047857; font-weight:800;">⚡ ${round1(dailyTDD)}U</div>
         <div style="font-size:8.5px; color:#64748b;">ق:${round1(dailyBasal)} | س:${round1(dailyBolus)}</div>
-      ` : ''}
+      ` : (dailyBolus > 0 ? `
+        <div style="color:#047857; font-weight:800;">💉 ${round1(dailyBolus)}U</div>
+        <div style="font-size:8.5px; color:#b45309;">يوم غير مكتمل: لا قاعدي مسجّل</div>
+      ` : '')}
     </div>`;
   } else {
     html += `<div class="cell" style="background:#f8fafc; color:#cbd5e1;">—</div>`;
@@ -504,7 +508,7 @@ function createSummaryPage(child, allData, displayUnit, basalMap, allDates, tota
     let dayBolus = 0;
     dayMatches.forEach(m => { dayBolus += Number(m.totalInsulin || m.correctionDose || m.totalDose || m.dose) || 0; });
     const dayBasal = basalMap[dStr] != null ? basalMap[dStr] : defaultBasal;
-    if (dayMatches.length > 0 || basalMap[dStr] != null) {
+    if (basalMap[dStr] != null) {
       totalBasalSum += dayBasal;
       totalBolusSum += dayBolus;
       tddDaysCount++;
