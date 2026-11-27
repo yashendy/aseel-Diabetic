@@ -450,7 +450,7 @@ function createDayRow(dateStr, dayData, child, displayUnit, basalMap = {}) {
         <div style="color:#1d4ed8; font-weight:700;">🔵 ${basalConfirmed ? `ترسيبا ${round1(dailyBasal)}U` : 'ترسيبا: غير مسجل'}</div>
         ${dailyBolus > 0 ? `<div style="color:#c2410c; font-weight:700;">🟠 نوفو ${round1(dailyBolus)}U</div>` : ''}
         ${basalConfirmed ? `<div style="color:#047857; font-weight:800;">⚡ الكل ${round1(dailyTDD)}U</div>` : `<div style="font-size:8.5px; color:#b45309;">المسجل فقط (غير مكتمل)</div>`}
-      ` : '')}
+      ` : ''}
     </div>`;
   } else {
     html += `<div class="cell" style="background:#f8fafc; color:#cbd5e1;">—</div>`;
