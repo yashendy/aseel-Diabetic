@@ -398,6 +398,7 @@ function groupByDaySlot(list, basalMap = {}) {
       dailyInsulin: 0,
       dailyBolus: 0,
       dailyBasal: (basalMap[key] != null ? basalMap[key] : defaultBasal),
+      basalConfirmed: basalMap[key] != null,
       dailyTDD: 0,
       basalRatio: 0,
       bolusRatio: 0
@@ -412,7 +413,7 @@ function groupByDaySlot(list, basalMap = {}) {
     const d = days[k];
     d.dailyBolus = d.dailyInsulin;
     if (d.dailyBasal == null) d.dailyBasal = (basalMap[k] != null ? basalMap[k] : defaultBasal);
-    d.dailyTDD = round1(d.dailyBasal + d.dailyBolus);
+    d.dailyTDD = d.basalConfirmed ? round1(d.dailyBasal + d.dailyBolus) : 0;
     d.basalRatio = d.dailyTDD > 0 ? Math.round((d.dailyBasal / d.dailyTDD) * 100) : 0;
     d.bolusRatio = d.dailyTDD > 0 ? (100 - d.basalRatio) : 0;
   }
@@ -474,15 +475,12 @@ async function renderReport() {
     const totalCell = `
       <div class="cell-data" style="justify-content:center;">
         ${d.dailyCarbs > 0 ? `<div class="badge-carb" title="إجمالي النشويات">${round1(d.dailyCarbs)}g</div>` : ''}
-        ${d.dailyTDD > 0 ? `
-          <div class="badge-tdd" title="إجمالي الأنسولين TDD: ${round1(d.dailyTDD)}U (قاعدي ${round1(d.dailyBasal)}U / سريع ${round1(d.dailyBolus)}U)">
-            ⚡ ${round1(d.dailyTDD)}U
-          </div>
-          <div style="font-size:9.5px; color:#64748b; line-height:1.2; text-align:center;">
-            ق: ${round1(d.dailyBasal)} | س: ${round1(d.dailyBolus)}
-          </div>
-        ` : (d.dailyBolus > 0 ? `<div class="badge-ins">💉 ${round1(d.dailyBolus)}U</div>` : '')}
-        ${d.dailyCarbs === 0 && d.dailyTDD === 0 ? '<span class="muted">—</span>' : ''}
+        ${(d.basalConfirmed || d.dailyBolus > 0) ? `
+          <div class="badge-tresiba" title="ترسيبا (قاعدي)">${d.basalConfirmed ? `ترسيبا ${round1(d.dailyBasal)}U` : 'ترسيبا: غير مسجل'}</div>
+          ${d.dailyBolus > 0 ? `<div class="badge-novo" title="نوفو (سريع) المسجّل">نوفو ${round1(d.dailyBolus)}U</div>` : ''}
+          ${d.basalConfirmed ? `<div class="badge-tdd" title="إجمالي الأنسولين: ترسيبا ${round1(d.dailyBasal)}U + نوفو ${round1(d.dailyBolus)}U">⚡ الكل ${round1(d.dailyTDD)}U</div>` : `<div class="badge-incomplete" title="مجموع المسجل فقط، لا جرعة ترسيبا مسجلة لهذا اليوم">المسجل فقط ${round1(d.dailyBolus)}U (غير مكتمل)</div>`}
+        ` : ''}
+        ${d.dailyCarbs === 0 && !d.basalConfirmed && d.dailyBolus === 0 ? '<span class="muted">—</span>' : ''}
       </div>`;
 
     row.innerHTML = `
@@ -590,7 +588,7 @@ function updateStats(list, days = []) {
   setText($('statChildWeight'), weight ? `${weight}` : '—');
 
   const daysList = (days && days.length) ? days : (reportDays || []);
-  const activeDays = daysList.filter(d => (d.dailyTDD > 0 || d.dailyBolus > 0));
+  const activeDays = daysList.filter(d => d.basalConfirmed && d.dailyTDD > 0);
   if (activeDays.length > 0) {
     const sumTDD = activeDays.reduce((acc, d) => acc + (d.dailyTDD || 0), 0);
     const sumBasal = activeDays.reduce((acc, d) => acc + (d.dailyBasal || 0), 0);
@@ -887,7 +885,7 @@ function buildAI(list, unit, days = []) {
   const pctTIR = Math.round((valid.filter(x => x.val >= L.low && x.val <= L.high).length / total) * 100);
 
   const daysList = (days && days.length) ? days : (reportDays || []);
-  const activeDays = daysList.filter(d => (d.dailyTDD > 0 || d.dailyBolus > 0));
+  const activeDays = daysList.filter(d => d.basalConfirmed && d.dailyTDD > 0);
   if (activeDays.length > 0) {
     const sumTDD = activeDays.reduce((acc, d) => acc + (d.dailyTDD || 0), 0);
     const sumBasal = activeDays.reduce((acc, d) => acc + (d.dailyBasal || 0), 0);
