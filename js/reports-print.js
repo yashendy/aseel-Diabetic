@@ -378,7 +378,7 @@ function createPageStructure(child, start, end, pageNum, totalPages, displayUnit
            <span>•</span>
            <span>💉 <b>جرعة الأنسولين السريع (U)</b></span>
            <span>•</span>
-           <span>⚡ <b>إجمالي أنسولين اليوم:</b> 🔵 ترسيبا (قاعدي) | 🟠 نوفو (سريع) | ⚡ الكل = ترسيبا + نوفو | «غير مسجل» = لا جرعة ترسيبا مسجلة (لا يُحسب الإعداد)</span>
+           <span>⚡ <b>إجمالي أنسولين اليوم:</b> 🔵 ترسيبا (قاعدي) | 🟠 نوفو (سريع) | ⚡ الإجمالي | — = غير مسجل | * = مجموع المسجل فقط (ترسيبا غير مسجل، الإعداد غير محسوب)</span>
          </div>
          <div class="print-legend-row">
            <span>📖 <b>شرح اختصارات الجدول والملف الطبي:</b></span>
@@ -447,9 +447,9 @@ function createDayRow(dateStr, dayData, child, displayUnit, basalMap = {}) {
     html += `<div class="cell" style="background:#f8fafc; font-size:10px; line-height:1.25;">
       ${dailyCarbs > 0 ? `<div style="color:#6d28d9; font-weight:700;">🍔 ${round1(dailyCarbs)}g</div>` : ''}
       ${(basalConfirmed || dailyBolus > 0) ? `
-        <div style="color:#1d4ed8; font-weight:700;">🔵 ${basalConfirmed ? `ترسيبا ${round1(dailyBasal)}U` : 'ترسيبا: غير مسجل'}</div>
-        ${dailyBolus > 0 ? `<div style="color:#c2410c; font-weight:700;">🟠 نوفو ${round1(dailyBolus)}U</div>` : ''}
-        ${basalConfirmed ? `<div style="color:#047857; font-weight:800;">⚡ الكل ${round1(dailyTDD)}U</div>` : `<div style="font-size:8.5px; color:#b45309;">المسجل فقط (غير مكتمل)</div>`}
+        <div style="color:#1d4ed8; font-weight:700;">🔵 ${basalConfirmed ? `${round1(dailyBasal)}U` : '—'}</div>
+        ${dailyBolus > 0 ? `<div style="color:#c2410c; font-weight:700;">🟠 ${round1(dailyBolus)}U</div>` : ''}
+        ${basalConfirmed ? `<div style="color:#047857; font-weight:800;">⚡ ${round1(dailyTDD)}U</div>` : `<div style="color:#b45309; font-weight:800;">⚡ ${round1(dailyBolus)}U*</div>`}
       ` : ''}
     </div>`;
   } else {
