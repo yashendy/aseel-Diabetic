@@ -476,9 +476,9 @@ async function renderReport() {
       <div class="cell-data" style="justify-content:center;">
         ${d.dailyCarbs > 0 ? `<div class="badge-carb" title="إجمالي النشويات">${round1(d.dailyCarbs)}g</div>` : ''}
         ${(d.basalConfirmed || d.dailyBolus > 0) ? `
-          <div class="badge-tresiba" title="ترسيبا (قاعدي)">${d.basalConfirmed ? `ترسيبا ${round1(d.dailyBasal)}U` : 'ترسيبا: غير مسجل'}</div>
-          ${d.dailyBolus > 0 ? `<div class="badge-novo" title="نوفو (سريع) المسجّل">نوفو ${round1(d.dailyBolus)}U</div>` : ''}
-          ${d.basalConfirmed ? `<div class="badge-tdd" title="إجمالي الأنسولين: ترسيبا ${round1(d.dailyBasal)}U + نوفو ${round1(d.dailyBolus)}U">⚡ الكل ${round1(d.dailyTDD)}U</div>` : `<div class="badge-incomplete" title="مجموع المسجل فقط، لا جرعة ترسيبا مسجلة لهذا اليوم">المسجل فقط ${round1(d.dailyBolus)}U (غير مكتمل)</div>`}
+          <div class="badge-tresiba" title="ترسيبا (قاعدي)">${d.basalConfirmed ? `${round1(d.dailyBasal)}U` : '—'}</div>
+          ${d.dailyBolus > 0 ? `<div class="badge-novo" title="نوفو (سريع) المسجّل">${round1(d.dailyBolus)}U</div>` : ''}
+          ${d.basalConfirmed ? `<div class="badge-tdd" title="إجمالي الأنسولين: ترسيبا ${round1(d.dailyBasal)}U + نوفو ${round1(d.dailyBolus)}U">⚡ ${round1(d.dailyTDD)}U</div>` : `<div class="badge-incomplete" title="مجموع المسجل فقط، لا جرعة ترسيبا مسجلة لهذا اليوم">⚡ ${round1(d.dailyBolus)}U*</div>`}
         ` : ''}
         ${d.dailyCarbs === 0 && !d.basalConfirmed && d.dailyBolus === 0 ? '<span class="muted">—</span>' : ''}
       </div>`;
