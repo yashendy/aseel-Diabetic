@@ -46,7 +46,7 @@ let currentIOB = 0;         // الأنسولين النشط وقت القراء
 
  
 
-const SLOT_NAMES = { FASTING: 'صائم', PRE_BREAKFAST: 'قبل الفطار', POST_BREAKFAST: 'بعد الفطار', PRE_LUNCH: 'قبل الغدا', POST_LUNCH: 'بعد الغدا', PRE_DINNER: 'قبل العشا', POST_DINNER: 'بعد العشا', SNACK: 'سناك', BEDTIME: 'قبل النوم', EXERCISE: 'رياضة', OTHER: 'أخرى' };
+const SLOT_NAMES = { FASTING: 'صائم', PRE_BREAKFAST: 'قبل الفطار', POST_BREAKFAST: 'بعد الفطار', PRE_LUNCH: 'قبل الغدا', POST_LUNCH: 'بعد الغدا', PRE_DINNER: 'قبل العشا', POST_DINNER: 'بعد العشا', SNACK: 'سناك', BEDTIME: 'قبل النوم', DURING_SLEEP: 'أثناء النوم', EXERCISE: 'رياضة', OTHER: 'أخرى' };
 
  
 
