@@ -38,7 +38,7 @@ export const convert = (v, from, to) => {
 };
 
 // ---------- الوجبات والـ Slots ----------
-export const SLOT_ORDER = { FASTING: 10, PRE_BREAKFAST: 20, POST_BREAKFAST: 25, PRE_LUNCH: 30, POST_LUNCH: 35, PRE_DINNER: 40, POST_DINNER: 45, SNACK: 50, EXERCISE: 60, BEDTIME: 90, OTHER: 200 };
+export const SLOT_ORDER = { FASTING: 10, PRE_BREAKFAST: 20, POST_BREAKFAST: 25, PRE_LUNCH: 30, POST_LUNCH: 35, PRE_DINNER: 40, POST_DINNER: 45, SNACK: 50, EXERCISE: 60, BEDTIME: 90, DURING_SLEEP: 95, OTHER: 200 };
 export function mealOfSlot(slotKey = '') {
   if (slotKey.includes('BREAKFAST')) return 'breakfast';
   if (slotKey.includes('LUNCH')) return 'lunch';
